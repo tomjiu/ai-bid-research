@@ -67,6 +67,7 @@ pub mod pricing;
 pub mod principal;
 pub mod review;
 pub mod scoring;
+pub mod scoring_coverage;
 pub mod scoring_outline;
 pub mod coverage;
 pub mod rewrite;
