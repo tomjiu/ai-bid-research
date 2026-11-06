@@ -308,6 +308,13 @@ fn input_schema(name: &str) -> Value {
                 "page": {"type": "integer", "minimum": 1, "description": "可选——只取该页块（PDF 面；省略 = 全文件）"}
             },
             "required": ["project_id", "file_id"]
+        // ---- #318 评分细则逐条响应覆盖检查 ----
+        "check_scoring_coverage" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid
+            },
+            "required": ["project_id"]
         }),
         "get_compliance_matrix" => json!({
             "type": "object",
@@ -876,6 +883,7 @@ pub(crate) fn describe(name: &str) -> &'static str {
         "advance_task" => "分工单件推进（#321——ASSIGNED→IN_PROGRESS→DONE 线性链越级拒；TaskStatus 人的进度与 SectionStatus 内容的进度两轴独立）",
         "reopen_section" => "ACCEPTED 章节重开（#321——→Revising+dirty，重导前修订面；非 ACCEPTED 拒；重开后需重过 pre_export_confirm）",
         "set_param_responses" => "参数应答批量写入（#321——技术参数偏离表唯一录入面；偏离判定派生态 derive_deviation 单一真源，导出时自动逐行判定；幂等）",
+        "check_scoring_coverage" => "只读：评分细则逐条响应覆盖检查（#318——细则拆点（触发词+顿号枚举的字面挖掘）对映射章节正文做子串命中（纯正文——建纲标题不算，防标题派生自命中的伪覆盖）；criteria[] 逐细则 points[]{point,hit_section} 漏点即扣分面；summary 建议扣分=Σ(满分×未覆盖比)启发式；notes 明示字面口径局限（语义等价表述不识别）；只报不补——补写走 rewrite_section_segment/append_section_segment）",
         _ => "unknown",
     }
 }
