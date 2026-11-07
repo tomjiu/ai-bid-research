@@ -126,7 +126,16 @@ sections 只列可起草叶）、`score_price` / `score_section` / `score_docume
 见下）、`record_addendum_waiver`（补遗不就绪件的逐件人工确认——见下）、
 `recover_validating_state`（历史异常态恢复：项目滞留在 VALIDATING 且仍有
 未起草叶（旧版校验误推进所致）→ 回 DRAFTING 解锁起草面，#243；三重约束
-+审计账，**禁止手改 db.json**）。
++审计账，**禁止手改 db.json**）、**对账四工具（#285——只读，怀疑漏标/要
+回查原文时用）**：`get_star_coverage`（★漏标检测——★字面真值 vs 已抽 REQ
+差集，三级恒等式不漏不重，missing 带页/行/块定位，只报不补）、
+`get_requirement_provenance`（REQ→原文溯源——锚点带 block_idx/page/line，
+写证据引用或核对条款时回查出出处）、`get_block_requirements`（块→REQ 反查
+——补遗改标时看一个块牵连哪些 REQ）、`get_annotation_overlay`（视图层数据
+面——逐块 req_ids/semantic/status 的全量渲染数据，明细≤200 截断带分页）、
+`list_tasks`（任务分工清单——owner/status 过滤 + 游标分页，P7 审校期查
+RevisionTask 归属时用）。对账工具的详细用法见 references/p2-extract.md
+「与引擎★检测的对账」节。
 
 > **校验状态安全（#243 · 2026-11-05）**：`validate_bid_document` 的
 > `scope=all`（全稿最终校验）要求**全部叶章节达 DRAFTED**——缺章时返回

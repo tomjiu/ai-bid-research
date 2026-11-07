@@ -155,6 +155,9 @@ status / project_version
 - **BLOCKER 强制派生 RT**（结构保证非约定保证）：每条 Blocker finding
   自动创建修订工单（owner 空、status=Open、锚 `section_id` 或 `PROJECT`）
   ——「Blocker 数 ≡ RT 数」是数据结构不变量；WARNING/INFO 不派生；
+- 任务分工的查询面：`list_tasks { project_id, owner?, status?, cursor? }`
+  （只读——owner/status 过滤 + 游标分页）。审校期查「谁名下还有未关单」
+  或向用户汇报 RT 归属清单时用；推进仍是后端面，MCP 无 RT 推进工具；
 - RT 生命周期（后端面——MCP 工具面无 RT 推进工具）：
   `Open → InProgress → Done` 逐级；`Done` 必须带非空 resolution（空说明
   不算修完）；**Done 是终态不可重开**——重走门 = 新 finding 新 RT；

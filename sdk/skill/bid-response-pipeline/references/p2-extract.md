@@ -128,6 +128,41 @@ build_matrix 后生效）；响应（绑证据）或人工 receipt 覆写（set_
 `not_responded > 0` = 废标风险在场（引擎 note 原文：一条不响应即响应
 无效），逐条补响应后重查。
 
+### ★对账专用工具（#285①——比 star_summary 更精准的漏标检测面）
+
+`get_star_coverage { project_id, file_id }`——★字面真值（引擎字符检测，
+排除「打★号条款为实质性条款」类样板声明句）与已抽 REQ 的差集对账：
+
+- **三级恒等式**（`star_total = declarations + star_truth`；已抽面
+  `captured` / 漏检面 `missing`）——不漏不重，比矩阵侧 star_summary 的
+  单数字对账多出「漏在哪」的定位面；
+- `missing[]` 每条带 `page / line / block_idx / reason`——照着补标，
+  不用全文重扫；
+- **只报不补**——补标动作仍走 `submit_block_marks`（substantive=true），
+  补完重跑 `extract_requirements` 后复查恒等式归零。
+
+何时调它：P3 建纲前（与 star_summary 对账同刻）；任何「疑似漏标」的
+自查时刻（用户质疑、补遗到达后复核、跨页表格担心截断）。
+
+### 块级双向索引（#285②——溯源与反查）
+
+三个只读工具，输入输出互为镜像：
+
+- **`get_requirement_provenance { project_id, req_id }`**（REQ→原文）：
+  返回该 REQ 的锚点（block_idx / page / line）。**写证据引用、向用户
+  复述条款出处、核对「这条 REQ 是从哪句话抽的」**时用——锚点三级真源
+  （回填值 → 旧锚 locator/excerpt 兜底 → null 诚实），`resolved_via`
+  标记用了哪条腿；
+- **`get_block_requirements { project_id, file_id, block_idx }`**
+  （块→REQ）：返回这个块覆盖哪些 `req_ids`、`marked_by`（标记路径与
+  抽取路径）。**补遗改标做影响面分析**时用——register_addendum_changes
+  前先反查「这段原文牵连哪些条款」，改写范围就不发散；无 REQ 的块照常
+  返回（verdict=null——顺带复核自己的排除判定）；
+- **`get_annotation_overlay { project_id, file_id, page? }`**（视图层
+  全量数据）：逐块的 req_ids / semantic（emphasis|requirement）/
+  status / suspected_miss。**要整体看一个文件的标记密度与分布**时用
+  （计数全量、明细≤200 截断，PDF 带页参数分页）——比逐块反查省调用。
+
 ### 建纲门：标记过的文件必须标满（#244）
 
 P3 `build_outline` 前有覆盖闭环门：**每个块要么被判定，要么被排除，要么
