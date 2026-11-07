@@ -102,23 +102,28 @@ MATRIX_READY 后不存在「悄悄改档」——重建面按 p3-matrix 状态�
 
 ## BLOCKER 清零路径（导出前置）
 
-`校验通过（ok=true）才推进 VALIDATING；BLOCKER 清零（或登记 WAIVED+理由）才可 EXPORT`
+`校验通过（ok=true）才推进 VALIDATING；BLOCKER 清零才可 EXPORT`
 
-两条路：
+**没有通用「豁免」通道**——导出门在工具内独立复算（fail-closed），每类
+BLOCKER 走各自的**真实出口**（每个出口自带留痕纪律；不经出口的「口头确认
+豁免」不会出现在任何审计面，等于没豁免）。
 
-1. **修复**（推荐）：逐条 BLOCKER 按上表修复 → `scope` 重跑受影响章 → 全量
-   `scope=all` 复核；
-2. **豁免**：确属误报或业务上可接受 → 登记 WAIVED + 理由（记录在案，导出
-   precheck 的 waived 清单可见）。
+主路径（推荐）：逐条 BLOCKER 按上表修复 → `scope` 重跑受影响章 → 全量
+`scope=all` 复核。误报/业务可接受时，也按下表走对应出口：
 
-### WAIVED 审批话术（向用户）
+| BLOCKER 类别 | 出口（真实工具，非豁免话术） |
+|---|---|
+| 矩阵 blocking（`E_VETO_UNRESPONDED` / `E_QUAL_UNMET`） | `set_matrix_override` 人工覆写（带偏离说明——#226 否决项死锁出口） |
+| 引用幽灵/占位（`E_CITATION_GHOST` / `E_CITATION_PLACEHOLDER`） | 回 P5 修正文引用（真实 EV-id），或先 `register_evidence` 补件再改引用 |
+| 失效证据绑定（`E_EVIDENCE_EXPIRED`） | 换版登记新证据 + 重新绑定（R-03：失效证据禁绑，无绕行） |
+| 占位证据绑定（`E_EVIDENCE_PLACEHOLDER`） | 补真实材料换版；确属不适用 → `set_matrix_override` NOT_APPLICABLE + 偏离说明 + Human receipt（占位豁免的唯一合法形态——普通状态覆写不豁免） |
+| 写作验收（`E_SECTION_EMPTY` / `E_CHARS_BELOW_MIN` / `E_TOTAL_CHARS_BELOW_MIN`） | **只能补写**——导出门独立复算，审核已批准也不放行；篇幅系统性不足 → `recommend_length_profile` 调档位后重建纲 |
+| scope 引用不存在（`E_SCOPE_UNKNOWN`） | 改传真实 section_id 重跑 |
+| 审核面 BLOCKER（record_review_gate 的 findings，非本工具产出） | 修订后关单 RevisionTask（Done 带关单说明） |
 
-> 「BLOCKER `<vf_id>`（`<rule_code>`：`<message>`）经核对属于
-> <误报/业务可接受>，理由：<…>。是否豁免？豁免将记录在导出预检的 waived
-> 清单中。」
-
-用户确认后才豁免——**不要自作主张豁免**（AI 操作者不得自审自过的门禁
-精神）。
+（「AI 操作者不得自审自过」的门禁精神落在**每个出口的留痕**上：覆写有
+偏离说明、占位豁免要 Human receipt、审核 BLOCKER 要关单说明——向用户
+复述 finding 并取得口头确认，本身不构成任何记录。）
 
 ## 全局一致性预检（check_bid_quality 的 global_conflicts——#423）
 
