@@ -208,7 +208,7 @@ pub fn extract_docx_tables(f: &ParsedFile) -> Vec<ReviewItem> {
     let mut items = Vec::new();
     let mut group: Vec<&Block> = Vec::new();
     let mut cur_key: Option<String> = None;
-    let mut flush = |group: &mut Vec<&Block>, items: &mut Vec<ReviewItem>| {
+    let flush = |group: &mut Vec<&Block>, items: &mut Vec<ReviewItem>| {
         if !group.is_empty() {
             if let Some(more) = assemble_docx_group(f, group) {
                 items.extend(more);
@@ -389,7 +389,7 @@ pub fn extract_pdf_linearized(f: &ParsedFile) -> (Vec<ReviewItem>, Vec<usize>) {
         .collect();
     let mut i = 0usize;
     while i < lines.len() {
-        let (idx, b) = lines[i];
+        let (_idx, b) = lines[i];
         let t = b.text.trim();
         if let Some(kind) = linearized_table_title_kind(t) {
             let name = table_name_core(t);
@@ -501,7 +501,7 @@ fn assemble_linearized_rows(
         // 乱序序号（A-05「3」），非页码；3 位以上才是页码面）
         if re_seq_alone.is_match(t) {
             let no: u32 = n.parse().unwrap_or(0);
-            if let Some((row_no, text, _idxs, _locator)) = pending.as_mut() {
+            if let Some((row_no, _text, _idxs, _locator)) = pending.as_mut() {
                 if row_no.is_none() {
                     *row_no = Some(no); // 乱序形：序号行在行中间——只赋号不进锚
                 } else {
