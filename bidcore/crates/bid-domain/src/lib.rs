@@ -1201,6 +1201,26 @@ impl DomainStore {
         // / `human_review_complete` / method 回显的数据源）。**注意**：只写
         // gate_passes 不写 reviews——`gate_approved`（门禁消费面）读的是
         // reviews，逐件免责不武装全局门（#379 拆门的关键切割点）。
+        let review_id = self.next_id("REV");
+        let reviewed_content_version = self.project.as_ref().map_or(0, |p| p.content_version);
+        let reviewed_content_digest = self.sections_digest();
+        self.reviews.push(review::ReviewRecord {
+            id: review_id,
+            gate: review::Gate::AddendumWaiver,
+            // legacy 回显面同款派生（record_review 口径——human/agent 前缀随身份）
+            reviewer: principal_echo,
+            principal: Some(principal.clone()),
+            decision: review::Decision::Approved,
+            findings: Vec::new(),
+            at,
+            reviewed_content_version,
+            reviewed_content_digest,
+            // A-10/#474：计分面摘要（全部门记录统一携带；判定面只消费
+            // PreExportConfirm——与 reviewed_content_digest 同纪律）。
+            reviewed_scoring_digest: self.scoring_surface_digest(),
+        });
+        // #277 方案 A：补遗门过门同步落审计账（与 record_review 的
+        // GatePassRecord 同构——导出警告判据 = 本门最新一条 human_confirmed）
         let gp_id = self.next_id("GP");
         self.gate_passes.push(review::GatePassRecord {
             id: gp_id,
@@ -1271,6 +1291,9 @@ impl DomainStore {
             at,
             reviewed_content_version,
             reviewed_content_digest,
+            // A-10/#474：计分面摘要（全部门记录统一携带；判定面只消费
+            // PreExportConfirm——与 reviewed_content_digest 同纪律）。
+            reviewed_scoring_digest: self.scoring_surface_digest(),
         };
         self.reviews.push(rec.clone());
         // #277 方案 A 同构：过门同步落审计账（导出警告判据 = 本门最新一条
