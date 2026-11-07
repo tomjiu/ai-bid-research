@@ -69,9 +69,11 @@ use serde_json::Value;
 /// + `set_param_responses`（参数应答录入）= 42；#319 增 2 个：补遗后
 /// 增量重写（register_addendum_changes / rewrite_section_partial）= 44；
 /// #316 增 1 个：`list_packages`（分包清单只读——多标段/多包）
-/// #318 增 1 个：`check_scoring_coverage`（评分细则逐条响应覆盖检查——只读诊断）= 45。
+/// #318 增 1 个：`check_scoring_coverage`（评分细则逐条响应覆盖检查——只读诊断）
+/// #315 增 4 个：业绩材料库四工具（register_performance / list_performance /
+/// recommend_performance / write_performance_section）= 50。
 
-pub const TOOL_NAMES: [&str; 46] = [
+pub const TOOL_NAMES: [&str; 50] = [
     "create_bid_project",
     "import_tender_files",
     "extract_requirements",
@@ -136,6 +138,11 @@ pub const TOOL_NAMES: [&str; 46] = [
     "advance_task",
     "reopen_section",
     "set_param_responses",
+    // #315 业绩材料库（跨项目业绩资产：登记/列表无项目路由，推荐/写入走项目态）
+    "register_performance",
+    "list_performance",
+    "recommend_performance",
+    "write_performance_section",
 ];
 
 /// 工具解析与分发入口（进程级全局服务态——stdio 默认传输面）。

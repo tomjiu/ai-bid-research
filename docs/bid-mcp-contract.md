@@ -19,6 +19,7 @@
   游标规则（fail-closed）：opaque base64（内嵌版本字节/偏移/过滤器指纹）；跨过滤器或跨工具复用游标 → `E_UNPROCESSABLE`；limit 合法域 1..=1000、缺省 100，越界/非整数**显式拒**（不静默 clamp）；游标损坏/版本不认识/偏移越界（底层列表已变化）→ `E_UNPROCESSABLE`。行序确定性（矩阵=条款位置序 CMP-0001..N；证据=id 字典序；任务=target_id 字典序）是分页安全前提，不得破坏。
 - **工具面沿革（单一真源 = `bidcore/crates/bid-mcp/src/lib.rs` TOOL_NAMES）**：原 8 工具（§1-§9）；V3-5（S-4）增只读三件——`get_bid_project_state`（§4-C，断点恢复入口）、`list_evidence` / `list_tasks`（§4-A/§4-B）→ 11；#42 阶段 10 增 `save_version`（§SV）→ 12；#80 第三批（G1-G3）后 21；#219 全块覆盖三工具（§17/§18/§19）后 24；#226 增 `set_matrix_override`（§4-D，否决项死锁人工出口）→ 25；#243 增 `recover_validating_state`（§20）后 26；#254 增分段三工具（§21-A/B/C）后 29；#279 增 `list_tools`（§LT，行协议发现面）后 30；#287 增 `recommend_length_profile`（§25，篇幅档位推荐）后 31（commit 23a2537「第 31 个」）；#285 ① 增 `get_star_coverage`（§22，★漏标检测）后 32（merge 66465fb「工具面 30->32」）；#285 ② 增块级双向索引三工具（§22-A/B/C——REQ 溯源/块反查/overlay 数据面）后 35；#319 增补遗后增量重写两工具（§23/§24）后 37；#321（A-23）增 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（§12-A~G）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
 
+
 ## 1. create_bid_project
 ```
 in : { name, tender_notice_ref?, bid_deadline, mode(明标|暗标), external_key }
@@ -1394,6 +1395,8 @@ out: { count, tools: [{ name, summary }...],
 ```
 
 ## 25. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+
+## 23. recommend_length_profile（#287 篇幅档位推荐 · 只读）
 ```
 in : { project_id }
 out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
@@ -1450,6 +1453,95 @@ out: { detected, items:[{ id:"PKG-01", label:"第1包", kind:"包"|"标段", num
 ```
 
 
+
+## 23. 业绩材料库四工具（#315 · 跨项目业绩资产）
+
+> 背景：#269 黑盒实测「剩余唯一墙 = 业绩材料缺口」。业绩是投标人的**长期
+> 资产**（评标常占 10-20 分），不是单项目的输入——库文件在项目工作区之外
+> （路径解析：`BID_PERF_LIB` 环境变量 → 用户级默认位
+> Unix `$HOME/.mang/performance-library.json` / Windows
+> `%APPDATA%\mang\performance-library.json` → 内存态（本会话可用、不落盘，
+> 响应面 `library_persisted:false` 如实报告）。原子写（tmp+rename）+
+> schema_version 门 + 损坏拒载不重建（对齐 store_io 纪律）。
+
+### 23-A. register_performance（登记 · 无项目路由）
+```
+in : { entries?:[{
+         name*, client*, amount_wan*(万元 >= 0), completed_on*(YYYY-MM-DD),
+         categories?:[标签 <= 20], materials?:[材料路径 <= 20],
+         key_points?:[亮点 <= 20], subject_name?(条目级乙方主体) }] <= 200 条,
+       owner_name?(库主 = 投标人主体名——证据 subject_name 默认源，一次登记全程生效) }
+out: { added:[PERF-xxxx], added_count, deduplicated:[PERF-xxxx],
+       total_entries, owner_name, library_path, library_persisted, next }
+幂等: 语义四元组 (name, client, amount_wan, completed_on) 归一空白后命中
+      既有条目 → 回显既有 id 不重复登记。
+原子: 一条非法整批拒（零副作用）——错误文案带 entries[i] 定位。
+窗口: 无项目路由（建项目前可维护库——先有资产再投标）。
+```
+
+### 23-B. list_performance（只读 · 无项目路由）
+```
+in : { filters?:{ category?(标签子串), keyword?(name/client 包含),
+                  min_amount_wan?, max_amount_wan?, since?(完成日期下界 ISO) },
+       limit?(1..=1000，缺省 100——越界显式拒不静默 clamp) }
+out: { entries:[{ perf_id, name, client, amount_wan, completed_on,
+                  categories, materials_count, key_points,
+                  client_type(推断展示面) }], returned, owner_name,
+       library_path, library_persisted }
+```
+
+### 23-C. recommend_performance（匹配推荐 · 只读）
+```
+in : { project_id*,
+       budget_wan?(项目预算万元——仓内无预算结构面，显式入参不猜；缺省该因子弃权),
+       base_date?(评标基准日 ISO；不传 = 系统今日，signals.base_date_source 注明),
+       client_type?(government|soe|private|other——采购人类型，缺省弃权),
+       focus?(额外侧重关键词——拼进匹配语料),
+       top_k?(1..=20，缺省 10) }
+out: { recommendations:[{ perf_id, name, score(0..=1),
+                          factors:[{factor, score, available, note}×4],
+                          reasons:[逐因子人读依据] }],
+       library_total, signals:{ base_date, base_date_source, budget_wan,
+                                client_type, focus },
+       suggested_section(SEC-xxxx|null——业绩/类似项目标题的叶章节),
+       next }
+打分: 四因子确定性加权——标签重叠 40%（entry.categories 子串命中语料：
+      项目名 + REQ 陈述 + 评分项 criteria + focus；命中 3 个标签满分）/
+      金额规模 30%（min/max 比值：>= 0.5 满分 / <= 0.1 零分 / 之间线性）/
+      近三年 20%（完成日距基准日 <= 3 年满分、3-5 年半分、更早零分）/
+      客户类型 10%（同型满分 / 异型零分 / 任一侧未判定弃权 0.5）。
+      **缺信号因子弃权重归一**（available=false 不参与分母——「不知道预算」
+      不惩罚业绩）。分数是排序依据不是正确率，选哪几条由用户/Agent 裁决。
+排序: 分数降序，同分按 perf_id 字典序（确定性——同输入恒同序）。
+窗口: REQUIREMENTS_EXTRACTED+（信号来自 REQ 面）。
+```
+
+### 23-D. write_performance_section（一键写入 · 写）
+```
+in : { project_id*, section_id*(目标叶章节 SEC-xxxx),
+       perf_ids*(PERF-* 清单 >= 1),
+       bid_open_date?(开标日 ISO——证据有效性裁决基准日；缺省系统今日),
+       project_version? }
+out: { section_id, segment_id, changed, deduplicated, segment_chars,
+       evidence_registered:[{ perf_id, ev_id, source_file, deduplicated }],
+       materials_pending:[{ perf_id, materials, reason }],
+       bindings:[{ ev_id, req_ids }],
+       warnings, project_version }
+流程: ① 材料文件名（materials 的 file_name 分量）比对已导入 TF——命中 →
+      register_evidence（kind=performance；subject_name = 条目级 >
+      库主 owner_name > 工作区 bidder-profile.json 的 company_name；
+      域层语义位查重天然幂等，重跑不重复登记）；
+      ② 绑定业绩类 REQ（陈述含 业绩/类似项目）→ bind_evidence + 矩阵重算；
+      ③ 单段写入：业绩表（GFM——单元格转义）+ 逐条描述段（key_points +
+      [EV-*] 引用），幂等键 `perf-section:<section_id>`（同批重跑 no-op）。
+诚实: 材料未导入/无主体名 → materials_pending 逐条列明（正文照写、证据
+      不伪造——导入材料后重跑自动补登记）；readiness 门（可用业绩证据
+      < 3，MIN_PERFORMANCE_COUNT）拦写入并把材料指引带全。
+窗口: MATRIX_READY+（append_section_segment / register_evidence /
+      bind_evidence 三组成工具的同窗口交集）。
+```
+
+## 24. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
 ```
 in : { project_id,
        changes:[{ req_id?("REQ-xxxx"——value_changed/requirement_removed 必填；
