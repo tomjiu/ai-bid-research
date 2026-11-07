@@ -549,7 +549,6 @@ fn chars_below_min_advisory(
     node: &bid_domain::outline::OutlineNode,
     chars: usize,
 ) -> ValidationFinding {
-    let target = f64::from(node.target_chars);
     ValidationFinding {
         rule_code: "W_CHARS_BELOW_MIN".into(),
         severity: "MAJOR",

@@ -2043,7 +2043,12 @@ fn convert_to_pdf_word(docx: &std::path::Path, out_pdf: &std::path::Path) -> Res
     verify_pdf_output(out_pdf)
 }
 
-/// PDF 产物校验（魔数 + 存在性）——两条转换通道共用。
+/// PDF 产物校验（魔数 + 存在性）。
+///
+/// #494：当前唯一消费方是 `convert_to_pdf_word`（#[cfg(windows)]）——
+/// Linux 构建下本函数零引用（LibreOffice 通道未接此校验，见 issue 登记），
+/// 对齐 cfg 门消除死代码告警；Windows 行为零变化。
+#[cfg(windows)]
 fn verify_pdf_output(path: &std::path::Path) -> Result<(), String> {
     if !path.is_file() {
         return Err(format!("声称成功但产物缺失: {}", path.display()));
