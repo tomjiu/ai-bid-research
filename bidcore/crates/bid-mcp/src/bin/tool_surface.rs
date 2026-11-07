@@ -457,4 +457,4 @@ mod tests {
             assert!(bits.chars().all(|c| c == '0' || c == '1'));
         }
     }
-}
+}
