@@ -71,7 +71,10 @@ out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), sha256, pages, ta
 
 ## 3. extract_requirements
 ```
-in : { project_id, scope:"all"|file_ids[], options:{granularity, include_scoring_table:true}, project_version }
+in : { project_id, scope:"all", options:{granularity, include_scoring_table:true}, project_version }
+     scope：**仅 "all"**（整集重抽——幂等合并面）；`file_ids[]` 子集过滤属
+     M2 扩展未实现，传非 "all" 即 E_UNPROCESSABLE（与 schema enum 一致；
+     未来实现时在此补记）。
      options.granularity：**保留位，当前未实现**（传入被忽略——#86 摩擦 #6 清偿：
      契约曾提到但无实现，如实标注；未来实现时枚举合法值并在此补记）
 out: { counts:{total, added(可为负——整集替换语义下的诚实增量), by_category{qualification,veto,scoring,tech_param,commercial,format,other}},

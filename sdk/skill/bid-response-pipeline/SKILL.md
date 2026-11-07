@@ -187,7 +187,7 @@ receipt 拒收 CONTENT_DRIFTED_RECEIPT，重新请人工确认签发即解）；
 3. 规则：
    - status 已达阶段 N → 从 N 继续，禁止重跑已完成阶段（幂等也勿滥用）；
    - 上游 content_version 变化 → 仅重跑 DIRTY 章节（影响面分析），不整单重跑；
-   - 新增补遗文件 → P1 幂等导入 → 起草已开始（MATRIX_READY+）则走 **#319 增量重写流**（见「补遗后的增量重写」节：register_addendum_changes → 逐指令 rewrite_section_partial——只改受影响段，不整章重写）；起草前到达则 P2 增量抽取；
+   - 新增补遗文件 → P1 幂等导入 → 起草已开始（MATRIX_READY+）则走 **#319 增量重写流**（见「补遗后的增量重写」节：register_addendum_changes → 逐指令 rewrite_section_partial——只改受影响段，不整章重写）；起草前到达则 P2 整集重抽（幂等合并——extract 的 scope 仅支持 all，无子集过滤）；
    - 换模型 → 读最后模型记录，仅 SEC 非 ACCEPTED 且 DIRTY 的章节重写；ACCEPTED 章节默认保留（用户可显式推翻）；
 4. 每次恢复先输出「恢复计划摘要」（从哪步起、重跑哪些 SEC、预计动作）供用户确认。
 
