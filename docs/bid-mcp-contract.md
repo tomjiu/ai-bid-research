@@ -384,7 +384,10 @@ categories 四桶（#187——「没做 ≠ 做对了」，issue #9 口径）:
       证据补绑），无状态变迁则不落版本。重复校验幂等（无变迁不推进）。
       ③ 历史异常态（VALIDATING + 缺章——旧版无条件推进所致）的恢复走 §20
       recover_validating_state，禁止手改 db.json。
-      BLOCKER 清零（或登记 WAIVED+理由）才可 EXPORT
+      BLOCKER 清零才可 EXPORT（无通用豁免通道——每类 BLOCKER 走各自出口：
+      矩阵 blocking→set_matrix_override 覆写；失效/占位证据→换版或
+      NOT_APPLICABLE+Human receipt；写作验收→只能补写；审核面 BLOCKER→
+      RT 关单。口头豁免不落在任何审计面，见 Skill p6-validation.md 出口表）
       （#86 摩擦 #10 清偿：REVIEWING 是导出时自动补齐的瞬态——单次 export 内部
       经 Drafting→Validating→Reviewing→ReadyToExport→Exported 逐态补链，
       不会作为可观察的停泊状态出现在两次调用之间；人工审面是三门
@@ -426,7 +429,8 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
          ——标书缺资质证书图是废标级事故）
        · 版面适配：宽超内容区 6 英寸等比缩放（A4 安全面）
      - 标题行：# / ## … → 剥号加粗段（不再字面输出井号）
-out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blockers:0, waived:[VF-*]},
+out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blockers:0, waived:[]},
+       （waived 恒空——预留字段，无通用豁免通道；#508）
        tables_written, table_kinds:[...], forms_written, form_titles:[...],
        agent_waivers:[{ gate, actor, actor_type, method, human_confirmed, at, reason }](#277),
        human_review_complete(bool)(#277), warnings[],

@@ -4156,6 +4156,9 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "form_titles": outcome.report.form_titles,
         "content_version_snapshot": svc.store().content_version(),
         "project_status": svc.store().project().map(|p| p.status.as_str()).unwrap_or("UNKNOWN"),
+        // precheck.waived 恒空——预留字段（无通用豁免通道：每类 BLOCKER 走
+        // 各自出口——矩阵覆写/换证/补写/RT 关单，见 Skill p6-validation.md
+        // 出口表；#508 诚实化，不再承诺 VF-* 清单）
         "precheck": { "blockers": 0, "waived": [] },  // 双前置门已过（失败路径在 Err 面）
         // #277 方案 A：agent 声明过门清单 + 人工复核完成度（machine-readable
         // ——导出带警告横幅时，响应面同步携带判据与追认指引）
