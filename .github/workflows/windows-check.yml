@@ -18,6 +18,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+# #568：队列深度防线——同 workflow + 同 ref 只保留最新 run（主仓
+# mmqz/mdcore#548 同款；同分支连推只跑最后一次，不同 PR/tag 互不干扰）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 
 env:
   CARGO_TERM_COLOR: always
