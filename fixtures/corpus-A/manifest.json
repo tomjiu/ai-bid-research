@@ -1,7 +1,7 @@
 {
   "fixture": "corpus-A (+ queries/corpus-R)",
-  "spec_version": "v0.6",
-  "spec_source": "scripts/fixture_spec.py + research/test-plan.md §1（v0.6：corpus-R +D6-revisions 修订/批注专项层——引擎 mdcore#17/#19 验收夹具，T2 批 issue #2；此前 v0.5：v0.2 审计修正 + v0.4 B2 扫描件修复 + corpus-R D1/D2/D5 结构层）",
+  "spec_version": "v0.7",
+  "spec_source": "scripts/fixture_spec.py + research/test-plan.md §1（v0.7：#559 携带面（澄清修改文件）+ meta.json（#490）；此前 v0.6：corpus-R +D6-revisions 修订/批注专项层——引擎 mdcore#17/#19 验收夹具，T2 批 issue #2；此前 v0.5：v0.2 审计修正 + v0.4 B2 扫描件修复 + corpus-R D1/D2/D5 结构层）",
   "deterministic": true,
   "stats_note": "A.paragraph_blocks 为生成器块计数（非 docx 物理段落数）；B1.rows 为数据行数（物理跨 2 页）",
   "counts": {
@@ -452,6 +452,11 @@
       "path": "corpus-A/files/evidence/EV-13-安全生产许可证.pdf",
       "sha256": "f377b8445de6a170c7942ba50cd8c943d931d28bc046a67240d194328ad52505",
       "bytes": 2881
+    },
+    {
+      "path": "corpus-A/files/澄清修改文件-3.1.1.docx",
+      "sha256": "019c15d0b7bd4184718455e1b5876ebdc72261f31b122b3d0832258a08afb3c3",
+      "bytes": 36799
     },
     {
       "path": "corpus-A/ground-truth/conflicts.json",
