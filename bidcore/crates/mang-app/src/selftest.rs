@@ -292,13 +292,24 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     // ---- #76 设置面板：mcp.status / llm.status→save→status 往返 / fspec.status
     let resp = call(&ctx, json!({"id":"t-mcp","cmd":"mcp.status"}));
     let mcp = result(&resp);
+    // FG-01（#303）教训：本断言曾把工具面钉死 13（#68 阶段 2 的字面量），
+    // diag.rs 单测面已改为对 TOOL_NAMES 的动态断言，此处漏改——同一事实
+    // 两副本漂移，工具面涨到 44 后健康系统上 --selftest 必红（#542）。
+    // 与 diag.rs mcp_status_is_stdio_and_ready 同口径：以 TOOL_NAMES 为
+    // 单一真源，工具面涨多少都不用改这里。
     r.check(
         "mcp.status",
         resp["ok"] == json!(true)
             && mcp["channel"].as_str() == Some("stdio")
             && mcp["ready"] == json!(true)
-            && mcp["tools"].as_u64().unwrap_or(0) == 13,
-        format!("channel={} tools={} ready={}", mcp["channel"], mcp["tools"], mcp["ready"]),
+            && mcp["tools"].as_u64().unwrap_or(0) == bid_mcp::TOOL_NAMES.len() as u64,
+        format!(
+            "channel={} tools={} ready={} (TOOL_NAMES={})",
+            mcp["channel"],
+            mcp["tools"],
+            mcp["ready"],
+            bid_mcp::TOOL_NAMES.len()
+        ),
     );
 
     let resp = call(&ctx, json!({"id":"t-llm0","cmd":"llm.status"}));
