@@ -22,6 +22,7 @@
 
 pub mod coverage_tools;
 pub mod bidi_tools;
+pub mod perf_tools;
 pub mod cursor;
 pub mod error;
 pub mod protocol;
