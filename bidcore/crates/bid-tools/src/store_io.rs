@@ -180,7 +180,7 @@ impl StoreFile {
             let name = parsed_file_name(&bytes);
             let ppath = self.dir.join(&name);
             if !ppath.exists() {
-                write_fsync_atomic(&ppath, &bytes)?;
+                write_fsync_atomic(&ppath, &bytes).map_err(StoreIoError::Io)?;
             }
             Some(name)
         };
@@ -188,7 +188,7 @@ impl StoreFile {
         // ---- 2. db.json v2（域面 + ref）原子提交
         let svc = ServiceSnapshot::v2(domain.clone(), parsed_ref);
         let json = serde_json::to_string_pretty(&svc).map_err(StoreIoError::Serialize)?;
-        write_fsync_atomic(&self.path(), json.as_bytes())?;
+        write_fsync_atomic(&self.path(), json.as_bytes()).map_err(StoreIoError::Io)?;
 
         // ---- 3. GC：清除未被引用的 parsed 文件（单进程串行——服务态无并发写）
         self.gc_parsed()?;
@@ -283,20 +283,30 @@ fn parsed_file_name(bytes: &[u8]) -> String {
 /// 失败的操作（源不存在，os error 2 恒返），烧完预算后失败。实测：main
 /// f0e3ca9a（#461 已合入）run 992 仍红，e2e 启动后 140ms panic = 3 次尝试
 /// × 2 次 50ms 退避被完整烧穿的时间线。修正后整个「create→write→sync→
+/// **单一真源（#546）**：本函数是全仓唯一的 `write_fsync_atomic` 定义点
+/// ——[`profile_io`]（bidder-profile.json 落盘）改调此处，不再自备副本。
+/// 原双副本纪律分裂面：#457（profile_io 自备）× #460/#461（本处加有界
+/// 重试）——收敛后重试语义自动覆盖两侧。返回裸 [`std::io::Result`]：
+/// 错误类型适配（StoreIoError::Io / FormError::Io）由调用方 map_err 承担。
+///
 /// rename」序列作为一个闭包进 retry_transient：任何一步瞬态失败 → 重做
 /// 全序列（重建 tmp）。#411 的 fsync 纪律不变——重试只针对路径竞态，
 /// 不取消刷盘；sync_all 也随之获得瞬态重试覆盖。
-fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> Result<(), StoreIoError> {
+pub fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("json.tmp");
-    retry_transient(|| -> std::io::Result<()> {
+    // 重试耗尽后清 tmp 残骸（#457 增量，#546 统一后两侧同享）——
+    // 注意闭包内部的重试成功路径不经过此分支。
+    if let Err(e) = retry_transient(|| -> std::io::Result<()> {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all()?; // 提交点前刷盘（#411）
         drop(f); // 关句柄再 rename（Windows: 句柄在开时 rename 失败面更大）
         std::fs::rename(&tmp, path)?; // 原子提交点
         Ok(())
-    })
-    .map_err(StoreIoError::Io)?;
+    }) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
     if cfg!(unix) {
         if let Some(parent) = path.parent() {
             if let Ok(d) = std::fs::File::open(parent) {
