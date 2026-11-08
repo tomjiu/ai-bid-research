@@ -269,8 +269,8 @@ fn tool_names_partition_into_gated_and_ungated() {
 
     // ④ 数量对账：44 = 状态门并集 + 无门集（演进时同步改这里——与
     //    tool_names_are_the_contract 的计数断言同款纪律）。
-    assert_eq!(all.len(), 44);
-    assert_eq!(gated.len() + ungated.len(), 44, "门表并集 {} + 无门 {} 应 == 44", gated.len(), ungated.len());
+    assert_eq!(all.len(), 50);
+    assert_eq!(gated.len() + ungated.len(), 50, "门表并集 {} + 无门 {} 应 == 50", gated.len(), ungated.len());
 }
 
 /// ungated_tools 回显在位且与状态无关（#522 验收：任何状态下值一致）。
