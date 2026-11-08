@@ -1227,9 +1227,26 @@ fn count_number_unit(content: &str) -> usize {
 
 /// 价格类评分项识别（criteria 词面——价格分 = f(报价)，内容自评无意义，
 /// 由 [`crate::pricing::PriceScoreSpec`] 管）。
-fn is_price_item(item: &ScoringItem) -> bool {
+///
+/// #538/A-18：词面分两档——[`unambiguous_price_phrase`]（价格分/下浮率/
+/// 基准价）是无歧义价格语汇；「投标报价」单独命中属**疑似**
+/// （`suspected_price_item`——如「投标报价合理性分析」是评委主观打分项，
+/// 不是 f(报价) 的价格分）。消费方对疑似档给告警口径，不静默。
+/// pub = 单一真源（bid-mcp 的 is_price_item_mirror 已删——关键词面只在
+/// 本处，改词面不再需要两处同步）。
+pub fn is_price_item(item: &ScoringItem) -> bool {
+    unambiguous_price_phrase(item) || item.criteria.contains("投标报价")
+}
+
+/// 无歧义价格语汇（不含「投标报价」——该词在主观评审项里也出现）。
+pub fn unambiguous_price_phrase(item: &ScoringItem) -> bool {
     let c = &item.criteria;
-    c.contains("价格分") || c.contains("投标报价") || c.contains("下浮率") || c.contains("基准价")
+    c.contains("价格分") || c.contains("下浮率") || c.contains("基准价")
+}
+
+/// 疑似价格项（仅「投标报价」命中——可能实为主观评审项，A-18 误伤面）。
+pub fn suspected_price_item(item: &ScoringItem) -> bool {
+    is_price_item(item) && !unambiguous_price_phrase(item)
 }
 
 impl SectionScorer {
@@ -1304,10 +1321,22 @@ impl SectionScorer {
         }
         for (item, share) in &items {
             if is_price_item(item) {
-                rationale_lines.push(format!(
-                    "[{}] 价格类评分项——内容自评无意义（价格分 = f(报价)，由 PriceScoreSpec 计算），跳过",
-                    short_id(&item.requirement_id)
-                ));
+                // #538/A-18：仅「投标报价」词面命中属疑似档——可能实为评委
+                // 主观评审项，此跳过是误伤面，rationale 告警不静默；无歧义
+                // 档保持原文案。跳过行为与 max 计算不变（评分语义留 Lead）。
+                let line = if suspected_price_item(item) {
+                    format!(
+                        "[{}] 疑似价格类评分项——仅「投标报价」词面命中（若「{}」实为评委主观评审项，此跳过是误伤：请人工核对该项口径），跳过自评",
+                        short_id(&item.requirement_id),
+                        item.criteria
+                    )
+                } else {
+                    format!(
+                        "[{}] 价格类评分项——内容自评无意义（价格分 = f(报价)，由 PriceScoreSpec 计算），跳过",
+                        short_id(&item.requirement_id)
+                    )
+                };
+                rationale_lines.push(line);
                 continue;
             }
             let d = self.assess(item, content);
@@ -2756,5 +2785,77 @@ mod tests {
         // 档位差距面：凑字数技术章 vs 理想技术章
         let bad = scorer.score_section("SEC-T1", &filler_section(3000));
         assert!(bad.estimated < ds.breakdown[0].estimated / 2.0, "凑字数须显著低分");
+    }
+
+    // ---------------------------------------------------------------- #538（A-18）价格项两档
+
+    fn price_item_538(id: &str, criteria: &str) -> ScoringItem {
+        ScoringItem {
+            requirement_id: id.into(),
+            weight: Some(5.0),
+            max_score: Some(5.0),
+            criteria: criteria.into(),
+            score_rules: None,
+            is_hard_gate: false,
+            parent_id: None,
+            tiers: vec![],
+            is_objective: false,
+            mappings: vec![],
+            our_estimate: None,
+        }
+    }
+
+    #[test]
+    fn price_item_phrase_matrix_538() {
+        // 无歧义三词 → 价格项且非疑似
+        for c in ["价格分（最低价法）", "下浮率报价", "基准价计算"] {
+            let it = price_item_538("CMP-0001", c);
+            assert!(is_price_item(&it), "{c}");
+            assert!(!suspected_price_item(&it), "{c}——无歧义词不应标疑似");
+        }
+        // 「投标报价」单独命中 → 价格项但疑似（A-18：主观评审项误伤面）
+        let it = price_item_538("CMP-0002", "投标报价合理性分析");
+        assert!(is_price_item(&it), "行为不变：仍按价格项跳过");
+        assert!(suspected_price_item(&it), "仅歧义词命中应标疑似");
+        // 组合：歧义词 + 无歧义词 → 非疑似
+        let it = price_item_538("CMP-0003", "价格分（含投标报价偏离）");
+        assert!(is_price_item(&it) && !suspected_price_item(&it));
+        // 非价格项 → 两档皆 false
+        let it = price_item_538("CMP-0004", "技术方案完整性");
+        assert!(!is_price_item(&it) && !suspected_price_item(&it));
+    }
+
+    #[test]
+    fn suspected_price_item_rationale_warns_538() {
+        // 两项映射到 SEC-01：疑似档（仅「投标报价」）与无歧义档——
+        // rationale 分别含「疑似」告警与原文案（跳过行为不变）
+        let mut suspected = price_item_538("CMP-0002", "投标报价合理性分析");
+        suspected.mappings = vec![SectionMapping { section_id: "SEC-01".into(), weight_share: 1.0 }];
+        let mut unambiguous = price_item_538("CMP-0005", "价格分（基准价法）");
+        unambiguous.mappings = vec![SectionMapping { section_id: "SEC-01".into(), weight_share: 1.0 }];
+        let tree = ScoringTree {
+            roots: vec![suspected.clone(), unambiguous.clone()],
+            index: [
+                ("CMP-0002".to_string(), suspected),
+                ("CMP-0005".to_string(), unambiguous),
+            ]
+            .into_iter()
+            .collect(),
+            order: vec!["CMP-0002".into(), "CMP-0005".into()],
+        };
+        let scorer = SectionScorer::new(tree, vec![]);
+        let s = scorer.score_section("SEC-01", "本章内容任意。");
+        assert!(
+            s.rationale.contains("疑似价格类评分项") && s.rationale.contains("投标报价合理性分析"),
+            "疑似档 rationale 必须含告警与项原文: {}",
+            s.rationale
+        );
+        assert!(
+            s.rationale.contains("价格类评分项——内容自评无意义"),
+            "无歧义档保持原文案: {}",
+            s.rationale
+        );
+        assert_eq!(s.item_scores.len(), 0, "两价格项都跳过自评（行为不变）");
+        assert!((s.max - 0.0).abs() < 1e-9, "价格项不计 max（行为不变）, got {}", s.max);
     }
 }
