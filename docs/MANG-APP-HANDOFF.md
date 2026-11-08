@@ -50,7 +50,7 @@ bidcore\target\release\mang-app.exe
 │  bidcore（标书引擎）                       │
 │    bid-domain  领域模型                   │
 │    bid-tools   持久化（db.json）           │
-│    bid-mcp     11 个 MCP 工具              │
+│    bid-mcp     44 个 MCP 工具              │
 └──────────────────────────────────────────┘
 ```
 
