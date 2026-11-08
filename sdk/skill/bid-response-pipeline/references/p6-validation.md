@@ -100,6 +100,13 @@ MATRIX_READY 后不存在「悄悄改档」——重建面按 p3-matrix 状态�
 表述质量 / 逻辑连贯 / 偏离合理化 / 疑似过度承诺——**只产 finding 不改稿**：
 你读 finding 后回 P5 修订该章（external 模式重提 content），再重跑 validate。
 
+**状态条件（#534/C-29 残留——照做前先看项目状态）**：「回 P5 重提」只在
+**DRAFTING 期**可走（`draft_response_section` 的窗口是 MatrixReady+ 至
+DRAFTING）。`scope=sections` 章节级检查**同样跑模型复核**——M_ findings
+在起草期即可拿全，**纪律：M_ MAJOR 清零后才 scope=all**（ok=true 即推进
+VALIDATING，M_ 不拦推进；VALIDATING 态无内容写入工具，届时新出现的 M_
+修订出口见 p7-review.md 诚实桥接段——当前无工具出口，如实上报）。
+
 ## BLOCKER 清零路径（导出前置）
 
 `校验通过（ok=true）才推进 VALIDATING；BLOCKER 清零（或登记 WAIVED+理由）才可 EXPORT`
