@@ -401,6 +401,10 @@ pub fn xlsx_to_parsed_file(
 ///   输出会让扫描页 0 块 0 文本静默丢失——MappingGap 落标书侧逐页路由
 ///   （文本页文本层 + 扫描页 OCR 子集，bid-parse engines/mod.rs）。
 ///   纯文本件（每页 ≥1 非空白字符）不受影响，仍走本映射（零回归）。
+/// - **乱码件（#557/B-12 残留面）也不进本映射**：CID-CJK 解码失败的件
+///   pdfium 照样「成功」输出乱码残渣——门面 [`crate::pdf_garble_gate`]
+///   在映射前拦截（Garbled → MappingGap 回退旧路径仲裁链 #169/#200），
+///   本函数不重复判（闸与映射各司其职：闸决定采信，映射只管字段搬移）。
 #[allow(clippy::needless_pass_by_value)]
 pub fn pdf_to_parsed_file(
     pdf: EnginePdf,
