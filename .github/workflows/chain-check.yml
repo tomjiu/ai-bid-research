@@ -67,12 +67,33 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            poppler-utils tesseract-ocr tesseract-ocr-chi-sim libreoffice
+            poppler-utils poppler-data tesseract-ocr tesseract-ocr-chi-sim libreoffice
           pdftotext -v
           pdftoppm -v
           tesseract --version | head -1
           soffice --version
           tesseract --list-langs 2>/dev/null | grep chi_sim
+
+      - name: Verify Poppler CJK mapping (B1 text-layer fixture)
+        # --no-install-recommends omits poppler-data: pdftotext can return 0
+        # with empty text for Adobe-GB1. Verify real text before the m1 chain.
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          source = Path("fixtures/corpus-A/files/B1-设备清单.pdf")
+          result = subprocess.run(
+              ["pdftotext", "-layout", "-enc", "UTF-8", str(source), "-"],
+              capture_output=True, text=True, check=True,
+          )
+          cjk_chars = sum("\u4e00" <= ch <= "\u9fff" for ch in result.stdout)
+          if not result.stdout.strip() or cjk_chars == 0:
+              print("::error::B1 text-layer PDF produced no CJK text; check poppler-data CMap installation")
+              print(result.stderr)
+              raise SystemExit(1)
+          print(f"Poppler CJK mapping verified: chars={len(result.stdout.strip())}, CJK={cjk_chars}")
+          PY
 
       - name: Install gtk/webkit dev (T19 mang-app 构建件)
         # T19 跑 cargo test --workspace（含 mang-app）——tao/wry Linux 后端

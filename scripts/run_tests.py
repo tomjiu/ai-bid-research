@@ -48,7 +48,8 @@ SCENARIOS = ("TC-01", "TC-02", "TC-07", "TC-11")
 #   5 主文件 + 13 证据 + 4 GT + 12 转换 + 2 查询集 + 2 缺陷草稿 + 1 corpus-R README + 5 corpus-R 结构层
 #   + 5 TR2 引擎借鉴夹具（PR #15 引入：word-complex/word-merged/excel-complex + gen-log + PROVENANCE）
 EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 4 + len(S.TRANSITIONS) + 2 + 2 + 1
-                           + len(R.OUTPUT_FILES) + 5)
+                           + len(R.OUTPUT_FILES) + 5
+                           + 2)  # #559：澄清修改文件-3.1.1.docx（#425）+ ground-truth/meta.json（#491/A-20③）——携带面，见 fixture_gen.gen_carried_fixtures
 _RULE_CODES = ["CERT_EXPIRED", "PRICE_EXCEEDS_BUDGET", "DURATION_MISMATCH", "PAGE_LIMIT",
                "MISSING_SIGNATURE", "DARK_BID_WORD", "TODO_RESIDUE", "INJECTION_PATTERN"]
 _ECHO_RE = None  # 延迟编译（防 import 顺序）
@@ -98,15 +99,27 @@ def require_tools_or_skip(name: str, tools: list[str], what: str) -> bool:
 
 
 def write_env_blocked():
-    """缺失清单追加 baseline/ENV_BLOCKED.md（B1 机制复用，issue #9 要求 4）。"""
+    """缺失清单追加 baseline/ENV_BLOCKED.md（B1 机制复用，issue #9 要求 4）。
+
+    幂等（#559）：同日同缺失组合已登记 → 不重复追加。原实现每跑一次追加
+    一块——受跟踪文件被运行时副作用无界改写（脏工作区 + 无信息量 diff；
+    本机三连跑实证长了三块）。登记价值在「缺什么+怎么补」，不在次数。
+    """
     if not _ENV_MISSING:
         return
     import datetime
     p = REPO / "baseline" / "ENV_BLOCKED.md"
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.datetime.now()
+    items = [f"- {tool} —— {hint}" for tool, hint in _ENV_MISSING.items()]
+    key = "\n".join(items)
+    existing = p.read_text(encoding="utf-8") if p.exists() else ""
+    # 末块同日且同缺失组合 → 已登记，跳过
+    last_block = existing.rsplit("## ", 1)[-1]
+    if key in last_block and now.strftime("%Y-%m-%d") in last_block.split("\n", 1)[0]:
+        return
+    stamp = now.strftime("%Y-%m-%d %H:%M")
     lines = ["", f"## {stamp} run_tests.py 预检登记（issue #9 SKIP 机制）", ""]
-    for tool, hint in _ENV_MISSING.items():
-        lines.append(f"- {tool} —— {hint}")
+    lines += items
     lines += ["", f"受影响测试项已 SKIP（{len(_skipped)} 项），未计为失败。", ""]
     with open(p, "a", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -295,8 +308,15 @@ def t_fixture_integrity():
         elif hashlib.sha256(p.read_bytes()).hexdigest() != f["sha256"]:
             bad.append(f"{f['path']} 哈希不符")
     # R2 P1-4：反向校验——磁盘→manifest（游离文件会被真实流水线当语料摄入）
-    on_disk = {str(p.relative_to(FIXTURES)) for p in FIXTURES.rglob("*")
-               if p.is_file() and p.name != "manifest.json" and not p.name.endswith(".tmp")}
+    # #559 范围收口：只巡查 **manifest 治理域**（从条目动态派生顶层目录）。
+    # 原实现扫全 fixtures 树——那是写它时的事实（当时 fixtures/ 只有 corpus-A/
+    # queries/corpus-R）。其后 real-tender-batch1/2、songling-232762、
+    # synth-tender 相继入库（各有自己的 README/溯源，本就不在本 manifest
+    # 治理域）→ 102 个域外文件被误报游离，T3a 恒红无人见（主链不在 CI）。
+    governed = {f["path"].split("/", 1)[0] for f in manifest["files"]}
+    on_disk = {p.relative_to(FIXTURES).as_posix() for p in FIXTURES.rglob("*")
+               if p.is_file() and p.name != "manifest.json" and not p.name.endswith(".tmp")
+               and p.relative_to(FIXTURES).parts[0] in governed}
     stray = sorted(on_disk - {f["path"] for f in manifest["files"]})
     if stray:
         bad.append(f"游离文件未入清单：{stray[:3]}")
