@@ -753,6 +753,9 @@ impl DomainStore {
     ///   `reviewed_content_digest` 非空且 ≠ 当前 [`DomainStore::sections_digest`]
     ///   → E_UNPROCESSABLE（审核针对的内容已变更，请重新审核）——三门
     ///   之后、RT 之前：门虽过了，但针对的是旧内容，重审比修 RT 更根本；
+    /// - #544 Revising 拦截：任一章节 status==REVISING → E_UNPROCESSABLE
+    ///   （点名章节清单）——reopen 只动 status/dirty，摘要比对对其失明，
+    ///   本面是重开面的唯一导出闸门（重走原验收链后放行）；
     /// - 全部 RT DONE（open_blockers 空——否则 E_UNPROCESSABLE，消息含未关单数）。
     ///
     /// 与 export_gate.rs 两阶段门的串联语义：本面是**前置裁决面**
@@ -789,6 +792,27 @@ impl DomainStore {
                     ),
                 });
             }
+        }
+        // #544 Revising 拦截：reopen_section 置 Revising+dirty = 「此章内容
+        // 不可信」。status/dirty 不入 sections_digest（#180 六字段编码契约）——
+        // 摘要比对对 reopen 天然失明，本面是 reopen 的唯一导出侧闸门：
+        // 重开面必须走完原验收链（重新起草 → advance 到 ACCEPTED →
+        // 重过 pre_export_confirm）再导出。is_drafted(Revising)=true 的导出
+        // 包含面（export.rs）以本门为前置裁决——REVISING 章节到不了渲染面。
+        let revising: Vec<&str> = self
+            .sections
+            .iter()
+            .filter(|n| n.status == crate::outline::SectionStatus::Revising)
+            .map(|n| n.id.as_str())
+            .collect();
+        if !revising.is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "导出前置裁决未过：{} 个章节处于 REVISING（{}）——重开面必须走完原验收链（重新起草 → advance 到 ACCEPTED → 重过 pre_export_confirm）再导出",
+                    revising.len(),
+                    revising.join(", ")
+                ),
+            });
         }
         // 全部 RT DONE（BLOCKER 必须修完并带关单说明——RT 面单一真源）
         let open = self.open_blockers();
@@ -1324,6 +1348,54 @@ mod tests {
             }
             other => panic!("改叶正文后导出须 E_UNPROCESSABLE，得到 {other:?}"),
         }
+    }
+
+    /// #544｜reopen 后导出门拦截：三门全过 + 章节全 ACCEPTED → 放行；
+    /// reopen 一章（→Revising+dirty，digest 六字段不含 status——#180 比对
+    /// 不变）→ export_allowed E_UNPROCESSABLE **点名 Revising 章节**；
+    /// advance 回 ACCEPTED（走完原验收链的状态面）→ 恢复放行。
+    /// 重起草改正文的 #180 重审面由 pre_export_digest_binds_section_content
+    /// 单测覆盖——本测只钉 Revising 闸门自身。
+    #[test]
+    fn export_allowed_blocks_revising_sections() {
+        let mut s = store_with_outline();
+        s.set_section_content("SEC-0002", "第一章正文 v1（审核时点）".into()).unwrap();
+        s.set_section_content("SEC-0003", "第二章正文 v1（审核时点）".into()).unwrap();
+        // 两叶走全链到 ACCEPTED（reopen 的前置终态）
+        for id in ["SEC-0002", "SEC-0003"] {
+            use SectionStatus::*;
+            for to in [Outlining, Drafting, Drafted, Validating, Accepted] {
+                s.advance_section_status(id, to).unwrap();
+            }
+        }
+        force_status(&mut s, ProjectStatus::Drafting);
+        walk_three_gates(&mut s, vec![]);
+        assert!(s.export_allowed().is_ok(), "全 ACCEPTED + 三门过 + 无 RT → 放行");
+        // 重开一章：status/dirty 变、digest 不变（#180 失明面）——本门拦截
+        s.reopen_section("SEC-0002").unwrap();
+        let sec = s.sections().iter().find(|n| n.id == "SEC-0002").unwrap();
+        assert_eq!((sec.status, sec.dirty), (SectionStatus::Revising, true));
+        match s.export_allowed() {
+            Err(ToolError::EUnprocessable { reason }) => {
+                assert!(reason.contains("REVISING"), "须点名 REVISING：{reason}");
+                assert!(reason.contains("SEC-0002"), "须点名章节 id：{reason}");
+                assert!(reason.contains("pre_export_confirm"), "须给行动指引：{reason}");
+            }
+            other => panic!("reopen 后导出须 E_UNPROCESSABLE，得到 {other:?}"),
+        }
+        // 多章重开：点名清单全列
+        s.reopen_section("SEC-0003").unwrap();
+        match s.export_allowed() {
+            Err(ToolError::EUnprocessable { reason }) => {
+                assert!(reason.contains("2 个章节"), "计数：{reason}");
+                assert!(reason.contains("SEC-0002") && reason.contains("SEC-0003"), "{reason}");
+            }
+            other => panic!("双章 reopen 后导出须 E_UNPROCESSABLE，得到 {other:?}"),
+        }
+        // 走完原验收链（状态面）→ 恢复放行
+        s.advance_section_status("SEC-0002", SectionStatus::Accepted).unwrap();
+        s.advance_section_status("SEC-0003", SectionStatus::Accepted).unwrap();
+        assert!(s.export_allowed().is_ok(), "Revising→Accepted 全复位后恢复放行");
     }
 
     /// B｜无关变更不误伤：过门 → upsert_file 导入无关件（bump 全局
