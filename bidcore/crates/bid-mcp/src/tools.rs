@@ -1174,11 +1174,12 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
     }
     // Agent 标必选且类别不在类别阻断面（资格条件/否决项）——这些条款经
     // matrix.rs `agent_mandatory` 接线进入矩阵 blocking 面（未响应即拦
-    // 起草/导出）。信息性提示：告诉 Agent 这些标记现在有阻断力，重跑
-    // build_matrix 后生效，响应（绑证据/覆写）后放行。
+    // 起草/导出）。信息性提示：告诉 Agent 这些标记现在有阻断力，矩阵下次
+    // 重算时生效（build_outline 时自动重算——#551 措辞不教域函数名），响应
+    // （绑证据/覆写）后放行。
     if merge_stats.agent_mandatory_offcategory > 0 {
         warnings.push(format!(
-            "AGENT_MANDATORY_OFFCATEGORY: {} 条 Agent 标必选且类别不在资格/否决阻断面——已进入矩阵 blocking 面（重跑 build_matrix 后未响应将拦起草/导出；响应或人工 receipt 覆写后放行）",
+            "AGENT_MANDATORY_OFFCATEGORY: {} 条 Agent 标必选且类别不在资格/否决阻断面——已进入矩阵 blocking 面（矩阵下次重算时生效——build_outline 时自动重算；未响应将拦起草/导出；响应或人工 receipt 覆写后放行）",
             merge_stats.agent_mandatory_offcategory
         ));
     }
