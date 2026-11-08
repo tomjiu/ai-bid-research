@@ -165,7 +165,8 @@ fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(),
     }
 
     // #505：draft 面（draft_tool.rs 的 arr.len() 断言）此前只在 check()
-    // 消费——check 红了 --write 修不了，只能手改。与上面三面同款接线。    let draft_src = read(draft)?;
+    // 消费——check 红了 --write 修不了，只能手改。与上面三面同款接线。
+    let draft_src = read(draft)?;
     let draft_new = render_draft(&draft_src, n)?;
     if draft_new != draft_src {
         fs::write(draft, &draft_new).map_err(|e| Diagnostic {
