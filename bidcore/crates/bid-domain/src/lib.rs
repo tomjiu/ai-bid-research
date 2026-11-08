@@ -117,6 +117,30 @@ impl ToolError {
 }
 
 // ---------------------------------------------------------------- 项目状态机（domain-model §2）
+
+/// 无状态门工具清单（#522/C-22：`ungated_tools` 回显的单一真源）。
+///
+/// 这些工具**不参与状态机门**——不出现在任何 [`ProjectStatus::allowed_tools`]
+/// 中，调用它们不应触发状态变迁裁决。语义注意：
+/// - 无状态门 ≠ 无前置——`list_tasks` / `list_evidence` / #285② 对账三工具
+///   仍要求项目存在（壳层 route_project 把关：项目不存在 → E_NOTFOUND）；
+/// - `list_tools` / `save_version` / `score_price` 连项目也不需要；
+/// - 与各状态 `allowed_tools` 的**并集 = 当前完整可调面**（get_bid_project_state
+///   以 `allowed_next_tools` + `ungated_tools` 两字段分别回显）。
+///
+/// 护栏：bid-mcp dispatch_contract 有二分不变量测试（TOOL_NAMES == 状态门
+/// 并集 ∪ 本清单，两集不相交）——新工具要么进门表要么登记在此，漏登即红。
+pub const UNGATED_TOOLS: &[&str] = &[
+    "list_tools",
+    "list_tasks",
+    "list_evidence",
+    "save_version",
+    "score_price",
+    "get_requirement_provenance",
+    "get_block_requirements",
+    "get_annotation_overlay",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProjectStatus {

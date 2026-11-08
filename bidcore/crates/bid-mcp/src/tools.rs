@@ -380,6 +380,10 @@ fn get_bid_project_state(svc: &mut BidService, args: Value) -> ToolResult {
     Ok(json!({
         "status": status.as_str(),
         "allowed_next_tools": status.allowed_tools(),
+        // #522（C-22）：无状态门恒可调工具（与 allowed_next_tools 并集 = 完整
+        // 可调面——单一真源 bid_domain::UNGATED_TOOLS；无门≠无前置，多数仍
+        // 需项目存在，见常量注）
+        "ungated_tools": bid_domain::UNGATED_TOOLS,
         "terminal": status.next_allowed().is_empty(),
         "dirty_sections": dirty_sections,
         "pending_rewrite_directives": pending_directives,
