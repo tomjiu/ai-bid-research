@@ -304,6 +304,37 @@ fn e2e_reject_spawn_resolve_export() {
     })));
     assert_eq!(r["project_status"], "EXPORTED", "死锁面已打通");
     assert_eq!(svc.store().project().unwrap().status, ProjectStatus::Exported);
+
+    // #544｜重导前修订面（§12-F 窗口含 Exported）：叶走完验收链到 ACCEPTED
+    // → reopen（→Revising+dirty，digest 六字段不含 status——#180 比对不变）
+    // → 再导出必须被 Revising 门拦。修复前此处放行 = 被重开章节的旧正文
+    // 直进成品标书（工具 note 与 p7 教学承诺的「重导前需重过
+    // pre_export_confirm」此前零强制）。
+    let leaf = {
+        let parents: std::collections::HashSet<String> = svc.store().sections().iter()
+            .filter_map(|n| n.parent_id.clone()).collect();
+        svc.store().sections().iter()
+            .find(|n| !parents.contains(&n.id)).map(|n| n.id.clone()).unwrap()
+    };
+    {
+        let st = svc.store_mut();
+        st.advance_section_status(&leaf, SectionStatus::Validating).unwrap();
+        st.advance_section_status(&leaf, SectionStatus::Accepted).unwrap();
+    }
+    let ro = ok_result(call(&mut svc, "reopen_section", json!({
+        "project_id": pid, "section_id": leaf,
+    })));
+    assert_eq!(ro["section"]["status"], "REVISING");
+    assert_eq!(ro["section"]["dirty"], true);
+    let blocked2 = call(&mut svc, "export_bid_document", json!({
+        "project_id": pid, "format": "docx", "output_path": "out/标书-v2.docx",
+    }));
+    assert_eq!(err_code(&blocked2), "E_UNPROCESSABLE");
+    assert!(
+        err_msg(&blocked2).contains("REVISING") && err_msg(&blocked2).contains(&leaf),
+        "重导前必须被 Revising 门拦且点名章节（got: {}）",
+        err_msg(&blocked2)
+    );
 }
 
 // ---------------------------------------------------------------- 3. 分工面

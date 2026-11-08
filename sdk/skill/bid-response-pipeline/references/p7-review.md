@@ -188,7 +188,9 @@ status / project_version
 配套面（#321 同族，A-23 同批接线）：`batch_task`/`advance_task`（分工
 派工与推进——T-6 Assignment，target=SEC/REQ 自然键 upsert）；
 `reopen_section`（ACCEPTED 章节重开 → Revising+dirty，重导前修订面——
-重开后需重过 pre_export_confirm）；`set_param_responses`（技术参数应答
+重开后 `export_bid_document` 将被 E_UNPROCESSABLE 拦截并点名 REVISING
+章节：重新起草 → advance 到 ACCEPTED → 重过 pre_export_confirm 后才
+放行）；`set_param_responses`（技术参数应答
 录入——偏离表唯一入口，偏离判定派生态）。
 
 与 validate 的关系（诚实桥接）：`validate_bid_document` 的 MAJOR finding
