@@ -2628,7 +2628,6 @@ mod tests {
     /// 字典/注释（无自己的 stream），旧实现会拿 N 之后**别人的**流当 N 的。
     #[test]
     fn tounicode_non_stream_object_not_borrowing_foreign_stream() {
-        let cmap_stream = b"begincmap\n1 beginbfchar\n<0001> <4E2D>\nendbfchar\nendcmap";
         // #223 修 A：混入可打印 CID 0x0041（'A'）——纯 <0001> 件清洗后无文本层，
         // 改后不借流剩 "A"（可打印），借流仍解出「中」被断言抓到，强度不变。
         let content = b"BT /F1 12 Tf 1 0 0 -1 100 50 Tm <00410001> Tj ET";

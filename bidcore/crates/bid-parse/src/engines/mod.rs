@@ -358,7 +358,7 @@ fn mixed_parse(
     let scan_list = page_list_str(scan_nos);
     match tess.ocr_pages(path, scan_nos) {
         tesseract::MixedOcrOutcome::Done {
-            mut blocks,
+            blocks,
             failed_pages,
             stderr_note,
         } => {
