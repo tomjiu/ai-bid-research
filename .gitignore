@@ -46,3 +46,8 @@ artifacts/real-corpus-e2e/latest/*/05_drafts/
 artifacts/real-corpus-e2e/latest/*/06_*
 artifacts/real-corpus-e2e/latest/*/07_*
 artifacts/real-corpus-e2e/latest/*/08_*
+
+# Python 工具缓存（feature/llm-module 新增）
+.pytest_cache/
+output/
+
