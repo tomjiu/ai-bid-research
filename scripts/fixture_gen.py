@@ -406,6 +406,33 @@ def gen_engine_borrowed(out: Path) -> dict:
     return {"files": copied}
 
 
+def gen_carried_fixtures(out: Path) -> dict:
+    """携带面真实夹具（#559 入清单，#425→#441 引入）：仓内字节级复制到输出根。
+
+    `corpus-A/files/澄清修改文件-3.1.1.docx` 是 PR #441（fix #425）为
+    `bid-mcp/tests/merge_kind_gate_tool.rs` 新增的真实命名测试夹具（真实补遗
+    无前缀命名形态，sha256 019c15d0…，36799B）——非生成器产物，确定性语义 =
+    字节级复制（engine-borrowed 同款纪律）。T6 重生成比对依赖本面（复制到
+    --out 临时目录后由 gen_manifest 收录，与仓内 manifest 双向一致）；T3a
+    反向校验由此消除「游离文件未入清单」。
+    """
+    carried = ["corpus-A/files/澄清修改文件-3.1.1.docx"]
+    copied = 0
+    for rel in carried:
+        src = REPO / "fixtures" / rel
+        if not src.exists():
+            raise FileNotFoundError(
+                f"携带面夹具缺失：{src}（#559：仓内必须提交该文件，生成器只负责复制）")
+        dst = out / rel
+        if dst.resolve() == src.resolve():
+            copied += 1  # 默认输出 = 仓内 fixtures 本身，原地即目标
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        copied += 1
+    return {"files": copied}
+
+
 def gen_manifest(fixtures_root: Path, stats: dict):
     """覆盖整个 fixtures 根（corpus-A + queries + corpus-R），路径相对 fixtures/。"""
     files = []
@@ -475,6 +502,7 @@ def main():
     stats["queries"] = gen_queries(out / "queries")
     stats["corpus_r"] = v1_corpus_r.gen_corpus_r(out / "corpus-R")
     stats["engine_borrowed"] = gen_engine_borrowed(out)
+    stats["carried"] = gen_carried_fixtures(out)
     manifest = gen_manifest(out, stats)
 
     print(json.dumps({
