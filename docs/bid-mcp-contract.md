@@ -1221,7 +1221,7 @@ out: { file_id, file_name,
       substantive=true 后重跑 extract_requirements）；不改抽取逻辑；无 UI。
 ```
 
-## 23. check_scoring_coverage（#318 评标细则逐条响应覆盖检查 · 只读）
+## 22-B. check_scoring_coverage（#318 评标细则逐条响应覆盖检查 · 只读）
 ```
 in : { project_id }
 out: { project_id,
