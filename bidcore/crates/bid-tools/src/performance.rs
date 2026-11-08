@@ -562,7 +562,7 @@ impl BidService {
         let subject_fallback = owner_name.or_else(|| {
             // 工作区 bidder-profile.json 的 company_name（格式件面——人工填过就有）
             self.workspace_dir()
-                .and_then(|ws| bid_domain::party::BidderProfile::load(&ws).ok())
+                .and_then(|ws| crate::profile_io::load(&ws).ok())
                 .filter(|p| !p.company_name.trim().is_empty())
                 .map(|p| p.company_name)
         });
