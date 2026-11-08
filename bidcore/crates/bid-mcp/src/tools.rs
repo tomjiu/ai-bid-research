@@ -3271,7 +3271,8 @@ fn score_document(svc: &mut BidService, args: Value) -> ToolResult {
         // #224：section_id = 首映射（契约 §15 旧键保留）；mapping_ids = 全部
         // 映射章节（多对多新面）；weight_share = 首映射摊分比
         let primary = it.mappings.first();
-        if is_price_item_mirror(it) {
+        // #538：直连域层单一真源（is_price_item 已 pub——镜像删除，词面不再两处同步）
+        if bid_domain::scoring::is_price_item(it) {
             // 价格类叶：内容自评无意义（价格分 = f(报价)）——estimated 取 B1 实算值
             by_item.push(json!({
                 "item_id": it.requirement_id,
@@ -3651,13 +3652,6 @@ fn build_scorer(
         items,
         ledger_effective,
     )
-}
-
-/// 价格类评分项判定（`bid_domain::scoring::is_price_item` 的镜像——该函数
-/// 未 pub；关键词面同步自同一真源，两处修改必须一起）。
-fn is_price_item_mirror(it: &bid_domain::scoring::ScoringItem) -> bool {
-    let c = &it.criteria;
-    c.contains("价格分") || c.contains("投标报价") || c.contains("下浮率") || c.contains("基准价")
 }
 
 /// 价格分规格解析（score_price / score_document 共用——字符串糖 + 完整
