@@ -39,7 +39,7 @@ jobs:
   chain:
     name: 主链 run_tests.py（T0-T19）
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100  # #562 同源：T19 预算 2400s + 冷缓存首跑编译面，60min 装不下
     env:
       # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
       MD_CORE_DEPLOY_KEY: ${{ secrets.MD_CORE_DEPLOY_KEY }}

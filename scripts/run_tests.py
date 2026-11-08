@@ -785,8 +785,18 @@ def t_bidcore_cargo():
             f"清理 cargo target 或扩容后重跑；磁盘满时编译失败是假红，FG-15）",
         )
         return
-    _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
-                 cwd=REPO / "bidcore", timeout=900)
+    # #562 同源：超时不再裸崩（TimeoutExpired 无守卫 → traceback 直退 1 无 ✗ 行）。
+    # 首跑冷缓存全 workspace 编译可达 40min+；重跑走 Chain-cargo 缓存后大幅缩短。
+    timeout_s = 2400
+    try:
+        _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
+                     cwd=REPO / "bidcore", timeout=timeout_s)
+    except _sp.TimeoutExpired:
+        check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
+              False,
+              f"超时（{timeout_s}s）——首跑冷缓存编译面实测可达 40min+；本 run 已 save "
+              f"Chain-cargo 缓存，重跑走温缓存。若仍超时：拆分 --workspace 分 crate 门禁或扩 job 预算")
+        return
     out = _p.stdout + _p.stderr
     # 汇总行口径：各 crate 的 "test result: ok. N passed" 汇总 + 零 failed
     import re as _re
