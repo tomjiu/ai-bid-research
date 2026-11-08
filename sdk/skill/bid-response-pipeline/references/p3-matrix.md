@@ -176,8 +176,11 @@ policy/资格三态字段——`get_compliance_matrix` 行内 `response_policy` 
 ## 来源锚点
 
 - `docs/bid-mcp-contract.md` §10（build_outline 入出参/状态窗/篇幅档位，
-  L544-592）、§22（recommend_length_profile——四档推荐/信号/置信度，L1151-1184）、
-  §4（get_compliance_matrix 行结构/游标，L112-152）、§0（大结果分页约定，L16-18）
+  L607-655）、§25（recommend_length_profile——四档推荐/信号/置信度，L1306-1339；
+  #513 起节号由 §22 改 §25，消与 get_star_coverage 的撞号）、
+  §4（get_compliance_matrix 行结构/游标，L112-152）、§4-C/§4-D（get_bid_
+  project_state / set_matrix_override——#513 补章，L179/L206）、
+  §0（大结果分页约定，L16-18）
 - `bidcore/crates/bid-mcp/src/lib.rs`（TOOL_NAMES 单一真源——含矩阵人工
   覆写工具 `set_matrix_override`，#226 起入面）
 - `bidcore/crates/bid-mcp/src/tools.rs` L4370-4490（`build_outline` 壳层）、
