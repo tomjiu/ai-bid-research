@@ -85,6 +85,24 @@ jobs:
           fi
           tesseract --list-langs 2>/dev/null | grep chi_sim
 
+      - name: Link chi_sim to ~/.tessdata (环境探测口径对齐)
+        # env_preflight::tessdata_dir() 的解析口径（TESSDATA_PREFIX 优先，
+        # 否则 $HOME/.tessdata）——与 bid-parse/src/pdf.rs 消费面同源。
+        # apt 的 tesseract-ocr-chi-sim 落在 /usr/share/tesseract-ocr/*/tessdata/，
+        # 不在上述口径上 → 测试侧判 ENV_MISSING 而误报 SKIP（linux-check 的双向
+        # 断言随后判红）。此处软链到 ~/.tessdata 对齐探测面与消费面。
+        run: |
+          mkdir -p ~/.tessdata
+          SRC=$(find /usr/share/tesseract-ocr -name "chi_sim.traineddata" | head -1)
+          if [ -z "$SRC" ]; then
+            echo "::error::chi_sim.traineddata 未找到（apt 装完仍缺）"
+            exit 1
+          fi
+          echo "源: $SRC"
+          ln -sf "$SRC" ~/.tessdata/chi_sim.traineddata
+          ls -la ~/.tessdata/
+          test -f ~/.tessdata/chi_sim.traineddata && echo "chi_sim 已对齐到 ~/.tessdata"
+
       - name: Verify Poppler CJK mapping (B1 text-layer fixture)
         # --no-install-recommends omits poppler-data: pdftotext can return 0
         # with empty text for Adobe-GB1. Verify real text before the m1 chain.
