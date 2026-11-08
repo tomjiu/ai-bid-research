@@ -23,9 +23,10 @@
     warning: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2 14.4 13H1.6z"/><path d="M8 6.2v3.1M8 11.4v.6"/></svg>',
     info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.3v4M8 5.1v.6"/></svg>',
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.2 8.4 3 3 6.6-6.8"/></svg>',
-    outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h2.2M4 12h2.2M4 18.5h2.2"/><path d="M10 5.5h10M10 12h7.5M10 18.5h9"/></svg>'
+    outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h2.2M4 12h2.2M4 18.5h2.2"/><path d="M10 5.5h10M10 12h7.5M10 18.5h9"/></svg>',
+    bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>'
   };
-  var KIND_ICON = { docx: "docx", xlsx: "xlsx", pdf: "pdf", md: "md", text: "text", dir: "folder" };
+  var KIND_ICON = { docx: "docx", xlsx: "xlsx", pdf: "pdf", md: "md", text: "text", dir: "folder", bidwork: "bid" };
   function fmtBytes(n) {
     if (!Number.isFinite(n)) return "";
     if (n < 1024) return n + " B";
@@ -264,6 +265,59 @@
       if (id) push({ id, ok: false, error: { code, message } });
     };
     const findDoc = (p) => docs.find((d) => d.path === p);
+    // #313 批 A：标书面板演示数据（与真实 bid.state / bid.outline 响应同形——
+    // docs/mang/IPC-CONTRACT.md §6；只在此处造数，渲染代码零分支）
+    const demoChapterContent = (sec) =>
+      [
+        "## " + sec + " 章节正文（演示）",
+        "",
+        "> 本节由标书工作台演示桥提供——真实运行时来自 chapters/" + sec + ".json 的 content 字段。",
+        "",
+        "本节对招标文件技术参数逐项应答：",
+        "",
+        "| 参数项 | 招标要求 | 本方案响应 |",
+        "| --- | --- | --- |",
+        "| 并发容量 | ≥1000 路 | 2000 路（留双倍冗余） |",
+        "| 响应时延 | ≤50ms | 32ms 实测 |",
+        "| 可用性 | 99.9% | 99.95%（双活架构） |",
+        "",
+        "实施计划与质量保证措施见后续章节。"
+      ].join("\n");
+    const DEMO_BID = {
+      state: {
+        present: true,
+        workspace: root,
+        db: root + "\\db.json",
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", code: "", mode: "明标", status: "DRAFTING" },
+        state: {
+          status: "DRAFTING",
+          allowed_next_tools: ["draft_response_section", "validate_bid_document"],
+          terminal: false,
+          dirty_sections: [{ section_id: "SEC-0002", title: "1.1 技术参数", section_status: "DRAFTED", pending_directives: 1 }],
+          pending_rewrite_directives: [
+            { id: "RD-0001", section_id: "SEC-0002", change_id: "CH-0001", req_id: "REQ-0007", change_type: "MODIFIED", old_text: "支持 1000 路并发", new_requirement: "支持 2000 路并发", affected_segments: [], created_at: "2026-11-07T09:00:00Z" }
+          ],
+          content_binding: { sections_digest: "demo-digest", content_version: 12 },
+          agent_waivers: [],
+          human_review_complete: false
+        },
+        quick_stats: { requirements: 1120, evidence: 13, evidence_bindings: 46, sections: 26, sections_leaf: 20, sections_drafted: 12, sections_accepted: 3, sections_failed: 1, sections_dirty: 1, target_total_chars: 150000, actual_total_chars: 81200, pages_estimate: 97 }
+      },
+      outline: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+        nodes: [
+          { id: "SEC-0001", parent_id: null, title: "第一章 技术方案", level: 1, order: 1, status: "DRAFTING", dirty: false, target_chars: 15000, actual_chars: 12000, req_count: 8, is_leaf: false, has_content: false, content_attempt: 0, chapter_file: null },
+          { id: "SEC-0002", parent_id: "SEC-0001", title: "1.1 技术参数", level: 2, order: 2, status: "DRAFTED", dirty: true, target_chars: 6000, actual_chars: 5000, req_count: 5, is_leaf: true, has_content: true, content_attempt: 2, chapter_file: "chapters/SEC-0002.json" },
+          { id: "SEC-0003", parent_id: "SEC-0001", title: "1.2 商务要求", level: 2, order: 3, status: "PENDING", dirty: false, target_chars: 9000, actual_chars: 0, req_count: 3, is_leaf: true, has_content: false, content_attempt: 0, chapter_file: null },
+          { id: "SEC-0004", parent_id: null, title: "第二章 施工组织", level: 1, order: 4, status: "OUTLINING", dirty: false, target_chars: 12000, actual_chars: 0, req_count: 4, is_leaf: false, has_content: false, content_attempt: 0, chapter_file: null },
+          { id: "SEC-0005", parent_id: "SEC-0004", title: "2.1 施工进度计划", level: 2, order: 5, status: "FAILED", dirty: false, target_chars: 5000, actual_chars: 0, req_count: 2, is_leaf: true, has_content: false, content_attempt: 0, chapter_file: null },
+          { id: "SEC-0006", parent_id: "SEC-0004", title: "2.2 质量保证", level: 2, order: 6, status: "ACCEPTED", dirty: false, target_chars: 7000, actual_chars: 7150, req_count: 2, is_leaf: true, has_content: true, content_attempt: 1, chapter_file: "chapters/SEC-0006.json" }
+        ],
+        stats: { sections: 6, sections_leaf: 4, sections_drafted: 2, sections_accepted: 1, sections_failed: 1, sections_dirty: 1, target_total_chars: 27000, actual_total_chars: 12150, pages_estimate: 15 }
+      }
+    };
     return {
       mode: "demo",
       post(msg) {
@@ -274,9 +328,20 @@
               return respond(m.id, { pong: true, t: Date.now() });
             case "app.info":
               return respond(m.id, { version: "0.1.0-demo", workspace: root, ui_dir: "", exe: "mang-app.exe" });
+            case "bid.state":
+              return respond(m.id, DEMO_BID.state);
+            case "bid.outline":
+              return respond(m.id, DEMO_BID.outline);
             case "fs.tree":
               return respond(m.id, tree);
             case "fs.read": {
+              // #313 批 A：章节详情面——演示桥回 chapters/SEC-xxxx.json（与真实壳同形）
+              const secMatch = /chapters[/\\](SEC-[\w-]+)\.json$/i.exec(String(m.path || ""));
+              if (secMatch) {
+                const rec = { section_id: secMatch[1], content: demoChapterContent(secMatch[1]), char_count: 0, attempt: 1, citations: [], updated_at: Math.floor(now / 1000) };
+                const recText = JSON.stringify(rec);
+                return respond(m.id, { path: root + "\\" + String(m.path).replace(/[/\\\\]+/g, "\\"), bytes: recText.length, text: recText, mtimeMs: now });
+              }
               const d = findDoc(m.path);
               if (!d) {
                 const name = baseName(m.path || "") || "\u793A\u4F8B\u6587\u6863";
@@ -373,10 +438,14 @@
     // git 数据（「改动」面板）：{ status, available, branch, items, log, error }
     git: { status: "idle", available: false, branch: "", items: [], log: [], error: "" },
     // 版本快照（issue #42 阶段 7）：{ status, file, entries, error }
-    snapshots: { status: "idle", file: "", entries: [], error: "" }
+    snapshots: { status: "idle", file: "", entries: [], error: "" },
+    // #313 批 A：标书数据面（bid.state / bid.outline 拉取缓存）+ 大纲树折叠态
+    bid: { status: "idle", present: false, data: null, outline: null, error: "", ts: 0 },
+    bidCollapsed: /* @__PURE__ */ new Set()
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
+    { id: "bid", icon: "bid", title: "标书", key: "Ctrl+Shift+B" },
     { id: "outline", icon: "outline", title: "\u5927\u7EB2", key: "Ctrl+Shift+U" },
     { id: "history", icon: "history", title: "\u5386\u53F2", key: "Ctrl+Shift+H" },
     { id: "changes", icon: "changes", title: "\u6539\u52A8", key: "Ctrl+Shift+G" },
@@ -600,6 +669,8 @@
           { label: "\u5207\u6362\u72B6\u6001\u680F", act: () => ui.toggleStatusBar() },
           { sep: true },
           { label: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E", act: () => ui.showSidebar("files") },
+          { label: "标书", key: "Ctrl+Shift+B", act: () => ui.showSidebar("bid") },
+          { label: "标书工作台", act: () => ui.openBidWorkbench() },
           { label: "\u5927\u7EB2", key: "Ctrl+Shift+U", act: () => ui.showSidebar("outline") },
           { label: "\u5386\u53F2", key: "Ctrl+Shift+H", act: () => ui.showSidebar("history") },
           { label: "\u6539\u52A8", key: "Ctrl+Shift+G", act: () => ui.showSidebar("changes") },
@@ -760,6 +831,7 @@
       history: [{ icon: "close", title: "\u6E05\u7A7A\u5386\u53F2", act: () => ui.clearRecent() }],
       changes: [],
       star: [],
+      bid: [{ icon: "refresh", title: "刷新标书数据（bid.state / bid.outline）", act: () => ui.loadBid(true) }],
       settings: []
     };
     const acts = actions[view.id] || [];
@@ -783,13 +855,338 @@
     body.dataset.view = view;
     syncActivitySelection();
     if (view === "files") renderFilesView(body);
-    else if (view === "outline") renderOutlineView(body);
+    else if (view === "bid") {
+      if (state.bid.status === "idle") setTimeout(() => ui.loadBid(), 0);
+      renderBidView(body);
+    } else if (view === "outline") renderOutlineView(body);
     else if (view === "history") renderHistoryView(body);
     else if (view === "changes") {
       if (state.git.status === "idle") setTimeout(() => ui.loadGit(), 0);
       renderChangesView(body);
     } else if (view === "star") renderStarView(body);
     else renderSettingsView(body);
+  }
+  // ============ #313 批 A：标书数据面（bid.state / bid.outline → 侧栏视图 + 标书工作台） ============
+  // 数据来源：壳侧 bid.state（经 bid_mcp::dispatch_with 走 get_bid_project_state 真实工具面
+  // + project 元信息 + quick_stats）与 bid.outline（DomainStore 直读章节树）。
+  // 契约：docs/mang/IPC-CONTRACT.md §6。合规矩阵/自评/覆盖报告 = 批 B/C/D（占位禁用态）。
+  function bidStatusZh(s) {
+    return (
+      {
+        PENDING: "待起草",
+        OUTLINING: "大纲中",
+        DRAFTING: "起草中",
+        FAILED: "起草失败",
+        DRAFTED: "已起草",
+        VALIDATING: "校验中",
+        REVISING: "修订中",
+        ACCEPTED: "已验收"
+      }[s] || s
+    );
+  }
+  function bidProjectStatusZh(s) {
+    return (
+      {
+        DRAFT: "草稿",
+        FILES_IMPORTED: "已导入文件",
+        REQUIREMENTS_EXTRACTED: "已抽取条款",
+        MATRIX_READY: "矩阵就绪",
+        EVIDENCE_BOUND: "证据已绑定",
+        DRAFTING: "起草中",
+        VALIDATING: "校验中",
+        REVIEWING: "审核中",
+        READY_TO_EXPORT: "待导出",
+        EXPORTED: "已导出"
+      }[s] || s
+    );
+  }
+  function bidDrafted(status) {
+    return ["DRAFTED", "VALIDATING", "REVISING", "ACCEPTED"].indexOf(status) >= 0;
+  }
+  function fmtChars(n) {
+    return Number(n || 0).toLocaleString("zh-CN");
+  }
+  function renderBidViewIfVisible() {
+    if (settings.sidebarActive === "bid" && settings.sidebarVisible) renderSidebar();
+  }
+  function bidWorkbenchTab() {
+    for (const t of state.tabs) if (t.kind === "bidwork") return t;
+    return null;
+  }
+  function renderBidWorkbenchIfOpen() {
+    const tab = bidWorkbenchTab();
+    if (!tab || state.activeTabId !== tab.id) return;
+    const host = document.getElementById("pane-" + tab.id);
+    if (host && host.querySelector(".bid-wb")) renderBidWorkbenchPanes(host);
+  }
+  function bidStatCell(v, label) {
+    return '<div class="bid-stat"><span class="bid-stat-v">' + esc(v) + '</span><span class="bid-stat-k">' + esc(label) + "</span></div>";
+  }
+  function bidDisabledEntry(name, sub, batch) {
+    return '<button class="bid-entry" disabled title="后续批次接线（#313 ' + esc(batch) + '）"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">' + esc(name) + '</span><span class="bid-entry-sub">' + esc(sub) + "</span></span>" + '<span class="bid-entry-state">' + esc(batch) + " 待接线</span></button>";
+  }
+  function bindBidViewActions(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("[data-bid-act]"), (btn) => {
+      btn.addEventListener("click", () => {
+        const act = btn.dataset.bidAct;
+        if (act === "refresh") ui.loadBid(true);
+        else if (act === "open-folder") ui.openFolderDialog();
+        else if (act === "workbench") ui.openBidWorkbench();
+      });
+    });
+  }
+  /** 侧栏「标书」视图：项目状态 / 门审 / 快速统计 + 工作台与四面板入口 */
+  function renderBidView(body) {
+    const b = state.bid;
+    if (b.status === "idle" || b.status === "loading") {
+      body.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取标书项目…</div></div>';
+      return;
+    }
+    if (!b.present) {
+      const notProject = b.error && b.error.indexOf("db.json") >= 0;
+      body.innerHTML =
+        '<div class="bid-side"><div class="bid-card" data-kind="empty">'
+        + '<div class="bid-card-title">' + (notProject ? "当前工作区不是标书项目" : "读取失败") + "</div>"
+        + '<div class="bid-card-sub">' + esc(b.error || "无数据") + "</div>"
+        + '<div class="bid-card-actions">'
+        + (notProject ? '<button class="btn" data-bid-act="open-folder">' + ICON.folderOpen + "切换工作区</button>" : "")
+        + '<button class="btn" data-bid-act="refresh">重试</button></div>'
+        + "</div></div>";
+      bindBidViewActions(body);
+      return;
+    }
+    const d = b.data || {};
+    const p = d.project || {};
+    const st = d.state || {};
+    const q = d.quick_stats || {};
+    const dirtyCount = (st.dirty_sections || []).length;
+    const directives = (st.pending_rewrite_directives || []).length;
+    const waivers = (st.agent_waivers || []).length;
+    const human = !!st.human_review_complete;
+    body.innerHTML =
+      '<div class="bid-side">'
+      + '<div class="bid-card">'
+      + '<div class="bid-proj-row"><span class="bid-proj-name" title="' + esc(p.name) + '">' + esc(p.name || "未命名项目") + '</span><span class="bid-badge" data-status="' + esc(p.status) + '">' + esc(bidProjectStatusZh(p.status)) + "</span></div>"
+      + '<div class="bid-card-sub">' + esc(p.mode || "") + " · " + esc(p.id || "") + "</div>"
+      + '<div class="bid-gates">'
+      + '<div class="bid-gate" data-state="' + (human ? "ok" : "pending") + '"><span class="bid-gate-dot"></span>人工复核' + (human ? "完成" : "未完成") + "</div>"
+      + '<div class="bid-gate" data-state="' + (waivers ? "warn" : "ok") + '"><span class="bid-gate-dot"></span>Agent 门审声明 ' + waivers + " 项</div>"
+      + (dirtyCount ? '<div class="bid-gate" data-state="warn"><span class="bid-gate-dot"></span>DIRTY 章节 ' + dirtyCount + " 个</div>" : "")
+      + (directives ? '<div class="bid-gate" data-state="warn"><span class="bid-gate-dot"></span>待处置改写指令 ' + directives + " 条</div>" : "")
+      + "</div>"
+      + '<div class="bid-stats">'
+      + bidStatCell(fmtChars(q.requirements), "条款")
+      + bidStatCell(fmtChars(q.sections_leaf) + "/" + fmtChars(q.sections), "叶/总章节")
+      + bidStatCell(fmtChars(q.sections_drafted), "已起草")
+      + bidStatCell(fmtChars(q.evidence), "证据")
+      + bidStatCell(fmtChars(q.actual_total_chars), "实际字数")
+      + bidStatCell(fmtChars(q.target_total_chars), "配额字数")
+      + "</div>"
+      + '<div class="bid-card-sub">≈ ' + fmtChars(q.pages_estimate) + " 页（844 字/页）· " + (b.ts ? timeAgo(b.ts) : "—") + "</div>"
+      + '<div class="bid-card-actions"><button class="btn btn-primary" data-bid-act="workbench">' + ICON.bid + "打开标书工作台</button></div>"
+      + "</div>"
+      + '<div class="bid-card"><div class="bid-card-title">面板</div>'
+      + '<button class="bid-entry" data-bid-act="workbench"><span class="bid-entry-icon">' + ICON.outline + '</span><span class="bid-entry-main"><span class="bid-entry-name">大纲树</span><span class="bid-entry-sub">章节层级 · 字数进度 · 状态标记</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + bidDisabledEntry("合规矩阵", "REQ × 响应状态 × 证据", "批 B")
+      + bidDisabledEntry("自评", "BLOCKER / WARNING / 评分", "批 C")
+      + bidDisabledEntry("覆盖报告", "已判定 / 未判定 / ★条款", "批 D")
+      + "</div></div>";
+    bindBidViewActions(body);
+  }
+  /** 「标书工作台」伪标签页骨架（数据由 renderBidWorkbenchPanes 就地补齐） */
+  function renderBidWorkbenchView(tab, host) {
+    host.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.className = "bid-wb";
+    wrap.innerHTML =
+      '<header class="bid-wb-head">'
+      + '<span class="bid-wb-title">' + ICON.bid + "标书工作台</span>"
+      + '<span class="bid-wb-project" id="bid-wb-project"></span>'
+      + '<span class="bid-wb-status" id="bid-wb-status"></span>'
+      + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline">刷新</button>'
+      + "</header>"
+      + '<div class="bid-wb-body">'
+      + '<aside class="bid-tree" id="bid-tree" role="tree" aria-label="标书大纲树"></aside>'
+      + '<section class="bid-main">'
+      + '<nav class="bid-tabs" role="tablist">'
+      + '<button class="bid-tab" role="tab" aria-selected="true" data-bid-panel="detail">章节详情</button>'
+      + '<button class="bid-tab" role="tab" disabled title="批 B 接线（#313）">合规矩阵</button>'
+      + '<button class="bid-tab" role="tab" disabled title="批 C 接线（#313）">自评</button>'
+      + '<button class="bid-tab" role="tab" disabled title="批 D 接线（#313）">覆盖报告</button>'
+      + "</nav>"
+      + '<div class="bid-panel" id="bid-panel"></div>'
+      + "</section></div>";
+    host.appendChild(wrap);
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-bid-act]");
+      if (btn && btn.dataset.bidAct === "refresh") ui.loadBid(true);
+    });
+    renderBidWorkbenchPanes(host);
+  }
+  function bidOutlineNodes() {
+    const o = state.bid.outline;
+    return o && Array.isArray(o.nodes) ? o.nodes : [];
+  }
+  /** 可见行 = 祖先全部未被折叠的节点（nodes 本身按 order 升序——壳侧保证） */
+  function bidVisibleRows(nodes) {
+    const byId = {};
+    nodes.forEach((n) => {
+      byId[n.id] = n;
+    });
+    return nodes.filter((n) => {
+      let cur = n;
+      while (cur && cur.parent_id) {
+        if (state.bidCollapsed.has(cur.parent_id)) return false;
+        cur = byId[cur.parent_id];
+      }
+      return true;
+    });
+  }
+  /** 工作台数据面：头部（项目/状态）+ 左树 + 右详情（选中节点） */
+  function renderBidWorkbenchPanes(host) {
+    if (!host || !host.querySelector) return;
+    const b = state.bid;
+    const projEl = host.querySelector("#bid-wb-project");
+    const statEl = host.querySelector("#bid-wb-status");
+    const treeEl = host.querySelector("#bid-tree");
+    if (!projEl || !statEl || !treeEl) return;
+    if (b.status === "idle") {
+      ui.loadBid();
+      return;
+    }
+    if (b.status === "loading") {
+      projEl.textContent = "";
+      statEl.textContent = "读取中…";
+      treeEl.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取章节树…</div></div>';
+      return;
+    }
+    if (!b.present) {
+      projEl.textContent = "";
+      statEl.textContent = "";
+      treeEl.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">未接入标书项目</div><div>' + esc(b.error || "当前工作区无 db.json") + '</div><button class="btn" data-bid-act="refresh">重试</button></div>';
+      bindBidViewActions(treeEl);
+      return;
+    }
+    const p = (b.data && b.data.project) || {};
+    projEl.textContent = p.name || "未命名项目";
+    projEl.title = (b.data && b.data.workspace) || "";
+    statEl.innerHTML = '<span class="bid-badge" data-status="' + esc(p.status) + '">' + esc(bidProjectStatusZh(p.status)) + "</span>";
+    const nodes = bidOutlineNodes();
+    if (!nodes.length) {
+      treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
+      return;
+    }
+    const byId = {};
+    nodes.forEach((n) => {
+      byId[n.id] = n;
+    });
+    const stats = (b.outline && b.outline.stats) || {};
+    let html = '<div class="bid-tree-head"><span>大纲树</span><span class="bid-tree-meta">' + fmtChars(stats.sections_drafted) + "/" + fmtChars(stats.sections) + " 章成稿 · " + fmtChars(stats.actual_total_chars) + " 字</span></div>";
+    html += '<div class="bid-tree-body">';
+    for (const n of bidVisibleRows(nodes)) {
+      const hasKids = nodes.some((m) => m.parent_id === n.id);
+      const collapsed = state.bidCollapsed.has(n.id);
+      const pad = 10 + (n.level - 1) * 14;
+      const pct = n.target_chars > 0 ? Math.min(100, Math.round((n.actual_chars / n.target_chars) * 100)) : 0;
+      // 字数进度条：未起草 = 中性灰；已起草不足配额 = 红（issue 验收「不足标红」）；达标 = 绿
+      const barState = !bidDrafted(n.status) ? "pending" : pct >= 100 ? "ok" : "low";
+      html +=
+        '<div class="bid-node" role="treeitem" data-id="' + esc(n.id) + '" data-leaf="' + String(!hasKids) + '" aria-expanded="' + (hasKids ? String(!collapsed) : "false") + '" tabindex="0" style="padding-left:' + pad + 'px">'
+        + '<span class="bid-caret"' + (hasKids ? "" : " aria-hidden=" + String.fromCharCode(34) + "true" + String.fromCharCode(34)) + ' style="transform:rotate(' + (hasKids && !collapsed ? "90deg" : "0deg") + ')">' + (hasKids ? ICON.chevron : "") + "</span>"
+        + '<span class="bid-node-label" title="' + esc(n.title) + '">' + esc(n.title) + "</span>"
+        + (n.dirty ? '<span class="bid-dirty" title="补遗/重开致脏——待增量重写">脏</span>' : "")
+        + '<span class="bid-badge" data-status="' + esc(n.status) + '">' + esc(bidStatusZh(n.status)) + "</span>"
+        + '<span class="bid-node-chars">' + fmtChars(n.actual_chars) + "/" + fmtChars(n.target_chars) + "</span>"
+        + '<span class="bid-bar"><span class="bid-bar-fill" data-state="' + barState + '" style="width:' + pct + '%"></span></span>'
+        + "</div>";
+    }
+    html += "</div>";
+    treeEl.innerHTML = html;
+    treeEl.querySelectorAll(".bid-node").forEach((row) => {
+      row.addEventListener("click", () => {
+        const node = byId[row.dataset.id];
+        if (!node) return;
+        if (row.dataset.leaf === "false") {
+          if (state.bidCollapsed.has(node.id)) state.bidCollapsed.delete(node.id);
+          else state.bidCollapsed.add(node.id);
+          renderBidWorkbenchIfOpen();
+          return;
+        }
+        renderBidDetail(host, node);
+      });
+    });
+    // 选中态：保持已选（刷新后仍指向同一节）；初次进入选第一片叶
+    const tab = bidWorkbenchTab();
+    const selId = tab && tab.meta && tab.meta.selectedId;
+    if (selId && byId[selId]) renderBidDetail(host, byId[selId]);
+    else {
+      const firstLeaf = nodes.find((n) => !nodes.some((m) => m.parent_id === n.id));
+      if (firstLeaf) renderBidDetail(host, firstLeaf);
+    }
+  }
+  /** 章节详情（右面板）：元信息 + 章节正文预览（chapters/{id}.json 的 content） */
+  function renderBidDetail(host, node) {
+    const tab = bidWorkbenchTab();
+    if (tab) tab.meta.selectedId = node.id;
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    host.querySelectorAll("#bid-tree .bid-node").forEach((row) => {
+      row.dataset.selected = String(row.dataset.id === node.id);
+    });
+    const pct = node.target_chars > 0 ? Math.round((node.actual_chars / node.target_chars) * 100) : 0;
+    let html =
+      '<div class="bid-detail">'
+      + '<div class="bid-detail-head">'
+      + '<h3 class="bid-detail-title">' + esc(node.title) + ' <span class="bid-badge" data-status="' + esc(node.status) + '">' + esc(bidStatusZh(node.status)) + "</span>" + (node.dirty ? ' <span class="bid-dirty" title="补遗/重开致脏——待增量重写">脏</span>' : "") + "</h3>"
+      + '<div class="bid-detail-meta">'
+      + "<span>" + esc(node.id) + "</span>"
+      + "<span>层级 L" + esc(node.level) + "</span>"
+      + "<span>配额 " + fmtChars(node.target_chars) + " 字</span>"
+      + "<span>实际 " + fmtChars(node.actual_chars) + " 字（" + pct + "%）</span>"
+      + (node.is_leaf ? "<span>响应条款 " + fmtChars(node.req_count) + " 条</span>" : "<span>结构节点</span>")
+      + (node.content_attempt ? "<span>提交 v" + esc(node.content_attempt) + "</span>" : "")
+      + "</div>"
+      + '<div class="bid-detail-actions">'
+      + (node.chapter_file ? '<button class="btn btn-sm" data-bid-act="open-chapter" data-path="' + esc(node.chapter_file) + '">' + ICON.text + "打开章节文件</button>" : "")
+      + "</div></div>";
+    if (!node.is_leaf) {
+      html += '<div class="bid-detail-body"><div class="view-state"><div class="view-state-title">结构节点</div><div>本节点是大纲的调度单元，正文在子章节——点左侧树的子节点查看详情</div></div></div>';
+    } else if (!node.has_content) {
+      html += '<div class="bid-detail-body"><div class="view-state"><div class="view-state-title">未起草</div><div>本章节还没有正文——MCP 管线 draft_response_section 之后，这里展示章节内容预览</div></div></div>';
+    } else if (!node.chapter_file) {
+      html += '<div class="bid-detail-body"><div class="view-state"><div class="view-state-title">正文未落盘</div><div>章节内容在项目内存态（chapters/' + esc(node.id) + '.json 不存在）</div></div></div>';
+    } else {
+      html += '<div class="bid-detail-body" data-bid-content="' + esc(node.chapter_file) + '"><div class="view-state"><div class="view-spinner"></div><div>正在读取章节正文…</div></div></div>';
+    }
+    html += "</div>";
+    panel.innerHTML = html;
+    const openBtn = panel.querySelector('[data-bid-act="open-chapter"]');
+    if (openBtn) openBtn.addEventListener("click", () => ui.openPath(absPathOf(openBtn.dataset.path)));
+    const bodyEl = panel.querySelector("[data-bid-content]");
+    if (bodyEl && bodyEl.dataset.bidContent) {
+      const file = bodyEl.dataset.bidContent;
+      ipc("fs.read", { path: file }, 3e4)
+        .then((r) => {
+          if (!bodyEl.isConnected) return;
+          let content = "";
+          try {
+            const rec = JSON.parse(typeof r.text === "string" ? r.text : "");
+            content = rec && typeof rec.content === "string" ? rec.content : "";
+          } catch (err) {
+            content = "";
+          }
+          if (content) {
+            bodyEl.innerHTML = '<div class="md-view bid-detail-md">' + mdToHtml(content) + "</div>";
+          } else {
+            bodyEl.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">章节文件不可读</div><div>' + esc(file) + "</div></div>";
+          }
+        })
+        .catch((err) => {
+          if (!bodyEl.isConnected) return;
+          bodyEl.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">读取章节失败</div><div>' + esc(err.message || String(err)) + "</div></div>";
+        });
+    }
   }
   // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 ============
   /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
@@ -2380,6 +2777,9 @@
     } else if (ctrl && e.shiftKey && key === "e") {
       e.preventDefault();
       ui.showSidebar("files");
+    } else if (ctrl && e.shiftKey && key === "b") {
+      e.preventDefault();
+      ui.showSidebar("bid");
     } else if (ctrl && e.shiftKey && key === "u") {
       e.preventDefault();
       ui.showSidebar("outline");
@@ -2499,6 +2899,9 @@
       state.selectedRel = "";
       state.git = { status: "idle", available: false, branch: "", items: [], log: [], error: "" };
       state.snapshots = { status: "idle", file: "", entries: [], error: "" };
+      // #313 批 A：标书数据面随根失效（壳侧服务缓存也会按 db.json 指纹重开）
+      state.bid = { status: "idle", present: false, data: null, outline: null, error: "", ts: 0 };
+      state.bidCollapsed = new Set();
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
@@ -2509,6 +2912,8 @@
       renderStatusBar();
       // git 面板当前可见才立刻拉新工作区的数据（不可见时等打开再拉）
       if (settings.sidebarActive === "changes") ui.loadGit();
+      // #313 批 A：标书面板同理——可见即拉新根的标书数据
+      if (settings.sidebarActive === "bid") ui.loadBid();
       if (info && info.changed) {
         ui.toast("ok", "\u5DF2\u5207\u6362\u5DE5\u4F5C\u533A\uFF1A" + (baseName(root) || root));
       }
@@ -2521,6 +2926,56 @@
       } catch (err) {
         ui.toast("error", "\u6253\u5F00\u6587\u4EF6\u5931\u8D25\uFF1A" + err.message);
       }
+    },
+    /** #313 批 A：拉取标书数据面（bid.state + bid.outline 并行）——侧栏与工作台共用 */
+    async loadBid(force) {
+      if (!state.bridge) return;
+      if (state.bid.status === "loading" && !force) return;
+      state.bid.status = "loading";
+      state.bid.error = "";
+      renderBidViewIfVisible();
+      renderBidWorkbenchIfOpen();
+      const settled = await Promise.allSettled([
+        ipc("bid.state", {}, 15e3),
+        ipc("bid.outline", {}, 15e3)
+      ]);
+      const st = settled[0];
+      const ol = settled[1];
+      if (st.status === "fulfilled" && st.value && st.value.present) {
+        state.bid.present = true;
+        state.bid.data = st.value;
+      } else {
+        state.bid.present = false;
+        state.bid.data = null;
+        state.bid.error = st.reason && (st.reason.message || st.reason.code) || "bid.state 读取失败";
+      }
+      state.bid.outline = ol.status === "fulfilled" ? ol.value : null;
+      state.bid.status = "ready";
+      state.bid.ts = Date.now();
+      renderBidViewIfVisible();
+      renderBidWorkbenchIfOpen();
+    },
+    /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统） */
+    async openBidWorkbench() {
+      const existing = bidWorkbenchTab();
+      if (existing) return ui.activateTab(existing.id);
+      const tab = {
+        id: "t" + ++tabSeq,
+        path: "mang://bid-workbench",
+        name: "标书工作台",
+        kind: "bidwork",
+        dirty: false,
+        state: "loading",
+        error: "",
+        meta: { selectedId: "" },
+        dispose: null
+      };
+      state.tabs.push(tab);
+      state.activeTabId = tab.id;
+      renderTabs();
+      renderEmpty();
+      renderStatusBar();
+      await ui.loadTab(tab);
     },
     async openPath(p0) {
       if (!p0) return;
@@ -2554,7 +3009,10 @@
       const host = ui.ensurePane(tab);
       host.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>\u6B63\u5728\u8BFB\u53D6 ' + esc(tab.name) + "\u2026</div></div>";
       try {
-        if (tab.kind === "text" || tab.kind === "md") {
+        if (tab.kind === "bidwork") {
+          // #313 批 A：标书工作台伪标签页——不读文件系统，数据面 bid.state/bid.outline
+          renderBidWorkbenchView(tab, host);
+        } else if (tab.kind === "text" || tab.kind === "md") {
           const r = await ipc("fs.read", { path: tab.path }, 3e4);
           tab.meta.text = r && typeof r.text === "string" ? r.text : "";
           tab.meta.bytes = r && r.bytes || 0;
@@ -2846,6 +3304,7 @@
         ["Ctrl+1\u20269", "\u8DF3\u5230\u7B2C N \u4E2A Tab"],
         ["Ctrl+B", "\u663E\u793A / \u9690\u85CF\u4FA7\u680F"],
         ["Ctrl+Shift+E", "\u8D44\u6E90\u7BA1\u7406\u5668"],
+        ["Ctrl+Shift+B", "标书面板"],
         ["Ctrl+Shift+H", "\u5386\u53F2"],
         ["Ctrl+Shift+G", "\u6539\u52A8"],
         ["Ctrl+,", "\u8BBE\u7F6E"],

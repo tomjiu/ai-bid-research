@@ -4,6 +4,7 @@
 //!       / fs.stat / fs.mkdir / path-guard(../ 与绝对越界) / 大响应落盘与取回 / recent 往返
 //!       / history.list / unknown_cmd / bad_json
 //!       / mcp.status / llm.status+save 往返（#76）/ fspec.status（#76）
+//!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
 //! 输出形如 `PASS  <name>：<detail>` / `FAIL  <name>：<detail>`，最后一行汇总 + 退出码。
 
@@ -77,6 +78,74 @@ fn err_code(resp: &Value) -> String {
 
 fn result(resp: &Value) -> &Value {
     resp.get("result").unwrap_or(&Value::Null)
+}
+
+/// #313 批 A：在目录里种一个最小真实项目（bid-tools 服务面，与 MCP 写路径
+/// 同源）——1 章 + 1 叶，外加 chapters/SEC-S2.json（chapter_file 检测面）。
+fn seed_bid_project(dir: &std::path::Path) {
+    use bid_domain::outline::{OutlineNode, SectionStatus};
+    use bid_domain::{ProjectStatus, Requirement};
+    use std::collections::HashMap;
+    // 独立锚点：requirement_hash = sha256(file|locator|excerpt)——空锚点
+    // 同哈希会被 set_requirements「同位覆盖」（见 bid.rs 测试同款注记）
+    let mk_req = |id: &str, category: &str, excerpt: &str| Requirement {
+        id: id.into(),
+        category: category.into(),
+        clause_no: None,
+        anchors: vec![bid_domain::Anchor {
+            file: "A-招标文件.docx".into(),
+            kind: "para".into(),
+            locator: format!("第三章 3.2/{id}"),
+            excerpt: excerpt.into(),
+            ..bid_domain::Anchor::default()
+        }],
+        params: HashMap::new(),
+        source_file: "A-招标文件.docx".into(),
+    };
+    let mut svc = bid_tools::service::BidService::open(dir).unwrap();
+    svc.create_project("selftest 项目", "PRJ-ST", "明标", "ext-st-313").unwrap();
+    let st = svc.store_mut();
+    st.advance_project_status(ProjectStatus::FilesImported).unwrap();
+    st.set_requirements(vec![mk_req("REQ-0001", "技术参数", "投标人须提供 2000 路并发能力")])
+        .unwrap();
+    st.set_outline(vec![
+        OutlineNode {
+            id: "SEC-S1".into(),
+            parent_id: None,
+            title: "第一章 技术方案".into(),
+            level: 1,
+            order: 1,
+            // 父节点 requirement_ids = 子并集（validate_outline 要求每节点 ≥1）
+            requirement_ids: vec!["REQ-0001".into()],
+            target_chars: 15_000,
+            status: SectionStatus::Pending,
+            dirty: false,
+            content: None,
+            content_attempt: 0,
+        },
+        OutlineNode {
+            id: "SEC-S2".into(),
+            parent_id: Some("SEC-S1".into()),
+            title: "1.1 参数响应".into(),
+            level: 2,
+            order: 2,
+            requirement_ids: vec!["REQ-0001".into()],
+            target_chars: 15_000,
+            status: SectionStatus::Pending,
+            dirty: false,
+            content: None,
+            content_attempt: 0,
+        },
+    ])
+    .unwrap();
+    drop(st);
+    svc.checkpoint().unwrap();
+    std::fs::create_dir_all(dir.join("chapters")).unwrap();
+    std::fs::write(
+        dir.join("chapters").join("SEC-S2.json"),
+        r#"{"section_id":"SEC-S2","content":"占位正文","char_count":4,"attempt":1,"citations":[],"updated_at":1793000000}"#,
+    )
+    .unwrap();
 }
 
 pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
@@ -292,12 +361,14 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     // ---- #76 设置面板：mcp.status / llm.status→save→status 往返 / fspec.status
     let resp = call(&ctx, json!({"id":"t-mcp","cmd":"mcp.status"}));
     let mcp = result(&resp);
+    // FG-01 教训（diag.rs 同款）：不得硬编码工具计数——曾写死 13，工具面
+    // 涨到 45 后 --selftest 永红却无人跑。改为对单一真源 TOOL_NAMES 动态断言。
     r.check(
         "mcp.status",
         resp["ok"] == json!(true)
             && mcp["channel"].as_str() == Some("stdio")
             && mcp["ready"] == json!(true)
-            && mcp["tools"].as_u64().unwrap_or(0) == 13,
+            && mcp["tools"].as_u64().unwrap_or(0) == bid_mcp::TOOL_NAMES.len() as u64,
         format!("channel={} tools={} ready={}", mcp["channel"], mcp["tools"], mcp["ready"]),
     );
 
@@ -351,6 +422,73 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         "fspec.status(在场)",
         fs1["present"] == json!(true) && fs1["invalid"] == json!(false) && fs1["page"]["size"] == json!("A4") && fs1["font"]["body"] == json!("仿宋_GB2312"),
         format!("{} {}pt", fs1["page"]["size"], fs1["font"]["size_pt"]),
+    );
+
+    // ---- #313 批 A：标书数据面（bid.state / bid.outline）
+    // 无 db.json → 干净的 not_found（不落副作用）
+    let resp = call(&ctx, json!({"id":"t-bid-s0","cmd":"bid.state"}));
+    r.check(
+        "bid.state(无db.json)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-o0","cmd":"bid.outline"}));
+    r.check(
+        "bid.outline(无db.json)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // 种一个真实项目（bid-tools 服务面——与 MCP 写路径同源）
+    seed_bid_project(&root);
+    let resp = call(&ctx, json!({"id":"t-bid-s1","cmd":"bid.state"}));
+    let bs = result(&resp);
+    r.check(
+        "bid.state(真实项目)",
+        resp["ok"] == json!(true)
+            && bs["present"] == json!(true)
+            && bs["project"]["name"] == json!("selftest 项目")
+            && bs["state"]["status"].is_string()
+            && bs["quick_stats"]["requirements"] == json!(1)
+            && bs["quick_stats"]["sections_leaf"] == json!(1),
+        format!("status={} reqs={}", bs["state"]["status"], bs["quick_stats"]["requirements"]),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-o1","cmd":"bid.outline"}));
+    let bo = result(&resp);
+    r.check(
+        "bid.outline(章节树)",
+        bo["present"] == json!(true)
+            && bo["nodes"].as_array().map(|a| a.len() == 2).unwrap_or(false)
+            && bo["nodes"][1]["chapter_file"] == json!("chapters/SEC-S2.json")
+            && bo["stats"]["sections"] == json!(2),
+        format!("nodes={}", bo["nodes"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // db.json 被外部进程改写（bid-mcp-stdio / Agent）→ 服务缓存按指纹重开
+    {
+        let mut svc = bid_tools::service::BidService::open(&root).unwrap();
+        let st = svc.store_mut();
+        st.set_requirements(vec![bid_domain::Requirement {
+            id: "REQ-0002".into(),
+            category: "资格条件".into(),
+            clause_no: None,
+            anchors: vec![bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "para".into(),
+                locator: "第一章 1.4/REQ-0002".into(),
+                excerpt: "投标人须具备电子与智能化专业承包二级资质".into(),
+                ..bid_domain::Anchor::default()
+            }],
+            params: std::collections::HashMap::new(),
+            source_file: "A-招标文件.docx".into(),
+        }])
+        .unwrap();
+        drop(st);
+        svc.checkpoint().unwrap();
+    }
+    let resp = call(&ctx, json!({"id":"t-bid-s2","cmd":"bid.state"}));
+    r.check(
+        "bid.state(db变更重开)",
+        resp["ok"] == json!(true) && result(&resp)["quick_stats"]["requirements"] == json!(2),
+        format!("reqs={}", result(&resp)["quick_stats"]["requirements"]),
     );
 
     // ---- #194：工作区切换（workspace.open / workspace.current）
