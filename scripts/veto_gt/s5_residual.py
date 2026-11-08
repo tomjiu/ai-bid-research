@@ -16,8 +16,9 @@ import json, re, collections, os
 
 MEAS = 'artifacts/veto-measure/after-gt-supplement.json'
 GT = 'artifacts/veto-gt/ground-truth.json'
-DUMP_DIR = '/tmp/vgt-dump/'
-OUT = '/home/z/my-project/tmp-conv/vgt-supplement/s5-verdicts.jsonl'
+DUMP_DIR = os.environ.get('VGT_DUMP_DIR') or '/tmp/vgt-dump/'   # #519：env 口（与 s5_merge/supplement_merge 同待遇）
+OUT = os.environ.get('VGT_OUT_DIR') or 'artifacts/vgt-supplement/s5-verdicts.jsonl'
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
 def norm(s):
     return re.sub(r'\s+', '', s or '')
@@ -115,7 +116,8 @@ def main():
     with open(OUT, 'w') as fo:
         for v in verdicts:
             fo.write(json.dumps(v, ensure_ascii=False) + '\n')
-    with open('/home/z/my-project/tmp-conv/vgt-supplement/s5-open-items.json', 'w') as fo:
+    _open_out = os.environ.get('VGT_OUT_DIR') and os.path.join(os.path.dirname(os.environ.get('VGT_OUT_DIR')), 's5-open-items.json')
+    with open(_open_out or 'artifacts/vgt-supplement/s5-open-items.json', 'w') as fo:
         json.dump(open_items, fo, ensure_ascii=False, indent=1)
 
     print(f'双生补锚 {n_dual} | 误标改判 {n_misjudge} | 待人工 {n_open}')

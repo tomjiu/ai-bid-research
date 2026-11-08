@@ -8,9 +8,10 @@ A-01 #1103-1104+#1419-1420 签章评审行 / A-18 #272-277 1.12 实质性+不允
 """
 import json, re, collections
 
-OPEN = '/home/z/my-project/tmp-conv/vgt-supplement/s5-open-items.json'
+import os
+OPEN = os.environ.get('VGT_OPEN_ITEMS') or 'artifacts/vgt-supplement/s5-open-items.json'   # #519：原仓外绝对路径
 GT = 'artifacts/veto-gt/ground-truth.json'
-DUMP_DIR = '/tmp/vgt-dump/'
+DUMP_DIR = os.environ.get('VGT_DUMP_DIR') or '/tmp/vgt-dump/'   # #519：env 口
 
 TRUE_RULES = [
     (r'不允许偏离招标文件的实质性要求|不允许偏离$', '实质性响应否决', '1.12 偏差不允许——实质性要求不可偏离（与 A-05 #305 判例一致）'),
@@ -127,7 +128,9 @@ def main():
             byk[k] = v
     verdicts = list(byk.values())
 
-    with open('/home/z/my-project/tmp-conv/vgt-supplement/s5-final.jsonl', 'w') as f:
+    _final_out = os.environ.get('VGT_FINAL_OUT') or 'artifacts/vgt-supplement/s5-final.jsonl'
+    os.makedirs(os.path.dirname(_final_out), exist_ok=True)
+    with open(_final_out, 'w') as f:
         for v in verdicts:
             f.write(json.dumps(v, ensure_ascii=False) + '\n')
 
