@@ -5,7 +5,8 @@ import json, re, collections, os
 
 MEAS = 'artifacts/veto-measure/after-gt-supplement.json'
 GT = 'artifacts/veto-gt/ground-truth.json'
-DUMP_DIR = '/tmp/vgt-dump/'
+import os
+DUMP_DIR = os.environ.get('VGT_DUMP_DIR') or '/tmp/vgt-dump/'   # #519：env 口
 
 # 先复用 s5_final 的规则机
 import importlib.util

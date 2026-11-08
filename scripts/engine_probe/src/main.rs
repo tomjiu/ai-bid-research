@@ -234,7 +234,14 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let fixtures = if args.len() > 1 { args[1].clone() } else { ".".into() };
     let hostile = format!("{fixtures}/baseline/security/hostile");
-    let tr2 = "/home/z/my-project/repos/mdcore-audit-f8c860a/test-artifacts/TR2/fixtures";
+    // TR2 夹具三级（#519/D-20：可从 HEAD 重现——原钉死仓外 mdcore-audit 工作区）：
+    // CLI arg[2] → env TR2_FIXTURES → 仓相对默认（fixtures/engine-borrowed/TR2，
+    // 三件 word-merged/excel-complex/word-complex 全在仓，见该目录 PROVENANCE.md）。
+    let tr2 = args
+        .get(2)
+        .cloned()
+        .or_else(|| std::env::var("TR2_FIXTURES").ok())
+        .unwrap_or_else(|| format!("{fixtures}/fixtures/engine-borrowed/TR2"));
     let corpus_r = format!("{fixtures}/fixtures/corpus-R/D2-nonbody/D2a-非正文条款.docx");
     let corpus_a_b3 = format!("{fixtures}/fixtures/corpus-A/files/B3-图纸目录.xlsx");
     let word_merged = format!("{tr2}/word-merged.docx");
