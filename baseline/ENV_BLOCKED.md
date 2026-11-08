@@ -88,3 +88,15 @@
 - chi_sim.traineddata —— github.com/tesseract-ocr/tessdata_fast → chi_sim.traineddata 放 ~/.tessdata/
 
 受影响测试项已 SKIP（4 项），未计为失败。
+
+## 2026-11-08 11:35 run_tests.py 预检登记（issue #9 SKIP 机制）
+
+- cargo —— sh data/rustup-init.sh -y --profile minimal --default-toolchain stable（T10~T13/T17e/T19 需要）
+
+受影响测试项已 SKIP（4 项），未计为失败。
+
+## 2026-11-08 11:36 run_tests.py 预检登记（issue #9 SKIP 机制）
+
+- cargo —— sh data/rustup-init.sh -y --profile minimal --default-toolchain stable（T10~T13/T17e/T19 需要）
+
+受影响测试项已 SKIP（5 项），未计为失败。

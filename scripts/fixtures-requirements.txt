@@ -7,6 +7,10 @@ Pillow==11.3.0
 pdfplumber==0.11.9
 pymupdf==1.26.7
 
+# T4c-OCR 像素层分析（fitz pixmap → numpy，#565）：不影响夹具确定性（只消费像素），
+# 缺件走 SKIP 门（run_tests.py T0a-numpy）——不与六包同列钉版 FAIL 面。
+numpy==2.1.3
+
 # ---- bidcore（Rust 核心）环境契约 ----
 # Rust 工具链：rustup stable（实测 1.99.1；edition 2021）
 # 外部解析引擎适配器（组件版本矩阵钉住点，test-plan §5.2）：

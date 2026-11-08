@@ -137,6 +137,13 @@ def t_env_preflight():
     check("T0a Python 钉版六包一致（fixtures-requirements.txt）", not bad,
           "; ".join(bad) if bad else "")
 
+    # T0a-numpy（#565）：T4c-OCR 像素层分析（fitz pixmap → numpy）依赖 numpy——
+    # 与六包不同，numpy 不影响夹具确定性（只消费像素），缺件走 SKIP 门而非 FAIL。
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        register_env_missing("numpy", "pip install numpy==2.1.3（T4c-OCR 像素层分析；CI 装件面见 chain-check.yml）")
+
     # T0b 外部解析引擎四件（poppler 双件 / tesseract / LibreOffice headless）
     # issue #9：缺件不判 FAIL——登记入 _ENV_MISSING，受影响 T 项（T4c-OCR/T7/T10~T13）
     # 由 require_tools_or_skip 跳过；汇总行单列 skipped。
@@ -167,15 +174,36 @@ def t_env_preflight():
         check("T0c chi_sim 语言数据在位（~/.tessdata，tessdata_fast）", True, "")
 
     # T0d 渲染字体（可变字体陷阱后钉版——PIL 像素层/B2 扫描件/插图全依赖）
+    # #565：缺件走 SKIP 门（与 T0b/T0c 同构）——CI/Linux 无系统级 Sarasa 时
+    # T6（重生成）/T7（导出渲染）SKIP 而非 OSError 红链；字体钉版 v1.0.36（hinted），
+    # sha256 d604b02e…（与夹具生成基线字节一致——T6 确定性前提）。
     font = Path("/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf")
-    check("T0d SarasaMonoSC 渲染字体在位（像素层钉版）", font.exists(),
-          "" if font.exists() else "缺失时 B2/D5a/D5b/插图生成全空白（Task 16 字体陷阱）")
+    if font.exists():
+        check("T0d SarasaMonoSC 渲染字体在位（像素层钉版）", True, "")
+    else:
+        register_env_missing(
+            "SarasaMonoSC-Regular.ttf",
+            "Sarasa-Gothic v1.0.36（hinted）SarasaMonoSC-Regular.ttf → "
+            "/usr/share/fonts/truetype/chinese/（releases/download/v1.0.36/"
+            "SarasaMonoSC-TTF-1.0.36.7z；sha256 d604b02e…；CI 装件面见 chain-check.yml）")
+        skip("T0d SarasaMonoSC 渲染字体在位（像素层钉版）",
+             "ENV_MISSING: SarasaMonoSC-Regular.ttf——缺失时 B2/D5a/D5b/插图生成"
+             "全空白（Task 16 字体陷阱）；T6/T7 将 SKIP（非失败）")
 
     # T0e Rust 工具链（m1 并行线 T10~T13 与 bidcore cargo 回归）
+    # #565：与 T0b/T0c/T0d 同构——缺件登记 + SKIP（本地无 Rust 面时
+    # T10~T13/T17e/T19 SKIP 而非红链；此前 T0e 判 FAIL 且 t_m1 的 _cargo()
+    # fallback 不验存在性直接 FileNotFoundError 崩整链——同修）。
     cargo_path = Path.home() / ".cargo" / "bin" / "cargo"
     ok_e = bool(_sh.which("cargo")) or cargo_path.exists()
-    check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", ok_e,
-          "" if ok_e else "补装：sh data/rustup-init.sh -y --profile minimal --default-toolchain stable")
+    if ok_e:
+        check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", True, "")
+    else:
+        register_env_missing(
+            "cargo",
+            "sh data/rustup-init.sh -y --profile minimal --default-toolchain stable（T10~T13/T17e/T19 需要）")
+        skip("T0e cargo 工具链可达（rustup stable，实测 1.99.1）",
+             "ENV_MISSING: cargo——T10~T13/T17e/T19 将 SKIP（非失败）")
 
 
 def check(name: str, ok: bool, detail: str = ""):
@@ -372,7 +400,8 @@ def t_readback():
     # T4c-OCR（v0.4）：扫描件 OCR 通道真实性——嵌入图像须有像素文字 + tesseract 回读关键条款与四要素。
     # 背景：v0.4 前可变字体静默渲染空白（图像只有公章没有字），OCR 通道建立在空图像上未被任何测试发现。
     # issue #9：tesseract/chi_sim 缺件 → SKIP（不伪装成业务 FAIL）
-    _ocr_missing = [t for t in ("tesseract", "chi_sim.traineddata") if t in _ENV_MISSING]
+    # #565：numpy 缺件同门（fitz→numpy 像素层分析，非确定性面）——三缺一即 SKIP
+    _ocr_missing = [t for t in ("numpy", "tesseract", "chi_sim.traineddata") if t in _ENV_MISSING]
     if _ocr_missing:
         skip("T4c-OCR B2 扫描件 OCR 回读（像素层有字 + 条款归一化包含 + 四要素）",
              f"ENV_MISSING: {', '.join(_ocr_missing)}")
@@ -402,7 +431,13 @@ def t_readback():
 
 # ---------------------------------------------------------------- T7~T12：M1 Rust 流水线
 def _cargo() -> str | None:
-    return shutil.which("cargo") or str(Path.home() / ".cargo" / "bin" / "cargo")
+    # #565：fallback 路径必须验存在性——否则 which 未命中且 ~/.cargo/bin/cargo
+    # 不存在时返回幽灵路径，t_m1 守卫失效直接 FileNotFoundError 崩整链。
+    w = shutil.which("cargo")
+    if w:
+        return w
+    fb = Path.home() / ".cargo" / "bin" / "cargo"
+    return str(fb) if fb.exists() else None
 
 
 def _m1_run(scenario: str, out: Path) -> tuple[int, str]:
@@ -442,12 +477,14 @@ def t_m1():
     # 缺件则 T10~T13 整组 SKIP（测试需真实 OCR 通道，非业务失败）
     if not require_tools_or_skip(
             "T10~T13 m1 并行线（构建/单测/场景/覆盖/确定性）",
-            ["pdftotext", "pdfinfo", "tesseract", "chi_sim.traineddata"],
-            "m1 OCR 链路"):
+            ["cargo", "pdftotext", "pdfinfo", "tesseract", "chi_sim.traineddata"],
+            "m1 OCR 链路 + Rust 工具链"):
         return
     cargo = _cargo()
     if not cargo:
-        check("T10a cargo 可用（~/.cargo/bin）", False, "未找到 cargo 工具链")
+        # 防御面（正常已在 T0e 登记、组门 SKIP——此处仅断网式兜底）
+        skip("T10~T13 m1 并行线（构建/单测/场景/覆盖/确定性）",
+             "ENV_MISSING: cargo（Rust 工具链不在场）")
         return
     b = subprocess.run([cargo, "build", "--release"], capture_output=True, text=True,
                        cwd=M1_DIR, env={**os.environ, "PATH": f"{Path.home()}/.cargo/bin:{os.environ['PATH']}"})
@@ -518,6 +555,12 @@ def t_grade():
 
 def t_determinism():
     print("[T6] 夹具确定性（重生成哈希比对）")
+    # #565：重生成像素层（B2/D5a/D5b/插图）依赖钉版字体——缺件 SKIP 而非
+    # fixture_gen.py 内部 OSError: cannot open resource 红链（CI Linux 实证）。
+    if not require_tools_or_skip(
+            "T6 夹具确定性（重生成哈希比对）",
+            ["SarasaMonoSC-Regular.ttf"], "B2/D5a/D5b/插图像素层渲染（Task 16 钉版字体）"):
+        return
     with tempfile.TemporaryDirectory() as td:
         code, out = run(["scripts/fixture_gen.py", "--out", td])
         if code != 0:
@@ -540,7 +583,8 @@ def t_v1():
     # issue #9：导出保真段需 soffice（LO headless 渲染）——缺件则 T7 整组 SKIP
     if not require_tools_or_skip(
             "T7 V1 四段验证（解析覆盖 / 引用回填 / 导出保真 / 暗标口径）",
-            ["soffice", "pdftotext"], "LO headless 导出渲染"):
+            ["soffice", "pdftotext", "SarasaMonoSC-Regular.ttf"],
+            "LO headless 导出渲染 + v1_export 插图渲染（钉版字体）"):
         return
     import v1_citation
     import v1_darkbid
@@ -728,6 +772,12 @@ def t_b5_gt_eval():
     「不低于冻结基线」（基线锚定 HEAD 实测，回归即红）；「引擎 ≥ 旧路径」
     的交换等价性由 engine-diff-r3 100% EQ 冻结验收承载。"""
     print("[T18] B5 引擎路径 GT-25 抽取质量评测（冻结基线地板）")
+    # #565：评测需构建 bid-engine（cargo）——缺件 SKIP（b5_engine_gt_eval 的
+    # find_cargo 抛 FileNotFoundError 的红是环境红，同 T19 口径）。
+    if not require_tools_or_skip(
+            "T18 B5 引擎路径 GT-25 抽取质量评测（冻结基线地板）",
+            ["cargo"], "bid-engine 评测构建（Rust 工具链）"):
+        return
     import subprocess as _sp
     _p = _sp.run([sys.executable, "scripts/b5_engine_gt_eval.py"],
                  capture_output=True, text=True, cwd=REPO, timeout=400)
