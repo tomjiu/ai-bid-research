@@ -239,7 +239,7 @@ mod tests {
         }
     }
 
-    fn spawn_piped(cmd: &Command) -> std::process::Child {
+    fn spawn_piped(cmd: &mut Command) -> std::process::Child {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -252,7 +252,7 @@ mod tests {
     /// 慢命令 ~2s、预算 50ms → 稳定走超时分支（非时序敏感）。
     #[test]
     fn deadline_kills_slow_process_with_timeout_error() {
-        let mut child = spawn_piped(&slow_command());
+        let mut child = spawn_piped(&mut slow_command());
         let r = wait_output_with_deadline(&mut child, 50);
         let msg = r.expect_err("2s 慢命令配 50ms 预算必超时");
         assert!(
@@ -268,7 +268,7 @@ mod tests {
     ///（timeout 机制不误伤慢但合法的命令；读线程的 stdout 传递面）。
     #[test]
     fn generous_budget_lets_slow_process_finish() {
-        let mut child = spawn_piped(&slow_command());
+        let mut child = spawn_piped(&mut slow_command());
         let (status, _out, _err) =
             wait_output_with_deadline(&mut child, 15_000).expect("15s 预算足够 2s 命令完成");
         assert!(status.success(), "sleep/ping 正常退出应 success");
