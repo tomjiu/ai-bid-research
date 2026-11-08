@@ -189,10 +189,19 @@ def t_env_preflight():
         check("T0d SarasaMonoSC 渲染字体在位（像素层钉版）", True, str(font))
 
     # T0e Rust 工具链（m1 并行线 T10~T13 与 bidcore cargo 回归）
+    # #565：与 T0b/T0c/T0d/T0f 同构——缺件登记 + SKIP（本地无 Rust 面时
+    # T10~T13/T17e/T18/T19 SKIP 而非红链；此前 T0e 判 FAIL 且 t_m1 的
+    # _cargo() fallback 不验存在性直接 FileNotFoundError 崩整链——同修）。
     cargo_path = Path.home() / ".cargo" / "bin" / "cargo"
     ok_e = bool(_sh.which("cargo")) or cargo_path.exists()
-    check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", ok_e,
-          "" if ok_e else "补装：sh data/rustup-init.sh -y --profile minimal --default-toolchain stable")
+    if ok_e:
+        check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", True, "")
+    else:
+        register_env_missing(
+            "cargo",
+            "sh data/rustup-init.sh -y --profile minimal --default-toolchain stable（T10~T13/T17e/T18/T19 需要）")
+        skip("T0e cargo 工具链可达（rustup stable，实测 1.99.1）",
+             "ENV_MISSING: cargo——T10~T13/T17e/T18/T19 将 SKIP（非失败）")
 
     # T0f numpy（#565：T4c-OCR 像素层统计依赖——CI 链路实测缺件恒红的环境门收口）
     try:
@@ -433,7 +442,13 @@ def t_readback():
 
 # ---------------------------------------------------------------- T7~T12：M1 Rust 流水线
 def _cargo() -> str | None:
-    return shutil.which("cargo") or str(Path.home() / ".cargo" / "bin" / "cargo")
+    # #565：fallback 路径必须验存在性——否则 which 未命中且 ~/.cargo/bin/cargo
+    # 不存在时返回幽灵路径，t_m1 守卫失效直接 FileNotFoundError 崩整链。
+    w = shutil.which("cargo")
+    if w:
+        return w
+    fb = Path.home() / ".cargo" / "bin" / "cargo"
+    return str(fb) if fb.exists() else None
 
 
 def _m1_run(scenario: str, out: Path) -> tuple[int, str]:
@@ -473,12 +488,14 @@ def t_m1():
     # 缺件则 T10~T13 整组 SKIP（测试需真实 OCR 通道，非业务失败）
     if not require_tools_or_skip(
             "T10~T13 m1 并行线（构建/单测/场景/覆盖/确定性）",
-            ["pdftotext", "pdfinfo", "tesseract", "chi_sim.traineddata"],
-            "m1 OCR 链路"):
+            ["cargo", "pdftotext", "pdfinfo", "tesseract", "chi_sim.traineddata"],
+            "m1 OCR 链路 + Rust 工具链"):
         return
     cargo = _cargo()
     if not cargo:
-        check("T10a cargo 可用（~/.cargo/bin）", False, "未找到 cargo 工具链")
+        # 防御面（正常已在 T0e 登记、组门 SKIP——此处仅兜底）
+        skip("T10~T13 m1 并行线（构建/单测/场景/覆盖/确定性）",
+             "ENV_MISSING: cargo（Rust 工具链不在场）")
         return
     b = subprocess.run([cargo, "build", "--release"], capture_output=True, text=True,
                        cwd=M1_DIR, env={**os.environ, "PATH": f"{Path.home()}/.cargo/bin:{os.environ['PATH']}"})
@@ -764,6 +781,12 @@ def t_b5_gt_eval():
     「不低于冻结基线」（基线锚定 HEAD 实测，回归即红）；「引擎 ≥ 旧路径」
     的交换等价性由 engine-diff-r3 100% EQ 冻结验收承载。"""
     print("[T18] B5 引擎路径 GT-25 抽取质量评测（冻结基线地板）")
+    # #565：评测需构建 bid-engine（cargo）——缺件 SKIP（b5_engine_gt_eval 的
+    # find_cargo 抛 FileNotFoundError 的红是环境红，同 T19 口径）。
+    if not require_tools_or_skip(
+            "T18 B5 引擎路径 GT-25 抽取质量评测（冻结基线地板）",
+            ["cargo"], "bid-engine 评测构建（Rust 工具链）"):
+        return
     import subprocess as _sp
     _p = _sp.run([sys.executable, "scripts/b5_engine_gt_eval.py"],
                  capture_output=True, text=True, cwd=REPO, timeout=400)

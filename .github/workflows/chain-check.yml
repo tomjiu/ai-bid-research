@@ -1,0 +1,171 @@
+name: chain-check
+
+# R-20（#561）：run_tests.py 主链（T0-T19）CI 门——「主链红点零门禁信号」
+# （FG-04/FG-05）的落地收口。
+#
+# 由来（2026-11-08 实证）：
+#   · T3a 曾恒红（manifest 游离 104 个）无人见——主链不在 CI（#559 修复）；
+#   · #491 合并时又引入同型漏登（meta.json 入治理域未入清单）——CI 本可
+#     在合并时拦截（#559 的收口面在 rebase 后基线上立即抓到）；
+#   · #559 修复后本机基线 54 通过 / 4 跳过 / 0 失败——主链已具备入 CI
+#     的绿基线。其中 3 项跳过在 CI 解：chi_sim→~/.tessdata（T0c/T4c-OCR）、
+#     磁盘预算（T19——runner 余量充足，非诱导跳过）。
+#
+# 覆盖面（T0-T19）：夹具完整性/埋点读回/判分器自测/确定性重生成/V1-V3
+# 验证/m1 并行线/M1.7 真实链/engine_diff/GT-25 评测/bidcore 全量测试。
+#
+# 与 linux-check.yml（PR #556）的 T19/测试面重叠属已知——收敛路径（Lead
+# 可后续裁定）：linux-check 的 cargo test 步替换为 run_tests 调用或反之。
+# 本 workflow 不预合并那一步。
+#
+# 纪律对齐：
+#   · 退出码直通——python3 直跑，不包 tee 不吞码（0 全绿 / 1 失败即红）；
+#   · mdcore deploy key 同款条件布置（T19 的 bidcore 构建需要）；
+#   · cache 镜像 #308 拆分（restore 前置 + save 后置显式步骤，双 target 面）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 3
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  chain:
+    name: 主链 run_tests.py（T0-T19）
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
+      MD_CORE_DEPLOY_KEY: ${{ secrets.MD_CORE_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure mdcore read access (deploy key)
+        # T19（bidcore cargo test --workspace）需要 mdcore git 依赖——同款
+        # 只读 deploy key 布置；无 secret 时跳过（真门禁是 T19 的 cargo fetch）。
+        if: env.MD_CORE_DEPLOY_KEY != ''
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$MD_CORE_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git config --global url."git@github.com:mmqz/mdcore.git".insteadOf "https://github.com/mmqz/mdcore"
+          ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -T git@github.com 2>/dev/null || true
+          echo "ssh probe done（连通性以 T19 cargo fetch 为准）"
+
+      - name: Install external toolchain (poppler + tesseract + LibreOffice)
+        # T0b 外部解析引擎四件：pdftotext/pdftoppm（poppler）、tesseract、
+        # soffice（T7 V1 导出保真段的 LO headless 渲染）。装后自检版本进
+        # 日志（基线跨平台核对证据面）。
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            poppler-utils tesseract-ocr tesseract-ocr-chi-sim libreoffice
+          pdftotext -v
+          pdftoppm -v
+          tesseract --version | head -1
+          soffice --version
+          tesseract --list-langs 2>/dev/null | grep chi_sim
+
+      - name: Install gtk/webkit dev (T19 mang-app 构建件)
+        # T19 跑 cargo test --workspace（含 mang-app）——tao/wry Linux 后端
+        # 需要 gtk+-3.0 / webkit2gtk-4.1 dev 包。
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+          pkg-config --exists gtk+-3.0 || { echo "::error::gtk+-3.0 dev 缺失"; exit 1; }
+          pkg-config --exists webkit2gtk-4.1 || { echo "::error::webkit2gtk-4.1 dev 缺失"; exit 1; }
+
+      - name: Install chi_sim to ~/.tessdata (tessdata_fast —— 解跳 T0c/T4c-OCR)
+        # 脚本侧（run_tests.py T0c/T4c）的探测口径是 ~/.tessdata/（与
+        # bid-parse env_preflight::tessdata_dir 同口径：TESSDATA_PREFIX 优先，
+        # 否则用户主目录）。系统级 tesseract-ocr-chi-sim 不在该口径上——
+        # 下载 tessdata_fast 的 chi_sim.traineddata 到 ~/.tessdata/。
+        # sha256 校验固定期望值（供应链面：语言数据被换 = OCR 判定漂移）。
+        # 2026-11-08：上游 tessdata_fast raw CDN 持续 504（本地 curl 实测同象）——
+        # 改从 mdcore release ci-deps-v1 镜像取件（integration 线 dbe2fd0 同款）。
+        run: |
+          mkdir -p ~/.tessdata
+          curl -fsSL --retry 3 -o ~/.tessdata/chi_sim.traineddata \
+            https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/chi_sim.traineddata
+          ls -la ~/.tessdata/
+          # 只断言非空与可加载（上游 tessdata_fast 无官方 sha 清单钉版；
+          # 可加载性由 tesseract 直接验证）
+          tesseract --list-langs 2>&1 | grep -q chi_sim || {
+            echo "::error::~/.tessdata/chi_sim.traineddata 不可加载"; exit 1; }
+          echo "chi_sim (tessdata_fast) 就位——T0c/T4c-OCR 解跳"
+
+      - name: Install Python pinned six + numpy (fixtures-requirements 口径)
+        # T0a 钉版六包（版本漂移 = 确定性回归隐患源，T6/T13 依赖）。
+        # numpy（#565）：T4c-OCR 像素层分析（fitz pixmap → numpy）——非确定性面，
+        # 缺件时 run_tests.py T0a-numpy 登记并 SKIP T4c-OCR（这里真装让它真跑）。
+        run: |
+          python3 -m pip install --quiet \
+            python-docx==1.2.0 reportlab==4.4.9 openpyxl==3.1.5 \
+            Pillow==11.3.0 pdfplumber==0.11.9 pymupdf==1.26.7 numpy==2.1.3
+
+      - name: Install SarasaMonoSC font (v1.0.36 hinted —— #565/#570 T0d/T6/T7 钉版字体)
+        # #565/#570：夹具生成基线字体 = v1.0.36（hinted），sha256 d604b02e…（逐字节
+        # 验证过 = upstream v1.0.36 7z 解出）。ci-deps-v1 用 v1.0.29（507add5a）
+        # → T6 重生成必炸（B2/D5a/D5b sha 漂移，run 42472257021 实证）。
+        # 落位 data/fonts/（#578 resolve_render_font 三级探测第 2 级——无 sudo）；
+        # Pillow==11.3.0 wheel 自带 freetype 2.13.3（哈希 soname + RPATH，系统
+        # freetype 被旁路）→ 渲染栈 hermetic，同 wheel 跨发行版字节一致（#570）。
+        run: |
+          sudo apt-get install -y --no-install-recommends p7zip-full
+          curl -fsSL --retry 3 -o /tmp/sarasa-mono-sc.7z \
+            https://github.com/be5invis/Sarasa-Gothic/releases/download/v1.0.36/SarasaMonoSC-TTF-1.0.36.7z
+          7z e -y -o/tmp/sarasa-ext /tmp/sarasa-mono-sc.7z SarasaMonoSC-Regular.ttf >/dev/null
+          echo "d604b02e7fa3c2d21cdf0cc122656b6f843fe8e520d8934bed44760854577473  /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf" \
+            | sha256sum -c - || { echo "::error::SarasaMonoSC-Regular.ttf sha256 不符（v1.0.36 hinted 基线 d604b02e…）"; exit 1; }
+          mkdir -p data/fonts
+          cp /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf data/fonts/
+          python3 -c "from PIL import ImageFont; f=ImageFont.truetype('data/fonts/SarasaMonoSC-Regular.ttf', 20); print('SarasaMonoSC 可加载——T0d/T6/T7 解跳')"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cargo cache (#308 拆分——bidcore 与 m1 双 target 面)
+        id: cache-cargo
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            bidcore/target/
+            m1/target/
+          key: Chain-cargo-${{ hashFiles('bidcore/Cargo.lock', 'm1/Cargo.lock') }}
+          restore-keys: |
+            Chain-cargo-
+
+      - name: run_tests.py 主链直跑（T0-T19，退出码即门禁）
+        # 不包 tee、不经管道——python3 的退出码直接决定步骤红绿（0 全绿 /
+        # 1 存在失败）。环境缺件按 issue #9 机制 SKIP（横幅 + 汇总行单列），
+        # 不计失败；SKIP 数异常增多时看日志定位装件缺口。
+        run: python3 scripts/run_tests.py
+
+      - name: Save cargo cache (#308 收尾——save 独立后置)
+        if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            bidcore/target/
+            m1/target/
+          key: Chain-cargo-${{ hashFiles('bidcore/Cargo.lock', 'm1/Cargo.lock') }}
