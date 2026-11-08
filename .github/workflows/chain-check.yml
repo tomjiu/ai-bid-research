@@ -170,6 +170,12 @@ jobs:
           [ "$CJK" -gt 50 ] || { echo "::error::B1 中文抽取不足——Adobe-GB1 语言包缺件"; exit 1; }
 
       - name: run_tests.py 主链直跑（T0-T19，退出码即门禁）
+        # #571 证据面预算：T19 的 cargo test --workspace 冷缓存（无 hit 的
+        # Chain-cargo- 键）编译+175 测试实测 >900s（run 42492183787 TimeoutExpired
+        # 实证）；windows-check 同套件 ~35-40min 预算内完成。故链上给 2700s
+        # （timeout-minutes: 60 内），T19_TIMEOUT_S 参数化（#571 最小切片）。
+        env:
+          T19_TIMEOUT_S: "2700"
         # 不包 tee、不经管道——python3 的退出码直接决定步骤红绿（0 全绿 /
         # 1 存在失败）。环境缺件按 issue #9 机制 SKIP（横幅 + 汇总行单列），
         # 不计失败；SKIP 数异常增多时看日志定位装件缺口。

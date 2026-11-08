@@ -824,8 +824,22 @@ def t_bidcore_cargo():
             f"清理 cargo target 或扩容后重跑；磁盘满时编译失败是假红，FG-15）",
         )
         return
-    _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
-                 cwd=REPO / "bidcore", timeout=900)
+    # #571 前置缓解（PR#583）：预算参数化 + 超时不再裸崩整链。
+    #   · T19_TIMEOUT_S 环境变量可调（默认 900 不变——本地行为零变化）；
+    #   · TimeoutExpired 捕获后转**诊断性 FAIL**（保留超时值/已耗时/已有
+    #     输出尾部），主链汇总与退出码语义保持（#571 任务 1 的最小切片，
+    #     进程树清理与冷/热缓存实测仍归 #571 本线）。
+    _t19_timeout = int(os.environ.get("T19_TIMEOUT_S", "900"))
+    try:
+        _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
+                     cwd=REPO / "bidcore", timeout=_t19_timeout)
+    except _sp.TimeoutExpired as _te:
+        _tail = ((_te.stdout or "") + (_te.stderr or ""))[-400:]
+        check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
+              False,
+              f"TIMEOUT：cargo test --workspace 超 {_t19_timeout}s 未完（冷缓存编译面超预算——"
+              f"链上证据 run 42492183787；调 T19_TIMEOUT_S 或清缓存重跑。输出尾部：{_tail!r}")
+        return
     out = _p.stdout + _p.stderr
     # 汇总行口径：各 crate 的 "test result: ok. N passed" 汇总 + 零 failed
     import re as _re
