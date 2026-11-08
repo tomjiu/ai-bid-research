@@ -101,10 +101,35 @@ pub fn parse_docx_via_engine(path: &std::path::Path) -> Result<bid_parse::Parsed
 /// 是标书侧保留面（映射表 §3 处置列），调用方（import 路由）回退旧路径。
 /// 无 pdfium 二进制的环境返回 `EngineFailed`——调用方同样回退旧路径
 /// （pdftotext 通道），测试面走 SKIP（issue #9 口径）。
+/// **乱码件（#557/B-12 残留面）**：CID-CJK 解码失败的件 pdfium 照样「成功」
+/// 输出乱码残渣——映射前过 [`pdf_garble_gate`]，Garbled 即 `MappingGap`
+/// 回退旧路径（那里有完整仲裁链：纯 Rust 兜底互证 / OCR 救援 / 拒绝产出，
+/// #169/#200）。闸只决定「采信 vs 回退」，不做救援（那是仲裁器职责）。
 pub fn parse_pdf_via_engine(path: &std::path::Path) -> Result<bid_parse::ParsedFile, EngineError> {
     parse_office_via_engine(path, |r, bytes, meta| {
-        pdf_to_parsed_file(r.extract_pdf_text(bytes)?, meta)
+        let pdf = r.extract_pdf_text(bytes)?;
+        pdf_garble_gate(bytes, &pdf)?;
+        pdf_to_parsed_file(pdf, meta)
     })
+}
+
+/// pdfium 文本层乱码闸（#557）——采信前过 CJK 乱码探针。
+///
+/// 判据单一真源：`bid_parse::pdf_text::probe_cjk_garble_pages`（本 crate 已
+/// 依赖 bid-parse，不复制探针逻辑）。三态：
+/// - `Garbled` → `MappingGap`（乱码仲裁是标书侧保留面——调用方 `or_else`
+///   回退旧路径，获得完整仲裁链；语义与扫描件/混合件回退同列，映射表 §3
+///   的第三类边界）；
+/// - `Clean` / `NoSignal`（英文件无 CJK 声明 / 样本不足）→ 放行（防误伤：
+///   声明中文字体但正文以英文为主的模板件降级无损失，闸不拦）。
+pub fn pdf_garble_gate(bytes: &[u8], pdf: &crate::types::EnginePdf) -> Result<(), EngineError> {
+    use bid_parse::pdf_text::{probe_cjk_garble_pages, CjkGarbleProbe};
+    if probe_cjk_garble_pages(bytes, &pdf.pages).verdict == CjkGarbleProbe::Garbled {
+        return Err(EngineError::MappingGap(
+            "pdfium 文本层疑似 CJK 乱码（CID 解码失败形态）——仲裁/兜底互证/OCR 救援在标书侧旧路径（#557：闸只决定采信 vs 回退）".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// 门面（B3-4）：xlsx 通道——引擎三门 + calamine 五面提取 + 映射。
