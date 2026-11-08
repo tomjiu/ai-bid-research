@@ -112,6 +112,20 @@ jobs:
           echo "gtk3: $(pkg-config --modversion gtk+-3.0)"
           echo "webkit: $(pkg-config --modversion webkit2gtk-4.1)"
 
+      - name: Install Python mcp SDK (官方 SDK e2e 依赖)
+        # mcp_sdk_e2e.rs 探测 `python3 -c "import mcp"`——缺席时打 SKIP 横幅，
+        # 被「Verify SKIP banner absent」零 SKIP 硬门拦红（run 42481940896
+        # 实证）。全装面纪律：装上让官方 SDK e2e 真跑（stdio 握手 +
+        # list_tools 全量 + call_tool 三态）。钉版与 fixtures-requirements
+        # 同纪律（SDK 行为漂移 = 协议验收面漂移）。1.27.0 本地实证：
+        # ClientSession/StdioServerParameters/stdio_client 导入面 OK。
+        run: |
+          python3 -m pip install --quiet mcp==1.27.0
+          python3 -c "from mcp import ClientSession, StdioServerParameters; \
+            from mcp.client.stdio import stdio_client; \
+            print('mcp SDK import 面 OK')" || {
+            echo "::error::mcp SDK 安装失败——官方 SDK e2e 将打 SKIP 横幅被零 SKIP 门拦红"; exit 1; }
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
