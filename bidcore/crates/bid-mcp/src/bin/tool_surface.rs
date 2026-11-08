@@ -11,6 +11,7 @@
 //! 4. bid-domain/tests/state_machine_matrix.rs
 //!                                  ALL_TOOLS + 10 状态位串
 //! 5. bid-mcp/tests/dispatch_contract.rs + mcp_sdk_e2e.py  硬编码数字
+//! 6. bid-mcp/tests/draft_tool.rs     `arr.len()` 工具数断言（#505 起纳入 --write）
 //! ```
 //!
 //! 2026-11-07 单日因「加工具只改了一部分面」导致 6 个 PR CI 红
@@ -27,7 +28,7 @@
 //! ```
 //!
 //! 注意：1/2/3 是**手写面**（有注释、有顺序语义），本工具只**校验**不重写；
-//! 4/5 是**纯派生面**（位串和数字都能从 1 算出来），本工具负责重写。
+//! 4/5/6 是**纯派生面**（位串和数字都能从 1 算出来），本工具负责重写。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -125,9 +126,9 @@ fn check(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(),
     }
 }
 
-/// #494：`draft` 面（draft_tool.rs）只在 check() 消费——write() 未接
-/// 重写（功能缺口另行开单，零行为变更纪律下先 underscore 化）。
-fn write(matrix: &Path, dispatch: &Path, e2e: &Path, _draft: &Path) -> Result<(), Diagnostic> {
+/// #505：`draft` 面（draft_tool.rs）已接线 write()——check/write 全回路
+///（#494 登记的缺口由本变更收口）。
+fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(), Diagnostic> {
     let n = bid_mcp::TOOL_NAMES.len();
 
     let matrix_src = read(matrix)?;
@@ -158,6 +159,18 @@ fn write(matrix: &Path, dispatch: &Path, e2e: &Path, _draft: &Path) -> Result<()
             details: vec![],
         })?;
         println!("[tool-surface] 重写 {}", display(e2e));
+    }
+
+    // #505：draft 面（draft_tool.rs 的 arr.len() 断言）此前只在 check()
+    // 消费——check 红了 --write 修不了，只能手改。与上面三面同款接线。
+    let draft_src = read(draft)?;
+    let draft_new = render_draft(&draft_src, n)?;
+    if draft_new != draft_src {
+        fs::write(draft, &draft_new).map_err(|e| Diagnostic {
+            message: format!("写 {} 失败: {e}", display(draft)),
+            details: vec![],
+        })?;
+        println!("[tool-surface] 重写 {}", display(draft));
     }
 
     Ok(())
