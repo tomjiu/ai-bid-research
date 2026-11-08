@@ -67,18 +67,33 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -T git@github.com 2>/dev/null || true
           echo "ssh probe done（连通性以 cargo fetch 为准）"
 
-      - name: Install external toolchain (poppler + tesseract + chi_sim)
+      - name: Install external toolchain (poppler + poppler-data + tesseract + chi_sim)
         # #295 镜像 + R-21 扩面：Linux 侧 tesseract + chi_sim 一并装齐——
         # OCR 依赖测试从「恒 SKIP」转「真跑」。装后自检：版本号进日志
         # （基线跨平台核对的证据面），chi_sim 语言数据在位验证。
+        #
+        # poppler-data（CMap 资源包，#555 CI 实测缺件）：非嵌入 CID 字体
+        # 的预定义 CMap 解码必需。缺它时两类真件测试假红：
+        #   · pdf_cid_identity::gbk_euc_h_pdf_rejection…——GBK-EUC-H 声明
+        #     件在「完整环境」分支应解出中文（pdftotext 需要 poppler-data
+        #     的 GBK↔Unicode CMap），缺件解出空串；
+        #   · pdf_tables_metric::real_pdf_tables_metric_positive_on_b1——
+        #     B1 用非嵌入 STSong-Light + UniGB-UCS2-H，缺 CMap 时文本抽取
+        #     异常 → 列对齐检测恒 0 → tables 死指标假红。
+        # 本地实证：装了 poppler-data 的环境两测试全绿（bid-parse 7/7 +
+        # 1/1）；ubuntu-latest 只装 poppler-utils 不带 poppler-data。
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            poppler-utils tesseract-ocr tesseract-ocr-chi-sim
+            poppler-utils poppler-data tesseract-ocr tesseract-ocr-chi-sim
           pdftotext -v
           pdfinfo -v
           pdftoppm -v
           tesseract --version | head -1
+          dpkg -s poppler-data >/dev/null 2>&1 || {
+            echo "::error::poppler-data 缺失——CJK 预定义 CMap 解码面将假红"; exit 1; }
+          ls /usr/share/poppler/cMap/ >/dev/null 2>&1 || {
+            echo "::error::/usr/share/poppler/cMap 不在位（CMap 资源包未展开）"; exit 1; }
           if ! tesseract --list-langs 2>/dev/null | grep -q chi_sim; then
             echo "::error::chi_sim 语言数据缺失——OCR 面测试将误报 SKIP"
             exit 1
