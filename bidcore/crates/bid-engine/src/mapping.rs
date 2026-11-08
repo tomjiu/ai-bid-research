@@ -618,7 +618,8 @@ mod tests {
         // 全角章号 → Some（归一后过字符集）
         assert!(as_chapter("第２章 投标人须知").is_some(), "全角单数字（U+FF12）");
         assert!(as_chapter("第１２章 合同条款").is_some(), "全角两位数（U+FF11/FF12）");
-        assert!(as_chapter("第 ２ 章 投标人须知").is_some(), "全角 + 双侧空格");
+        assert!(as_chapter("第 ２ 章 投标人须知").is_some(), "半角空格 + 全角数字混排");
+        assert!(as_chapter("第　２　章 投标人须知").is_some(), "全角空格分隔（U+3000——nfkc 归一后 trim，PDF 抽取层常见形态）");
         assert!(as_chapter("第２5章 混合形态").is_some(), "全角+半角混合章号区");
         // 回显保留原字符串（判定归一、原文不动——locator 口径需要真原文）
         assert_eq!(
@@ -626,9 +627,10 @@ mod tests {
             Some("第２章 投标人须知".to_string()),
             "回显原文（含全角数字），仅判定走归一"
         );
-        // 全角字母章号仍拒（nfkc("Ａ")="A" 不在数字字符集）
+        // 判定边界不因归一放宽：归一后含非数字字符仍拒
+        assert!(as_chapter("第２.章 正文").is_none(), "全角数字+句点仍非章号");
+        assert!(as_chapter("第２Ａ章 正文").is_none(), "全角字母混入拒（归一后 2A 非纯数字）");
         assert!(as_chapter("第Ａ章 手册").is_none(), "全角字母章号拒（归一后仍非数字）");
-        // 全角括号序号仍拒（与半角「第（一）章」同口径）
         assert!(as_chapter("第（２）章 正文").is_none(), "章号区带括号拒（归一不拆括号）");
         // 既有半角/中文/空格形态零回归（与 chapter_arabic_numeral_dual_form 互补）
         assert!(as_chapter("第2章 投标人须知").is_some());
