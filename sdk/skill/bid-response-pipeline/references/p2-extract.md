@@ -24,8 +24,12 @@ Agent 关键点转 `REQ-Axxxx`（params 携 statement/mandatory/block_idx/
 marked_by=agent；溯源锚=块原文）。 REQ-A 后缀非纯数字 → CMP 派生 id 走
 `CMP-0000-REQ-Axxxx` 回退分支，与正则 `CMP-000N` 零碰撞。
 
-`scope` 可传 `file_ids[]` 只抽指定件（增量补遗面）。`granularity` 是保留位
-**当前未实现**（传入被忽略）。
+`scope` 当前仅支持 `"all"`（整集重抽——幂等合并，`added` 可为负的诚实
+增量）；文件子集过滤（`file_ids[]`）属 M2 扩展未实现，传非 `"all"` 会被
+E_UNPROCESSABLE 拒。补遗场景的真实路径：起草前到达 → P1 幂等重导入 +
+P2 整集重抽（幂等 merge）；起草后到达 → #319 增量重写流
+（register_addendum_changes → rewrite_section_partial，见「补遗后的
+增量重写」节）。`granularity` 是保留位**当前未实现**（传入被忽略）。
 
 ## 返回核对
 
