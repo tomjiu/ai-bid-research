@@ -98,7 +98,7 @@ async def main() -> None:
             # ---- ② list_tools（全量工具面 + inputSchema 形态）----
             tools = (await session.list_tools()).tools
             names = {t.name for t in tools}
-            check(len(tools) == 46, f"list_tools: 工具数 = {len(tools)}（46）")
+            check(len(tools) == 48, f"list_tools: 工具数 = {len(tools)}（48）")
 
             check(names == EXPECTED_TOOLS, "list_tools: 与 TOOL_NAMES 单一真源一致")
             for t in tools:

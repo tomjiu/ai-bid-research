@@ -829,6 +829,7 @@ fn input_schema(name: &str) -> Value {
                 }
             },
             "required": ["project_id", "rows"]
+        }),
         // ---- #315 业绩材料库四工具 ----
         "register_performance" => json!({
             "type": "object",
