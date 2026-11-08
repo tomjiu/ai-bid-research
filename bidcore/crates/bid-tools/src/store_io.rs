@@ -180,7 +180,7 @@ impl StoreFile {
             let name = parsed_file_name(&bytes);
             let ppath = self.dir.join(&name);
             if !ppath.exists() {
-                write_fsync_atomic(&ppath, &bytes)?;
+                write_fsync_atomic(&ppath, &bytes).map_err(StoreIoError::Io)?;
             }
             Some(name)
         };
@@ -188,7 +188,7 @@ impl StoreFile {
         // ---- 2. db.json v2（域面 + ref）原子提交
         let svc = ServiceSnapshot::v2(domain.clone(), parsed_ref);
         let json = serde_json::to_string_pretty(&svc).map_err(StoreIoError::Serialize)?;
-        write_fsync_atomic(&self.path(), json.as_bytes())?;
+        write_fsync_atomic(&self.path(), json.as_bytes()).map_err(StoreIoError::Io)?;
 
         // ---- 3. GC：清除未被引用的 parsed 文件（单进程串行——服务态无并发写）
         self.gc_parsed()?;
@@ -276,16 +276,37 @@ fn parsed_file_name(bytes: &[u8]) -> String {
 ///
 /// #460：`File::create` / `fs::rename` 接瞬态重试（Windows Defender 扫描
 /// 窗口撞锁 → os error 2/5/32；实测证据：e2e_pipeline 假红两撞，见 issue）。
-/// 有界 3 次 × 50ms 退避；非瞬态错误直报；耗尽后报最后一次错（fail-closed
-/// 不吞）。#411 的 fsync 纪律不变——重试只针对路径竞态，不取消刷盘。
-fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> Result<(), StoreIoError> {
+///
+/// #564 复发修正：**create / rename 必须作为同一重试单元**。旧版对两者
+/// 各自单独重试（3×50ms），存在结构性不可自愈面——若 Defender 在 create
+/// 与 rename 之间抢走/隔离了 tmp 文件，rename 单独重试是在重试一个必然
+/// 失败的操作（源不存在，os error 2 恒返），烧完预算后失败。实测：main
+/// f0e3ca9a（#461 已合入）run 992 仍红，e2e 启动后 140ms panic = 3 次尝试
+/// × 2 次 50ms 退避被完整烧穿的时间线。修正后整个「create→write→sync→
+/// **单一真源（#546）**：本函数是全仓唯一的 `write_fsync_atomic` 定义点
+/// ——[`profile_io`]（bidder-profile.json 落盘）改调此处，不再自备副本。
+/// 原双副本纪律分裂面：#457（profile_io 自备）× #460/#461（本处加有界
+/// 重试）——收敛后重试语义自动覆盖两侧。返回裸 [`std::io::Result`]：
+/// 错误类型适配（StoreIoError::Io / FormError::Io）由调用方 map_err 承担。
+///
+/// rename」序列作为一个闭包进 retry_transient：任何一步瞬态失败 → 重做
+/// 全序列（重建 tmp）。#411 的 fsync 纪律不变——重试只针对路径竞态，
+/// 不取消刷盘；sync_all 也随之获得瞬态重试覆盖。
+pub fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("json.tmp");
-    {
-        let mut f = retry_transient(|| std::fs::File::create(&tmp)).map_err(StoreIoError::Io)?;
-        f.write_all(bytes).map_err(StoreIoError::Io)?;
-        f.sync_all().map_err(StoreIoError::Io)?; // 提交点前刷盘（#411）
+    // 重试耗尽后清 tmp 残骸（#457 增量，#546 统一后两侧同享）——
+    // 注意闭包内部的重试成功路径不经过此分支。
+    if let Err(e) = retry_transient(|| -> std::io::Result<()> {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?; // 提交点前刷盘（#411）
+        drop(f); // 关句柄再 rename（Windows: 句柄在开时 rename 失败面更大）
+        std::fs::rename(&tmp, path)?; // 原子提交点
+        Ok(())
+    }) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
     }
-    retry_transient(|| std::fs::rename(&tmp, path)).map_err(StoreIoError::Io)?; // 原子提交点
     if cfg!(unix) {
         if let Some(parent) = path.parent() {
             if let Ok(d) = std::fs::File::open(parent) {
@@ -317,13 +338,19 @@ fn is_transient_io_error(e: &std::io::Error) -> bool {
     matches!(e.raw_os_error(), Some(2) | Some(5) | Some(32))
 }
 
-/// #460：瞬态错误有界重试（3 次 × 50ms 退避，零依赖）。
+/// #460/#564：瞬态错误有界重试（6 次指数退避 50→800ms，零依赖）。
 ///
 /// 成功返回 Ok；非瞬态错误或耗尽重试后返回最后一次 Err（fail-closed）。
-/// 与 #447（annotations 读面）同模式，本处是写面（create/rename）。
+/// 与 #447（annotations 读面）同模式，本处是写面（create→write→sync→
+/// rename 全序列单元，见 [`write_fsync_atomic`]）。
+///
+/// #564 预算扩容依据：旧版 3×50ms（累计退避 100ms）在 GH Actions Windows
+/// runner 上被实测烧穿（main f0e3ca9a run 992，e2e 启动 140ms panic）。
+/// Defender 对新落盘文件的扫描窗口可达数百毫秒至秒级，指数退避把累计
+/// 预算提到 1.55s（50+100+200+400+800ms），正常路径零退避零开销。
 fn retry_transient<T>(mut op: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
-    const ATTEMPTS: u32 = 3;
-    const BACKOFF_MS: u64 = 50;
+    const ATTEMPTS: u32 = 6;
+    const BASE_BACKOFF_MS: u64 = 50;
     let mut last_err: Option<std::io::Error> = None;
     for attempt in 0..ATTEMPTS {
         match op() {
@@ -334,7 +361,9 @@ fn retry_transient<T>(mut op: impl FnMut() -> std::io::Result<T>) -> std::io::Re
                 if !transient || attempt + 1 == ATTEMPTS {
                     break;
                 }
-                std::thread::sleep(std::time::Duration::from_millis(BACKOFF_MS));
+                // 指数退避：50ms << attempt（50/100/200/400/800，#564）
+                let backoff = BASE_BACKOFF_MS << attempt;
+                std::thread::sleep(std::time::Duration::from_millis(backoff));
             }
         }
     }
@@ -747,7 +776,10 @@ mod tests {
         assert_eq!(calls, 3, "恰好尝试三次");
     }
 
-    /// #460：瞬态错耗尽 3 次预算 → 报最后一次错（fail-closed 不吞）。
+    /// #460/#564：瞬态错耗尽 6 次预算 → 报最后一次错（fail-closed 不吞）。
+    ///
+    /// 旧版预算 3 次；#564 复发实测烧穿后扩到 6 次指数退避（见
+    /// retry_transient 文档）。
     #[test]
     fn retry_transient_fails_closed_after_exhaustion() {
         let mut calls = 0;
@@ -757,7 +789,63 @@ mod tests {
         });
         let e = r.expect_err("耗尽必须报错");
         assert_eq!(e.raw_os_error(), Some(2), "报最后一次错");
-        assert_eq!(calls, 3, "预算恰好 3 次，无无限重试");
+        assert_eq!(calls, 6, "预算恰好 6 次（#564 扩容后），无无限重试");
+    }
+
+    /// #564 核心回归：**全序列重试自愈**——确定性建模「Defender 抢走
+    /// tmp」场景：第 1 轮 create/write/sync 全成功，rename 提交点前 tmp
+    /// 被隔离（remove）→ rename 报 os error 2（与线上同码）。
+    ///
+    /// 旧版 rename 单独重试在此形态下**永不可自愈**（重试的源永远不
+    /// 在）；新版全序列单元第 2 轮重建 tmp → 提交成功。
+    #[test]
+    fn retry_whole_sequence_recovers_after_rename_source_vanished() {
+        let dir = tmp_store("whole-seq-rename-vanish");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("db.json");
+        let tmp = target.with_extension("json.tmp");
+
+        let mut round = 0;
+        let r = retry_transient(|| -> std::io::Result<()> {
+            round += 1;
+            use std::io::Write as _;
+            let mut f = std::fs::File::create(&tmp)?;
+            f.write_all(b"payload")?;
+            f.sync_all()?;
+            drop(f);
+            if round == 1 {
+                // Defender 在 rename 提交点前隔离了 tmp（#564 实测形态）
+                std::fs::remove_file(&tmp)?;
+                // 此时 rename 必然报 os error 2——与线上失败同码
+                return Err(std::io::Error::from_raw_os_error(2));
+            }
+            std::fs::rename(&tmp, &target)?;
+            Ok(())
+        });
+        assert!(r.is_ok(), "全序列重试必须自愈：{r:?}");
+        assert_eq!(std::fs::read(&target).unwrap(), b"payload");
+        assert_eq!(round, 2, "恰两轮：第一轮撞锁、第二轮重做全序列");
+    }
+
+    /// #564：全序列单元的 fail-closed 面——持续不可自愈的占用
+    /// （tmp 位置被同名目录占据：Windows 上 File::create 报 error 5，
+    /// Unix 报 EISDIR 21——两者都不在瞬态名单里）→ 一次即报，且目标文件
+    /// 不被半截污染（rename 前不覆盖——原子性）。
+    #[test]
+    fn write_fsync_atomic_fail_closed_keeps_target_untouched() {
+        let dir = tmp_store("whole-seq-fail-closed");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("db.json");
+        std::fs::write(&target, b"old-content").unwrap();
+        let tmp = target.with_extension("json.tmp");
+        std::fs::create_dir_all(&tmp).unwrap(); // tmp 位置被目录占据
+        let r = write_fsync_atomic(&target, b"new-content");
+        assert!(r.is_err(), "tmp 被目录占用必须报错（fail-closed）");
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            b"old-content",
+            "失败路径不得触碰旧文件（rename 前不覆盖——原子性）"
+        );
     }
 
     /// #460：非瞬态错误一次即返——不浪费预算（磁盘满等直报）。

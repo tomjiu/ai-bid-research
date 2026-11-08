@@ -22,7 +22,7 @@ use bid_domain::locator::EngineLocator;
 use bid_domain::principal::{self, TrustedPrincipal};
 use bid_domain::review::Gate;
 use bid_domain::{DomainStore, ParseStatus, Requirement, ToolError};
-use bid_parse::{parse_file, sha256_file, BlockKind, ParsedFile};
+use bid_parse::{parse_file_with_sha, sha256_file, BlockKind, ParsedFile};
 use std::path::{Path, PathBuf};
 
 /// 单文件导入规格（MCP 壳已完成契约校验后传入）。
@@ -415,14 +415,15 @@ pub fn import_files(
             // B3-5：pdf 引擎通道（pdfium 文本层）——扫描件（MappingGap）或
             // 无 pdfium（EngineFailed）回退旧 pdftotext/OCR 路径（映射表 §3）
             "pdf" => bid_engine::parse_pdf_via_engine(&spec.upload_ref)
-                .or_else(|_| parse_file(&spec.upload_ref, &spec.filename)),
+                // #529/B-23：哈希复用——幂等面已算过 sha，回退解析不再读第二遍
+                .or_else(|_| parse_file_with_sha(&spec.upload_ref, &spec.filename, &sha)),
             // #270：.doc（Word 97-2003）——两层设计：有转换器自动转换（sha 记
             // 原件 + 响应面标注），无转换器引导报错（Skill 侧接管）
             "doc" => {
                 converted_note = Some("CONVERTED_FROM_DOC");
                 import_doc_converted(&spec.upload_ref, &spec.filename, &sha, convert_dir)
             }
-            _ => parse_file(&spec.upload_ref, &spec.filename),
+            _ => parse_file_with_sha(&spec.upload_ref, &spec.filename, &sha),
         };
         match parsed_result {
             Ok(p) => {
@@ -628,7 +629,12 @@ fn load_or_create_approval_key(
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let key = random_approval_key();
-            std::fs::write(&path, key).map_err(crate::store_io::StoreIoError::Io)?;
+            // #580：写入走单一真源原子面（tmp+sync_all+rename，含 #460/#575
+            // 全序列瞬态重试）——裸 fs::write 撞 Defender/掉电产生半截密钥，
+            // 下次 open 即 Corrupt 且无人工出口（工作区砖死、在途 receipt
+            // 全失验）。写入面根本不该允许产生半截文件。
+            crate::store_io::write_fsync_atomic(&path, &key)
+                .map_err(crate::store_io::StoreIoError::Io)?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;

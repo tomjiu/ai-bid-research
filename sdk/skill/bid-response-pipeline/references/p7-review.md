@@ -167,6 +167,9 @@ status / project_version
 - **BLOCKER 强制派生 RT**（结构保证非约定保证）：每条 Blocker finding
   自动创建修订工单（owner 空、status=Open、锚 `section_id` 或 `PROJECT`）
   ——「Blocker 数 ≡ RT 数」是数据结构不变量；WARNING/INFO 不派生；
+- 任务分工的查询面：`list_tasks { project_id, owner?, status?, cursor? }`
+  （只读——owner/status 过滤 + 游标分页）。审校期查「谁名下还有未关单」
+  或向用户汇报 RT 归属清单时用；
 - RT 生命周期（#321 起 MCP 工具族在位——此前无工具出口 = 拒审后结构性
   死锁，唯一出路手改 db.json）：
   `Open → InProgress → Done` 逐级；处置链 =
@@ -185,7 +188,9 @@ status / project_version
 配套面（#321 同族，A-23 同批接线）：`batch_task`/`advance_task`（分工
 派工与推进——T-6 Assignment，target=SEC/REQ 自然键 upsert）；
 `reopen_section`（ACCEPTED 章节重开 → Revising+dirty，重导前修订面——
-重开后需重过 pre_export_confirm）；`set_param_responses`（技术参数应答
+重开后 `export_bid_document` 将被 E_UNPROCESSABLE 拦截并点名 REVISING
+章节：重新起草 → advance 到 ACCEPTED → 重过 pre_export_confirm 后才
+放行）；`set_param_responses`（技术参数应答
 录入——偏离表唯一入口，偏离判定派生态）。
 
 与 validate 的关系（诚实桥接）：`validate_bid_document` 的 MAJOR finding

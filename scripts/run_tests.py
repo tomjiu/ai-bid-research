@@ -45,9 +45,10 @@ M1_SCOPE = ("G1_recall", "G2_exact", "G5_transitions", "G7_idempotency")
 M1_PENDING = {"G3_policy", "G4_citation", "G6_rules"}  # M2/M3/M4 范围——db 无该字段，判分器诚实 FAIL
 SCENARIOS = ("TC-01", "TC-02", "TC-07", "TC-11")
 # 期望文件数从规格派生（R2 P2-2：不再双处硬编码）
-#   5 主文件 + 13 证据 + 4 GT + 12 转换 + 2 查询集 + 2 缺陷草稿 + 1 corpus-R README + 5 corpus-R 结构层
+#   5 主文件 + 13 证据 + 5 GT（#490 A-20②③ 增开标日 meta.json → #577 计数回补）+ 12 转换
+#   + 2 查询集 + 2 缺陷草稿 + 1 corpus-R README + 5 corpus-R 结构层
 #   + 5 TR2 引擎借鉴夹具（PR #15 引入：word-complex/word-merged/excel-complex + gen-log + PROVENANCE）
-EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 4 + len(S.TRANSITIONS) + 2 + 2 + 1
+EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 5 + len(S.TRANSITIONS) + 2 + 2 + 1
                            + len(R.OUTPUT_FILES) + 5)
 _RULE_CODES = ["CERT_EXPIRED", "PRICE_EXCEEDS_BUDGET", "DURATION_MISMATCH", "PAGE_LIMIT",
                "MISSING_SIGNATURE", "DARK_BID_WORD", "TODO_RESIDUE", "INJECTION_PATTERN"]
@@ -167,15 +168,31 @@ def t_env_preflight():
         check("T0c chi_sim 语言数据在位（~/.tessdata，tessdata_fast）", True, "")
 
     # T0d 渲染字体（可变字体陷阱后钉版——PIL 像素层/B2 扫描件/插图全依赖）
-    font = Path("/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf")
-    check("T0d SarasaMonoSC 渲染字体在位（像素层钉版）", font.exists(),
-          "" if font.exists() else "缺失时 B2/D5a/D5b/插图生成全空白（Task 16 字体陷阱）")
+    # #565：缺字体判 SKIP 环境门（issue #9 纪律——CI 实证裸 PIL OSError 无指引恒红）；
+    # 解析顺序单一真源见 fixture_spec.resolve_render_font（BID_RENDER_FONT → data/fonts/ → 钉版路径）。
+    font = S.resolve_render_font()
+    if font is None:
+        register_env_missing("SarasaMonoSC渲染字体", S.RENDER_FONT_HINT)
+        skip("T0d SarasaMonoSC 渲染字体在位（像素层钉版）",
+             "ENV_MISSING: 字体未命中（BID_RENDER_FONT → data/fonts/ → /usr/share/... 三级探测）"
+             "——受影响项 T6 将 SKIP（非失败）")
+    else:
+        check("T0d SarasaMonoSC 渲染字体在位（像素层钉版）", True, str(font))
 
     # T0e Rust 工具链（m1 并行线 T10~T13 与 bidcore cargo 回归）
     cargo_path = Path.home() / ".cargo" / "bin" / "cargo"
     ok_e = bool(_sh.which("cargo")) or cargo_path.exists()
     check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", ok_e,
           "" if ok_e else "补装：sh data/rustup-init.sh -y --profile minimal --default-toolchain stable")
+
+    # T0f numpy（#565：T4c-OCR 像素层统计依赖——CI 链路实测缺件恒红的环境门收口）
+    try:
+        import numpy  # noqa: F401
+        check("T0f numpy 在位（T4c-OCR 像素层统计）", True, "")
+    except ImportError:
+        register_env_missing("numpy", "pip install numpy（T4c-OCR 像素层统计依赖）")
+        skip("T0f numpy 在位（T4c-OCR 像素层统计）",
+             "ENV_MISSING: numpy——受影响项 T4c-OCR 将 SKIP（非失败）")
 
 
 def check(name: str, ok: bool, detail: str = ""):
@@ -372,7 +389,7 @@ def t_readback():
     # T4c-OCR（v0.4）：扫描件 OCR 通道真实性——嵌入图像须有像素文字 + tesseract 回读关键条款与四要素。
     # 背景：v0.4 前可变字体静默渲染空白（图像只有公章没有字），OCR 通道建立在空图像上未被任何测试发现。
     # issue #9：tesseract/chi_sim 缺件 → SKIP（不伪装成业务 FAIL）
-    _ocr_missing = [t for t in ("tesseract", "chi_sim.traineddata") if t in _ENV_MISSING]
+    _ocr_missing = [t for t in ("numpy", "tesseract", "chi_sim.traineddata") if t in _ENV_MISSING]
     if _ocr_missing:
         skip("T4c-OCR B2 扫描件 OCR 回读（像素层有字 + 条款归一化包含 + 四要素）",
              f"ENV_MISSING: {', '.join(_ocr_missing)}")
@@ -518,6 +535,11 @@ def t_grade():
 
 def t_determinism():
     print("[T6] 夹具确定性（重生成哈希比对）")
+    # #565：缺渲染字体 → 生成器入口即 exit(2)，属环境缺件非业务回归——SKIP 门拦截
+    if not require_tools_or_skip(
+        "T6 生成器可重跑", ["SarasaMonoSC渲染字体"], "像素层渲染依赖钉版字体"
+    ):
+        return
     with tempfile.TemporaryDirectory() as td:
         code, out = run(["scripts/fixture_gen.py", "--out", td])
         if code != 0:

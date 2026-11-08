@@ -60,6 +60,8 @@ pub(crate) fn invoke(name: &str, args: Value, svc: &mut BidService) -> ToolResul
         "build_outline" => build_outline(svc, args),
         // ---- #287 篇幅档位推荐（只读——P3 建纲前：建议+理由+alternatives 交用户确认） ----
         "recommend_length_profile" => recommend_length_profile(svc, args),
+        // ---- #316 分包清单（只读——多标段/多包识别结果 + 归属统计 + 选包状态） ----
+        "list_packages" => list_packages(svc, args),
         "register_evidence" => register_evidence(svc, args),
         "bind_evidence" => bind_evidence(svc, args),
         "record_review_gate" => record_review_gate(svc, args),
@@ -800,6 +802,18 @@ fn category_key(cn: &str) -> &'static str {
     }
 }
 
+/// `filters.category` 合法值域（#426——契约 §4：契约键或中文类别名）。
+/// **键集从 [`category_key`] 派生**（同一张映射表，不另维护一份字面量——
+/// 类别面变化时两处自动一致）；中文名 = extract 产物七类口径
+/// （契约 submit_block_marks：资格条件|否决项|评分项|技术参数|商务要求|格式要求|其他）。
+fn category_filter_domain() -> (Vec<&'static str>, Vec<&'static str>) {
+    const NAMES: [&str; 7] = [
+        "资格条件", "否决项", "评分项", "技术参数", "商务要求", "格式要求", "其他",
+    ];
+    let keys: Vec<&'static str> = NAMES.iter().map(|n| category_key(n)).collect();
+    (keys, NAMES.to_vec())
+}
+
 /// 条款号数值化（`3.2.1` → [3, 2, 1]——缺号检测的序比较基元）。
 fn clause_digits(no: &str) -> Option<Vec<u64>> {
     let parts: Vec<&str> = no.split('.').collect();
@@ -1058,6 +1072,30 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
         }
     }
 
+    // ---- #316 分包识别与 REQ 归属（三形态：文件名/章节结构/分包清单表格）。
+    // 合并面之后、落库之前——params 加性写入（REQ 产物零位移：id/category/
+    // anchors 不动，requirement_hash 不含 params，幂等合并稳定）。无分包件
+    // → 空注册表 + REQ 不标（既有行为逐位一致）。
+    let packages = bid_parse::packages::detect_and_attribute(svc.parsed(), &mut reqs);
+    let package_counts: std::collections::BTreeMap<String, usize> = {
+        let mut m: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        for r in reqs.iter() {
+            if let Some(p) = bid_domain::packages::requirement_package_id(r) {
+                *m.entry(p.to_string()).or_insert(0) += 1;
+            }
+        }
+        m
+    };
+    let shared_count = if packages.is_empty() {
+        0
+    } else {
+        reqs.iter()
+            .filter(|r| bid_domain::packages::requirement_package_id(r).is_none())
+            .count()
+    };
+    // 重抽幂等：注册表整集替换（选中包消失时 set_packages 内部复位）
+    svc.store_mut().set_packages(packages.clone());
+
     // ---- #285 ① ★漏标检测：字面★真值 vs 已抽 REQ（抽取面汇总 + 警告）。
     //
     // 口径与 get_star_coverage 同源（star_scan 三级恒等式）；此处只汇总
@@ -1224,6 +1262,20 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
         },
         "conflicts": conflicts,
         "missing_sequence": missing_sequence,
+        // #316 分包识别汇总（无分包 → detected=0，items 空——既有项目零位移；
+        // 有分包时 shared = 共用条款数，选包建纲时共用条款全量进纲）
+        "packages": {
+            "detected": packages.len(),
+            "items": packages.iter().map(|p| json!({
+                "id": p.id,
+                "label": p.label,
+                "kind": p.kind,
+                "number": p.number,
+                "sources": p.sources,
+                "req_count": package_counts.get(p.id.as_str()).copied().unwrap_or(0),
+            })).collect::<Vec<_>>(),
+            "shared_req_count": shared_count,
+        },
         "warnings": warnings,
         "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
         "project_version": svc.store().content_version(),
@@ -1259,6 +1311,35 @@ fn get_compliance_matrix(svc: &mut BidService, args: Value) -> ToolResult {
     let filters = filters_of(&args, "get_compliance_matrix")?;
     let filter_category = filter_str(filters, "category", "get_compliance_matrix")?;
     let filter_status = filter_str(filters, "status", "get_compliance_matrix")?;
+    // ---- 过滤值域校验（#426——search_evidence mode 同款纪律：非法值显式拒。
+    // 此前传错值域静默 0 行 + ok:true，Agent 误判「无阻塞项」——0 行也是
+    // 一种伪装的空成功（issue #9 口径）。
+    if let Some(c) = filter_category.as_deref() {
+        let (keys, names) = category_filter_domain();
+        if !keys.contains(&c) && !names.contains(&c) {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "get_compliance_matrix: filters.category={c:?} 非法（合法：契约键 {} 或中文类别名 {}——契约 §4；拼写错显式拒，不静默 0 行）",
+                    keys.join("|"),
+                    names.join("|"),
+                ),
+            });
+        }
+    }
+    if let Some(s) = filter_status.as_deref() {
+        let valid: Vec<&str> = bid_domain::matrix::ResponseStatus::ALL
+            .iter()
+            .map(|v| v.as_str())
+            .collect();
+        if !valid.contains(&s) {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "get_compliance_matrix: filters.status={s:?} 非法（合法：{}——T-2+#245 五态派生；拼写错显式拒，不静默 0 行）",
+                    valid.join("|"),
+                ),
+            });
+        }
+    }
     // 游标窗口（S-4）：fp 绑定 工具名+project_id+过滤参数——跨过滤器游标 fail-closed 拒；
     // cv 绑定当前数据版本（#406/C-14）——翻页期间 store 变更（增长位移）即拒
     let fp = cursor::fingerprint(&[
@@ -4503,6 +4584,15 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
             });
         }
     }
+    // #316 按包建纲：package 接受 PKG id（PKG-01）/ 原文标签（第2包）/ 纯序号（2）
+    let package = opt_str(&args, "package", TOOL)?;
+    if let Some(p) = &package {
+        if p.trim().is_empty() {
+            return Err(ToolError::EUnprocessable {
+                what: format!("{TOOL}: package 不得为空白（不选包则不传，用 list_packages 查看可选项）"),
+            });
+        }
+    }
 
     route_guard(svc, &project_id, TOOL, project_version)?;
 
@@ -4520,6 +4610,60 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
                     .project()
                     .map(|p| p.status.as_str())
                     .unwrap_or("?")
+            ),
+        });
+    }
+
+    // ---- #316 选包裁决（分包结构存在时）：
+    // · 显式传 package → 解析（id/标签/序号三口径）后选定；
+    // · 未传且仅 1 包 → 自动选定（零摩擦——单包件如「…-第2包.doc」）；
+    // · 未传且 ≥2 包 → 拒绝列清单（fail-visible：混包建纲会让 REQ/矩阵
+    //   混面，不能静默；「投全部」= 每包各建一个项目，单存储单大纲）；
+    // · 无分包 → 不选（既有行为零位移）。
+    let mut auto_package = false;
+    let pkgs = svc.store().packages().to_vec();
+    match (&package, pkgs.len()) {
+        (Some(p), _) => {
+            let norm = p.trim();
+            let found = pkgs.iter().find(|x| {
+                x.id == norm
+                    || x.label == norm
+                    || x.number.to_string() == norm
+            });
+            let Some(found) = found else {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: package={p} 未命中已识别分包（可用：{}；用 list_packages 查看识别结果与证据）",
+                        pkgs.iter().map(|x| format!("{}({})", x.id, x.label)).collect::<Vec<_>>().join("、")
+                    ),
+                });
+            };
+            svc.store_mut().select_package(&found.id).map_err(ToolError::from)?;
+        }
+        (None, 1) => {
+            let only = pkgs[0].clone();
+            svc.store_mut().select_package(&only.id).map_err(ToolError::from)?;
+            auto_package = true;
+        }
+        (None, 0) => {}
+        // 余下 = 未传 package 且 ≥2 包（0/1 已被上两臂覆盖）
+        (None, _) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: 检测到 {} 个分包（{}）——必须传 package 选定投哪个包（共用条款自动进纲）；「投全部」= 每包各建一个项目分别建纲。用 list_packages 查看识别结果与证据",
+                    pkgs.len(),
+                    pkgs.iter().map(|x| format!("{}({})", x.id, x.label)).collect::<Vec<_>>().join("、")
+                ),
+            });
+        }
+    }
+    // 选包后范围非空门（选中包 REQ + 共用至少 1 条——空范围建纲无意义）
+    let scoped = svc.store().requirements_in_scope();
+    if scoped.is_empty() {
+        return Err(ToolError::EUnprocessable {
+            what: format!(
+                "{TOOL}: 所选分包 {} 的条款范围为空（该包无 REQ 且无共用条款——用 list_packages 复核归属）",
+                svc.store().selected_package().map(|p| p.label.clone()).unwrap_or_default()
             ),
         });
     }
@@ -4628,10 +4772,24 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
         "counts": {
             "sections": n_sections,
             "leaves": leaves.len(),
-            "requirements": n_reqs,
+            // #316：建纲范围口径（选包后 = 选中包 REQ + 共用；未选 = 全集）
+            "requirements": scoped.len(),
+            "total_requirements": n_reqs,
             "total_target_chars": total_target,
             "matrix_rows": n_rows,
             "matrix_blocking": n_blocking,
+        },
+        // #316 选包回显（审计面：本项目投哪个包、是否自动选定、共用条款量）
+        "package": {
+            "selected": svc.store().selected_package().map(|p| json!({
+                "id": p.id,
+                "label": p.label,
+                "kind": p.kind,
+                "number": p.number,
+            })).unwrap_or(json!(null)),
+            "auto_selected": auto_package,
+            "detected_packages": pkgs.len(),
+            "shared_requirements": svc.store().shared_requirement_count(),
         },
         "length": {
             "profile": effective_profile
@@ -4656,6 +4814,52 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
         // 建纲后无从规划「哪叶几批」）
         "leaf_quotas": leaf_quotas,
         "warnings": outline_warnings,
+        "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
+        "project_version": svc.store().content_version(),
+        "request_id": next_request_id(),
+    }))
+}
+
+// ---------------------------------------------------------------- #316 list_packages
+
+/// `list_packages` —— 分包清单（只读）。
+///
+/// 返回 extract_requirements 时识别的分包注册表（三形态证据：文件名/章节
+/// 结构/分包清单表格）+ 每包 REQ 归属数 + 共用条款数 + 当前选包状态。
+/// 无分包结构 → detected=0（诚实空面，不是错误）。
+///
+/// 消费面：建纲前查可投的包（build_outline 的 package 参数取值面）；
+/// 「投全部」的官方路径 = 每包各建一个项目（单存储单大纲的边界，如实呈现）。
+fn list_packages(svc: &mut BidService, args: Value) -> ToolResult {
+    const TOOL: &str = "list_packages";
+    let project_id = req_str(&args, "project_id", TOOL)?;
+    route_project(svc, &project_id, TOOL)?;
+
+    let stats = svc.store().package_stats();
+    let selected = svc.store().selected_package();
+    let shared = svc.store().shared_requirement_count();
+    let total_reqs = svc.store().requirements().len();
+    Ok(json!({
+        "detected": stats.len(),
+        "items": stats.iter().map(|(p, n)| json!({
+            "id": p.id,
+            "label": p.label,
+            "kind": p.kind,
+            "number": p.number,
+            "req_count": n,
+            "sources": p.sources,
+            "selected": selected.map(|s| s.id == p.id).unwrap_or(false),
+        })).collect::<Vec<_>>(),
+        "shared_req_count": shared,
+        "total_requirements": total_reqs,
+        "selected_package": selected.map(|p| json!({
+            "id": p.id,
+            "label": p.label,
+            "kind": p.kind,
+            "number": p.number,
+        })).unwrap_or(json!(null)),
+        // 用法提示（信息性）：选包走 build_outline 的 package 参数
+        "usage": "build_outline 传 package=<id|label|number> 选定投哪个包（共用条款自动进纲）；投全部 = 每包各建一个项目",
         "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
         "project_version": svc.store().content_version(),
         "request_id": next_request_id(),

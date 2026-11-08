@@ -17,7 +17,7 @@
   `in : { project_id, filters:{...}, cursor?, limit?, page?(仅矩阵兼容) }`；
   `out: { rows|items, total(过滤后总数), limit(生效页宽), cursor(本次生效游标), next_cursor: string|null }`，`next_cursor=null` 即取完，原样回传取下一页。
   游标规则（fail-closed）：opaque base64（内嵌版本字节/偏移/过滤器指纹）；跨过滤器或跨工具复用游标 → `E_UNPROCESSABLE`；limit 合法域 1..=1000、缺省 100，越界/非整数**显式拒**（不静默 clamp）；游标损坏/版本不认识/偏移越界（底层列表已变化）→ `E_UNPROCESSABLE`。行序确定性（矩阵=条款位置序 CMP-0001..N；证据=id 字典序；任务=target_id 字典序）是分页安全前提，不得破坏。
-- **工具面沿革（单一真源 = `bidcore/crates/bid-mcp/src/lib.rs` TOOL_NAMES）**：原 8 工具（§1-§9）；V3-5（S-4）增只读三件——`get_bid_project_state`（§4-C，断点恢复入口）、`list_evidence` / `list_tasks`（§4-A/§4-B）→ 11；#42 阶段 10 增 `save_version`（§SV）→ 12；#80 第三批（G1-G3）后 21；#219 全块覆盖三工具（§17/§18/§19）后 24；#226 增 `set_matrix_override`（§4-D，否决项死锁人工出口）→ 25；#243 增 `recover_validating_state`（§20）后 26；#254 增分段三工具（§21-A/B/C）后 29；#279 增 `list_tools`（§LT，行协议发现面）后 30；#287 增 `recommend_length_profile`（§25，篇幅档位推荐）后 31（commit 23a2537「第 31 个」）；#285 ① 增 `get_star_coverage`（§22，★漏标检测）后 32（merge 66465fb「工具面 30->32」）；#285 ② 增块级双向索引三工具（§22-A/B/C——REQ 溯源/块反查/overlay 数据面）后 35；#319 增补遗后增量重写两工具（§23/§24）后 37；#321（A-23）增 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（§12-A~G）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
+- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22-A，篇幅档位推荐）后工具面 31；#285① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 32；#285② 块级双向索引三工具 `get_requirement_provenance` / `get_block_requirements` / `get_annotation_overlay`（§22 对账族）后工具面 35；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§25，DIRTY 章节局部改写 + 局部复验）后工具面 37；#321 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（assign_revision / advance_revision / complete_revision / batch_task / advance_task / reopen_section / set_param_responses）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
 
 ## 1. create_bid_project
 ```
@@ -69,7 +69,10 @@ out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), sha256, pages, ta
 
 ## 3. extract_requirements
 ```
-in : { project_id, scope:"all"|file_ids[], options:{granularity, include_scoring_table:true}, project_version }
+in : { project_id, scope:"all", options:{granularity, include_scoring_table:true}, project_version }
+     scope：**仅 "all"**（整集重抽——幂等合并面）；`file_ids[]` 子集过滤属
+     M2 扩展未实现，传非 "all" 即 E_UNPROCESSABLE（与 schema enum 一致；
+     未来实现时在此补记）。
      options.granularity：**保留位，当前未实现**（传入被忽略——#86 摩擦 #6 清偿：
      契约曾提到但无实现，如实标注；未来实现时枚举合法值并在此补记）
 out: { counts:{total, added(可为负——整集替换语义下的诚实增量), by_category{qualification,veto,scoring,tech_param,commercial,format,other}},
@@ -78,6 +81,10 @@ out: { counts:{total, added(可为负——整集替换语义下的诚实增量)
          抽取面文件口径；total 为真值★（样板句已排除，captured+missing==total
          恒成立）；missing>0 时 warnings 追加 STAR_MISSING；逐文件明细走 §22
          get_star_coverage），
+       packages:{ detected, items:[{id:"PKG-01", label:"第1包", kind:"包"|"标段",
+         number, sources["filename:…"|"chapter:…"|"table:…"|"text:…"], req_count}],
+         shared_req_count }（#316 分包识别——无分包时 detected=0/items 空，
+         既有行为零位移；共用条款无 package_id，选任何包建纲都进纲），
        conflicts:[{a:REQ-*,b:REQ-*,reason}], missing_sequence:[{file_id,expected_clause_nos,found}], warnings[] }
 执行: 确定性先行（条款编号序列解析、表格结构化槽位抽取）→ #219 二步抽取通路合并
       （Agent 块标记优先 + 正则兜底，#422 按 verdict 分流）：被区间标记覆盖的块，
@@ -92,6 +99,10 @@ out: { counts:{total, added(可为负——整集替换语义下的诚实增量)
       id 走 CMP-0000-REQ-Axxxx 回退分支，与正则 CMP-000N 零碰撞。
       **无标记时严格 no-op**：与旧正则产物逐位一致（GT 红线零位移）。
       B3（图纸目录/证据件，无抽取面）不进合并统计。
+      #316 分包识别与归属（合并面之后）：三形态（文件名「…-第2包」/章节结构
+      「第X章 第N包 …」/分包清单表格行）；REQ 归属写 params.package_id
+      （加性——id/category/anchors 零位移，幂等合并不受影响）；文件名带单一
+      包标记 → 整件归属；多包并提的总括句 → 共用；康熙部首 NFKC 归一化匹配。
       warnings 新增：UNCOVERED_BLOCKS（未覆盖块数——正则已兜底，Agent 补标后
       重跑更准）；AGENT_MANDATORY_OFFCATEGORY（Agent 标必选且类别不在类别
       阻断面资格条件/否决项——**已接线**：经 matrix.rs `agent_mandatory`
@@ -147,7 +158,9 @@ out: { rows:[{cmp_id, requirement:{id, clause_no, category, statement, mandatory
 无有效证据无占位 → **RESPONDED**（写了就是写了——文本事实）；证据缺口由
 evidence_missing 正交承载，由提交就绪面（validate/check_bid_quality 的
 submission_readiness）拦截，不压进状态面。
-错误: E_UNPROCESSABLE（游标与过滤器不匹配/游标损坏/limit 或 page 越界——显式拒不 clamp）
+错误: E_UNPROCESSABLE（游标与过滤器不匹配/游标损坏/limit 或 page 越界——显式拒不 clamp；
+      #426：filters.category / filters.status 不在值域（合法清单见 in 段）——拼写错
+      显式拒 + 报文附合法值清单，不静默 0 行——0 行也是伪装的空成功（issue #9））
 ```
 
 ## 4-A. list_evidence（只读，S-4 新增）
@@ -616,13 +629,22 @@ CherryHQ/cherry-studio（AGPL-3.0，52.9k★）为 Electron **桌面客户端**�
 in : { project_id, length_profile?("practical"|"standard"|"conservative"|"maximum",
        #287 篇幅档位四选一),
        target_total_chars?(1000..=5000000, 直接给字数覆盖档位),
-       max_reqs_per_leaf?(1..=50, 缺省 8), project_version }
+       max_reqs_per_leaf?(1..=50, 缺省 8),
+       package?(#316 选包建纲——PKG id「PKG-02」/原文标签「第2包」/纯序号「2」
+       三口径任一；先用 §24 list_packages 查识别结果；共用条款自动进纲；
+       「投全部」= 每包各建一个项目——单存储单大纲的边界，如实呈现),
+       project_version }
        三者优先（#287）：target_total_chars 显式给 → 用它；length_profile
        显式给 → 档位字数；都不给 → 默认档 Conservative 1,200,000
        （单一真源 bid_domain::outline::DEFAULT_TARGET_TOTAL_CHARS；用户裁定
        2026-11-06：120 万字 ≈ 1422 页，四档 400k/800k/1.2M/2.5M；拼错档位键
        E_UNPROCESSABLE 显式拒）
-out: { counts:{ sections, leaves, requirements, total_target_chars, matrix_rows, matrix_blocking },
+out: { counts:{ sections, leaves, requirements(建纲范围口径——选包后 =
+       选中包 REQ + 共用；未选 = 全集), total_requirements(全集计数),
+       total_target_chars, matrix_rows, matrix_blocking },
+       package:{ selected:{id,label,kind,number}|null, auto_selected,
+       detected_packages, shared_requirements }（#316 选包回显——审计面：
+       本项目投哪个包、是否自动选定、共用条款量），
        length:{ profile("practical"…|"custom"), target_total_chars, approx_pages }
        （#287 生效档回显——审计面可核对），
        status: "MATRIX_READY", project_version }
@@ -650,9 +672,12 @@ out 补: coverage:{ face_files, marked_files, regex_fallback_files,
       excluded_blocks(B 态总数), unjudged_blocks(恒 0——非零时已被门拦) }
 错误: E_COVERAGE_INCOMPLETE（部分标记未判完——零副作用，补标 →
       重跑 extract_requirements → build_outline）；E_STATE（状态窗口外/
-      条款面空）
+      条款面空）；E_UNPROCESSABLE（#316：检测到 ≥2 包但未传 package——
+      fail-visible 拒并列清单，不静默混包建纲；package 未命中已识别分包；
+      所选包范围为空）
 幂等: 推导确定性（同输入同树）；状态机面不重入（见上）；补标后重跑
-      幂等（REQ 集合逐位稳定——替换语义 + REQ-A 编号确定性）
+      幂等（REQ 集合逐位稳定——替换语义 + REQ-A 编号确定性）；#316 选包
+      幂等（同包重选 no-op；换包受状态机拦——重建面同上）
 ```
 
 ## 11-A. register_evidence（#80 第三批 · G2；#185 缺口 1 来源验证；#217 四态 + 正文摘录；#245 占位态）
@@ -1254,7 +1279,7 @@ out: { file_id, file_name,
       substantive=true 后重跑 extract_requirements）；不改抽取逻辑；无 UI。
 ```
 
-## 22-A. get_requirement_provenance（#285② · REQ→原文溯源 · 只读）
+## 22-B. get_requirement_provenance（#285② · REQ→原文溯源 · 只读）
 ```
 in : { project_id, req_id }
 out: { project_id, req_id, category, clause_no, substantive(bool——params.star
@@ -1277,7 +1302,7 @@ out: { project_id, req_id, category, clause_no, substantive(bool——params.sta
 > mdcore 侧查几何）。多文件多锚形态（GT-07 双锚点）逐锚回显。
 > 无状态门（只读，route_project 项目路由即可）。
 
-## 22-B. get_block_requirements（#285② · 块→REQ 反查 · 只读）
+## 22-C. get_block_requirements（#285② · 块→REQ 反查 · 只读）
 ```
 in : { project_id, file_id, block_idx(0 基块序——get_document_chunks 的
        chunks[].block_idx 同一序) }
@@ -1292,7 +1317,7 @@ out: { project_id, file_id, file_name, block_idx,
 > 无 REQ 块照常返回（req_ids: []）——「这段原文没被抽成任何要求」可见。
 > 越界 block_idx → E_NOTFOUND（消息带本文件总块数）。
 
-## 22-C. get_annotation_overlay（#285② · 视图层 overlay 数据面 · 只读）
+## 22-D. get_annotation_overlay（#285② · 视图层 overlay 数据面 · 只读）
 ```
 in : { project_id, file_id, page?(可选——只取该页块，PDF 面；省略 = 全文件) }
 out: { project_id, file_id, file_name,
@@ -1331,7 +1356,7 @@ out: { count, tools: [{ name, summary }...],
       全量）；本工具是 stdio 裸 JSON 行协议的发现面补口。
 ```
 
-## 25. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+## 22-A. recommend_length_profile（#287 篇幅档位推荐 · 只读）
 ```
 in : { project_id }
 out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
@@ -1366,6 +1391,28 @@ out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
 ```
 
 ## 23. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
+
+## 24. list_packages（#316 分包清单 · 只读）
+
+> 背景：真实招标常分包（batch2 实证：`…-第2包.doc`），一包一投或全投；
+> 引擎在 extract_requirements 时按三形态识别（文件名/章节结构/分包清单
+> 表格），本工具是识别结果与选包状态的唯一查询面。
+
+```
+in : { project_id }
+out: { detected, items:[{ id:"PKG-01", label:"第1包", kind:"包"|"标段", number,
+       req_count, sources["filename:…"|"chapter:…"|"table:…"], selected }],
+       shared_req_count(共用条款数——选任何包都进纲), total_requirements,
+       selected_package:{id,label,kind,number}|null,
+       usage(信息性提示：选包走 build_outline 的 package 参数),
+       status, project_version }
+语义: 纯读、无状态门（REQUIREMENTS_EXTRACTED+ 含 Exported——抽取时落
+      注册表，选包前后均可查）。无分包结构 → detected=0/items 空（诚实
+      空面，不是错误）。
+错误: E_NOTFOUND（project 路由失败）
+```
+
+
 ```
 in : { project_id,
        changes:[{ req_id?("REQ-xxxx"——value_changed/requirement_removed 必填；
@@ -1410,7 +1457,7 @@ out: { changes:[{ id(AC-xxxx), req_id, change_type, old_text, new_requirement,
       （断点恢复时「哪些章节还没追上补遗」一眼可见）。
 ```
 
-## 24. rewrite_section_partial（#319②+③ 指令执行：局部改写 + 局部复验）
+## 25. rewrite_section_partial（#319②+③ 指令执行：局部改写 + 局部复验）
 ```
 in : { project_id, directive_id("RD-xxxx"),
        rewrites?:[{ segment_id("SEG-xxxx"), content(该段重写后全文),

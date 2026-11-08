@@ -38,11 +38,14 @@ pub mod engines;
 pub mod env_preflight;
 pub mod extract;
 pub mod guard;
+
+use crate::guard::LIMIT_INPUT_BYTES_PDF;
 // #285 ②：块级双向索引（派生态构建面——锚→块兜底解析 + 块→REQ 聚合）。
 pub mod bidi;
 pub mod merge;
 pub mod nesting;
 pub mod numbering;
+pub mod packages;
 pub mod pdf_text;
 pub mod review_table;
 pub mod scoring_table;
@@ -164,44 +167,75 @@ pub fn sha256_file(path: &Path) -> std::io::Result<String> {
 /// B4 后仅剩 **pdf 面**（文本层/扫描 OCR 补遗链——映射表 §3 的标书侧保留面）；
 /// docx/xlsx 由消费方扩展名路由直调 bid-engine 门面（service.rs 同款），
 /// 直入本函数会得到「不支持的文件类型」显式拒绝——不留静默降级。
+///
+/// 门序（#529/B-23 收口）：**扩展名门 → 字节门 → 哈希**——原实现第一步就
+/// 全文件哈希，超限件（>500MB）与不支持类型被拒前白读一遍，违反 guard.rs
+/// 「读任何内容之前先查 metadata」的门序声明。已有哈希的调用方（import
+/// 幂等面）走 [`parse_file_with_sha`] 复用，免第二遍全量读。
 pub fn parse_file(path: &Path, name: &str) -> Result<ParsedFile, String> {
+    if extension_of(path) != "pdf" {
+        return Err(format!(
+            "不支持的文件类型 .{}（{name}）",
+            extension_of(path)
+        ));
+    }
+    guard::check_input_size(path, LIMIT_INPUT_BYTES_PDF)
+        .map_err(|e| format!("pdf 防护拒绝: {e}"))?;
     let sha256 = sha256_file(path).map_err(|e| format!("读取失败 {name}: {e}"))?;
-    let ext = path
-        .extension()
+    parse_file_with_sha(path, name, &sha256)
+}
+
+/// [`parse_file`] 的哈希复用入口（#529/B-23 双读去重）：import 链在幂等
+/// 检查时已对同一文件算过 sha256（service.rs），经此传入免第二遍全量读。
+/// 门序与 [`parse_file`] 一致（扩展名门 + 字节门——幂等复检，metadata 级
+/// 零内容读）；解析体完全同源。
+pub fn parse_file_with_sha(
+    path: &Path,
+    name: &str,
+    sha256: &str,
+) -> Result<ParsedFile, String> {
+    if extension_of(path) != "pdf" {
+        return Err(format!(
+            "不支持的文件类型 .{}（{name}）",
+            extension_of(path)
+        ));
+    }
+    guard::check_input_size(path, LIMIT_INPUT_BYTES_PDF)
+        .map_err(|e| format!("pdf 防护拒绝: {e}"))?;
+    // #200 R2：解析链全部迁入 engines（可插拔引擎 + 仲裁器）——
+    // 乱码判决/降级/互证/OCR 救援的口径见 engines/mod.rs，此处只做
+    // 扩展名路由与 sha256 回填。
+    let mut pf = engines::parse_pdf(path, name)?;
+    pf.name = name.to_string();
+    pf.sha256 = sha256.to_string();
+    // #272 跨平台结构形态自报（追加在尾部——[pdf-*] 前缀断言不受
+    // 影响）：方案 + 章数 + 告警，import 回执透出（识别不确定
+    // 响亮可见，不静默失败）。
+    let st = structure::detect_structure(&pf.blocks);
+    let scheme_label = match st.scheme {
+        structure::TopScheme::Zhang => "第X章",
+        structure::TopScheme::Part => "第X部分/篇",
+        structure::TopScheme::Numbered => "数字顶层头",
+        structure::TopScheme::Uncertain => "未识别",
+    };
+    pf.parse_summary = format!(
+        "{}；结构形态[{}]: {} 章标记",
+        pf.parse_summary,
+        scheme_label,
+        st.chapters.len()
+    );
+    for w in &st.warnings {
+        pf.parse_summary = format!("{}；【结构告警】{}", pf.parse_summary, w);
+    }
+    Ok(pf)
+}
+
+/// 扩展名小写归一（parse_file 门序用的单一取值口）。
+fn extension_of(path: &Path) -> String {
+    path.extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
-        .to_lowercase();
-    match ext.as_str() {
-        "pdf" => {
-            // #200 R2：解析链全部迁入 engines（可插拔引擎 + 仲裁器）——
-            // 乱码判决/降级/互证/OCR 救援的口径见 engines/mod.rs，此处只做
-            // 扩展名路由与 sha256 回填。
-            let mut pf = engines::parse_pdf(path, name)?;
-            pf.name = name.to_string();
-            pf.sha256 = sha256;
-            // #272 跨平台结构形态自报（追加在尾部——[pdf-*] 前缀断言不受
-            // 影响）：方案 + 章数 + 告警，import 回执透出（识别不确定
-            // 响亮可见，不静默失败）。
-            let st = structure::detect_structure(&pf.blocks);
-            let scheme_label = match st.scheme {
-                structure::TopScheme::Zhang => "第X章",
-                structure::TopScheme::Part => "第X部分/篇",
-                structure::TopScheme::Numbered => "数字顶层头",
-                structure::TopScheme::Uncertain => "未识别",
-            };
-            pf.parse_summary = format!(
-                "{}；结构形态[{}]: {} 章标记",
-                pf.parse_summary,
-                scheme_label,
-                st.chapters.len()
-            );
-            for w in &st.warnings {
-                pf.parse_summary = format!("{}；【结构告警】{}", pf.parse_summary, w);
-            }
-            Ok(pf)
-        }
-        other => Err(format!("不支持的文件类型 .{other}（{name}）")),
-    }
+        .to_lowercase()
 }
 
 // ---------------------------------------------------------------- 归一化（对齐/检索共用）
