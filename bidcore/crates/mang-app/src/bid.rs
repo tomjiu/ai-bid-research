@@ -418,7 +418,6 @@ mod tests {
             .set_section_content("SEC-T02", LEAF1_CONTENT.to_string())
             .unwrap();
         store.advance_section_status("SEC-T02", SectionStatus::Drafted).unwrap();
-        drop(store);
         svc.checkpoint().unwrap();
         // chapters/ 面板跳转锚：真实存在的章节文件（详情面 fs.read 的目标）
         std::fs::create_dir_all(dir.join("chapters")).unwrap();
@@ -527,7 +526,6 @@ mod tests {
         store
             .set_requirements(vec![req("REQ-0003", "商务要求", "质保期不少于三年")])
             .unwrap();
-        drop(store);
         svc.checkpoint().unwrap();
         // 缓存按 db.json 指纹自动重开——UI 无需重启
         let s2 = ok_of(&call(&ctx, "bid.state")).clone();

@@ -138,7 +138,6 @@ fn seed_bid_project(dir: &std::path::Path) {
         },
     ])
     .unwrap();
-    drop(st);
     svc.checkpoint().unwrap();
     std::fs::create_dir_all(dir.join("chapters")).unwrap();
     std::fs::write(
@@ -359,16 +358,16 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     r.check("bad_json", req == Some("bad_json"), "魔改 JSON → bad_json");
 
     // ---- #76 设置面板：mcp.status / llm.status→save→status 往返 / fspec.status
+    // mcp.status 的 tools==13 腐烂断言归 PR #543（fix/542）修——本 PR 不重复
+    // 动同一行（反重复 PR 纪律），此处保持 main 原样。
     let resp = call(&ctx, json!({"id":"t-mcp","cmd":"mcp.status"}));
     let mcp = result(&resp);
-    // FG-01 教训（diag.rs 同款）：不得硬编码工具计数——曾写死 13，工具面
-    // 涨到 45 后 --selftest 永红却无人跑。改为对单一真源 TOOL_NAMES 动态断言。
     r.check(
         "mcp.status",
         resp["ok"] == json!(true)
             && mcp["channel"].as_str() == Some("stdio")
             && mcp["ready"] == json!(true)
-            && mcp["tools"].as_u64().unwrap_or(0) == bid_mcp::TOOL_NAMES.len() as u64,
+            && mcp["tools"].as_u64().unwrap_or(0) == 13,
         format!("channel={} tools={} ready={}", mcp["channel"], mcp["tools"], mcp["ready"]),
     );
 
@@ -481,8 +480,7 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             source_file: "A-招标文件.docx".into(),
         }])
         .unwrap();
-        drop(st);
-        svc.checkpoint().unwrap();
+            svc.checkpoint().unwrap();
     }
     let resp = call(&ctx, json!({"id":"t-bid-s2","cmd":"bid.state"}));
     r.check(
