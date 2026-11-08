@@ -130,6 +130,7 @@ INFO     仅记录
 | 文档 | 内容 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | **代理协作规则**——开工前必读 |
+| [docs/PYTHON-BOUNDARY.md](docs/PYTHON-BOUNDARY.md) | **Python 研究工具边界**——src/llm·report·storage 为非生产链路（#563） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 环境搭建 + 开发流程 |
 | [docs/bid-domain-model.md](docs/bid-domain-model.md) | 领域对象 + 状态机 + ID 命名空间 |
 | [docs/bid-mcp-contract.md](docs/bid-mcp-contract.md) | MCP 工具契约（31 个工具） |

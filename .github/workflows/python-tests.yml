@@ -1,0 +1,44 @@
+# 本文件保持 LF 行尾（与仓库在位 workflow 一致，#568 复核结论）
+name: python tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "main.py"
+      - "requirements.txt"
+      - "pytest.ini"
+      - ".github/workflows/python-tests.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "main.py"
+      - "requirements.txt"
+      - "pytest.ini"
+      - ".github/workflows/python-tests.yml"
+
+# #568/#563：Python 研究侧独立 CI 门——只跑 pytest，不接入 bid 的 4 项检查；
+# concurrency 组与全仓纪律一致（检查类 run 可被同 ref 新推送安全取消）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 运行 pytest
+        run: python -m pytest tests/ -v
