@@ -51,9 +51,10 @@ warnings:         [ …含 UNCOVERED_BLOCKS / AGENT_MANDATORY_OFFCATEGORY / MARK
 参数（REQ-A 承接）；若该块其实不是要求，显式改标 noise/rule 后重跑 extract
 消除。向用户提示的口径：这批条款已进矩阵不会丢，但 Agent 的提炼面缺位。
 `AGENT_MANDATORY_OFFCATEGORY`：Agent 标必选且类别不在资格/否决阻断面——
-**已接线**：这些条款进入矩阵 blocking 面，未响应将拦起草与导出（重跑
-build_matrix 后生效）；响应（绑证据）或人工 receipt 覆写（set_matrix_override）
-后放行。向用户提示的口径：必选漏响应 = 废标风险，请逐条确认响应状态。
+**已接线**：这些条款进入矩阵 blocking 面，未响应将拦起草与导出（矩阵下次
+重算时生效——`build_outline` 时自动重算，无需也无法单独"重跑矩阵"）；响应
+（绑证据）或人工 receipt 覆写（set_matrix_override）后放行。向用户提示的
+口径：必选漏响应 = 废标风险，请逐条确认响应状态。
 
 **必须向用户复述**：`共抽取 N 条（资格 q / 否决 v / 评分 s / 技术参数 t /
 商务 c / 格式 f / 其他 o）`。
