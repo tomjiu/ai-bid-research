@@ -400,6 +400,33 @@ def gen_engine_borrowed(out: Path) -> dict:
     return {"files": copied}
 
 
+def gen_carried_fixtures(out: Path) -> dict:
+    """携带夹具面（#559）：手工制作、非生成器产物的治理域内夹具。
+
+    目前一枚：`corpus-A/files/澄清修改文件-3.1.1.docx`（#425 真实命名补遗
+    夹具——merge_kind_gate_tool.rs 消费；scripts/make_425_addendum.py 可
+    再生成）。它住在 manifest 治理域内但不是生成器产物——本携带面在
+    --out 临时目录模式下字节级复制它（与 gen_engine_borrowed 同款纪律：
+    sha256 恒定），使 T6 再生成比对（仓内 ↔ 临时 manifest 全等）成立。
+    """
+    carried = [
+        "corpus-A/files/澄清修改文件-3.1.1.docx",
+    ]
+    copied = 0
+    for rel in carried:
+        src = REPO / "fixtures" / rel
+        if not src.exists():
+            raise SystemExit(f"携带夹具缺失：{src}（见 scripts/make_425_addendum.py）")
+        dst = out / rel
+        if dst.resolve() == src.resolve():
+            copied += 1  # 默认输出 = 仓内 fixtures 本身，原地即目标
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        copied += 1
+    return {"files": copied}
+
+
 def gen_manifest(fixtures_root: Path, stats: dict):
     """覆盖整个 fixtures 根（corpus-A + queries + corpus-R），路径相对 fixtures/。"""
     files = []
@@ -469,6 +496,7 @@ def main():
     stats["queries"] = gen_queries(out / "queries")
     stats["corpus_r"] = v1_corpus_r.gen_corpus_r(out / "corpus-R")
     stats["engine_borrowed"] = gen_engine_borrowed(out)
+    stats["carried_fixtures"] = gen_carried_fixtures(out)  # #559：治理域内手工夹具携带面
     manifest = gen_manifest(out, stats)
 
     print(json.dumps({
