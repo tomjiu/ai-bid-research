@@ -526,6 +526,11 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
         )
         .unwrap();
     }
+    // #474：覆写改变了计分面摘要——导出的「计分面已变更→重审」判据先于
+    // 占位门触发。本测试的被测对象是占位门本身，故重过 PreExportConfirm
+    // 绑新计分摘要，让导出链路走到占位门那一步（计分面判据的正确性由
+    // review.rs 的 #474 回归测试面覆盖，不在此重复验证）。
+    approve_pre_export(&mut svc);
     let reply_resp = call(
         &mut svc,
         "export_bid_document",
@@ -549,6 +554,9 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
             .unwrap();
     }
     let _ = svc.store_mut().rebuild_matrix_for_override().unwrap();
+    // #474：豁免覆写同样改变计分面摘要——重过门绑新摘要后放行面才可见
+    // （放行路径的计分面判据验证在 review.rs 的 #474 回归测试面）。
+    approve_pre_export(&mut svc);
     let r = ok_result(call(
         &mut svc,
         "export_bid_document",
