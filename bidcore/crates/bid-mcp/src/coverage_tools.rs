@@ -18,7 +18,7 @@ use bid_domain::coverage::{BlockMark, BlockVerdict, SubmittedRequirement};
 use serde_json::{json, Value};
 
 use crate::error::{ToolError, ToolResult};
-use crate::tools::{opt_u64, req_str, route_guard};
+use crate::tools::{opt_u64, req_str, route_guard, route_project};
 use bid_tools::service::BidService;
 
 /// 单次返回块数上限（防上下文吃爆——160 页文件有 3600+ 块）。
