@@ -511,14 +511,27 @@ fn chapter_num_ok(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| "0123456789一二三四五六七八九十百".contains(c))
 }
 
+/// NFKC 归一（#545/B-11 残留面）——与 PDF 侧 `extract.rs` 的 `nfkc` 同款
+/// （`unicode_normalization::UnicodeNormalization`）。全角数字 `２`(U+FF12)
+/// → `2`：从 PDF 复制粘贴进 Word / IME 全角模式输入的章头，两侧通道
+/// 判定口径必须一致，否则同一份内容 PDF 通道建章节上下文、DOCX 通道
+/// 静默漂移（locator 无章名 → 类别映射错位）。
+fn nfkc(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    s.nfkc().collect()
+}
+
 /// 「第X章 标题」——章号中文或阿拉伯数字（#376/B-11 与 PDF 侧对称）；
 /// 携带完整标题（类别映射与 GT locator 口径需要全文）。
 pub fn as_chapter(t: &str) -> Option<String> {
     if t.len() >= 4 && t.starts_with("第") {
         if let Some(pos) = t.find("章") {
-            // "第"占 3 字节；章号区 trim 后校字符集（"第 2 章"与"第2章"同过）
-            let num = t[3..pos].trim();
-            if !num.is_empty() && chapter_num_ok(num) && pos + 3 <= t.len() {
+            // "第"占 3 字节；章号区 trim + nfkc 归一后校字符集
+            // （"第 2 章"与"第2章"同过；"第２章"归一为"2"同过——#545）。
+            // 判定归一、回显原文：返回的是 t 本身（标题区不动，避免
+            // 误伤其余全角排版——归一只用于章号字符集判定这一件事）。
+            let num = nfkc(t[3..pos].trim());
+            if !num.is_empty() && chapter_num_ok(&num) && pos + 3 <= t.len() {
                 return Some(t.trim().to_string());
             }
         }
@@ -591,5 +604,30 @@ mod tests {
         assert!(as_chapter("第X章").is_none(), "占位字母拒");
         assert!(as_chapter("第（一）章 正文").is_none(), "章号区带括号拒（num=「（一）」非纯数字）");
         assert!(as_chapter("第二部分 响应文件格式").is_none(), "「第X部分」非章（询价类顶层，structure.rs 另收）");
+    }
+
+    /// #545（B-11 残留面）：全角数字章头 nfkc 归一——与 PDF 侧
+    /// （extract.rs:703 先 nfkc 再过 re_chapter）跨格式对称。
+    /// 全角来源面：PDF 复制粘贴进 Word / IME 全角模式 / 政府站全角排版。
+    #[test]
+    fn chapter_fullwidth_numeral_nfkc() {
+        // 全角章号 → Some（归一后过字符集）
+        assert!(as_chapter("第２章 投标人须知").is_some(), "全角单数字（U+FF12）");
+        assert!(as_chapter("第１２章 合同条款").is_some(), "全角两位数（U+FF11/FF12）");
+        assert!(as_chapter("第 ２ 章 投标人须知").is_some(), "全角 + 双侧空格");
+        assert!(as_chapter("第２5章 混合形态").is_some(), "全角+半角混合章号区");
+        // 回显保留原字符串（判定归一、原文不动——locator 口径需要真原文）
+        assert_eq!(
+            as_chapter("第２章 投标人须知"),
+            Some("第２章 投标人须知".to_string()),
+            "回显原文（含全角数字），仅判定走归一"
+        );
+        // 全角字母章号仍拒（nfkc("Ａ")="A" 不在数字字符集）
+        assert!(as_chapter("第Ａ章 手册").is_none(), "全角字母章号拒（归一后仍非数字）");
+        // 全角括号序号仍拒（与半角「第（一）章」同口径）
+        assert!(as_chapter("第（２）章 正文").is_none(), "章号区带括号拒（归一不拆括号）");
+        // 既有半角/中文/空格形态零回归（与 chapter_arabic_numeral_dual_form 互补）
+        assert!(as_chapter("第2章 投标人须知").is_some());
+        assert!(as_chapter("第十章 技术参数").is_some());
     }
 }

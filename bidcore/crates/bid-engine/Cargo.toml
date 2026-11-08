@@ -44,6 +44,9 @@ hex = "0.4"
 calamine = "0.36"
 # scripts/b5_engine_gt_eval.py 动态生成的 example（GT 抽取对比）需要 bid_domain::Requirement
 bid-domain = { path = "../bid-domain" }
+# #545（B-11 残留面）：章号区 nfkc 归一——「第２章」全角数字与 PDF 侧
+# （extract.rs:703 先 nfkc 再匹配）跨格式对称；workspace 单一版本源。
+unicode-normalization = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1"
