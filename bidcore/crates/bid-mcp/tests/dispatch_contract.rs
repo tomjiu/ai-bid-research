@@ -260,10 +260,18 @@ fn tool_names_partition_into_gated_and_ungated() {
         "门表/无门集存在 TOOL_NAMES 之外的幽灵名: {ghosts:?}"
     );
 
-    // ④ 数量对账：44 = 状态门并集 + 无门集（演进时同步改这里——与
-    //    tool_names_are_the_contract 的计数断言同款纪律）。
-    assert_eq!(all.len(), 44);
-    assert_eq!(gated.len() + ungated.len(), 44, "门表并集 {} + 无门 {} 应 == 44", gated.len(), ungated.len());
+    // ④ 数量对账：门表并集 + 无门集 == 工具面总数。总数本身的钉死面在
+    //    tool_names_are_the_contract（TOOL_NAMES.len() 断言——单一真源），
+    //    这里不再重复钉死数字：#467/#316/#347/#527 四度在分支演进时漂移
+    //    撞墙，钉两处的成本 > 收益。
+    assert_eq!(
+        gated.len() + ungated.len(),
+        all.len(),
+        "门表并集 {} + 无门 {} 应 == 工具面总数 {}",
+        gated.len(),
+        ungated.len(),
+        all.len()
+    );
 }
 
 /// ungated_tools 回显在位且与状态无关（#522 验收：任何状态下值一致）。
