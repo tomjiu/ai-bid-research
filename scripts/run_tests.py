@@ -48,8 +48,10 @@ SCENARIOS = ("TC-01", "TC-02", "TC-07", "TC-11")
 #   5 主文件 + 13 证据 + 5 GT（#490 A-20②③ 增开标日 meta.json → #577 计数回补）+ 12 转换
 #   + 2 查询集 + 2 缺陷草稿 + 1 corpus-R README + 5 corpus-R 结构层
 #   + 5 TR2 引擎借鉴夹具（PR #15 引入：word-complex/word-merged/excel-complex + gen-log + PROVENANCE）
+#   + 1 携带面真实夹具（#425→#441 引入的澄清修改文件-3.1.1.docx → #559 入清单，
+#     fixture_gen.gen_carried_fixtures 字节级复制，T6 再生成比对保持全等）
 EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 5 + len(S.TRANSITIONS) + 2 + 2 + 1
-                           + len(R.OUTPUT_FILES) + 5)
+                           + len(R.OUTPUT_FILES) + 5 + 1)
 _RULE_CODES = ["CERT_EXPIRED", "PRICE_EXCEEDS_BUDGET", "DURATION_MISMATCH", "PAGE_LIMIT",
                "MISSING_SIGNATURE", "DARK_BID_WORD", "TODO_RESIDUE", "INJECTION_PATTERN"]
 _ECHO_RE = None  # 延迟编译（防 import 顺序）
@@ -320,12 +322,18 @@ def t_fixture_integrity():
             bad.append(f"{f['path']} 缺失")
         elif hashlib.sha256(p.read_bytes()).hexdigest() != f["sha256"]:
             bad.append(f"{f['path']} 哈希不符")
-    # R2 P1-4：反向校验——磁盘→manifest（游离文件会被真实流水线当语料摄入）
+    # R2 P1-4：反向校验——磁盘→manifest（游离文件会被真实流水线当语料摄入）。
+    # #559：巡查限定在 manifest 治理域内（域从条目首段动态派生）——域外语料树
+    # （real-tender-batch1/2、songling、synth-tender）各有自己的 README/manifest
+    # 溯源与消费方，本就不属 corpus-A 治理域；全树扫描会把 102+ 个域外文件
+    # 误报游离（T3a 只显示前 3，实测全量 104——见 issue #559 根因一）。
+    domains = {f["path"].split("/")[0] for f in manifest["files"]}
     on_disk = {str(p.relative_to(FIXTURES)) for p in FIXTURES.rglob("*")
-               if p.is_file() and p.name != "manifest.json" and not p.name.endswith(".tmp")}
+               if p.is_file() and p.name != "manifest.json" and not p.name.endswith(".tmp")
+               and p.relative_to(FIXTURES).parts[0] in domains}
     stray = sorted(on_disk - {f["path"] for f in manifest["files"]})
     if stray:
-        bad.append(f"游离文件未入清单：{stray[:3]}")
+        bad.append(f"游离文件未入清单（治理域 {sorted(domains)}）：{stray[:3]}")
     check(f"T3a manifest 双向校验（{EXPECTED_MANIFEST_FILES} 文件）",
           not bad and len(manifest["files"]) == EXPECTED_MANIFEST_FILES, "; ".join(bad[:3]))
     c = manifest["counts"]
@@ -811,8 +819,21 @@ def t_bidcore_cargo():
             f"清理 cargo target 或扩容后重跑；磁盘满时编译失败是假红，FG-15）",
         )
         return
-    _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
-                 cwd=REPO / "bidcore", timeout=900)
+    # #562：超时不再裸崩（CI 实证 run 42476501539：TimeoutExpired 无守卫
+    # → traceback 直退 1，无 ✗ 行无汇总——门禁红得不可读）。首跑冷缓存
+    # 全 workspace 编译可达 40min+；重跑走 Chain-cargo 缓存（本 run 已 save）
+    # 编译面大幅缩短。预算 2400s，超时登记诚实 ✗ 并给出处置指引。
+    timeout_s = 2400
+    try:
+        _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
+                     cwd=REPO / "bidcore", timeout=timeout_s)
+    except _sp.TimeoutExpired:
+        check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
+              False,
+              f"超时（{timeout_s}s）——首跑冷缓存编译面实测可达 40min+（run 42476501539 实证"
+              f"900s 即杀）；本 run 已 save Chain-cargo 缓存，重跑走温缓存后编译面大幅"
+              f"缩短。若温缓存仍超时：拆分 --workspace 分 crate 门禁或扩 job 预算")
+        return
     out = _p.stdout + _p.stderr
     # 汇总行口径：各 crate 的 "test result: ok. N passed" 汇总 + 零 failed
     import re as _re
