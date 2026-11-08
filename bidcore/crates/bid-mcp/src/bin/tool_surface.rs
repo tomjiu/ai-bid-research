@@ -2,7 +2,7 @@
 //!
 //! ## 为什么需要这个工具
 //!
-//! 工具面有 5 处必须手工同步：
+//! 工具面有 7 处必须手工同步：
 //!
 //! ```text
 //! 1. bid-mcp/src/lib.rs            TOOL_NAMES 数组 + 长度常量
@@ -12,7 +12,14 @@
 //!                                  ALL_TOOLS + 10 状态位串
 //! 5. bid-mcp/tests/dispatch_contract.rs + mcp_sdk_e2e.py  硬编码数字
 //! 6. bid-mcp/tests/draft_tool.rs     `arr.len()` 工具数断言（#505 起纳入 --write）
+//! 7. bid-mcp/tests/search_evidence_tool.rs
+//!                                  `names.len()` 工具数断言（#467 起纳入）
 //! ```
+//!
+//! #467：dispatch_contract.rs 有**两个**计数断言——`TOOL_NAMES.len()`（工具面
+//! 常量自检）与 `tools_schema()` 的 `arr.len()`（清单实列数）——两者都纳管，
+//! 只管其一则另一处仍是盲区（PR #371 工具面 37→38 时实测：`--write` 跑过
+//! 仍漏 arr.len 面，Windows CI 红）。
 //!
 //! 2026-11-07 单日因「加工具只改了一部分面」导致 6 个 PR CI 红
 //! （#338/#347/#343/#354/#355/#357），全部是同一类错误。
@@ -23,12 +30,12 @@
 //! # 检查（CI 用）——不同步就红，退出码 1
 //! cargo run -p bid-mcp --bin tool-surface -- --check
 //!
-//! # 重写派生面（开发用）——自动改 4 和 5 的文件
+//! # 重写派生面（开发用）——自动改 4-7 的派生面文件
 //! cargo run -p bid-mcp --bin tool-surface -- --write
 //! ```
 //!
 //! 注意：1/2/3 是**手写面**（有注释、有顺序语义），本工具只**校验**不重写；
-//! 4/5/6 是**纯派生面**（位串和数字都能从 1 算出来），本工具负责重写。
+//! 4/5/6/7 是**纯派生面**（位串和数字都能从 1 算出来），本工具负责重写。
 //!
 //! 另：--check 还带 docs/bid-mcp-contract.md 的章节编号卫生检查（#566：
 //! 重复/乱序/跳号三防线）。该面无法自动重写——只报不修，人工定位。
@@ -45,11 +52,12 @@ fn main() {
     let dispatch_path = root.join("crates/bid-mcp/tests/dispatch_contract.rs");
     let e2e_path = root.join("crates/bid-mcp/tests/mcp_sdk_e2e.py");
     let draft_path = root.join("crates/bid-mcp/tests/draft_tool.rs");
+    let search_path = root.join("crates/bid-mcp/tests/search_evidence_tool.rs");
     let contract_path = root.join("../docs/bid-mcp-contract.md");
 
     let report = match mode {
-        "--check" => check(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &contract_path),
-        "--write" => write(&matrix_path, &dispatch_path, &e2e_path, &draft_path),
+        "--check" => check(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &search_path, &contract_path),
+        "--write" => write(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &search_path),
         other => {
             eprintln!("未知参数 {other:?}（只接受 --check / --write）");
             std::process::exit(2);
@@ -90,6 +98,7 @@ fn check(
     dispatch: &Path,
     e2e: &Path,
     draft: &Path,
+    search: &Path,
     contract: &Path,
 ) -> Result<(), Diagnostic> {
     let mut details = Vec::new();
@@ -126,7 +135,14 @@ fn check(
         details.push(format!("{}: 工具面断言数字不同步", display(draft)));
     }
 
-    // ---- 5. contract.md 章节编号卫生（#566：重复/乱序/跳号三防线）
+    // ---- 5. search_evidence_tool.rs 的 names.len() 断言（#467 盲区 3）
+    let search_src = read(search)?;
+    let search_expected = render_search(&search_src, n)?;
+    if search_expected != search_src {
+        details.push(format!("{}: names.len() 断言数字不同步", display(search)));
+    }
+
+    // ---- 6. contract.md 章节编号卫生（#566：重复/乱序/跳号三防线）
     let contract_src = read(contract)?;
     details.extend(check_contract_numbering(&contract_src));
 
@@ -142,7 +158,15 @@ fn check(
 
 /// #505：`draft` 面（draft_tool.rs）已接线 write()——check/write 全回路
 ///（#494 登记的缺口由本变更收口）。
-fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(), Diagnostic> {
+/// #467：`search` 面（search_evidence_tool.rs）同款接线；dispatch 面增管
+/// `arr.len()` 第二断言。
+fn write(
+    matrix: &Path,
+    dispatch: &Path,
+    e2e: &Path,
+    draft: &Path,
+    search: &Path,
+) -> Result<(), Diagnostic> {
     let n = bid_mcp::TOOL_NAMES.len();
 
     let matrix_src = read(matrix)?;
@@ -185,6 +209,19 @@ fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(),
             details: vec![],
         })?;
         println!("[tool-surface] 重写 {}", display(draft));
+    }
+
+    // #467：search 面（search_evidence_tool.rs 的 names.len() 断言）——
+    // PR #371 工具面 37→38 时 `--write` 跑过仍漏此面（Windows CI 红），
+    // 与上面四面同款接线收编。
+    let search_src = read(search)?;
+    let search_new = render_search(&search_src, n)?;
+    if search_new != search_src {
+        fs::write(search, &search_new).map_err(|e| Diagnostic {
+            message: format!("写 {} 失败: {e}", display(search)),
+            details: vec![],
+        })?;
+        println!("[tool-surface] 重写 {}", display(search));
     }
 
     Ok(())
@@ -287,16 +324,17 @@ fn render_matrix(src: &str, n: usize) -> Result<String, Diagnostic> {
     Ok(out)
 }
 
-/// 重写 dispatch_contract.rs 里 TOOL_NAMES.len() 的断言数字。
-fn render_dispatch(src: &str, n: usize) -> Result<String, Diagnostic> {
-    let needle = "assert_eq!(TOOL_NAMES.len(),";
+/// 把 `needle <旧数字>,` 形态断言的**第一处**数字替换为 `n`（#467 从
+/// render_dispatch/render_draft 抽出的公共面——三个断言同一格式：
+/// `assert_eq!(<expr>.len(), N, "...")`）。已同步则原样返回（幂等）。
+fn replace_assert_count(src: &str, needle: &str, n: usize) -> Result<String, Diagnostic> {
     let pos = src.find(needle).ok_or_else(|| Diagnostic {
-        message: "找不到 TOOL_NAMES.len() 断言".into(),
+        message: format!("找不到断言 {needle:?}"),
         details: vec![],
     })?;
     let after = &src[pos + needle.len()..];
     let comma = after.find(',').ok_or_else(|| Diagnostic {
-        message: "断言格式异常".into(),
+        message: format!("断言 {needle:?} 格式异常（缺逗号）"),
         details: vec![],
     })?;
     let old_num = after[..comma].trim();
@@ -308,6 +346,21 @@ fn render_dispatch(src: &str, n: usize) -> Result<String, Diagnostic> {
     out.push_str(&format!(" {n},"));
     out.push_str(&after[comma + 1..]);
     Ok(out)
+}
+
+/// 重写 dispatch_contract.rs 里**两个**计数断言的数字（#467）：
+/// - `assert_eq!(TOOL_NAMES.len(), N, ...)`——工具面常量自检（旧管理面）；
+/// - `assert_eq!(arr.len(), N, ...)`——`tools_schema()` 实列清单数（盲区 1：
+///   PR #371 加工具后 `--write` 跑过仍漏此面，Windows CI 红）。
+fn render_dispatch(src: &str, n: usize) -> Result<String, Diagnostic> {
+    let out = replace_assert_count(src, "assert_eq!(TOOL_NAMES.len(),", n)?;
+    replace_assert_count(&out, "assert_eq!(arr.len(),", n)
+}
+
+/// 重写 search_evidence_tool.rs 里 `assert_eq!(names.len(), N, ...)` 的
+/// 工具数断言（#467 盲区 3——同族漏改面，PR #371 实测红点之一）。
+fn render_search(src: &str, n: usize) -> Result<String, Diagnostic> {
+    replace_assert_count(src, "assert_eq!(names.len(),", n)
 }
 
 /// 重写 mcp_sdk_e2e.py 里工具数的断言数字。
@@ -348,27 +401,10 @@ fn render_e2e(src: &str, n: usize) -> Result<String, Diagnostic> {
     Ok(out)
 }
 
-/// 重写 draft_tool.rs 里 `assert_eq!(arr.len(), N, ...)` 的工具面断言。
+/// 重写 draft_tool.rs 里 `assert_eq!(arr.len(), N, ...)` 的工具面断言
+///（#505 接线；#467 起与 dispatch/search 共用 [`replace_assert_count`]）。
 fn render_draft(src: &str, n: usize) -> Result<String, Diagnostic> {
-    let needle = "assert_eq!(arr.len(),";
-    let pos = src.find(needle).ok_or_else(|| Diagnostic {
-        message: "找不到 draft_tool 的工具面断言".into(),
-        details: vec![],
-    })?;
-    let after = &src[pos + needle.len()..];
-    let comma = after.find(',').ok_or_else(|| Diagnostic {
-        message: "断言格式异常".into(),
-        details: vec![],
-    })?;
-    let old_num = after[..comma].trim();
-    if old_num == n.to_string() {
-        return Ok(src.to_string());
-    }
-    let mut out = String::with_capacity(src.len());
-    out.push_str(&src[..pos + needle.len()]);
-    out.push_str(&format!(" {n},"));
-    out.push_str(&after[comma + 1..]);
-    Ok(out)
+    replace_assert_count(src, "assert_eq!(arr.len(),", n)
 }
 
 // ---------------------------------------------------------------- 契约编号卫生（#566）
@@ -639,5 +675,59 @@ mod tests {
                 && !gap_reports[0].contains("11"),
             "跳号应含 13..24 且不含 11：{gap_reports:?}"
         );
+    }
+
+    /// #467：dispatch 双断言（TOOL_NAMES.len + tools_schema 的 arr.len）
+    /// 都要重写——只改其一仍是盲区（PR #371 实测红点）。
+    #[test]
+    fn dispatch_two_count_assertions_rewritten() {
+        let n = bid_mcp::TOOL_NAMES.len();
+        let stale = n + 3;
+        let src = format!(
+            "let v = tools_schema();\n\
+             assert_eq!(TOOL_NAMES.len(), {stale}, \"面自检\");\n\
+             assert_eq!(arr.len(), 99, \"清单实列\");\n"
+        );
+        let out = render_dispatch(&src, n).unwrap();
+        assert!(out.contains(&format!("assert_eq!(TOOL_NAMES.len(), {n},")));
+        assert!(out.contains(&format!("assert_eq!(arr.len(), {n},")));
+        assert!(!out.contains("99"), "旧数字必须被替换：{out}");
+        assert!(!out.contains(&stale.to_string()), "旧数字必须被替换：{out}");
+    }
+
+    /// #467：已同步的 dispatch 源幂等（两断言都不动）。
+    #[test]
+    fn dispatch_synced_source_idempotent() {
+        let n = bid_mcp::TOOL_NAMES.len();
+        let src = format!(
+            "assert_eq!(TOOL_NAMES.len(), {n}, \"面自检\");\n\
+             assert_eq!(arr.len(), {n}, \"清单实列\");\n"
+        );
+        assert_eq!(render_dispatch(&src, n).unwrap(), src);
+    }
+
+    /// #467：search_evidence 的 names.len 断言重写 + 幂等。
+    #[test]
+    fn search_count_assertion_rewritten_and_idempotent() {
+        let n = bid_mcp::TOOL_NAMES.len();
+        let stale = "assert_eq!(names.len(), 7, \"声明数\");";
+        let out = render_search(stale, n).unwrap();
+        assert!(out.contains(&format!("assert_eq!(names.len(), {n},")));
+        assert!(!out.contains("names.len(), 7"));
+
+        let synced = format!("assert_eq!(names.len(), {n}, \"声明数\");");
+        assert_eq!(render_search(&synced, n).unwrap(), synced);
+    }
+
+    /// #467：缺断言 → 显式 Err（不静默通过——派生面被删时必须点名）。
+    #[test]
+    fn missing_count_assertion_is_error() {
+        let n = bid_mcp::TOOL_NAMES.len();
+        assert!(render_dispatch("fn main() {{}}", n).is_err());
+        assert!(render_search("fn main() {{}}", n).is_err());
+        assert!(render_draft("fn main() {{}}", n).is_err());
+        // TOOL_NAMES.len 断言在、arr.len 断言被删 → 仍须红（两处都纳管）。
+        let half = format!("assert_eq!(TOOL_NAMES.len(), {n}, \"面自检\");");
+        assert!(render_dispatch(&half, n).is_err(), "arr.len 断言缺失须报错");
     }
 }
