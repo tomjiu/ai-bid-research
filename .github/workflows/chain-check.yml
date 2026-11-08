@@ -98,12 +98,14 @@ jobs:
         # 脚本侧（run_tests.py T0c/T4c）的探测口径是 ~/.tessdata/（与
         # bid-parse env_preflight::tessdata_dir 同口径：TESSDATA_PREFIX 优先，
         # 否则用户主目录）。系统级 tesseract-ocr-chi-sim 不在该口径上——
-        # 下载 tessdata_fast 的 chi_sim.traineddata 到 ~/.tessdata/。
+        # 下载 chi_sim.traineddata 到 ~/.tessdata/。
+        # 2026-11-08 改从 mdcore release ci-deps-v1 取件——上游 tessdata_fast
+        # raw CDN 持续 504（本地 curl 也 504），导致主链 T0-T19 恒红。
         # sha256 校验固定期望值（供应链面：语言数据被换 = OCR 判定漂移）。
         run: |
           mkdir -p ~/.tessdata
           curl -fsSL -o ~/.tessdata/chi_sim.traineddata \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/main/chi_sim.traineddata
+            https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/chi_sim.traineddata
           ls -la ~/.tessdata/
           # 只断言非空与可加载（上游 tessdata_fast 无官方 sha 清单钉版；
           # 可加载性由 tesseract 直接验证）
