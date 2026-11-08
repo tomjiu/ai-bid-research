@@ -42,9 +42,10 @@ fn main() {
     let dispatch_path = root.join("crates/bid-mcp/tests/dispatch_contract.rs");
     let e2e_path = root.join("crates/bid-mcp/tests/mcp_sdk_e2e.py");
     let draft_path = root.join("crates/bid-mcp/tests/draft_tool.rs");
+    let contract_path = root.join("../docs/bid-mcp-contract.md");
 
     let report = match mode {
-        "--check" => check(&matrix_path, &dispatch_path, &e2e_path, &draft_path),
+        "--check" => check(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &contract_path),
         "--write" => write(&matrix_path, &dispatch_path, &e2e_path, &draft_path),
         other => {
             eprintln!("未知参数 {other:?}（只接受 --check / --write）");
@@ -81,7 +82,7 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn check(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(), Diagnostic> {
+fn check(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path, contract: &Path) -> Result<(), Diagnostic> {
     let mut details = Vec::new();
     let n = bid_mcp::TOOL_NAMES.len();
 
@@ -118,6 +119,10 @@ fn check(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(),
     if draft_expected != draft_src {
         details.push(format!("{}: 工具面断言数字不同步", display(draft)));
     }
+
+    // ---- 5. contract.md 章节编号卫生（#566：重复/乱序/跳号三防线）
+    let contract_src = read(contract)?;
+    details.extend(check_contract_numbering(&contract_src));
 
     if details.is_empty() {
         Ok(())
@@ -386,6 +391,103 @@ fn render_draft(src: &str, n: usize) -> Result<String, Diagnostic> {
     Ok(out)
 }
 
+// ---------------------------------------------------------------- 契约编号卫生（#566）
+
+/// `docs/bid-mcp-contract.md` 章节编号卫生检查（--check 第 5 项）。
+///
+/// 三防线（对应 #566 的三类历史病灶）：
+///
+/// ```text
+/// R1  编号键全局唯一          —— 抓「## 22 两次」（get_star_coverage /
+///                               recommend_length_profile 重号历史）
+/// R2  纯数字主编号按出现顺序  —— 抓「## 26 出现在 ## 25 之前」
+///     严格递增                  （list_packages / rewrite_section_partial 乱序历史）
+/// R3  主号覆盖连续（0..=max） —— 抓「缺 24」；字母附号可占位主号
+///     每个数字有主标题或有附号  （11 由 11-A/11-B 占位、22 由 22-A 占位均为合法形态）
+/// ```
+///
+/// 非数字章节（`## 附录 A：` / `## SV.` / `## LT.`）不参与编号序列。
+fn check_contract_numbering(src: &str) -> Vec<String> {
+    use std::collections::HashSet;
+
+    /// 解析 `## ` 之后的编号前缀：返回 (主号数字串, 其后原文)。
+    fn split_number(rest: &str) -> Option<(&str, &str)> {
+        let digits = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        if digits == 0 {
+            return None;
+        }
+        Some((&rest[..digits], &rest[digits..]))
+    }
+
+    let mut details = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    // (主号, 是否主标题, 行号, 键)
+    let mut entries: Vec<(u32, bool, usize, String)> = Vec::new();
+
+    for (idx, line) in src.lines().enumerate() {
+        let Some(rest) = line.strip_prefix("## ") else { continue };
+        let Some((num_str, tail)) = split_number(rest) else { continue };
+        // 形态必须是 "N. xxx"（主）或 "N-X. xxx"（附，单大写字母）
+        let (key, is_main) = if let Some(dot) = tail.strip_prefix('.') {
+            let _ = dot;
+            (num_str.to_string(), true)
+        } else if let Some(after_dash) = tail.strip_prefix('-') {
+            let Some(letter) = after_dash.chars().next() else { continue };
+            if !letter.is_ascii_uppercase() || !after_dash[1..].starts_with('.') {
+                continue;
+            }
+            (format!("{num_str}-{letter}"), false)
+        } else {
+            continue;
+        };
+        let Ok(num) = num_str.parse::<u32>() else { continue };
+
+        if !seen.insert(key.clone()) {
+            details.push(format!(
+                "bid-mcp-contract.md: 编号重复 ## {key}.（第 {} 行再次出现）",
+                idx + 1
+            ));
+        }
+        entries.push((num, is_main, idx + 1, key));
+    }
+
+    // R2：主标题编号严格递增
+    let mut prev_main: Option<(u32, usize)> = None;
+    for (num, is_main, line_no, key) in &entries {
+        if !is_main {
+            continue;
+        }
+        if let Some((prev_num, prev_line)) = prev_main {
+            if *num <= prev_num {
+                details.push(format!(
+                    "bid-mcp-contract.md: 主编号乱序 ## {key}.（第 {line_no} 行 ≤ \
+                     前主号 {prev_num}·第 {prev_line} 行）"
+                ));
+            }
+        }
+        prev_main = Some((*num, *line_no));
+    }
+
+    // R3：主号覆盖连续（主标题或附号占位）
+    if let Some(&max_num) = entries.iter().map(|(n, _, _, _)| n).max() {
+        let covered: HashSet<u32> = entries.iter().map(|(n, _, _, _)| *n).collect();
+        let gaps: Vec<String> = (0..=max_num)
+            .filter(|n| !covered.contains(n))
+            .map(|n| n.to_string())
+            .collect();
+        if !gaps.is_empty() {
+            details.push(format!(
+                "bid-mcp-contract.md: 主号跳号（无主标题亦无附号占位）：{}",
+                gaps.join(", ")
+            ));
+        }
+    }
+
+    details
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,4 +560,104 @@ mod tests {
             assert!(bits.chars().all(|c| c == '0' || c == '1'));
         }
     }
-}
+
+    // ---------------- 契约编号卫生（#566）----------------
+
+    /// 形态与主仓契约同构的干净骨架：0 起全编号覆盖、字母附号占位
+    /// （4-A/B、11-A/B、22-A）、非数字章节（附录/SV/LT）不参与——校验必须零报告。
+    #[test]
+    fn contract_numbering_clean_fixture_passes() {
+        let src = "\
+## 0. 通用约定
+## 1. create_bid_project
+## 2. import_tender_files
+## 3. extract_requirements
+## 4-A. list_evidence
+## 4-B. list_tasks
+## 5. search_evidence
+## 6. draft_response_section
+## 7. validate_bid_document
+## 8. export_bid_document
+## 9. check_bid_quality
+## 10. build_outline
+## 11-A. register_evidence
+## 11-B. bind_evidence
+## 12. record_review_gate
+## 13. score_price
+## 14. score_section
+## 15. score_document
+## 16. record_addendum_waiver
+## 17. get_document_chunks
+## 18. submit_block_marks
+## 19. get_coverage_report
+## 20. recover_validating_state
+## 21. 章节分段写入三工具
+## 22. get_star_coverage
+## 附录 A：KBAdapter
+## SV. save_version
+## 22-A. recommend_length_profile
+## LT. list_tools
+## 23. register_addendum_changes
+## 24. list_packages
+## 25. rewrite_section_partial
+";
+        let details = check_contract_numbering(src);
+        assert!(details.is_empty(), "干净骨架不应报错：{details:?}");
+    }
+
+    /// R1：重复编号（## 22 两次——#566 病灶一）必须被抓。
+    #[test]
+    fn contract_numbering_catches_duplicate() {
+        let src = "\
+## 0. 通用约定
+## 1. create_bid_project
+## 22. get_star_coverage
+## 22. recommend_length_profile
+";
+        let details = check_contract_numbering(src);
+        assert!(
+            details.iter().any(|d| d.contains("编号重复") && d.contains("22")),
+            "应报 22 重复：{details:?}"
+        );
+    }
+
+    /// R2：主编号乱序（## 26 出现在 ## 25 之前——#566 病灶二）必须被抓。
+    #[test]
+    fn contract_numbering_catches_disorder() {
+        let src = "\
+## 0. 通用约定
+## 23. register_addendum_changes
+## 26. list_packages
+## 25. rewrite_section_partial
+";
+        let details = check_contract_numbering(src);
+        assert!(
+            details.iter().any(|d| d.contains("主编号乱序") && d.contains("25")),
+            "应报 25 乱序：{details:?}"
+        );
+    }
+
+    /// R3：主号跳号（缺 24——#566 病灶三）必须被抓；
+    /// 附号占位（11-A）则不算跳号。
+    #[test]
+    fn contract_numbering_catches_gap() {
+        // 11 无主标题但有 11-A 占位 → 不报；24 无主无附 → 报。
+        let src = "\
+## 0. 通用约定
+## 10. build_outline
+## 11-A. register_evidence
+## 12. record_review_gate
+## 23. register_addendum_changes
+## 25. rewrite_section_partial
+";
+        let details = check_contract_numbering(src);
+        let gap_reports: Vec<_> = details.iter().filter(|d| d.contains("跳号")).collect();
+        assert_eq!(gap_reports.len(), 1, "只应报一次跳号：{details:?}");
+        assert!(
+            gap_reports[0].contains("13")
+                && gap_reports[0].contains("24")
+                && !gap_reports[0].contains("11"),
+            "跳号应含 13..24 且不含 11：{gap_reports:?}"
+        );
+    }
+}
