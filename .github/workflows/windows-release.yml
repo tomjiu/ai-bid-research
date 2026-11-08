@@ -30,6 +30,13 @@ on:
   push:
     tags:
       - "v*" # 正式版本 tag 触发
+# #568：发版面串行化——同 workflow + 同 ref 排队不取消（tag 重推/
+# 双 dispatch 的第二个 run 等待而非掐断首个，杜绝半途而废的发版构建；
+# 队列防爆由「同 ref 串行」达成，跨 tag 互不干扰）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 
 env:
   CARGO_TERM_COLOR: always
