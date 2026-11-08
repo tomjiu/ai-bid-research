@@ -306,3 +306,50 @@ fn approval_key_file_persists_and_receipt_survives_reopen() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// #580：approval.key 写入面收敛到 write_fsync_atomic 后的撕裂语义。
+///
+/// ① 原子写清场：首启生成后 `.mang/` 无 `.tmp` 残骸（rename 提交面干净）；
+/// ② 半截密钥（17/32 字节——旧版裸 `fs::write` 的撕裂产物形态）→ open
+///    仍 Corrupt fail-closed（**修写入面不放松读面拒绝**：半截密钥该拒
+///    还是拒，只是新写入面根本不再产生它）；
+/// ③ 旧 key 完好语义由 write_fsync_atomic 的 fn 级测试承载
+///    （`write_fsync_atomic_fail_closed_keeps_target_untouched`——
+///    写失败不动目标文件），此处不重复注入。
+#[test]
+fn approval_key_atomic_write_and_torn_fail_closed() {
+    let dir = store_dir("approval-key-atomic");
+    // ① 首启生成（原子面）——不留 tmp 残骸
+    {
+        let _svc = BidService::open(&dir).unwrap();
+        let mang = dir.join(".mang");
+        let names: Vec<String> = std::fs::read_dir(&mang)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            names.iter().all(|n| !n.ends_with(".tmp")),
+            "原子写后 .mang/ 无 .tmp 残骸：{names:?}"
+        );
+        assert!(
+            names.iter().any(|n| n == "approval.key"),
+            "approval.key 在位：{names:?}"
+        );
+    }
+    // ② 半截密钥 → Corrupt（fail-closed 零变化）
+    {
+        let key_path = dir.join(".mang").join("approval.key");
+        std::fs::write(&key_path, [7u8; 17]).unwrap();
+        let err = match BidService::open(&dir) {
+            Err(e) => e,
+            Ok(_) => panic!("半截密钥应 Corrupt fail-closed，实际 open 成功"),
+        };
+        match err {
+            bid_tools::store_io::StoreIoError::Corrupt(what) => {
+                assert!(what.contains("32"), "Corrupt 文案携带字节数语义：{what}");
+            }
+            other => panic!("半截密钥应 Corrupt fail-closed，实际 {other:?}"),
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

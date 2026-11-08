@@ -69,9 +69,10 @@ use serde_json::Value;
 /// （batch_task/advance_task）+ `reopen_section`（ACCEPTED 章节重开）
 /// + `set_param_responses`（参数应答录入）= 42；#319 增 2 个：补遗后
 /// 增量重写（register_addendum_changes / rewrite_section_partial）= 44；
+/// #316 增 1 个：`list_packages`（分包清单只读——多标段/多包）。
 /// #315 增 4 个：业绩材料库四工具（register_performance / list_performance /
-/// recommend_performance / write_performance_section）= 48。
-pub const TOOL_NAMES: [&str; 48] = [
+/// recommend_performance / write_performance_section）= 45 + 4 = 49。
+pub const TOOL_NAMES: [&str; 49] = [
     "create_bid_project",
     "import_tender_files",
     "extract_requirements",
@@ -119,6 +120,8 @@ pub const TOOL_NAMES: [&str; 48] = [
     "rewrite_section_partial",
     // #287 篇幅档位推荐（只读——P3 建纲前调，建议+理由+alternatives 交用户确认）
     "recommend_length_profile",
+    // #316 分包清单（只读——多标段/多包的识别结果与选包状态查询面）
+    "list_packages",
     // #279 行协议发现面：无上下文代理合理预期先握手（六场实测两个独立代理
     // 都试探了 list_tools）——返回工具清单 + 行协议契约摘要；JSON-RPC 客户端
     // 用 tools/list 等价获取，本工具是行协议（stdio 裸 JSON）的握手入口

@@ -60,6 +60,8 @@ pub(crate) fn invoke(name: &str, args: Value, svc: &mut BidService) -> ToolResul
         "build_outline" => build_outline(svc, args),
         // ---- #287 篇幅档位推荐（只读——P3 建纲前：建议+理由+alternatives 交用户确认） ----
         "recommend_length_profile" => recommend_length_profile(svc, args),
+        // ---- #316 分包清单（只读——多标段/多包识别结果 + 归属统计 + 选包状态） ----
+        "list_packages" => list_packages(svc, args),
         "register_evidence" => register_evidence(svc, args),
         "bind_evidence" => bind_evidence(svc, args),
         "record_review_gate" => record_review_gate(svc, args),
@@ -204,6 +206,18 @@ pub(crate) fn opt_str(v: &Value, key: &str, at: &str) -> Result<Option<String>, 
         Some(Value::String(s)) => Ok(Some(s.clone())),
         Some(_) => Err(ToolError::EUnprocessable {
             what: format!("{at}: {key} 须为字符串"),
+        }),
+    }
+}
+
+/// #379：可选布尔参数（confirm_no_addendum 等）——类型不对响亮拒
+/// （不猜测、不静默默认——与 opt_str/opt_u64 同口径）。
+pub(crate) fn opt_bool(v: &Value, key: &str, at: &str) -> Result<Option<bool>, ToolError> {
+    match v.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(ToolError::EUnprocessable {
+            what: format!("{at}: {key} 须为布尔"),
         }),
     }
 }
@@ -703,7 +717,7 @@ fn import_tender_files(svc: &mut BidService, args: Value) -> ToolResult {
             continue; // 补遗已由 ADDENDUM_NOT_READY 点名——同一件事不报两遍
         }
         warnings.push(format!(
-            "INPUT_FILE_NOT_READY: {} 未就绪（{}）——「已提取出一部分需求」不等于输入完整，起草将被拒；请修复重传或人工确认后放行（record_addendum_waiver）",
+            "INPUT_FILE_NOT_READY: {} 未就绪（{}）——「已提取出一部分需求」不等于输入完整，起草将被拒；请修复重传，或对本件人工确认后放行（record_addendum_waiver file_id=<本件>——逐件免责，不构成「本项目无补遗」确认）",
             f.name, f.reason,
         ));
     }
@@ -791,6 +805,18 @@ fn category_key(cn: &str) -> &'static str {
         "格式要求" => "format",
         _ => "other",
     }
+}
+
+/// `filters.category` 合法值域（#426——契约 §4：契约键或中文类别名）。
+/// **键集从 [`category_key`] 派生**（同一张映射表，不另维护一份字面量——
+/// 类别面变化时两处自动一致）；中文名 = extract 产物七类口径
+/// （契约 submit_block_marks：资格条件|否决项|评分项|技术参数|商务要求|格式要求|其他）。
+fn category_filter_domain() -> (Vec<&'static str>, Vec<&'static str>) {
+    const NAMES: [&str; 7] = [
+        "资格条件", "否决项", "评分项", "技术参数", "商务要求", "格式要求", "其他",
+    ];
+    let keys: Vec<&'static str> = NAMES.iter().map(|n| category_key(n)).collect();
+    (keys, NAMES.to_vec())
 }
 
 /// 条款号数值化（`3.2.1` → [3, 2, 1]——缺号检测的序比较基元）。
@@ -1051,6 +1077,30 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
         }
     }
 
+    // ---- #316 分包识别与 REQ 归属（三形态：文件名/章节结构/分包清单表格）。
+    // 合并面之后、落库之前——params 加性写入（REQ 产物零位移：id/category/
+    // anchors 不动，requirement_hash 不含 params，幂等合并稳定）。无分包件
+    // → 空注册表 + REQ 不标（既有行为逐位一致）。
+    let packages = bid_parse::packages::detect_and_attribute(svc.parsed(), &mut reqs);
+    let package_counts: std::collections::BTreeMap<String, usize> = {
+        let mut m: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        for r in reqs.iter() {
+            if let Some(p) = bid_domain::packages::requirement_package_id(r) {
+                *m.entry(p.to_string()).or_insert(0) += 1;
+            }
+        }
+        m
+    };
+    let shared_count = if packages.is_empty() {
+        0
+    } else {
+        reqs.iter()
+            .filter(|r| bid_domain::packages::requirement_package_id(r).is_none())
+            .count()
+    };
+    // 重抽幂等：注册表整集替换（选中包消失时 set_packages 内部复位）
+    svc.store_mut().set_packages(packages.clone());
+
     // ---- #285 ① ★漏标检测：字面★真值 vs 已抽 REQ（抽取面汇总 + 警告）。
     //
     // 口径与 get_star_coverage 同源（star_scan 三级恒等式）；此处只汇总
@@ -1159,6 +1209,39 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
             names
         ));
     }
+    // #472（B-08）：per-file 零抽取可见性——ZERO_REQUIREMENTS 只在整批
+    // total==0 时响；混合批次（清单型 xlsx 主件 + docx 主件）中单个文件
+    // 0 REQ 时此前完全静默（audit B-08 的「同批其它文件有产出即无信号」
+    // 面）。有抽取面的文件（与 merge 面同口径 has_extraction_face）逐件
+    // 对账 source_file（reqs 已落库——读 store 面与 by_category 同源）；
+    // 0 条 → 逐文件警告（Agent 可定位哪一份零贡献，fail-visible）。
+    if total > 0 {
+        let zero_req_files: Vec<&str> = svc
+            .parsed()
+            .iter()
+            .filter(|p| {
+                bid_parse::merge::has_extraction_face(
+                    kind_map.get(&p.name).map(String::as_str),
+                    &p.name,
+                )
+            })
+            .filter(|p| {
+                !svc
+                    .store()
+                    .requirements()
+                    .iter()
+                    .any(|r| r.source_file == p.name)
+            })
+            .map(|p| p.name.as_str())
+            .collect();
+        if !zero_req_files.is_empty() {
+            warnings.push(format!(
+                "SOURCE_FILE_ZERO_REQ: {} 个有抽取面的文件 0 条 REQ（{:?}）——同批其它文件有产出，该件零贡献零信号。常见原因：① 清单型 xlsx 主文件（XlsxRow 黑洞已修——若仍空请开 issue 附 parse_summary）；② 文本层损坏/扫描件未 OCR；③ 该件确无可识别条款结构。请用 get_coverage_report 核对该件的块面后处置。",
+                zero_req_files.len(),
+                zero_req_files
+            ));
+        }
+    }
     Ok(json!({
         "counts": {
             "total": total,
@@ -1184,6 +1267,20 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
         },
         "conflicts": conflicts,
         "missing_sequence": missing_sequence,
+        // #316 分包识别汇总（无分包 → detected=0，items 空——既有项目零位移；
+        // 有分包时 shared = 共用条款数，选包建纲时共用条款全量进纲）
+        "packages": {
+            "detected": packages.len(),
+            "items": packages.iter().map(|p| json!({
+                "id": p.id,
+                "label": p.label,
+                "kind": p.kind,
+                "number": p.number,
+                "sources": p.sources,
+                "req_count": package_counts.get(p.id.as_str()).copied().unwrap_or(0),
+            })).collect::<Vec<_>>(),
+            "shared_req_count": shared_count,
+        },
         "warnings": warnings,
         "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
         "project_version": svc.store().content_version(),
@@ -1219,6 +1316,35 @@ fn get_compliance_matrix(svc: &mut BidService, args: Value) -> ToolResult {
     let filters = filters_of(&args, "get_compliance_matrix")?;
     let filter_category = filter_str(filters, "category", "get_compliance_matrix")?;
     let filter_status = filter_str(filters, "status", "get_compliance_matrix")?;
+    // ---- 过滤值域校验（#426——search_evidence mode 同款纪律：非法值显式拒。
+    // 此前传错值域静默 0 行 + ok:true，Agent 误判「无阻塞项」——0 行也是
+    // 一种伪装的空成功（issue #9 口径）。
+    if let Some(c) = filter_category.as_deref() {
+        let (keys, names) = category_filter_domain();
+        if !keys.contains(&c) && !names.contains(&c) {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "get_compliance_matrix: filters.category={c:?} 非法（合法：契约键 {} 或中文类别名 {}——契约 §4；拼写错显式拒，不静默 0 行）",
+                    keys.join("|"),
+                    names.join("|"),
+                ),
+            });
+        }
+    }
+    if let Some(s) = filter_status.as_deref() {
+        let valid: Vec<&str> = bid_domain::matrix::ResponseStatus::ALL
+            .iter()
+            .map(|v| v.as_str())
+            .collect();
+        if !valid.contains(&s) {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "get_compliance_matrix: filters.status={s:?} 非法（合法：{}——T-2+#245 五态派生；拼写错显式拒，不静默 0 行）",
+                    valid.join("|"),
+                ),
+            });
+        }
+    }
     // 游标窗口（S-4）：fp 绑定 工具名+project_id+过滤参数——跨过滤器游标 fail-closed 拒；
     // cv 绑定当前数据版本（#406/C-14）——翻页期间 store 变更（增长位移）即拒
     let fp = cursor::fingerprint(&[
@@ -4463,6 +4589,15 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
             });
         }
     }
+    // #316 按包建纲：package 接受 PKG id（PKG-01）/ 原文标签（第2包）/ 纯序号（2）
+    let package = opt_str(&args, "package", TOOL)?;
+    if let Some(p) = &package {
+        if p.trim().is_empty() {
+            return Err(ToolError::EUnprocessable {
+                what: format!("{TOOL}: package 不得为空白（不选包则不传，用 list_packages 查看可选项）"),
+            });
+        }
+    }
 
     route_guard(svc, &project_id, TOOL, project_version)?;
 
@@ -4480,6 +4615,60 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
                     .project()
                     .map(|p| p.status.as_str())
                     .unwrap_or("?")
+            ),
+        });
+    }
+
+    // ---- #316 选包裁决（分包结构存在时）：
+    // · 显式传 package → 解析（id/标签/序号三口径）后选定；
+    // · 未传且仅 1 包 → 自动选定（零摩擦——单包件如「…-第2包.doc」）；
+    // · 未传且 ≥2 包 → 拒绝列清单（fail-visible：混包建纲会让 REQ/矩阵
+    //   混面，不能静默；「投全部」= 每包各建一个项目，单存储单大纲）；
+    // · 无分包 → 不选（既有行为零位移）。
+    let mut auto_package = false;
+    let pkgs = svc.store().packages().to_vec();
+    match (&package, pkgs.len()) {
+        (Some(p), _) => {
+            let norm = p.trim();
+            let found = pkgs.iter().find(|x| {
+                x.id == norm
+                    || x.label == norm
+                    || x.number.to_string() == norm
+            });
+            let Some(found) = found else {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: package={p} 未命中已识别分包（可用：{}；用 list_packages 查看识别结果与证据）",
+                        pkgs.iter().map(|x| format!("{}({})", x.id, x.label)).collect::<Vec<_>>().join("、")
+                    ),
+                });
+            };
+            svc.store_mut().select_package(&found.id).map_err(ToolError::from)?;
+        }
+        (None, 1) => {
+            let only = pkgs[0].clone();
+            svc.store_mut().select_package(&only.id).map_err(ToolError::from)?;
+            auto_package = true;
+        }
+        (None, 0) => {}
+        // 余下 = 未传 package 且 ≥2 包（0/1 已被上两臂覆盖）
+        (None, _) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: 检测到 {} 个分包（{}）——必须传 package 选定投哪个包（共用条款自动进纲）；「投全部」= 每包各建一个项目分别建纲。用 list_packages 查看识别结果与证据",
+                    pkgs.len(),
+                    pkgs.iter().map(|x| format!("{}({})", x.id, x.label)).collect::<Vec<_>>().join("、")
+                ),
+            });
+        }
+    }
+    // 选包后范围非空门（选中包 REQ + 共用至少 1 条——空范围建纲无意义）
+    let scoped = svc.store().requirements_in_scope();
+    if scoped.is_empty() {
+        return Err(ToolError::EUnprocessable {
+            what: format!(
+                "{TOOL}: 所选分包 {} 的条款范围为空（该包无 REQ 且无共用条款——用 list_packages 复核归属）",
+                svc.store().selected_package().map(|p| p.label.clone()).unwrap_or_default()
             ),
         });
     }
@@ -4588,10 +4777,24 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
         "counts": {
             "sections": n_sections,
             "leaves": leaves.len(),
-            "requirements": n_reqs,
+            // #316：建纲范围口径（选包后 = 选中包 REQ + 共用；未选 = 全集）
+            "requirements": scoped.len(),
+            "total_requirements": n_reqs,
             "total_target_chars": total_target,
             "matrix_rows": n_rows,
             "matrix_blocking": n_blocking,
+        },
+        // #316 选包回显（审计面：本项目投哪个包、是否自动选定、共用条款量）
+        "package": {
+            "selected": svc.store().selected_package().map(|p| json!({
+                "id": p.id,
+                "label": p.label,
+                "kind": p.kind,
+                "number": p.number,
+            })).unwrap_or(json!(null)),
+            "auto_selected": auto_package,
+            "detected_packages": pkgs.len(),
+            "shared_requirements": svc.store().shared_requirement_count(),
         },
         "length": {
             "profile": effective_profile
@@ -4616,6 +4819,52 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
         // 建纲后无从规划「哪叶几批」）
         "leaf_quotas": leaf_quotas,
         "warnings": outline_warnings,
+        "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
+        "project_version": svc.store().content_version(),
+        "request_id": next_request_id(),
+    }))
+}
+
+// ---------------------------------------------------------------- #316 list_packages
+
+/// `list_packages` —— 分包清单（只读）。
+///
+/// 返回 extract_requirements 时识别的分包注册表（三形态证据：文件名/章节
+/// 结构/分包清单表格）+ 每包 REQ 归属数 + 共用条款数 + 当前选包状态。
+/// 无分包结构 → detected=0（诚实空面，不是错误）。
+///
+/// 消费面：建纲前查可投的包（build_outline 的 package 参数取值面）；
+/// 「投全部」的官方路径 = 每包各建一个项目（单存储单大纲的边界，如实呈现）。
+fn list_packages(svc: &mut BidService, args: Value) -> ToolResult {
+    const TOOL: &str = "list_packages";
+    let project_id = req_str(&args, "project_id", TOOL)?;
+    route_project(svc, &project_id, TOOL)?;
+
+    let stats = svc.store().package_stats();
+    let selected = svc.store().selected_package();
+    let shared = svc.store().shared_requirement_count();
+    let total_reqs = svc.store().requirements().len();
+    Ok(json!({
+        "detected": stats.len(),
+        "items": stats.iter().map(|(p, n)| json!({
+            "id": p.id,
+            "label": p.label,
+            "kind": p.kind,
+            "number": p.number,
+            "req_count": n,
+            "sources": p.sources,
+            "selected": selected.map(|s| s.id == p.id).unwrap_or(false),
+        })).collect::<Vec<_>>(),
+        "shared_req_count": shared,
+        "total_requirements": total_reqs,
+        "selected_package": selected.map(|p| json!({
+            "id": p.id,
+            "label": p.label,
+            "kind": p.kind,
+            "number": p.number,
+        })).unwrap_or(json!(null)),
+        // 用法提示（信息性）：选包走 build_outline 的 package 参数
+        "usage": "build_outline 传 package=<id|label|number> 选定投哪个包（共用条款自动进纲）；投全部 = 每包各建一个项目",
         "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
         "project_version": svc.store().content_version(),
         "request_id": next_request_id(),
@@ -5458,8 +5707,23 @@ fn set_matrix_override(svc: &mut BidService, args: Value) -> ToolResult {
 fn record_addendum_waiver(svc: &mut BidService, args: Value) -> ToolResult {
     const TOOL: &str = "record_addendum_waiver";
     let project_id = req_str(&args, "project_id", TOOL)?;
-    let file_id = req_str(&args, "file_id", TOOL)?;
     let reason = req_str(&args, "reason", TOOL)?;
+    // #379 拆门：confirm_no_addendum=true = 「本项目无补遗」的**全局显式
+    // 确认**（NotProvided 阻塞的唯一新出口）。与逐件语义互斥：file_id
+    // 不得同时出现（两种确认混调用 = 语义不清，响亮拒）。
+    let confirm_no_addendum = opt_bool(&args, "confirm_no_addendum", TOOL)?.unwrap_or(false);
+    let file_id = if confirm_no_addendum {
+        if args.get("file_id").map_or(false, |v| !v.is_null()) {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: confirm_no_addendum=true 时不得携带 file_id——全局确认（本项目无补遗）与逐件免责（某文件带病放行）是两种语义，混调用拒"
+                ),
+            });
+        }
+        None
+    } else {
+        Some(req_str(&args, "file_id", TOOL)?)
+    };
     // #182：principal 参数已废除——显式拒绝（参数面先于验签面）
     if args.get("principal").is_some() {
         return Err(ToolError::EUnprocessable {
@@ -5473,6 +5737,57 @@ fn record_addendum_waiver(svc: &mut BidService, args: Value) -> ToolResult {
 
     route_guard(svc, &project_id, TOOL, project_version)?;
 
+    // #379：全局确认路径——receipt 签域 no_addendum_confirmed（与逐件
+    // 签域 addendum_waiver:{file_id} 分离：A 门 receipt 免不了 B 门）。
+    if confirm_no_addendum {
+        let (confirmed, principal) = svc
+            .confirm_no_addendum(&reason, &receipt)
+            .map_err(ToolError::from)?;
+        let waivers: Vec<Value> = svc
+            .store()
+            .addendum_waivers()
+            .iter()
+            .map(|w| {
+                json!({
+                    "file_id": w.file_id,
+                    "reason": w.reason,
+                    "at": w.at,
+                    "principal": w.principal,
+                })
+            })
+            .collect();
+        return Ok(json!({
+            "confirmed_no_addendum": {
+                "review_id": confirmed.id,
+                "gate": "no_addendum_confirmed",
+                "reason": confirmed.reviewer,
+                "at": confirmed.at,
+                "actor": {
+                    "actor_id": principal.actor_id,
+                    "actor_type": principal.actor_type.as_str(),
+                    "authentication_method": principal.authentication_method,
+                },
+                // #277 过门方式（agent_declared 时导出带警告）
+                "method": svc
+                    .store()
+                    .latest_gate_pass(bid_domain::review::Gate::NoAddendumConfirmed)
+                    .map(|p| p.method.clone()),
+                "human_confirmed": svc
+                    .store()
+                    .latest_gate_pass(bid_domain::review::Gate::NoAddendumConfirmed)
+                    .map(|p| p.human_confirmed),
+            },
+            "addendum_waivers": waivers,
+            "addendum_readiness": addendum_readiness_block(svc),
+            "agent_waivers": agent_waivers_json(svc),
+            "human_review_complete": svc.store().human_review_complete(),
+            "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
+            "project_version": svc.store().content_version(),
+            "request_id": next_request_id(),
+        }));
+    }
+
+    let file_id = file_id.expect("非全局路径 file_id 必在场（上方已校验）");
     let (recorded, principal) = svc
         .record_addendum_waiver(&file_id, &reason, &receipt)
         .map_err(ToolError::from)?;

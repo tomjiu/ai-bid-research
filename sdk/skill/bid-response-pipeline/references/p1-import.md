@@ -96,13 +96,19 @@ LibreOffice 任一）时引擎**自动转 .docx 解析**——`per_file[].warnin
 任一补遗/澄清件不处 READY（readiness=FAILED 解析失败 / OCR_PENDING 零文本）
 → `draft_response_section` 被 MissingAddendum 拒，拒稿理由逐件点名文件名与
 原因——**部分失败也算**（3 份坏 1 份也拦：坏的那份可能正是改控制价/截止
-时间的，按旧条款做标是废标）。出口两条：
+时间的，按旧条款做标是废标）。出口三条：
 
 1. **修复重传**可解析版本（新 sha256 即新档，阻塞自然消失）；
 2. **用户逐件确认后放行**：`record_addendum_waiver`（file_id + reason +
    宿主签发 receipt——签域 `addendum_waiver:{file_id}` 件级绑定，旧
    `principal` 参数显式拒（#182）；逐件留底审计，非全局布尔；已确认件在
-   not_ready 清单里 waived=true，不再阻塞但仍可查）。
+   not_ready 清单里 waived=true，不再阻塞但仍可查）；
+3. **「未发现补遗/澄清文件」阻塞（NotProvided——项目里一件补遗都没有）**
+   的出口**不是**逐件确认——对主件/图纸等非补遗件做逐件 waiver 不解除
+   它（#379 拆门：那是「不知道≠没有」防线的旁路）。确认本项目真的无补遗
+   → `record_addendum_waiver` 带 `confirm_no_addendum:true`（receipt 签域
+   `no_addendum_confirmed`，与逐件签域分离）——这是全局确认的**唯一**
+   显式出口；项目已有补遗件时该调用响亮拒（正确出口是 ①/②）。
 
 ## 失败降级话术（向用户）
 

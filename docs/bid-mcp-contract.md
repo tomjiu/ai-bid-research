@@ -8,18 +8,16 @@
 
 ## 0. 通用约定
 
-- **错误码**：`E_AUTH` / `E_NOTFOUND` / `E_STATE`（状态机拒绝越级或非法转换）/ `E_CONFLICT`（project_version 过期）/ `E_PARTIAL`（部分条目失败，附 item_errors）/ `E_UNPROCESSABLE`（解析不可恢复）/ `E_DRAFT_INCOMPLETE`（#243——全稿最终校验前置拒：起草未完成，附 `missing` 叶清单，零副作用）/ `E_RATE` / `E_INTERNAL`。
+- **错误码**：`E_NOTFOUND` / `E_STATE`（状态机拒绝越级或非法转换）/ `E_CONFLICT`（project_version 过期）/ `E_PARTIAL`（部分条目失败，附 item_errors）/ `E_UNPROCESSABLE`（解析不可恢复）/ `E_DRAFT_INCOMPLETE`（#243——全稿最终校验前置拒：起草未完成，附 `missing` 叶清单，零副作用）/ `E_COVERAGE_INCOMPLETE`（#244——建纲覆盖闭环前置拒：标记集非空且存在未判块，附 `unjudged_blocks`+`gaps` 区间清单，零副作用）/ `UNIMPLEMENTED_INTERNAL`（骨架纪律保留面——当前工具面已全接线，代理勿重试）。（`E_AUTH` / `E_RATE` / `E_INTERNAL` 为**预留位，当前未实现**——鉴权/限流由宿主进程边界承担，工具面无此分类；未来实现时在此补记。）
 - **行协议信封（#279）**：stdio 裸 JSON 路径（`bid-mcp-stdio` / `dispatch_json`）每行一个 `{"tool":"...","args":{...}}`。参数放**顶层**（`{"tool":..,"name":..}`）时历史行为是 serde 静默吞掉 + 工具层报误导性的「字段缺失」（#269 六场 11 次失败调用）；#279 起顶层出现该工具已知参数名 → 直接报**信封结构错误**：`ToolCall 解析失败：参数须嵌套在 "args" 下（收到顶层字段 name、bid_deadline，未见 args）`。未知顶层字段不触发（不越权猜测，维持工具层原语义）。
 - **project_version 乐观并发（#279 第 3 项）**：写工具接受三种形态——① 非负整数：强一致 CAS，过期 `E_CONFLICT`（报错带对齐建议，不变）；② 字符串 `"latest"`：显式声明「我确认无并发」，跳过检查（单代理顺序作业不必追踪版本号）；③ 缺省/null：内部步骤语义，跳过检查（现状不变）。非法字符串 → `E_UNPROCESSABLE`（文案指明合法形态）。
 - **agent 声明过门（#277 方案 A——用户裁定「ai可以操控这个过去但是留痕」）**：审核门（record_review_gate / record_addendum_waiver）双路验签——人类签域（#182 现状）+ agent 签域（scope 带 `:agent` 后缀 + actor_type=agent，agent 持钥自签声明）。通道开关 = 工作区配置 `<ws>/.mang/config.json` 的 `require_human_receipt`（缺省 **true** 严格模式——Q1 裁定：保守，自动化跑批显式写 false）。放行面：GatePassRecord 审计账（GP-xxxx，append-only——谁/什么身份/什么方法/何时/为什么，reason 必填非空）+ 导出警告横幅（Q3 措辞）+ 响应面 `agent_waivers`/`human_review_complete` + 事后人工追认（重过门追加 human 条，最新条定警告，两账可追溯）。防线不弱化：混用签域双向拒（NOT_AGENT_ACTOR / NOT_HUMAN_ACTOR——scope 进 MAC）；System 恒拒。
-- **幂等策略**：写操作接受 `idempotency_key`；同一 key 重复调用返回首次结果（不重复执行）。文件按 `sha256` 天然幂等；条款抽取按 `dedupe_hash` 幂等合并。
+- **幂等策略**（实然四件）：文件按 `sha256` 天然幂等；条款抽取按 `dedupe_hash` 幂等合并；export 按服务端从参数派生的幂等键重放首次结果（同参重导不重复执行）；写操作携 `project_version` 走 CAS（过期 `E_CONFLICT`）。（调用方自报 `idempotency_key` 为**预留位，当前未实现**——传入会被静默忽略，调用方防重放请按上述四机制对齐设计。）
 - **大结果分页（S-4，V3-5）**：列表类工具（get_compliance_matrix / list_evidence / list_tasks，及 M2-b 的 search_evidence）不得一次返回全量（12,000 行矩阵 / 10,000 条证据量级）——统一游标信封：
   `in : { project_id, filters:{...}, cursor?, limit?, page?(仅矩阵兼容) }`；
   `out: { rows|items, total(过滤后总数), limit(生效页宽), cursor(本次生效游标), next_cursor: string|null }`，`next_cursor=null` 即取完，原样回传取下一页。
   游标规则（fail-closed）：opaque base64（内嵌版本字节/偏移/过滤器指纹）；跨过滤器或跨工具复用游标 → `E_UNPROCESSABLE`；limit 合法域 1..=1000、缺省 100，越界/非整数**显式拒**（不静默 clamp）；游标损坏/版本不认识/偏移越界（底层列表已变化）→ `E_UNPROCESSABLE`。行序确定性（矩阵=条款位置序 CMP-0001..N；证据=id 字典序；任务=target_id 字典序）是分页安全前提，不得破坏。
-- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#285 ① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 30。
-
-- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22，篇幅档位推荐）后工具面 31；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§24，DIRTY 章节局部改写 + 局部复验）后工具面 **33**。
+- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22-A，篇幅档位推荐）后工具面 31；#285① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 32；#285② 块级双向索引三工具 `get_requirement_provenance` / `get_block_requirements` / `get_annotation_overlay`（§22 对账族）后工具面 35；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§25，DIRTY 章节局部改写 + 局部复验）后工具面 37；#321 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（assign_revision / advance_revision / complete_revision / batch_task / advance_task / reopen_section / set_param_responses）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
 
 
 ## 1. create_bid_project
@@ -72,7 +70,10 @@ out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), sha256, pages, ta
 
 ## 3. extract_requirements
 ```
-in : { project_id, scope:"all"|file_ids[], options:{granularity, include_scoring_table:true}, project_version }
+in : { project_id, scope:"all", options:{granularity, include_scoring_table:true}, project_version }
+     scope：**仅 "all"**（整集重抽——幂等合并面）；`file_ids[]` 子集过滤属
+     M2 扩展未实现，传非 "all" 即 E_UNPROCESSABLE（与 schema enum 一致；
+     未来实现时在此补记）。
      options.granularity：**保留位，当前未实现**（传入被忽略——#86 摩擦 #6 清偿：
      契约曾提到但无实现，如实标注；未来实现时枚举合法值并在此补记）
 out: { counts:{total, added(可为负——整集替换语义下的诚实增量), by_category{qualification,veto,scoring,tech_param,commercial,format,other}},
@@ -81,6 +82,10 @@ out: { counts:{total, added(可为负——整集替换语义下的诚实增量)
          抽取面文件口径；total 为真值★（样板句已排除，captured+missing==total
          恒成立）；missing>0 时 warnings 追加 STAR_MISSING；逐文件明细走 §22
          get_star_coverage），
+       packages:{ detected, items:[{id:"PKG-01", label:"第1包", kind:"包"|"标段",
+         number, sources["filename:…"|"chapter:…"|"table:…"|"text:…"], req_count}],
+         shared_req_count }（#316 分包识别——无分包时 detected=0/items 空，
+         既有行为零位移；共用条款无 package_id，选任何包建纲都进纲），
        conflicts:[{a:REQ-*,b:REQ-*,reason}], missing_sequence:[{file_id,expected_clause_nos,found}], warnings[] }
 执行: 确定性先行（条款编号序列解析、表格结构化槽位抽取）→ #219 二步抽取通路合并
       （Agent 块标记优先 + 正则兜底，#422 按 verdict 分流）：被区间标记覆盖的块，
@@ -95,6 +100,10 @@ out: { counts:{total, added(可为负——整集替换语义下的诚实增量)
       id 走 CMP-0000-REQ-Axxxx 回退分支，与正则 CMP-000N 零碰撞。
       **无标记时严格 no-op**：与旧正则产物逐位一致（GT 红线零位移）。
       B3（图纸目录/证据件，无抽取面）不进合并统计。
+      #316 分包识别与归属（合并面之后）：三形态（文件名「…-第2包」/章节结构
+      「第X章 第N包 …」/分包清单表格行）；REQ 归属写 params.package_id
+      （加性——id/category/anchors 零位移，幂等合并不受影响）；文件名带单一
+      包标记 → 整件归属；多包并提的总括句 → 共用；康熙部首 NFKC 归一化匹配。
       warnings 新增：UNCOVERED_BLOCKS（未覆盖块数——正则已兜底，Agent 补标后
       重跑更准）；AGENT_MANDATORY_OFFCATEGORY（Agent 标必选且类别不在类别
       阻断面资格条件/否决项——**已接线**：经 matrix.rs `agent_mandatory`
@@ -150,7 +159,9 @@ out: { rows:[{cmp_id, requirement:{id, clause_no, category, statement, mandatory
 无有效证据无占位 → **RESPONDED**（写了就是写了——文本事实）；证据缺口由
 evidence_missing 正交承载，由提交就绪面（validate/check_bid_quality 的
 submission_readiness）拦截，不压进状态面。
-错误: E_UNPROCESSABLE（游标与过滤器不匹配/游标损坏/limit 或 page 越界——显式拒不 clamp）
+错误: E_UNPROCESSABLE（游标与过滤器不匹配/游标损坏/limit 或 page 越界——显式拒不 clamp；
+      #426：filters.category / filters.status 不在值域（合法清单见 in 段）——拼写错
+      显式拒 + 报文附合法值清单，不静默 0 行——0 行也是伪装的空成功（issue #9））
 ```
 
 ## 4-A. list_evidence（只读，S-4 新增）
@@ -195,8 +206,10 @@ out: { hits:[{ev_id, chunk_id, content, source:{file, position}, score, match_ty
       限制（页级截取——全文检索/分块是 M2-b 面）**；
       **M2-b 落地时必须走 bid-mcp cursor.rs 游标模块（S-4）——hits 面同属大结果列表，
       分页信封/游标绑定/fail-closed 语义与 §0 大结果分页约定统一，不得自带第二套分页口径**。
-错误: E_STATE（项目无企业资料库绑定）
 ```
+      ← #482/C-17 契约对账修订：原此处承诺「E_STATE（项目无企业资料库绑定）」
+      为空承诺——朴素实现下项目路由即总闸（tools.rs 注释自认），无独立绑定
+      门可拒。M2-b 接知识库时落地真实绑定门并恢复本承诺。
 
 ## 6. draft_response_section
 ```
@@ -559,13 +572,22 @@ CherryHQ/cherry-studio（AGPL-3.0，52.9k★）为 Electron **桌面客户端**�
 in : { project_id, length_profile?("practical"|"standard"|"conservative"|"maximum",
        #287 篇幅档位四选一),
        target_total_chars?(1000..=5000000, 直接给字数覆盖档位),
-       max_reqs_per_leaf?(1..=50, 缺省 8), project_version }
+       max_reqs_per_leaf?(1..=50, 缺省 8),
+       package?(#316 选包建纲——PKG id「PKG-02」/原文标签「第2包」/纯序号「2」
+       三口径任一；先用 §24 list_packages 查识别结果；共用条款自动进纲；
+       「投全部」= 每包各建一个项目——单存储单大纲的边界，如实呈现),
+       project_version }
        三者优先（#287）：target_total_chars 显式给 → 用它；length_profile
        显式给 → 档位字数；都不给 → 默认档 Conservative 1,200,000
        （单一真源 bid_domain::outline::DEFAULT_TARGET_TOTAL_CHARS；用户裁定
        2026-11-06：120 万字 ≈ 1422 页，四档 400k/800k/1.2M/2.5M；拼错档位键
        E_UNPROCESSABLE 显式拒）
-out: { counts:{ sections, leaves, requirements, total_target_chars, matrix_rows, matrix_blocking },
+out: { counts:{ sections, leaves, requirements(建纲范围口径——选包后 =
+       选中包 REQ + 共用；未选 = 全集), total_requirements(全集计数),
+       total_target_chars, matrix_rows, matrix_blocking },
+       package:{ selected:{id,label,kind,number}|null, auto_selected,
+       detected_packages, shared_requirements }（#316 选包回显——审计面：
+       本项目投哪个包、是否自动选定、共用条款量），
        length:{ profile("practical"…|"custom"), target_total_chars, approx_pages }
        （#287 生效档回显——审计面可核对），
        status: "MATRIX_READY", project_version }
@@ -593,9 +615,12 @@ out 补: coverage:{ face_files, marked_files, regex_fallback_files,
       excluded_blocks(B 态总数), unjudged_blocks(恒 0——非零时已被门拦) }
 错误: E_COVERAGE_INCOMPLETE（部分标记未判完——零副作用，补标 →
       重跑 extract_requirements → build_outline）；E_STATE（状态窗口外/
-      条款面空）
+      条款面空）；E_UNPROCESSABLE（#316：检测到 ≥2 包但未传 package——
+      fail-visible 拒并列清单，不静默混包建纲；package 未命中已识别分包；
+      所选包范围为空）
 幂等: 推导确定性（同输入同树）；状态机面不重入（见上）；补标后重跑
-      幂等（REQ 集合逐位稳定——替换语义 + REQ-A 编号确定性）
+      幂等（REQ 集合逐位稳定——替换语义 + REQ-A 编号确定性）；#316 选包
+      幂等（同包重选 no-op；换包受状态机拦——重建面同上）
 ```
 
 ## 11-A. register_evidence（#80 第三批 · G2；#185 缺口 1 来源验证；#217 四态 + 正文摘录；#245 占位态）
@@ -908,7 +933,7 @@ out: { project_id, diagnostic_only(true), result_kind("rule_heuristic"),
 错误: E_UNPROCESSABLE（价格口径非法）；E_STATE（无章节树）
 ```
 
-## 16. record_addendum_waiver（#184 补遗分级阻塞的逐件人工确认；#277 agent 声明面）
+## 16. record_addendum_waiver（#184 补遗分级阻塞的逐件人工确认；#277 agent 声明面；#379 起 confirm_no_addendum 全局确认）
 
 > 背景：#184 前旧判定「3 份补遗坏 1 份不拦工作流」（只有**全部**失败才阻塞），
 > 且 OcrRequired 一律放行——零文本扫描件被当「没有内容」处理。翻案理由：
@@ -919,15 +944,28 @@ out: { project_id, diagnostic_only(true), result_kind("rule_heuristic"),
 > 宿主签发面 → 设计内死锁（P5 全断的成因之一）；#277 方案 A 补 agent 声明面。
 
 ```
-in : { project_id, file_id(TF-*——须真实存在，import 响应/拒稿理由中的
-       addendum_readiness.not_ready[].file_id),
+in : { project_id,
+       file_id(TF-*——须真实存在，import 响应/拒稿理由中的
+       addendum_readiness.not_ready[].file_id；confirm_no_addendum=true
+       时不得携带——两种确认语义互斥),
+       confirm_no_addendum?(#379：true = 「本项目无补遗」的**全局显式确认**
+       ——NotProvided 阻塞（② 无补遗件分支）的唯一出口；项目已有补遗件
+       时响亮拒（语义矛盾——正确出口是逐件确认/修复重传）；缺省 false =
+       逐件免责（须携带 file_id）),
        reason(非空白——不可审计的确认不成确认；#277 agent 路径同构必填),
-       receipt(#182 人类签域：scope=addendum_waiver:{file_id} 件级绑定
-       ——TF-0003 的 receipt 免不了 TF-0004；#277 agent 签域：
-       addendum_waiver:{file_id}:agent + actor_type=agent——须工作区
+       receipt(#182 人类签域：逐件 scope=addendum_waiver:{file_id} 件级绑定
+       ——TF-0003 的 receipt 免不了 TF-0004；#379 全局确认 scope=
+       no_addendum_confirmed（与逐件签域分离——逐件 receipt 免不了全局
+       确认，A 门 receipt 免不了 B 门同款纪律）；#277 agent 签域：上述
+       scope + :agent 后缀 + actor_type=agent——须工作区
        require_human_receipt=false；旧 principal 参数显式拒),
        project_version }
-out: { recorded:{ file_id, reason, at(unix epoch 秒),
+out: { confirmed_no_addendum?{ review_id, gate:"no_addendum_confirmed",
+       reason, at, actor:{…}, method, human_confirmed }（#379——仅
+       confirm_no_addendum=true 路径回显；全局确认不写逐件台账——两账
+       分离：addendum_waivers=逐件免责 / reviews(NoAddendumConfirmed)=
+       全局放行事实）,
+       recorded:{ file_id, reason, at(unix epoch 秒),
        principal(legacy 回显——human/agent:{actor_id} 随身份),
        actor:{ actor_id, actor_type, authentication_method },
        method(#277——human_receipt | agent_declared),
@@ -943,7 +981,14 @@ out: { recorded:{ file_id, reason, at(unix epoch 秒),
       逐件点名）；本工具对具体 file_id 记一条人工确认 → 该件不再构成阻塞。
       非全局布尔——「3 份坏 1 份」要确认到具体哪一份、为什么故意带病放行。
       写账即 content_version +1；导入可解析版本后阻塞自然消失，确认记录
-      无害残留（与 §12 addendum_waiver 门同款语义）。工具名带 addendum 是
+      无害残留（与 §12 addendum_waiver 门同款语义）。
+      #379 拆门：逐件确认**只写台账 + GatePassRecord 审计账，不写
+      reviews 门记录**——「未发现补遗/澄清文件」（NotProvided）的放行
+      只能经 confirm_no_addendum=true 显式确认（NoAddendumConfirmed 门）
+      或旧快照既有的 addendum_waiver 门（OR 兼容——#379 前的确认无法
+      区分语义，已放行项目不回锁）。对无关件（如图纸）做逐件 waiver
+      不再顺手解除 NotProvided 阻塞。
+      工具名带 addendum 是
       #184 历史口径——确认面按 file_id 落账，覆盖所有招标包输入件（证据
       源文件不在此面，可用性归证据系统）。确认放行后起草为**受限起草**
       （§6 out.input_integrity.status = RESTRICTED——放行 ≠ 没问题）。
@@ -954,7 +999,9 @@ out: { recorded:{ file_id, reason, at(unix epoch 秒),
       ocr_pending（逐件真相在 not_ready 清单）。
 状态: FILES_IMPORTED+（含 EXPORTED——与 §12 addendum_waiver 门同窗口：导入
       后任意时刻可确认，阻塞可能出现在任何后续阶段；DRAFT 拒 E_STATE）
-错误: E_UNPROCESSABLE（principal 缺 human: 前缀 / reason 空白）；E_NOTFOUND
+错误: E_UNPROCESSABLE（principal 缺 human: 前缀 / reason 空白 /
+      confirm_no_addendum 与 file_id 混调用 / 项目已有补遗件时全局确认 /
+      confirm_no_addendum 非布尔 / 错域 receipt）；E_NOTFOUND
       （file_id 不存在于 files——对不存在的件做确认 = 凭空免责）；E_STATE
       （DRAFT）；拒绝路径零副作用
 ```
@@ -976,8 +1023,12 @@ out: { file_id, total_blocks, from, returned, next_from(取完为 null),
 语义: 取单文件的块文本窗口（join 键 = sha256——与 #217 locate_content 同口径）。
       size 上限 200 防上下文吃爆（160 页文件 3600+ 块）；from 越界 → E_UNPROCESSABLE。
 错误: E_NOTFOUND（file_id 不存在）；E_UNPROCESSABLE（size 0/>200、from 越界、
-      无解析产物在服务态——须先 import 成功）；E_STATE（状态机窗口外）
-状态: FILES_IMPORTED / REQUIREMENTS_EXTRACTED
+      无解析产物在服务态——须先 import 成功）；E_STATE（DRAFT 态——项目已建
+      未导入；导入后全程放行）
+状态: FILES_IMPORTED+（全程——只读；#482/C-16 契约对账修订：原「两态窗口」
+      承诺与实现/合法用例不符——起草期读块参考是 #271 注明的合法用例，
+      get_document_chunks 与 get_coverage_report/get_star_coverage 统一为
+      只读全程放行口径，实现侧补 route_guard 使 E_STATE 真实生效）
 ```
 
 ## 18. submit_block_marks（#219 全块覆盖 · 写）
@@ -1185,7 +1236,7 @@ out: { count, tools: [{ name, summary }...],
       全量）；本工具是 stdio 裸 JSON 行协议的发现面补口。
 ```
 
-## 23. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+## 22-A. recommend_length_profile（#287 篇幅档位推荐 · 只读）
 ```
 in : { project_id }
 out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
@@ -1219,94 +1270,29 @@ out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
       = 选中档位目标）动态判——档位化后自动按选中档生效（非固定 844,000）。
 ```
 
-## 23. 业绩材料库四工具（#315 · 跨项目业绩资产）
+## 23. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
 
-> 背景：#269 黑盒实测「剩余唯一墙 = 业绩材料缺口」。业绩是投标人的**长期
-> 资产**（评标常占 10-20 分），不是单项目的输入——库文件在项目工作区之外
-> （路径解析：`BID_PERF_LIB` 环境变量 → 用户级默认位
-> Unix `$HOME/.mang/performance-library.json` / Windows
-> `%APPDATA%\mang\performance-library.json` → 内存态（本会话可用、不落盘，
-> 响应面 `library_persisted:false` 如实报告）。原子写（tmp+rename）+
-> schema_version 门 + 损坏拒载不重建（对齐 store_io 纪律）。
+## 24. list_packages（#316 分包清单 · 只读）
 
-### 23-A. register_performance（登记 · 无项目路由）
+> 背景：真实招标常分包（batch2 实证：`…-第2包.doc`），一包一投或全投；
+> 引擎在 extract_requirements 时按三形态识别（文件名/章节结构/分包清单
+> 表格），本工具是识别结果与选包状态的唯一查询面。
+
 ```
-in : { entries?:[{
-         name*, client*, amount_wan*(万元 >= 0), completed_on*(YYYY-MM-DD),
-         categories?:[标签 <= 20], materials?:[材料路径 <= 20],
-         key_points?:[亮点 <= 20], subject_name?(条目级乙方主体) }] <= 200 条,
-       owner_name?(库主 = 投标人主体名——证据 subject_name 默认源，一次登记全程生效) }
-out: { added:[PERF-xxxx], added_count, deduplicated:[PERF-xxxx],
-       total_entries, owner_name, library_path, library_persisted, next }
-幂等: 语义四元组 (name, client, amount_wan, completed_on) 归一空白后命中
-      既有条目 → 回显既有 id 不重复登记。
-原子: 一条非法整批拒（零副作用）——错误文案带 entries[i] 定位。
-窗口: 无项目路由（建项目前可维护库——先有资产再投标）。
+in : { project_id }
+out: { detected, items:[{ id:"PKG-01", label:"第1包", kind:"包"|"标段", number,
+       req_count, sources["filename:…"|"chapter:…"|"table:…"], selected }],
+       shared_req_count(共用条款数——选任何包都进纲), total_requirements,
+       selected_package:{id,label,kind,number}|null,
+       usage(信息性提示：选包走 build_outline 的 package 参数),
+       status, project_version }
+语义: 纯读、无状态门（REQUIREMENTS_EXTRACTED+ 含 Exported——抽取时落
+      注册表，选包前后均可查）。无分包结构 → detected=0/items 空（诚实
+      空面，不是错误）。
+错误: E_NOTFOUND（project 路由失败）
 ```
 
-### 23-B. list_performance（只读 · 无项目路由）
-```
-in : { filters?:{ category?(标签子串), keyword?(name/client 包含),
-                  min_amount_wan?, max_amount_wan?, since?(完成日期下界 ISO) },
-       limit?(1..=1000，缺省 100——越界显式拒不静默 clamp) }
-out: { entries:[{ perf_id, name, client, amount_wan, completed_on,
-                  categories, materials_count, key_points,
-                  client_type(推断展示面) }], returned, owner_name,
-       library_path, library_persisted }
-```
 
-### 23-C. recommend_performance（匹配推荐 · 只读）
-```
-in : { project_id*,
-       budget_wan?(项目预算万元——仓内无预算结构面，显式入参不猜；缺省该因子弃权),
-       base_date?(评标基准日 ISO；不传 = 系统今日，signals.base_date_source 注明),
-       client_type?(government|soe|private|other——采购人类型，缺省弃权),
-       focus?(额外侧重关键词——拼进匹配语料),
-       top_k?(1..=20，缺省 10) }
-out: { recommendations:[{ perf_id, name, score(0..=1),
-                          factors:[{factor, score, available, note}×4],
-                          reasons:[逐因子人读依据] }],
-       library_total, signals:{ base_date, base_date_source, budget_wan,
-                                client_type, focus },
-       suggested_section(SEC-xxxx|null——业绩/类似项目标题的叶章节),
-       next }
-打分: 四因子确定性加权——标签重叠 40%（entry.categories 子串命中语料：
-      项目名 + REQ 陈述 + 评分项 criteria + focus；命中 3 个标签满分）/
-      金额规模 30%（min/max 比值：>= 0.5 满分 / <= 0.1 零分 / 之间线性）/
-      近三年 20%（完成日距基准日 <= 3 年满分、3-5 年半分、更早零分）/
-      客户类型 10%（同型满分 / 异型零分 / 任一侧未判定弃权 0.5）。
-      **缺信号因子弃权重归一**（available=false 不参与分母——「不知道预算」
-      不惩罚业绩）。分数是排序依据不是正确率，选哪几条由用户/Agent 裁决。
-排序: 分数降序，同分按 perf_id 字典序（确定性——同输入恒同序）。
-窗口: REQUIREMENTS_EXTRACTED+（信号来自 REQ 面）。
-```
-
-### 23-D. write_performance_section（一键写入 · 写）
-```
-in : { project_id*, section_id*(目标叶章节 SEC-xxxx),
-       perf_ids*(PERF-* 清单 >= 1),
-       bid_open_date?(开标日 ISO——证据有效性裁决基准日；缺省系统今日),
-       project_version? }
-out: { section_id, segment_id, changed, deduplicated, segment_chars,
-       evidence_registered:[{ perf_id, ev_id, source_file, deduplicated }],
-       materials_pending:[{ perf_id, materials, reason }],
-       bindings:[{ ev_id, req_ids }],
-       warnings, project_version }
-流程: ① 材料文件名（materials 的 file_name 分量）比对已导入 TF——命中 →
-      register_evidence（kind=performance；subject_name = 条目级 >
-      库主 owner_name > 工作区 bidder-profile.json 的 company_name；
-      域层语义位查重天然幂等，重跑不重复登记）；
-      ② 绑定业绩类 REQ（陈述含 业绩/类似项目）→ bind_evidence + 矩阵重算；
-      ③ 单段写入：业绩表（GFM——单元格转义）+ 逐条描述段（key_points +
-      [EV-*] 引用），幂等键 `perf-section:<section_id>`（同批重跑 no-op）。
-诚实: 材料未导入/无主体名 → materials_pending 逐条列明（正文照写、证据
-      不伪造——导入材料后重跑自动补登记）；readiness 门（可用业绩证据
-      < 3，MIN_PERFORMANCE_COUNT）拦写入并把材料指引带全。
-窗口: MATRIX_READY+（append_section_segment / register_evidence /
-      bind_evidence 三组成工具的同窗口交集）。
-```
-
-## 24. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
 ```
 in : { project_id,
        changes:[{ req_id?("REQ-xxxx"——value_changed/requirement_removed 必填；
@@ -1387,6 +1373,93 @@ out: { directive:{…处置后状态…}, section_id, dry_run,
       E_CONFLICT（expected_version 过期——无部分写入）。
 状态: MATRIX_READY+ 含 Exported（与 register 同窗口）。
 ```
+## 26. 业绩材料库四工具（#315 · 跨项目业绩资产）
+
+> 背景：#269 黑盒实测「剩余唯一墙 = 业绩材料缺口」。业绩是投标人的**长期
+> 资产**（评标常占 10-20 分），不是单项目的输入——库文件在项目工作区之外
+> （路径解析：`BID_PERF_LIB` 环境变量 → 用户级默认位
+> Unix `$HOME/.mang/performance-library.json` / Windows
+> `%APPDATA%\mang\performance-library.json` → 内存态（本会话可用、不落盘，
+> 响应面 `library_persisted:false` 如实报告）。原子写（tmp+rename）+
+> schema_version 门 + 损坏拒载不重建（对齐 store_io 纪律）。
+
+### 26-A. register_performance（登记 · 无项目路由）
+```
+in : { entries?:[{
+         name*, client*, amount_wan*(万元 >= 0), completed_on*(YYYY-MM-DD),
+         categories?:[标签 <= 20], materials?:[材料路径 <= 20],
+         key_points?:[亮点 <= 20], subject_name?(条目级乙方主体) }] <= 200 条,
+       owner_name?(库主 = 投标人主体名——证据 subject_name 默认源，一次登记全程生效) }
+out: { added:[PERF-xxxx], added_count, deduplicated:[PERF-xxxx],
+       total_entries, owner_name, library_path, library_persisted, next }
+幂等: 语义四元组 (name, client, amount_wan, completed_on) 归一空白后命中
+      既有条目 → 回显既有 id 不重复登记。
+原子: 一条非法整批拒（零副作用）——错误文案带 entries[i] 定位。
+窗口: 无项目路由（建项目前可维护库——先有资产再投标）。
+```
+
+### 26-B. list_performance（只读 · 无项目路由）
+```
+in : { filters?:{ category?(标签子串), keyword?(name/client 包含),
+                  min_amount_wan?, max_amount_wan?, since?(完成日期下界 ISO) },
+       limit?(1..=1000，缺省 100——越界显式拒不静默 clamp) }
+out: { entries:[{ perf_id, name, client, amount_wan, completed_on,
+                  categories, materials_count, key_points,
+                  client_type(推断展示面) }], returned, owner_name,
+       library_path, library_persisted }
+```
+
+### 26-C. recommend_performance（匹配推荐 · 只读）
+```
+in : { project_id*,
+       budget_wan?(项目预算万元——仓内无预算结构面，显式入参不猜；缺省该因子弃权),
+       base_date?(评标基准日 ISO；不传 = 系统今日，signals.base_date_source 注明),
+       client_type?(government|soe|private|other——采购人类型，缺省弃权),
+       focus?(额外侧重关键词——拼进匹配语料),
+       top_k?(1..=20，缺省 10) }
+out: { recommendations:[{ perf_id, name, score(0..=1),
+                          factors:[{factor, score, available, note}×4],
+                          reasons:[逐因子人读依据] }],
+       library_total, signals:{ base_date, base_date_source, budget_wan,
+                                client_type, focus },
+       suggested_section(SEC-xxxx|null——业绩/类似项目标题的叶章节),
+       next }
+打分: 四因子确定性加权——标签重叠 40%（entry.categories 子串命中语料：
+      项目名 + REQ 陈述 + 评分项 criteria + focus；命中 3 个标签满分）/
+      金额规模 30%（min/max 比值：>= 0.5 满分 / <= 0.1 零分 / 之间线性）/
+      近三年 20%（完成日距基准日 <= 3 年满分、3-5 年半分、更早零分）/
+      客户类型 10%（同型满分 / 异型零分 / 任一侧未判定弃权 0.5）。
+      **缺信号因子弃权重归一**（available=false 不参与分母——「不知道预算」
+      不惩罚业绩）。分数是排序依据不是正确率，选哪几条由用户/Agent 裁决。
+排序: 分数降序，同分按 perf_id 字典序（确定性——同输入恒同序）。
+窗口: REQUIREMENTS_EXTRACTED+（信号来自 REQ 面）。
+```
+
+### 26-D. write_performance_section（一键写入 · 写）
+```
+in : { project_id*, section_id*(目标叶章节 SEC-xxxx),
+       perf_ids*(PERF-* 清单 >= 1),
+       bid_open_date?(开标日 ISO——证据有效性裁决基准日；缺省系统今日),
+       project_version? }
+out: { section_id, segment_id, changed, deduplicated, segment_chars,
+       evidence_registered:[{ perf_id, ev_id, source_file, deduplicated }],
+       materials_pending:[{ perf_id, materials, reason }],
+       bindings:[{ ev_id, req_ids }],
+       warnings, project_version }
+流程: ① 材料文件名（materials 的 file_name 分量）比对已导入 TF——命中 →
+      register_evidence（kind=performance；subject_name = 条目级 >
+      库主 owner_name > 工作区 bidder-profile.json 的 company_name；
+      域层语义位查重天然幂等，重跑不重复登记）；
+      ② 绑定业绩类 REQ（陈述含 业绩/类似项目）→ bind_evidence + 矩阵重算；
+      ③ 单段写入：业绩表（GFM——单元格转义）+ 逐条描述段（key_points +
+      [EV-*] 引用），幂等键 `perf-section:<section_id>`（同批重跑 no-op）。
+诚实: 材料未导入/无主体名 → materials_pending 逐条列明（正文照写、证据
+      不伪造——导入材料后重跑自动补登记）；readiness 门（可用业绩证据
+      < 3，MIN_PERFORMANCE_COUNT）拦写入并把材料指引带全。
+窗口: MATRIX_READY+（append_section_segment / register_evidence /
+      bind_evidence 三组成工具的同窗口交集）。
+```
+
 ## 12-A. assign_revision（#321/A-23 · RT 认领/改派）
 ```
 in : { project_id, rt_id(RT-xxxx), owner(修订执行者——任意操作者面，

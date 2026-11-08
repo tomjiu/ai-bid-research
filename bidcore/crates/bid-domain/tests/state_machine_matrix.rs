@@ -36,7 +36,7 @@ const ALL_STATES: [ProjectStatus; 10] = [
 /// #287 增 `recommend_length_profile`（尾插——篇幅档位推荐只读，
 /// REQUIREMENTS_EXTRACTED+ 含 Exported：信号来自 REQ 面，建纲前后均可查）= 30。
 
-const ALL_TOOLS: [&str; 48] = [
+const ALL_TOOLS: [&str; 49] = [
     "create_bid_project",
     "import_tender_files",
     "extract_requirements",
@@ -73,6 +73,7 @@ const ALL_TOOLS: [&str; 48] = [
     "register_addendum_changes",
     "rewrite_section_partial",
     "recommend_length_profile",
+    "list_packages",
     "list_tools",
     "assign_revision",
     "advance_revision",
@@ -255,26 +256,16 @@ fn full_matrix_snapshot() {
         //        证据补件通道）。两个 PR 各自改位串矩阵，本表为两者并集。
         // Draft（record_addendum_waiver 拒——导入前无件可确认；#287 尾位 0
         //   ——无 REQ 面，推荐信号不存在）
-        (ProjectStatus::Draft, "110000000010000000000000000000000000000000000000"),
-        // FilesImported（#287 尾位 0——同上，抽取前无信号）
-        (ProjectStatus::FilesImported, "011100100010000001000111100000000000000000000000"),
-        // RequirementsExtracted（#287 尾位 1——推荐主窗口：P3 建纲前）
-        (ProjectStatus::RequirementsExtracted, "011100100010010001000111100000000001000000010010"),
-        // MatrixReady（#254 尾三位 111——分段写入与整稿同窗口；#287 尾位 1）
-        (ProjectStatus::MatrixReady, "000100110010101111011001100010111111011111010011"),
-        // EvidenceBound（同上）
-        (ProjectStatus::EvidenceBound, "000100110010101111011001100010111111011111010011"),
-        // Drafting（#254 尾三位 111；#241 5/6 位翻 1——证据补件主战场；#287 尾位 1）
-        (ProjectStatus::Drafting, "000100111110101111011001100010111111011111110011"),
-        // Validating（#243 尾区位 1；#254 尾三 001；#241 5/6 位翻 1；#287 尾位 1）
-        (ProjectStatus::Validating, "000100101110101111011001100011001111011111100010"),
-        // Reviewing（#254 尾三 001；#241 5/6 位翻 1；#287 尾位 1）
-        (ProjectStatus::Reviewing, "000100101110101111011001100010001111011111100010"),
-        // ReadyToExport（同上）
-        (ProjectStatus::ReadyToExport, "000100101110101111011001100010001111011111100010"),
-        // Exported（终态不变量：终态不改数据——#241 不被括进来；#254 仅只读
-        //   list；#287 尾位 1——导出后仍可查推荐口径追溯）
-        (ProjectStatus::Exported, "000100100110100011011001100010001111011100100000"),
+        (ProjectStatus::Draft, "1100000000100000000000000000000000000000000000000"),
+        (ProjectStatus::FilesImported, "0111001000100000010001111000000000000000000000000"),
+        (ProjectStatus::RequirementsExtracted, "0111001000100100010001111000000000011000000010010"),
+        (ProjectStatus::MatrixReady, "0001001100101011110111011000101111111011111010011"),
+        (ProjectStatus::EvidenceBound, "0001001100101011110111011000101111111011111010011"),
+        (ProjectStatus::Drafting, "0001001111101011110111011000101111111011111110011"),
+        (ProjectStatus::Validating, "0001001011101011110111011000110011111011111100010"),
+        (ProjectStatus::Reviewing, "0001001011101011110111011000100011111011111100010"),
+        (ProjectStatus::ReadyToExport, "0001001011101011110111011000100011111011111100010"),
+        (ProjectStatus::Exported, "0001001001101000110111011000100011111011100100000"),
 
 
     ];

@@ -3,6 +3,7 @@
 """#269 黑盒考验 · MCP 调用留痕器——子代理对引擎的唯一调用面。"""
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -29,7 +30,8 @@ def main() -> int:
 
     env = dict(os.environ)
     env["BID_WS"] = WS
-    env.setdefault("BID_FS_ROOT", "/home/z/my-project/ai-bid-research")
+    # #519：围栏根默认=仓根（脚本在 scripts/e2e_bid/ 下）——原仓外绝对路径
+    env.setdefault("BID_FS_ROOT", str(Path(__file__).resolve().parents[2]))
 
     line = json.dumps({"tool": tool, "args": args}, ensure_ascii=False)
     t0 = time.monotonic()

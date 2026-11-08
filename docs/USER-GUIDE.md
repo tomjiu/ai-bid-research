@@ -84,21 +84,91 @@ cargo run -p mang-app
 
 ## 四、MCP 工具面（AI Agent 调用）
 
-13 个工具（`bid-mcp-stdio` 的 stdio 协议），按项目状态机有序开放：
+**44 个工具**（`bid-mcp-stdio` 的 stdio 协议 / `bid-mcp-server` 的标准 MCP 传输），按项目状态机有序开放。工具契约单一真源 = `docs/bid-mcp-contract.md`；发现面 = `list_tools` 工具或 MCP `tools/list`。按产品域分组：
+
+**核心链（P0→P8 主线）**
 
 | 工具 | 什么时候能调 | 干什么 |
 |---|---|---|
 | `create_bid_project` | 起步 | 建项目（external_key 幂等——重复调不重复建） |
-| `import_tender_files` | 建项后 | 导入文件（sha256 幂等——同文件重导去重） |
-| `extract_requirements` | 导入后 | 抽条款（重抽零新增——幂等合并） |
-| `get_compliance_matrix` | 随时 | 看矩阵（要求×响应状态，游标分页） |
-| `list_evidence` / `list_tasks` | 随时 | 证据台账 / 任务分工 |
-| `draft_response_section` | 矩阵就绪后 | 单章起草（`generator: auto\|mock\|real`；引用回查防幻觉；字数 ±20%；未回应条款即时告警） |
-| `check_bid_quality` | 矩阵就绪后 | 只读质量体检（覆盖度/幻觉引用/字数带宽/需人工清单——报告落 `artifacts/quality-report.json`） |
-| `validate_bid_document` | 起草后 | 校验（8 规则——BLOCKER 清零才可导出） |
-| `export_bid_document` | 起草后 | 导出（docx/pdf；暗标模式公司名→「投标人」） |
+| `import_tender_files` | 建项后 | 导入文件（sha256 幂等——同文件重导去重；完整性对账） |
+| `extract_requirements` | 导入后 | 抽条款（六类；重抽零新增——幂等合并） |
+| `build_outline` | 抽取后 | 建纲 + 矩阵首建（#287 篇幅档位四选一，见 `recommend_length_profile`） |
+| `draft_response_section` | 矩阵就绪后 | 单章起草（`generator: auto\|mock\|real\|external`——external = Skill 驱动 Agent 写正文的标准模式；引用回查防幻觉；字数带宽；未回应条款即时告警） |
+| `validate_bid_document` | 起草后 | 校验（确定性规则 + 模型复核——BLOCKER 清零才可导出） |
+| `export_bid_document` | 校验+审校后 | 导出（docx/pdf；暗标模式；sha256 落库，中断不留半成品） |
 | `save_version` | 随时 | 存版本快照（桌面壳「改动」面板可见） |
-| `get_bid_project_state` | 随时 | 看状态 + 下一步允许哪些工具 |
+
+**只读对账（断点恢复与核对）**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `get_bid_project_state` | 随时 | 看状态 + 下一步允许哪些工具（断点恢复入口——含 DIRTY 章节清单） |
+| `get_compliance_matrix` | 随时 | 看矩阵（要求×响应状态，游标分页） |
+| `list_evidence` / `list_tasks` | 随时 | 证据台账 / 任务分工（过滤 + 游标分页） |
+| `search_evidence` | 随时 | 双通道证据检索（exact 五字段 / semantic 正文摘录） |
+| `check_bid_quality` | 矩阵就绪后 | 质量体检（覆盖度/幻觉引用/字数带宽/全局一致性——报告落 `artifacts/quality-report.json`） |
+| `list_tools` | 建项目前即可 | 行协议握手发现面（工具清单 + 契约摘要） |
+| `recommend_length_profile` | 抽取后 | 篇幅档位推荐（P3 建纲**前**调——决策权在用户） |
+| `get_coverage_report` | 随时 | 覆盖报告（哪些块没归属——全覆盖才允许建纲） |
+| `get_star_coverage` | 导入后 | ★漏标检测（字面★真值 vs 已抽 REQ 差集） |
+| `get_requirement_provenance` | 随时 | REQ→原文溯源（锚点带 block_idx/page/line） |
+| `get_block_requirements` | 随时 | 块→REQ 反查（原文 + verdict；无 REQ 块照常返回） |
+| `get_annotation_overlay` | 随时 | 视图层 overlay 数据面（渲染上色用，含 suspected_miss） |
+
+**块标记（导入后~建纲前的标记窗口）**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `get_document_chunks` | 导入后~建纲前 | 按文件取块窗口（block_idx + text + verdict 回显） |
+| `submit_block_marks` | 导入后~建纲前 | 块区间标记（requirement/noise/rule/review_table） |
+
+**证据与矩阵写面**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `register_evidence` | 矩阵就绪后 | 证据登记（四态验证：CONTENT_MATCHES/FILE_EXISTS/PLACEHOLDER…） |
+| `bind_evidence` | 矩阵就绪后 | 证据批量绑定 + 矩阵重算（EXPIRED 禁绑） |
+| `set_matrix_override` | 矩阵就绪后 | 人工覆写条款响应状态（否决项死锁出口；NOT_APPLICABLE 必带理由；receipt 验签） |
+
+**审校与门**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `record_review_gate` | 按门窗口 | 三门记审（matrix/outline/pre_export；receipt 验签，agent 声明留痕） |
+| `record_addendum_waiver` | 导入后任意时刻 | 补遗逐件人工确认（分级阻塞的免责面） |
+| `recover_validating_state` | 仅 VALIDATING 态 | 历史异常态恢复（缺章回 DRAFTING，审计账） |
+
+**评分（只读试算）**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `score_price` | 随时 | 价格分试算 + 最优报价反推（纯计算器） |
+| `score_section` / `score_document` | 矩阵就绪后 | 章节自评 / 整本自评（四维规则 + 逐评分项映射） |
+
+**分段写作（长章节安全续写）**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `append_section_segment` | 矩阵就绪后 | 追加章节分段（真增量，前段不丢） |
+| `rewrite_section_segment` | 矩阵就绪后 | 局部段重写（expected_version CAS） |
+| `list_section_segments` | 随时 | 段账本对账（合稿字数 + 剩余配额） |
+
+**补遗增量（起草后补遗到达）**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `register_addendum_changes` | 矩阵就绪后 | 变更登记 → DIRTY 打标 + 改写指令生成 |
+| `rewrite_section_partial` | 矩阵就绪后 | 局部改写 + 局部复验（只改指令影响面内的段） |
+
+**修订任务与分工（审校闭环）**
+
+| 工具 | 什么时候能调 | 干什么 |
+|---|---|---|
+| `assign_revision` / `advance_revision` / `complete_revision` | 矩阵就绪后 | RT 认领/推进/关单（BLOCKER finding 派生；**全部关单才放行导出**） |
+| `batch_task` / `advance_task` | 矩阵就绪后 | 分工批量派工 / 单件推进（人的进度轴） |
+| `reopen_section` | 起草后 | ACCEPTED 章节重开（→ REVISING + dirty，重过验收链） |
+| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
 
 **状态机**（越级调用会被拒——`E_STATE`）：
 

@@ -66,7 +66,9 @@ fn now_epoch_secs() -> u64 {
 /// 审核门（T-7 规格；issue #11 批次 v3 / V3-4）。三道门对应人类团队评审：
 /// 矩阵定稿门（条款响应矩阵）/ 章节树定稿门（大纲）/ 导出前确认门。
 /// 另有第四道独立闸门 [`Gate::AddendumWaiver`]（无补遗确认——#131 真实
-/// 语料验证落地的 L3 人工出口，不入三道主门的门序链）。
+/// 语料验证落地的 L3 人工出口，不入三道主门的门序链）与第五道
+/// [`Gate::NoAddendumConfirmed`]（#379 拆门——「本项目无补遗」的**全局**
+/// 显式确认，与逐件免责语义分离）。
 ///
 /// `as_str` 取规格原文蛇形（`matrix_approval` 等——门名/错误消息的引用口径）；
 /// serde 形随库惯例 SCREAMING_SNAKE_CASE（持久化面），两形并存各司其职。
@@ -83,7 +85,22 @@ pub enum Gate {
     /// Approved = 人工确认本项目无补遗（`missing_addendum` 放行）；
     /// 与三道主门正交：无状态门、无门序前置（导入后任意时刻可记）。
     /// 导入补遗件后走正常判定，waiver 不再被消费（自然失效）。
+    ///
+    /// #379 语义收缩：本门是 **legacy/兼容面**——#379 前的
+    /// `record_addendum_waiver` 对任意件（含非补遗件）无条件写本门，
+    /// 导致「逐件免责」与「全局无补遗确认」两种语义混写。修复后：
+    /// · 新的全局确认一律写 [`Gate::NoAddendumConfirmed`]；
+    /// · `readiness::missing_addendum` ② 分支 OR 消费两门（旧快照已
+    ///   放行项目不回锁——issue #379 纪律：迁移不得造成回锁）；
+    /// · `record_addendum_waiver` 逐件路径不再写本门（台账照写）。
     AddendumWaiver,
+    /// 「本项目无补遗」全局确认门（#379 拆门——R-07/A-04 修复）：
+    /// 只有**显式**的 no-addendum 确认（`record_addendum_waiver` 的
+    /// `confirm_no_addendum:true` 路径 / 域层 `confirm_no_addendum`）才写
+    /// 本门。对无关输入件做逐件 waiver 不再顺手解除 NotProvided 阻塞
+    /// （#131/#184 的「不知道≠没有」防线不被旁路）。与 AddendumWaiver
+    /// 同窗：无状态门、无门序前置；导入补遗件后走正常判定（自然失效）。
+    NoAddendumConfirmed,
 }
 
 impl Gate {
@@ -93,6 +110,7 @@ impl Gate {
             Gate::OutlineApproval => "outline_approval",
             Gate::PreExportConfirm => "pre_export_confirm",
             Gate::AddendumWaiver => "addendum_waiver",
+            Gate::NoAddendumConfirmed => "no_addendum_confirmed",
         }
     }
 }
@@ -434,6 +452,9 @@ impl DomainStore {
             // 人工出口，与三道主门正交（导入后任意状态可确认；记审语义与
             // 主门一致：Approved 是里程碑事实，Rejected 是过程记录）
             Gate::AddendumWaiver => {}
+            // 「本项目无补遗」全局确认门（#379）：与 AddendumWaiver 同窗——
+            // 无状态门、无门序前置（L3 人工出口，与三道主门正交）
+            Gate::NoAddendumConfirmed => {}
         }
 
         // ---- 4. findings 形状（诚实状态：空分类/空消息的发现是无效记录）
@@ -624,6 +645,8 @@ impl DomainStore {
             Gate::OutlineApproval,
             Gate::PreExportConfirm,
             Gate::AddendumWaiver,
+            // #379：全局无补遗确认的 agent 声明同样入审计面（导出警告判据）
+            Gate::NoAddendumConfirmed,
         ]
         .iter()
         .filter_map(|g| self.latest_gate_pass(*g))
@@ -753,6 +776,9 @@ impl DomainStore {
     ///   `reviewed_content_digest` 非空且 ≠ 当前 [`DomainStore::sections_digest`]
     ///   → E_UNPROCESSABLE（审核针对的内容已变更，请重新审核）——三门
     ///   之后、RT 之前：门虽过了，但针对的是旧内容，重审比修 RT 更根本；
+    /// - #544 Revising 拦截：任一章节 status==REVISING → E_UNPROCESSABLE
+    ///   （点名章节清单）——reopen 只动 status/dirty，摘要比对对其失明，
+    ///   本面是重开面的唯一导出闸门（重走原验收链后放行）；
     /// - 全部 RT DONE（open_blockers 空——否则 E_UNPROCESSABLE，消息含未关单数）。
     ///
     /// 与 export_gate.rs 两阶段门的串联语义：本面是**前置裁决面**
@@ -790,6 +816,27 @@ impl DomainStore {
                 });
             }
         }
+        // #544 Revising 拦截：reopen_section 置 Revising+dirty = 「此章内容
+        // 不可信」。status/dirty 不入 sections_digest（#180 六字段编码契约）——
+        // 摘要比对对 reopen 天然失明，本面是 reopen 的唯一导出侧闸门：
+        // 重开面必须走完原验收链（重新起草 → advance 到 ACCEPTED →
+        // 重过 pre_export_confirm）再导出。is_drafted(Revising)=true 的导出
+        // 包含面（export.rs）以本门为前置裁决——REVISING 章节到不了渲染面。
+        let revising: Vec<&str> = self
+            .sections
+            .iter()
+            .filter(|n| n.status == crate::outline::SectionStatus::Revising)
+            .map(|n| n.id.as_str())
+            .collect();
+        if !revising.is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "导出前置裁决未过：{} 个章节处于 REVISING（{}）——重开面必须走完原验收链（重新起草 → advance 到 ACCEPTED → 重过 pre_export_confirm）再导出",
+                    revising.len(),
+                    revising.join(", ")
+                ),
+            });
+        }
         // 全部 RT DONE（BLOCKER 必须修完并带关单说明——RT 面单一真源）
         let open = self.open_blockers();
         if !open.is_empty() {
@@ -815,6 +862,9 @@ fn missing_gate_attempted(gate: Gate) -> &'static str {
         // AddendumWaiver 不入 export_allowed 的三门遍历（#131：它是 L3 阻塞的
         // 人工确认出口，不是导出门序的一环）——显式点名而非通配，保穷尽性
         Gate::AddendumWaiver => "export_allowed——addendum_waiver 不属导出门序（不可达）",
+        // NoAddendumConfirmed 同上（#379 拆门：全局无补遗确认是 L3 出口，
+        // 不是导出门序一环）
+        Gate::NoAddendumConfirmed => "export_allowed——no_addendum_confirmed 不属导出门序（不可达）",
     }
 }
 
@@ -1324,6 +1374,54 @@ mod tests {
             }
             other => panic!("改叶正文后导出须 E_UNPROCESSABLE，得到 {other:?}"),
         }
+    }
+
+    /// #544｜reopen 后导出门拦截：三门全过 + 章节全 ACCEPTED → 放行；
+    /// reopen 一章（→Revising+dirty，digest 六字段不含 status——#180 比对
+    /// 不变）→ export_allowed E_UNPROCESSABLE **点名 Revising 章节**；
+    /// advance 回 ACCEPTED（走完原验收链的状态面）→ 恢复放行。
+    /// 重起草改正文的 #180 重审面由 pre_export_digest_binds_section_content
+    /// 单测覆盖——本测只钉 Revising 闸门自身。
+    #[test]
+    fn export_allowed_blocks_revising_sections() {
+        let mut s = store_with_outline();
+        s.set_section_content("SEC-0002", "第一章正文 v1（审核时点）".into()).unwrap();
+        s.set_section_content("SEC-0003", "第二章正文 v1（审核时点）".into()).unwrap();
+        // 两叶走全链到 ACCEPTED（reopen 的前置终态）
+        for id in ["SEC-0002", "SEC-0003"] {
+            use SectionStatus::*;
+            for to in [Outlining, Drafting, Drafted, Validating, Accepted] {
+                s.advance_section_status(id, to).unwrap();
+            }
+        }
+        force_status(&mut s, ProjectStatus::Drafting);
+        walk_three_gates(&mut s, vec![]);
+        assert!(s.export_allowed().is_ok(), "全 ACCEPTED + 三门过 + 无 RT → 放行");
+        // 重开一章：status/dirty 变、digest 不变（#180 失明面）——本门拦截
+        s.reopen_section("SEC-0002").unwrap();
+        let sec = s.sections().iter().find(|n| n.id == "SEC-0002").unwrap();
+        assert_eq!((sec.status, sec.dirty), (SectionStatus::Revising, true));
+        match s.export_allowed() {
+            Err(ToolError::EUnprocessable { reason }) => {
+                assert!(reason.contains("REVISING"), "须点名 REVISING：{reason}");
+                assert!(reason.contains("SEC-0002"), "须点名章节 id：{reason}");
+                assert!(reason.contains("pre_export_confirm"), "须给行动指引：{reason}");
+            }
+            other => panic!("reopen 后导出须 E_UNPROCESSABLE，得到 {other:?}"),
+        }
+        // 多章重开：点名清单全列
+        s.reopen_section("SEC-0003").unwrap();
+        match s.export_allowed() {
+            Err(ToolError::EUnprocessable { reason }) => {
+                assert!(reason.contains("2 个章节"), "计数：{reason}");
+                assert!(reason.contains("SEC-0002") && reason.contains("SEC-0003"), "{reason}");
+            }
+            other => panic!("双章 reopen 后导出须 E_UNPROCESSABLE，得到 {other:?}"),
+        }
+        // 走完原验收链（状态面）→ 恢复放行
+        s.advance_section_status("SEC-0002", SectionStatus::Accepted).unwrap();
+        s.advance_section_status("SEC-0003", SectionStatus::Accepted).unwrap();
+        assert!(s.export_allowed().is_ok(), "Revising→Accepted 全复位后恢复放行");
     }
 
     /// B｜无关变更不误伤：过门 → upsert_file 导入无关件（bump 全局

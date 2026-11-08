@@ -4,9 +4,15 @@
 //! 属体检诊断面，非生产代码；不修改 crates/ 任何源码。
 
 fn main() {
-    let path = std::path::Path::new(
-        "/home/z/my-project/bid-research/artifacts/bid-health-check/corpus/A-02_福建修订通知_扫描件.pdf",
-    );
+    // 路径三级（#519/D-20：评测可从 HEAD 重现——原硬编码仓外绝对路径）：
+    // CLI arg[1] → env BHC_A02_PDF → 仓相对默认（实体在 real-corpus，
+    // 与 artifacts 结果 JSON 的 bytes 字段 2,213,393 逐一相符）。
+    let default = "real-corpus/water/files/C-福建修订通知-扫描件.pdf";
+    let path_str = std::env::args()
+        .nth(1)
+        .or_else(|| std::env::var("BHC_A02_PDF").ok())
+        .unwrap_or_else(|| default.to_string());
+    let path = std::path::Path::new(&path_str);
     let pf = bid_parse::parse_file(path, "A-02_福建修订通知_扫描件.pdf").expect("parse");
     println!("pages={} blocks={} ocr_blocks={} chars={}",
         pf.pages, pf.blocks.len(), pf.ocr_blocks,

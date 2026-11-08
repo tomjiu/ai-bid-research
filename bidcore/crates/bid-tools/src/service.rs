@@ -22,7 +22,7 @@ use bid_domain::locator::EngineLocator;
 use bid_domain::principal::{self, TrustedPrincipal};
 use bid_domain::review::Gate;
 use bid_domain::{DomainStore, ParseStatus, Requirement, ToolError};
-use bid_parse::{parse_file, sha256_file, BlockKind, ParsedFile};
+use bid_parse::{parse_file_with_sha, sha256_file, BlockKind, ParsedFile};
 use std::path::{Path, PathBuf};
 
 /// 单文件导入规格（MCP 壳已完成契约校验后传入）。
@@ -415,14 +415,15 @@ pub fn import_files(
             // B3-5：pdf 引擎通道（pdfium 文本层）——扫描件（MappingGap）或
             // 无 pdfium（EngineFailed）回退旧 pdftotext/OCR 路径（映射表 §3）
             "pdf" => bid_engine::parse_pdf_via_engine(&spec.upload_ref)
-                .or_else(|_| parse_file(&spec.upload_ref, &spec.filename)),
+                // #529/B-23：哈希复用——幂等面已算过 sha，回退解析不再读第二遍
+                .or_else(|_| parse_file_with_sha(&spec.upload_ref, &spec.filename, &sha)),
             // #270：.doc（Word 97-2003）——两层设计：有转换器自动转换（sha 记
             // 原件 + 响应面标注），无转换器引导报错（Skill 侧接管）
             "doc" => {
                 converted_note = Some("CONVERTED_FROM_DOC");
                 import_doc_converted(&spec.upload_ref, &spec.filename, &sha, convert_dir)
             }
-            _ => parse_file(&spec.upload_ref, &spec.filename),
+            _ => parse_file_with_sha(&spec.upload_ref, &spec.filename, &sha),
         };
         match parsed_result {
             Ok(p) => {
@@ -633,7 +634,12 @@ fn load_or_create_approval_key(
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let key = random_approval_key();
-            std::fs::write(&path, key).map_err(crate::store_io::StoreIoError::Io)?;
+            // #580：写入走单一真源原子面（tmp+sync_all+rename，含 #460/#575
+            // 全序列瞬态重试）——裸 fs::write 撞 Defender/掉电产生半截密钥，
+            // 下次 open 即 Corrupt 且无人工出口（工作区砖死、在途 receipt
+            // 全失验）。写入面根本不该允许产生半截文件。
+            crate::store_io::write_fsync_atomic(&path, &key)
+                .map_err(crate::store_io::StoreIoError::Io)?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -696,6 +702,18 @@ pub fn agent_review_gate_scope(gate: Gate) -> String {
 /// #277 方案 A：补遗确认的 agent 签域（[`addendum_waiver_scope`] + 后缀）。
 pub fn agent_addendum_waiver_scope(file_id: &str) -> String {
     format!("{}:agent", addendum_waiver_scope(file_id))
+}
+
+/// #379：全局「本项目无补遗」确认 receipt 的签域——与逐件 waiver 签域
+/// 分离（A 门 receipt 免不了 B 门同款纪律：逐件免责的 receipt 不能顺
+/// 手当全局确认用）。
+pub fn no_addendum_confirmed_scope() -> String {
+    "no_addendum_confirmed".to_string()
+}
+
+/// #379：全局确认的 agent 声明签域（[`no_addendum_confirmed_scope`] + 后缀）。
+pub fn agent_no_addendum_confirmed_scope() -> String {
+    format!("{}:agent", no_addendum_confirmed_scope())
 }
 
 /// #277 方案 A：工作区配置装载（`<dir>/.mang/config.json`）。
@@ -1265,6 +1283,39 @@ impl BidService {
         Ok((rec, principal))
     }
 
+    /// #379 拆门：「本项目无补遗」的**全局显式确认**（MCP 面
+    /// `record_addendum_waiver` 的 `confirm_no_addendum:true` 路由到此）。
+    ///
+    /// 域前置裁决（fail-closed）：项目已有补遗/澄清件时响亮拒——「确认
+    /// 无补遗」与「补遗在场」矛盾，正确出口是逐件 waiver（坏件免责）或
+    /// 修复重传，不是全局确认。词面判定用 [`crate::readiness::addendum_statuses`]
+    /// 的同源身份面（#188 任一角色命中即算），不另立第二套判据。
+    pub fn confirm_no_addendum(
+        &mut self,
+        reason: &str,
+        receipt: &str,
+    ) -> Result<(bid_domain::review::ReviewRecord, TrustedPrincipal), ToolError> {
+        let principal = self.verify_gate_principal(
+            receipt,
+            &no_addendum_confirmed_scope(),
+            &agent_no_addendum_confirmed_scope(),
+            "record_addendum_waiver(confirm_no_addendum)",
+        )?;
+        let addenda = crate::readiness::addendum_statuses(&self.store);
+        if !addenda.is_empty() {
+            let names: Vec<&str> = addenda.iter().map(|a| a.name.as_str()).collect();
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "项目已有补遗/澄清件（{}）——「确认本项目无补遗」与事实矛盾。坏件的正确出口是逐件确认（record_addendum_waiver file_id=…）或修复重传；全局确认只适用于「未发现补遗」的阻塞（NotProvided）",
+                    names.join("、")
+                ),
+            });
+        }
+        let rec = self.store.confirm_no_addendum(reason, &principal)?;
+        self.auto_checkpoint()?;
+        Ok((rec, principal))
+    }
+
     /// #277 方案 A：过门面的双路验签（human 签域 → agent 签域 → 报错）。
     ///
     /// 裁决序：
@@ -1638,7 +1689,9 @@ impl BidService {
         //      缺档/字段缺 → 【待填】+ 告警，绝不编造）
         let ws_for_profile = self.workspace_dir();
         let (profile, profile_warn) = match &ws_for_profile {
-            Some(ws) => match bid_domain::party::BidderProfile::load(ws) {
+            // #455：profile 落盘面迁 bid-tools::profile_io（bid-domain 零 IO 纪律）——
+            // 缺档 Io → 未建档告警的既有语义逐字保持
+            Some(ws) => match crate::profile_io::load(ws) {
                 Ok(p) => (p, None),
                 Err(bid_domain::party::FormError::Io { .. }) => (
                     bid_domain::party::BidderProfile::default(),

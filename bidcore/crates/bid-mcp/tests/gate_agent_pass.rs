@@ -343,11 +343,13 @@ fn agent_e2e_ready(ws: &std::path::Path) -> (BidService, String, String, Vec<Str
     let _ = svc.store_mut().build_matrix().unwrap();
 
     // 补遗门 agent 声明（MCP 面——:agent 签域 + reason）
+    // #379 拆门：单件招标（无补遗件）的 NotProvided 出口是**全局显式确认**
+    // confirm_no_addendum=true（旧写法「对主件做逐件 waiver 顺手开门」已废
+    // ——R-07/A-04 攻击链）。签域 no_addendum_confirmed:agent。
     let fid = svc.store().files().first().unwrap().id.clone();
-    let aw_scope = format!("addendum_waiver:{fid}:agent");
-    let aw_receipt = agent_receipt(&svc, "agent-01", &aw_scope);
+    let aw_receipt = agent_receipt(&svc, "agent-01", "no_addendum_confirmed:agent");
     ok_result(call(&mut svc, "record_addendum_waiver", json!({
-        "project_id": &pid, "file_id": &fid,
+        "project_id": &pid, "confirm_no_addendum": true,
         "reason": "单件招标无补遗件（导入面仅主件在案）——agent 声明，待人工追认",
         "receipt": aw_receipt,
     })));
@@ -456,12 +458,12 @@ fn human_ratification_before_export_clears_banner_two_ledger_records() {
     let ws = tmp_ws("e2e-ratify", true);
     let (mut svc, pid, fid, _leaf) = agent_e2e_ready(&ws);
 
-    // 追认（Drafting 态窗口内——矩阵门窗口含 Drafting）：补遗门 + 矩阵门 +
-    // 大纲门 human receipt 重过（append-only：agent 声明条保留在账）
-    let human_aw = format!("addendum_waiver:{fid}");
-    let aw_receipt = human_receipt(&mut svc, "chief-reviewer", &human_aw);
+    // 追认（Drafting 态窗口内——矩阵门窗口含 Drafting）：全局无补遗门 +
+    // 矩阵门 + 大纲门 human receipt 重过（append-only：agent 声明条保留在账）
+    // #379：追认面同步切到 confirm_no_addendum（agent 声明的是全局确认）
+    let aw_receipt = human_receipt(&mut svc, "chief-reviewer", "no_addendum_confirmed");
     ok_result(call(&mut svc, "record_addendum_waiver", json!({
-        "project_id": &pid, "file_id": &fid,
+        "project_id": &pid, "confirm_no_addendum": true,
         "reason": "人工追认：确认无补遗（覆盖 agent 声明）",
         "receipt": aw_receipt,
     })));

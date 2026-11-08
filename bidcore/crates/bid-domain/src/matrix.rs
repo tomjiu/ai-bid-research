@@ -75,6 +75,17 @@ pub enum ResponseStatus {
 }
 
 impl ResponseStatus {
+    /// 全值域（#426：工具面过滤校验的单一真源——`get_compliance_matrix`
+    /// `filters.status` 合法清单从这里派生，不另写字面量表；加状态时
+    /// 这里与 `as_str` 同步扩，工具面自动跟随）。
+    pub const ALL: [ResponseStatus; 5] = [
+        ResponseStatus::NotResponded,
+        ResponseStatus::Responded,
+        ResponseStatus::Partial,
+        ResponseStatus::NotApplicable,
+        ResponseStatus::PendingEvidence,
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             ResponseStatus::NotResponded => "NOT_RESPONDED",
@@ -388,7 +399,19 @@ impl DomainStore {
         // 占位绑定进 pending 面（待补可见），不计为响应材料。
         let (effective, pending) = self.split_live_bindings();
         let overrides = self.matrix_overrides.clone();
-        let rows = derive_matrix_rows(&self.requirements, &effective, &pending, &self.sections, &overrides);
+        // #316 按包收敛：矩阵行与大纲同口径（已选分包 → 该包 + 共用条款；
+        // 未选/无分包 → 全集——既有行为零位移）。范围内的空集是选包后的
+        // 异常态（build_outline 已保证非空，重抽后可能出现）——fail-loud。
+        let scoped = self.requirements_in_scope();
+        if scoped.is_empty() && !self.requirements.is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "所选分包 {} 的条款范围为空（重抽后归属变化？——用 list_packages 复核后重建）",
+                    self.selected_package.as_deref().unwrap_or("?")
+                ),
+            });
+        }
+        let rows = derive_matrix_rows(&scoped, &effective, &pending, &self.sections, &overrides);
         let blocking = rows.iter().filter(|r| r.blocking).count();
         let changed = rows != self.matrix;
         self.matrix = rows;

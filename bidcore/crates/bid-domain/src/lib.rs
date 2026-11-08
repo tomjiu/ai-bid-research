@@ -60,6 +60,7 @@ pub mod linkage;
 pub mod locator;
 pub mod matrix;
 pub mod outline;
+pub mod packages;
 pub mod param;
 pub mod party;
 pub mod performance;
@@ -211,11 +212,21 @@ impl ProjectStatus {
                 // MatrixReady/EvidenceBound/Drafting——技术参数偏离表的唯一
                 // 录入面，此前无 MCP 入口恒为空账 A-07/A-23）
                 "set_param_responses",
+                // #316 分包清单（抽取时识别落注册表——选包前后均可查）
+                "list_packages",
             ],
             MatrixReady | EvidenceBound => &[
                 "get_coverage_report",
+                // #482（C-16）：get_document_chunks 补进全程窗口——与
+                // get_coverage_report/get_star_coverage 同口径（只读全程
+                // 放行；#271 注释自述「起草时可参考模板结构——块面可经
+                // get_document_chunks 读」是合法用例，两态窗口是早期
+                // 过严承诺，契约 §17 同步修订）。
+                "get_document_chunks",
                 "recommend_length_profile",
                 "get_star_coverage",
+                // #316 分包清单（抽取时识别落注册表——选包前后均可查）
+                "list_packages",
                 "get_compliance_matrix",
                 "search_evidence",
                 "get_bid_project_state",
@@ -257,8 +268,12 @@ impl ProjectStatus {
             ],
             Drafting => &[
                 "get_coverage_report",
+                // #482：同上——起草期读块参考（#271 合法用例）
+                "get_document_chunks",
                 "recommend_length_profile",
                 "get_star_coverage",
+                // #316 分包清单（抽取时识别落注册表——选包前后均可查）
+                "list_packages",
                 "get_compliance_matrix",
                 "search_evidence",
                 "get_bid_project_state",
@@ -305,8 +320,12 @@ impl ProjectStatus {
             Validating => &[
                 "get_compliance_matrix",
                 "get_coverage_report",
+                // #482：同上——校验期对账读块
+                "get_document_chunks",
                 "recommend_length_profile",
                 "get_star_coverage",
+                // #316 分包清单（抽取时识别落注册表——选包前后均可查）
+                "list_packages",
                 "search_evidence",
                 "get_bid_project_state",
                 // #315 业绩推荐（只读——校验期对账：缺业绩时看库里还有什么可用）
@@ -348,6 +367,10 @@ impl ProjectStatus {
                 "get_coverage_report",
                 "recommend_length_profile",
                 "get_star_coverage",
+                // #482：只读全程窗口（同 get_coverage_report 口径）
+                "get_document_chunks",
+                // #316 分包清单（抽取时识别落注册表——选包前后均可查）
+                "list_packages",
                 "search_evidence",
                 "get_bid_project_state",
                 // #315 业绩推荐（只读——导出前最后对账）
@@ -384,6 +407,10 @@ impl ProjectStatus {
                 "get_coverage_report",
                 "recommend_length_profile",
                 "get_star_coverage",
+                // #482：只读全程窗口（导出后追溯读块）
+                "get_document_chunks",
+                // #316 分包清单（抽取时识别落注册表——选包前后均可查）
+                "list_packages",
                 "get_compliance_matrix",
                 "search_evidence",
                 "get_bid_project_state",
@@ -644,6 +671,11 @@ pub struct DomainStore {
     /// #319 改写指令账本（RD-xxxx——变更 × 受影响章节的落账面；处置见
     /// [`DomainStore::apply_rewrite_directive`]）
     rewrite_directives: Vec<rewrite::RewriteDirective>,
+    /// #316 分包注册表（识别面见 bid-parse packages.rs；空 = 无分包结构）
+    packages: Vec<packages::PackageInfo>,
+    /// #316 本项目投标的分包（None = 未选/无分包——全量口径；Some = 只投
+    /// 该包 + 共用条款，大纲/矩阵推导输入的收敛面）
+    selected_package: Option<String>,
     /// 幂等键 → 首次结果 JSON（同 key 重放返回首次结果，不重复执行）
     idempotency: HashMap<String, serde_json::Value>,
     id_seq: u64,
@@ -675,6 +707,8 @@ impl DomainStore {
             segments: vec![],
             addendum_changes: vec![],
             rewrite_directives: vec![],
+            packages: vec![],
+            selected_package: None,
             idempotency: HashMap::new(),
             id_seq: 0,
         }
@@ -740,6 +774,118 @@ impl DomainStore {
 
     pub fn requirements(&self) -> &[Requirement] {
         &self.requirements
+    }
+
+    // ------------------------------------------------------------ #316 分包面（多标段/多包）
+
+    /// 分包注册表（识别产物——空 = 无分包结构）。
+    pub fn packages(&self) -> &[packages::PackageInfo] {
+        &self.packages
+    }
+
+    /// 写入分包注册表（extract_requirements 时由识别面调用）。
+    ///
+    /// 重跑幂等：按 number 去重合并（同号并 sources 证据）；已选分包若不在
+    /// 新集合（重抽后消失）→ 复位为 None（诚实：选中面必须可追溯到现存包）。
+    /// 不碰 content_version（派生元数据，同 file_roles 纪律）。
+    pub fn set_packages(&mut self, pkgs: Vec<packages::PackageInfo>) {
+        let mut merged: Vec<packages::PackageInfo> = Vec::with_capacity(pkgs.len());
+        for p in pkgs {
+            match merged.iter_mut().find(|m| m.number == p.number) {
+                Some(m) => {
+                    for s in p.sources {
+                        if !m.sources.contains(&s) {
+                            m.sources.push(s);
+                        }
+                    }
+                }
+                None => merged.push(p),
+            }
+        }
+        merged.sort_by_key(|p| p.number);
+        if let Some(sel) = &self.selected_package {
+            if !merged.iter().any(|p| &p.id == sel) {
+                self.selected_package = None;
+            }
+        }
+        self.packages = merged;
+    }
+
+    /// 已选投标分包（None = 未选/无分包）。
+    pub fn selected_package(&self) -> Option<&packages::PackageInfo> {
+        self.selected_package
+            .as_deref()
+            .and_then(|id| self.packages.iter().find(|p| p.id == id))
+    }
+
+    /// 选定投标分包（build_outline 的 package 参数落点）。
+    ///
+    /// 建纲前调用；大纲/矩阵经 [`DomainStore::requirements_in_scope`] 收敛到
+    /// 「该包 + 共用条款」。选中后重选（同 id）幂等 no-op；换选在建纲后
+    /// 由状态机拒（MATRIX_READY+ build_outline 已被 guard_tool 拦）。
+    pub fn select_package(&mut self, package_id: &str) -> Result<(), ToolError> {
+        let Some(p) = self.packages.iter().find(|p| p.id == package_id) else {
+            return Err(ToolError::ENotFound {
+                what: format!(
+                    "分包 {package_id} 不存在（可用：{}；用 list_packages 查看）",
+                    self.packages
+                        .iter()
+                        .map(|p| format!("{}({})", p.id, p.label))
+                        .collect::<Vec<_>>()
+                        .join("、")
+                ),
+            });
+        };
+        let id = p.id.clone();
+        if self.selected_package.as_deref() != Some(id.as_str()) {
+            self.selected_package = Some(id);
+        }
+        Ok(())
+    }
+
+    /// 大纲/矩阵的推导输入（#316 按包收敛）。
+    ///
+    /// - 未选包（None）/ 无分包 → 全集（既有项目零位移——GT 红线保护）；
+    /// - 已选包 → 该包 REQ + 共用条款（无 package_id 者）。
+    pub fn requirements_in_scope(&self) -> Vec<Requirement> {
+        match self.selected_package.as_deref() {
+            Some(pkg) => self
+                .requirements
+                .iter()
+                .filter(|r| match packages::requirement_package_id(r) {
+                    Some(p) => p == pkg, // 选中包
+                    None => true,        // 共用条款
+                })
+                .cloned()
+                .collect(),
+            None => self.requirements.clone(),
+        }
+    }
+
+    /// 分包统计（list_packages 的域面：每包 REQ 数 + 共用数）。
+    pub fn package_stats(&self) -> Vec<(packages::PackageInfo, usize)> {
+        self.packages
+            .iter()
+            .map(|p| {
+                let n = self
+                    .requirements
+                    .iter()
+                    .filter(|r| packages::requirement_package_id(r) == Some(p.id.as_str()))
+                    .count();
+                (p.clone(), n)
+            })
+            .collect()
+    }
+
+    /// 共用条款数（分包存在时无 package_id 的 REQ；无分包时为全集口径）。
+    pub fn shared_requirement_count(&self) -> usize {
+        if self.packages.is_empty() {
+            return 0;
+        }
+        self.requirements
+            .iter()
+            .filter(|r| packages::requirement_package_id(r).is_none())
+            .count()
     }
 
     pub fn content_version(&self) -> u64 {
@@ -1004,11 +1150,16 @@ impl DomainStore {
     /// 4. `file_id` 必须存在于 files（对不存在的件做确认 = 凭空免责）。
     ///
     /// 落账：追加 `AddendumWaiverRecord`（同件重复确认追加不覆盖——审计
-    /// 日志语义）+ `GatePassRecord`（#277 审计账——agent 声明面
-    /// human_confirmed=false，导出警告判据）+ content_version + 1（与
-    /// record_review 的「写账即版本」同口径）。不设状态门：与
-    /// Gate::AddendumWaiver 同窗口语义——导入后任意时刻可确认（阻塞可能
-    /// 出现在任何后续阶段）。
+    /// 日志语义）+ content_version + 1（与 record_review 的「写账即版本」
+    /// 同口径）。不设状态门：与 Gate::AddendumWaiver 同窗口语义——导入后
+    /// 任意时刻可确认（阻塞可能出现在任何后续阶段）。
+    ///
+    /// #379 语义收缩：本函数不再写 `reviews(AddendumWaiver, Approved)` 门
+    /// 记录与 `GatePassRecord`——那两处是「全局无补遗确认」的消费面，
+    /// 逐件免责不得顺手打开（对无关件 waiver 静默解除 NotProvided 阻塞
+    /// = R-07/A-04 攻击链）。全局确认走 [`Self::confirm_no_addendum`]。
+    /// 逐件免责自己的消费面是 `addendum_waived(file_id)`
+    /// （`readiness::missing_addendum` ③ 分支），不受影响。
     pub fn record_addendum_waiver(
         &mut self,
         file_id: &str,
@@ -1016,36 +1167,9 @@ impl DomainStore {
         principal: &TrustedPrincipal,
     ) -> Result<AddendumWaiverRecord, ToolError> {
         self.project()?;
-        // #277 方案 A：与 record_review 同款二元组（Human×人类签域 /
-        // Agent×agent 签域；混用拒）——服务层 require_human_receipt 已先裁。
-        let is_agent_pass = match (principal.actor_type, principal.scope_is_agent) {
-            (ActorType::Human, false) => false,
-            (ActorType::Agent, true) => true,
-            (ActorType::System, _) => {
-                return Err(ToolError::EUnprocessable {
-                    reason: format!(
-                        "确认人 {:?} 是 system 身份（过门面不收 System）",
-                        principal.actor_id
-                    ),
-                });
-            }
-            (ActorType::Human, true) => {
-                return Err(ToolError::EUnprocessable {
-                    reason: format!(
-                        "确认人 {:?} 是 Human 身份但携带 agent 签域（签域与身份不匹配）",
-                        principal.actor_id
-                    ),
-                });
-            }
-            (ActorType::Agent, false) => {
-                return Err(ToolError::EUnprocessable {
-                    reason: format!(
-                        "确认人 {:?} 是 agent 身份但未携带 agent 签域（Agent 不得用人类签域冒充真人——agent 声明过门走 :agent 签域，require_human_receipt=false 工作区才放行，见 #277）",
-                        principal.actor_id
-                    ),
-                });
-            }
-        };
+        // #277 方案 A：二元组裁决收敛到共用 helper（与 confirm_no_addendum
+        // 同构——服务层 require_human_receipt 已先裁）
+        let is_agent_pass = Self::waiver_principal_gate(principal)?;
         if reason.trim().is_empty() {
             return Err(ToolError::EUnprocessable {
                 reason: "确认理由不得为空白（不可审计的确认不成确认——agent 声明过门同构：必须说明为什么可以过这个门）".into(),
@@ -1075,36 +1199,23 @@ impl DomainStore {
             trusted: Some(principal.clone()),
         };
         self.addendum_waivers.push(rec.clone());
-        // 【接线修复】豁免记录必须同时写入 Gate 审计面——
-        // `readiness::missing_addendum` 判定的是 `gate_approved(AddendumWaiver)`，
-        // 而本函数此前只 push `addendum_waivers`，两边不通：
-        // 用户记录了「本项目无补遗」确认，起草门仍报「未发现补遗/澄清文件」死锁。
+        // 【#379 拆门】此前的「接线修复」把逐件 waiver 无条件写进
+        // reviews(AddendumWaiver, Approved) + GatePassRecord——但那两处
+        // 的唯一消费面是 `readiness::missing_addendum` ②（全局无补遗分支）。
+        // 后果：对任意非补遗件（如图纸）做逐件 waiver，会顺手解除
+        // 「未发现补遗/澄清文件」的 NotProvided 阻塞——用户从未确认过
+        // 「本项目无补遗」（R-07/A-04）。
         //
-        // 实测复现（2026-11-02，无补遗件的真实招标文件）：
-        //   record_addendum_waiver → ok:true，project_version 6
-        //   draft_response_section → E_UNPROCESSABLE「未发现补遗/澄清文件」
-        //
-        // 两道记录职责不同，不能只写一处：
-        //   · addendum_waivers = 逐件免责台账（哪些件、谁确认、为什么）
-        //   · reviews(AddendumWaiver, Approved) = 门禁消费的放行事实
-        // 与 record_review 同款：内容绑定快照（#180）——补遗确认针对的是当前章节树
-        let review_id = self.next_id("REV");
-        let reviewed_content_version = self.project.as_ref().map_or(0, |p| p.content_version);
-        let reviewed_content_digest = self.sections_digest();
-        self.reviews.push(review::ReviewRecord {
-            id: review_id,
-            gate: review::Gate::AddendumWaiver,
-            // legacy 回显面同款派生（record_review 口径——human/agent 前缀随身份）
-            reviewer: principal_echo,
-            principal: Some(principal.clone()),
-            decision: review::Decision::Approved,
-            findings: Vec::new(),
-            at,
-            reviewed_content_version,
-            reviewed_content_digest,
-        });
-        // #277 方案 A：补遗门过门同步落审计账（与 record_review 的
-        // GatePassRecord 同构——导出警告判据 = 本门最新一条 human_confirmed）
+        // 修复后职责划分：
+        //   · addendum_waivers（本台账）= 逐件免责——③ 分支按 file_id 消费；
+        //   · reviews(NoAddendumConfirmed, Approved) = 全局无补遗确认——
+        //     ② 分支消费，只由 confirm_no_addendum 写入（显式语义）；
+        //   · 旧快照既有 AddendumWaiver×Approved 由 ② 分支 OR 兼容消费
+        //     （不回锁——issue #379 迁移纪律）。
+        // #277 方案 A：逐件确认仍落 GatePassRecord（审计账——`agent_waivers`
+        // / `human_review_complete` / method 回显的数据源）。**注意**：只写
+        // gate_passes 不写 reviews——`gate_approved`（门禁消费面）读的是
+        // reviews，逐件免责不武装全局门（#379 拆门的关键切割点）。
         let gp_id = self.next_id("GP");
         self.gate_passes.push(review::GatePassRecord {
             id: gp_id,
@@ -1124,6 +1235,107 @@ impl DomainStore {
             p.content_version += 1;
         }
         Ok(rec)
+    }
+
+    /// 「本项目无补遗」全局确认（#379 拆门——R-07/A-04 修复的新入口）。
+    ///
+    /// 裁决序（与 record_addendum_waiver 同构——拒绝路径零副作用）：
+    /// 1. project 在场；
+    /// 2. `principal` 身份/签域匹配（#182/#277 同款二元组）；
+    /// 3. `reason` 非空白（不可审计的确认不成确认）。
+    ///
+    /// 「是否存在补遗件」的判定（`is_addendum_file` 词面判定）在 bid-tools
+    /// 服务层（域层无文件业务身份概念——issue #379 锚点）；服务层先裁
+    /// 「有补遗件 → 响亮拒并指引逐件 waiver」，域层本函数只管落账。
+    ///
+    /// 落账：`reviews(NoAddendumConfirmed, Approved)`（含 #180 内容绑定快照
+    /// ——与 record_review 同款）+ `GatePassRecord`（#277 审计账）+
+    /// content_version + 1。与 AddendumWaiver 同窗：无状态门、无门序前置。
+    /// 导入补遗件后走正常判定，本确认自然失效（② 分支不再触发）。
+    pub fn confirm_no_addendum(
+        &mut self,
+        reason: &str,
+        principal: &TrustedPrincipal,
+    ) -> Result<review::ReviewRecord, ToolError> {
+        self.project()?;
+        let is_agent_pass = Self::waiver_principal_gate(principal)?;
+        if reason.trim().is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: "确认理由不得为空白（不可审计的确认不成确认——全局无补遗确认与逐件 waiver 同构：必须说明为什么可以过这个门）".into(),
+            });
+        }
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let principal_echo = if is_agent_pass {
+            format!("agent:{}", principal.actor_id)
+        } else {
+            format!("human:{}", principal.actor_id)
+        };
+        let review_id = self.next_id("REV");
+        let reviewed_content_version = self.project.as_ref().map_or(0, |p| p.content_version);
+        let reviewed_content_digest = self.sections_digest();
+        let rec = review::ReviewRecord {
+            id: review_id,
+            gate: review::Gate::NoAddendumConfirmed,
+            reviewer: principal_echo,
+            principal: Some(principal.clone()),
+            decision: review::Decision::Approved,
+            findings: Vec::new(),
+            at,
+            reviewed_content_version,
+            reviewed_content_digest,
+        };
+        self.reviews.push(rec.clone());
+        // #277 方案 A 同构：过门同步落审计账（导出警告判据 = 本门最新一条
+        // human_confirmed；agent 声明 → human_confirmed=false）
+        let gp_id = self.next_id("GP");
+        self.gate_passes.push(review::GatePassRecord {
+            id: gp_id,
+            gate: review::Gate::NoAddendumConfirmed,
+            actor_id: principal.actor_id.clone(),
+            actor_type: principal.actor_type,
+            method: if is_agent_pass {
+                review::METHOD_AGENT_DECLARED.to_string()
+            } else {
+                review::METHOD_HUMAN_RECEIPT.to_string()
+            },
+            human_confirmed: !is_agent_pass,
+            at,
+            reason: reason.trim().to_string(),
+        });
+        if let Some(p) = self.project.as_mut() {
+            p.content_version += 1;
+        }
+        Ok(rec)
+    }
+
+    /// 逐件/全局确认共用的身份裁决（#277 二元组：Human×人类签域 /
+    /// Agent×agent 签域；System / 混用拒）。返回 is_agent_pass。
+    fn waiver_principal_gate(principal: &TrustedPrincipal) -> Result<bool, ToolError> {
+        match (principal.actor_type, principal.scope_is_agent) {
+            (ActorType::Human, false) => Ok(false),
+            (ActorType::Agent, true) => Ok(true),
+            (ActorType::System, _) => Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "确认人 {:?} 是 system 身份（过门面不收 System）",
+                    principal.actor_id
+                ),
+            }),
+            (ActorType::Human, true) => Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "确认人 {:?} 是 Human 身份但携带 agent 签域（签域与身份不匹配）",
+                    principal.actor_id
+                ),
+            }),
+            (ActorType::Agent, false) => Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "确认人 {:?} 是 agent 身份但未携带 agent 签域（Agent 不得用人类签域冒充真人——agent 声明过门走 :agent 签域，require_human_receipt=false 工作区才放行，见 #277）",
+                    principal.actor_id
+                ),
+            }),
+        }
     }
 
     // ---------------------------------------------------------------- #219 全块覆盖
@@ -1460,6 +1672,13 @@ pub struct StoreSnapshot {
     /// #319 改写指令账本（加性迁移——旧快照无此字段 → 空集合加载）
     #[serde(default)]
     pub rewrite_directives: Vec<rewrite::RewriteDirective>,
+    /// #316 分包注册表（加性迁移——旧快照无此字段 → 空注册表加载：
+    /// 无分包结构，行为与旧版一致；schema_version 不 bump，见头注释加性演进纪律）
+    #[serde(default)]
+    pub packages: Vec<packages::PackageInfo>,
+    /// #316 已选投标分包（加性迁移——旧快照无此字段 → None：未选包/无分包）
+    #[serde(default)]
+    pub selected_package: Option<String>,
     #[serde(default)]
     pub idempotency: BTreeMap<String, serde_json::Value>,
     #[serde(default)]
@@ -1499,6 +1718,10 @@ impl DomainStore {
             segments: self.segments.clone(),
             addendum_changes: self.addendum_changes.clone(),
             rewrite_directives: self.rewrite_directives.clone(),
+            // #316 分包面（加性迁移——旧快照无此字段 → 空注册表/未选包
+            // 加载，行为与 #316 之前一致；schema_version 不 bump，加性演进纪律）
+            packages: self.packages.clone(),
+            selected_package: self.selected_package.clone(),
             // HashMap → BTreeMap：持久化 DTO 要求跨进程字节一致（HashMap 迭代序不确定）
             idempotency: self.idempotency.clone().into_iter().collect(),
             id_seq: self.id_seq,
@@ -2016,6 +2239,8 @@ impl DomainStore {
             segments: snap.segments,
             addendum_changes: snap.addendum_changes,
             rewrite_directives: snap.rewrite_directives,
+            packages: snap.packages,
+            selected_package: snap.selected_package,
             idempotency: snap.idempotency.into_iter().collect(),
             id_seq: snap.id_seq,
         })

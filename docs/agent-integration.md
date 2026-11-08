@@ -376,8 +376,10 @@ sha256 与六表/七件对账数字给用户。）
 | `E_NOTFOUND` | 项目/条目不存在 | 检查 ID；重查 get_bid_project_state / list_* |
 | `E_UNPROCESSABLE` | 参数形态非法/前置不满足（含 external 互斥、EXPIRED 禁绑、无补遗阻塞） | 读 `error.what`（人读正文）修正后重试 |
 | `E_UNPROCESSABLE`（receipt 验签失败） | 审批回执非法——`what` 前缀分类码：`MALFORMED_RECEIPT` / `NOT_HUMAN_ACTOR` / `EXPIRED_RECEIPT` / `FUTURE_DATED_RECEIPT` / `BAD_SIGNATURE`（签名或签域不符，#182） | receipt 由宿主为真人签发（Agent 拿不到密钥）——请真人在宿主界面确认后重签；勿自行构造 |
-| `E_AUTH` / `E_RATE` | 鉴权/限流 | 退避重试 |
-| `E_INTERNAL` | 引擎内部错 | 带 request_id 报告维护方 |
+| `E_DRAFT_INCOMPLETE` | 全稿最终校验前置拒：起草未完成（附 `missing` 叶清单，零副作用） | 按 missing 清单回 P5 逐叶补写，或改 scope=sections 章节级检查 |
+| `E_COVERAGE_INCOMPLETE` | 建纲覆盖闭环前置拒：标记集非空且存在未判块（附 `gaps` 区间清单，零副作用） | 按 gaps 清单 submit_block_marks 补判 → 重跑 extract → 重建纲 |
+| ~~`E_AUTH` / `E_RATE`~~ | **预留位，当前未实现**（鉴权/限流由宿主进程边界承担） | 勿写针对它们的重试分支；真鉴权问题看宿主日志 |
+| ~~`E_INTERNAL`~~ | **预留位，当前未实现** | 勿写针对它的报告分支；引擎错误当前以 E_UNPROCESSABLE/what 人读正文形态返回 |
 | `UNIMPLEMENTED_INTERNAL` | 工具未接线（骨架纪律保留面——当前 `TOOL_NAMES` 全部工具已接线） | 勿重试；按报文指路走替代路径，报告维护方 |
 
 错误应答形：`{ok: false, tool, error: {code, what, hint?, item_errors?}}`——

@@ -21,6 +21,25 @@ fn model_regex() -> Regex {
     Regex::new(r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+").unwrap()
 }
 
+/// 中文大写日期（#487 单一真源——原两处手抄副本的字符类不含「十」、
+/// 量词上限不足，真实日历日期约 93% 静默不命中）。
+///
+/// - 字符类 `[〇一二三四五六七八九零十]`：含「十」（U+5341）——
+///   「十月/十一月/十二月」与「十日~三十一日」是真实日历的主流形态
+///   （一年中无十字的日期仅约 7%：1-9 月 × 1-9 日）；
+/// - 月 `{1,3}`：「十一月/十二月」3 字；
+/// - 日 `{1,4}`：「三十一日/二十九日」4 字；
+/// - 结构锚定「X年Y月Z日」——无日期语义的「N年」列举（「近三年」）
+///   不匹配（需月/日锚位）。
+///
+/// 命中面实证（修复前 → 后）：
+/// 「二〇二六年十二月三十日」false → true（B1 夹具 40+ 行到货日期全量恢复）
+/// 「二〇二六年十月十五日」  false → true（工期/质保期主流写法）
+/// 「二〇二六年一月一日」    true  → true（无十形态不回归）
+fn date_cn_regex() -> Regex {
+    Regex::new(r"[〇一二三四五六七八九零十]{4}年[〇一二三四五六七八九零十]{1,3}月[〇一二三四五六七八九零十]{1,4}日").unwrap()
+}
+
 /// 纯 NFKC（不剥空白）——**只用于章节/小节识别**，不改任何落库数据。
 ///
 /// 真实政采平台 PDF 的文本层用康熙部首区编码汉字（「第⼀章」的「⼀」
@@ -497,6 +516,128 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
         s.is_empty() || s.matches('.').count() >= 6 || s.contains("……")
     };
 
+    // ---- #450（B-18）：页界噪声预计算（页码行 + 重复页眉/页脚）----
+    // 机制：pdftotext 页间插入页码行（「12」/「— 12 —」/「-第N⻚-」）与页眉/
+    // 页脚行（「XX 水库除险加固工程招标文件」）——段落扩展循环只看行内特征，
+    // 噪声被拼进条款 para_text（excerpt 污染 + 否决词被噪声行截断的
+    // missed 面）。识别后「不吞不截」：不进 para_text/anchors，但扩展
+    // 透明穿越（跨页条款整段还原，词表跨页匹配）。
+    // 保守护栏（识别不全好过误杀正文）：
+    //   页码行 = 全行仅页号数字 + 白名单装饰（裸数字/— N —/- N -/· N ·/
+    //   第 N 页/⻚/頁 形态，NFKC 先归一——康熙部首 ⾴→頁、全角落回半角；
+    //   CJK 部首区 ⻚ 无 NFKC 分解、白名单显式收编），且数字 == 本行
+    //   locator 页号（页号不匹配的数字行是正文，如「12 万元」被拆行后的
+    //   「12」）；
+    //   页眉/页脚 = 同一文本（≤40 字、非条款头/章节头/小节头/部分头、非
+    //   skip 行、尾非冒号）出现在 ≥3 个不同页的首 2 行或末 2 行（真件
+    //   实证：真页眉重复 3~122 页，巧合命中恰好 ≤2 页——阈值与护栏的
+    //   校准依据见下方 repeated_edges 注释）。
+    // 零激活纪律：单页文档/无页界噪声的输入上新逻辑完全沉默（与 #272
+    // 仲裁同款「新增面只在噪声形态在场时激活」）。
+    let page_noisy: std::collections::HashSet<usize> = {
+        let is_dressed_page_no = |t: &str, page: Option<u32>| -> bool {
+            let Some(p) = page else { return false };
+            // 先 NFKC 归一：康熙部首（⾴→頁）与全角（２８→28、－→-）落回常用形
+            let t = nfkc(t);
+            let t = t.trim();
+            if t.is_empty() {
+                return false;
+            }
+            // 页号必须是**单一连续数字游程**：「12」「— 12 —」「-第28⻚-」。
+            // 多游程是条款号/编号列举形态——实测误杀面（黑龙江 wenming 件
+            // 评分表单元格「2.1」在页 21：数字拼接「21」撞页号 → 裸拼接
+            // 会把条款号行当页码噪声 → 评分项 REQ 丢失 18→17）。
+            let mut runs = t.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty());
+            let digits = match (runs.next(), runs.next()) {
+                (Some(d), None) => d,
+                _ => return false,
+            };
+            let Ok(d) = digits.parse::<u32>() else { return false };
+            if d != p {
+                return false;
+            }
+            // 全行只剩数字 + 白名单装饰符（防「12.5」「12 万元」类正文误杀
+            // ——点号**不在**白名单：issue 形态清单「12 / — 12 — / - 12 - /
+            // · 12 · / 第 12 页」无点号形态，「21.」类条款号行不判）。
+            // ⻚（U+2EDA，CJK 部首区）无 NFKC 分解——真实政采 PDF 的
+            // ToUnicode 常把「页」映到 ⻚（实测黑龙江 batch1 页脚
+            // 「-第28⻚-」），白名单显式收编 ⻚/頁（⾴ 经 NFKC 已落为 頁）。
+            let dressed: String = t
+                .chars()
+                .filter(|c| !c.is_ascii_digit() && !"—–-－· \t第页⻚頁".contains(*c))
+                .collect();
+            dressed.trim().is_empty()
+        };
+        // 页序分组（保序——页号变化开新组；无页号的行不参与边缘统计）
+        let mut page_runs: Vec<(Option<u32>, Vec<usize>)> = Vec::new();
+        for (idx, b) in blocks.iter().enumerate() {
+            let page = crate::page_line_of(&b.locator).0;
+            match page_runs.last_mut() {
+                Some((last_page, members)) if *last_page == page => members.push(idx),
+                _ => page_runs.push((page, vec![idx])),
+            }
+        }
+        // 边缘候选计数：每页首 2 / 末 2 个行块的文本 → 跨页重复集合
+        let mut edge_counts: std::collections::HashMap<&str, std::collections::BTreeSet<u32>> =
+            std::collections::HashMap::new();
+        for (page, members) in page_runs.iter() {
+            let Some(p) = *page else { continue };
+            let line_members: Vec<usize> = members
+                .iter()
+                .copied()
+                .filter(|&idx| {
+                    matches!(blocks[idx].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                })
+                .collect();
+            if line_members.len() < 2 {
+                continue; // 单行页无边缘结构（也防单行页误配）
+            }
+            let mut edges: Vec<usize> = Vec::new();
+            edges.extend(line_members.iter().take(2));
+            edges.extend(line_members.iter().rev().take(2));
+            for idx in edges {
+                let t = blocks[idx].text.trim();
+                let is_head_form = re_clause.is_match(t)
+                    || re_chapter.is_match(&nfkc(t))
+                    || re_subsection.is_match(t)
+                    || re_part_head.is_match(t);
+                if t.is_empty()
+                    || is_head_form
+                    || t.chars().count() > 40
+                    || is_skip_line(t)
+                {
+                    continue;
+                }
+                edge_counts.entry(t).or_default().insert(p);
+            }
+        }
+        // 阈值 ≥3 页 + 尾随冒号不判——真件实证校准（探针全量统计）：
+        //   真页眉/页脚重复 3~122 页（水利卷标头 122/283 页、评审表头 5/76 页、
+        //   签署模板「年 月 日」11/76 页）；而黑龙江 batch1 的 ≥2 重复**全部**
+        //   为巧合命中（「采购包3：」2 页恰落两页页首、「序号 资格审查要求
+        //   概况…」表头 2 页）——2 页门槛会把包标签/表头误判噪声 → 段界
+        //   移动吞 REQ（实测 hq 件资格条件 32→28）。3 页门槛恰好把巧合面
+        //   全挡掉、真页眉（≥3 页）全覆盖；冒号护栏再防 3+ 页巧合的标签
+        //   形态（「采购包N：」「附件一：」是内容引入标签，非页缘家具）。
+        let repeated_edges: std::collections::HashSet<&str> = edge_counts
+            .into_iter()
+            .filter(|(t, pages)| {
+                pages.len() >= 3 && !t.ends_with('：') && !t.ends_with(':')
+            })
+            .map(|(t, _)| t)
+            .collect();
+        blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                matches!(b.kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                    && (is_dressed_page_no(&b.text, crate::page_line_of(&b.locator).0)
+                        || repeated_edges.contains(b.text.trim()))
+            })
+            .map(|(idx, _)| idx)
+            .collect()
+    };
+
     let n = blocks.len();
     // para_end[i]：行 i 所在段落的末行（含自身）；para_start[i]：首行。
     // 段落成员行（para_start[i] < i）由首行统一处理（防段落尾行双抽）。
@@ -504,7 +645,12 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     let mut para_start = vec![0usize; n];
     let mut i = 0usize;
     while i < n {
-        if !matches!(blocks[i].kind, BlockKind::PdfLine | BlockKind::OcrLine) || is_skip_line(blocks[i].text.trim()) {
+        if !matches!(blocks[i].kind, BlockKind::PdfLine | BlockKind::OcrLine) || is_skip_line(blocks[i].text.trim())
+            // #450（B-18）：噪声行不做段头——做段头会让真续行沦为
+            // 非首成员被主循环去重丢弃（整段内容损失）；噪声行独立
+            // 成组（para_start=para_end=自身），主循环另按噪声集跳过。
+            || page_noisy.contains(&i)
+        {
             para_end[i] = i;
             para_start[i] = i;
             i += 1;
@@ -517,10 +663,18 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             if ends_sentence(cur) {
                 break;
             }
-            let Some(next) = blocks.get(j + 1) else { break };
+            // #450（B-18）：向后找真续行——页界噪声行透明穿越（不吞不截：
+            // 噪声不进文本，但也不截断条款——跳过连续噪声后看真行的
+            // 可拼接性；跳过位置（噪声区间）落入段落成员范围，由
+            // para_text/para_anchors 统一排除）。
+            let mut k = j + 1;
+            while k < n && page_noisy.contains(&k) {
+                k += 1;
+            }
+            let Some(next) = blocks.get(k) else { break };
             if !matches!(next.kind, BlockKind::PdfLine | BlockKind::OcrLine)
                 || is_skip_line(next.text.trim())
-                || is_clause_start(j + 1, next.text.trim())
+                || is_clause_start(k, next.text.trim())
                 // #68 阶段 4（G——根因修复）：列举条目行强制断段。missed 样例：
                 // 「5.1.1 形式评审标准：（见附表三：评标表-4）」尾缀 ）非终结
                 // 标点 → ⑴⑵⑶ 审查条目被拼进编号段 → 段落去重吞掉条目、
@@ -530,7 +684,7 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             {
                 break;
             }
-            j += 1;
+            j = k;
         }
         for k in i..=j {
             para_end[k] = j;
@@ -542,7 +696,10 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     let para_text = |start: usize, end: usize| -> String {
         let mut s = String::new();
         for k in start..=end {
-            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine) {
+            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                // #450（B-18）：页界噪声不拼进段落文本（excerpt 保真）
+                && !page_noisy.contains(&k)
+            {
                 s.push_str(blocks[k].text.trim());
             }
         }
@@ -551,7 +708,10 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     // 段落 anchors（每行一个，excerpt 保真）
     let para_anchors = |start: usize, end: usize| -> Vec<Anchor> {
         (start..=end).filter_map(|k| {
-            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine) {
+            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                // #450（B-18）：噪声行不是条款内容——不产锚（防回查噪声）
+                && !page_noisy.contains(&k)
+            {
                 Some(anchor(f, &blocks[k]))
             } else {
                 None
@@ -679,6 +839,11 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
         }
         // #266 语义表/值行接管：同款区域跳过
         if sem_consumed.contains(&i) {
+            continue;
+        }
+        // #450（B-18）：页界噪声行不进主循环（不分类不 REQ）——此前裸
+        // 页码行可经碎片过滤漏网成 junk、页眉行成独立 junk REQ
+        if page_noisy.contains(&i) {
             continue;
         }
         let t = b.text.trim();
@@ -1272,9 +1437,9 @@ fn extract_main_docx(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usiz
     let re_clause = Regex::new(r"^(\d+(?:\.\d+)+|\d{1,3}、)\s*").unwrap();
     let re_dunhao_list = Regex::new(r"^\d{1,3}、").unwrap();
     let re_model = model_regex();
+    let re_date_cn = date_cn_regex();
     let re_amount = Regex::new(r"(\d+(?:\.\d+)?)\s*万\s*元").unwrap();
     let re_date = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
-    let re_date_cn = Regex::new(r"[〇一二三四五六七八九零]{4}年[〇一二三四五六七八九零]{1,2}月[〇一二三四五六七八九零]{1,3}日").unwrap();
     // 分值形态（评分细则行「N分」——容忍空格；评标办法章内分值锚定的
     // 判定面，P0-B 修订 2）
     let re_score_shape = Regex::new(r"\d+(?:\.\d+)?\s*分").unwrap();
@@ -1465,7 +1630,15 @@ fn extract_main_docx(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usiz
                     veto_ctx = false;
                 }
             }
-            BlockKind::TableRow => {
+            // #472（B-08）：XlsxRow 并入 TableRow 分支——xlsx 清单型招标文件
+            // （kind=招标文件/补遗的 .xlsx）此前整份数据落入 `_ => {}` 黑洞
+            // （0 REQ 零告警，audit B-08）。XlsxRow 的 text/cells 形态与
+            // TableRow 同构（非空单元格空格 join / 原始行），通用分支
+            // （否决/资格/参数/审查语境）直接适用；review_map/semantic
+            // 两套结构感知 map 只按 TableRow 建（review_table.rs:220/
+            // table_semantics.rs:226），XlsxRow 自然 miss → 走通用分支，
+            // 无双抽风险。
+            BlockKind::TableRow | BlockKind::XlsxRow => {
                 // #144 审查表接管：数据行 → 结构化 REQ（旧链不走——防双抽）；
                 // 表头形状行只消费（防旧链误开语境/误产 REQ）。
                 if let Some(ri) = review_map.get(&b.idx) {
@@ -1575,11 +1748,13 @@ fn extract_main_docx(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usiz
 /// B1 设备清单：含型号或中文大写日期的行 → 技术参数 REQ（到货/规格要求行）。
 fn extract_b1_lines(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize) {
     let re_model = model_regex();
-    let re_date_cn = Regex::new(r"[〇一二三四五六七八九零]{4}年[〇一二三四五六七八九零]{1,2}月[〇一二三四五六七八九零]{1,3}日").unwrap();
+    let re_date_cn = date_cn_regex();
     let re_amount = Regex::new(r"(\d+(?:\.\d+)?)\s*万\s*元").unwrap();
     let re_date = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
     for b in &f.blocks {
-        if matches!(b.kind, BlockKind::PdfLine)
+        // #472（B-07②）：xlsx 报价清单的块全为 XlsxRow——只认 PdfLine 时
+        // 型号/中文大写日期行全部静默 0 抽取（audit B-07②）。两形态同判。
+        if matches!(b.kind, BlockKind::PdfLine | BlockKind::XlsxRow)
             && (re_model.is_match(&b.text) || re_date_cn.is_match(&b.text))
         {
             let mut params = HashMap::new();
@@ -1741,8 +1916,15 @@ fn row_no_of(locator: &str) -> usize {
 /// 表格键（locator 的 表N 序号——表切换检测用，P0-B 审查语境隔离）。
 fn table_key_of(locator: &str) -> String {
     // 「第二章 投标人须知 表1 行41」→「第二章 投标人须知 表1」
-    match locator.find(" 行") {
-        Some(i) => locator[..i].to_string(),
-        None => locator.to_string(),
+    if let Some(i) = locator.find(" 行") {
+        return locator[..i].to_string();
     }
+    // #472（B-08）：xlsx 形态「Sheet1!行5」→「Sheet1」（sheet 名为表键
+    // ——同 sheet 审查语境连续，跨 sheet 重置）。不兼容时每行返回整串
+    // → 表切换检测逐行触发 review_ctx=false，审查语境在 xlsx 表格内
+    // 无法传播。docx「 行」形态优先级不变（先判 docx 再判 xlsx）。
+    if let Some(i) = locator.find('!') {
+        return locator[..i].to_string();
+    }
+    locator.to_string()
 }

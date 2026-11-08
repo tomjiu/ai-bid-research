@@ -180,7 +180,7 @@ impl StoreFile {
             let name = parsed_file_name(&bytes);
             let ppath = self.dir.join(&name);
             if !ppath.exists() {
-                write_fsync_atomic(&ppath, &bytes)?;
+                write_fsync_atomic(&ppath, &bytes).map_err(StoreIoError::Io)?;
             }
             Some(name)
         };
@@ -188,7 +188,7 @@ impl StoreFile {
         // ---- 2. db.json v2（域面 + ref）原子提交
         let svc = ServiceSnapshot::v2(domain.clone(), parsed_ref);
         let json = serde_json::to_string_pretty(&svc).map_err(StoreIoError::Serialize)?;
-        write_fsync_atomic(&self.path(), json.as_bytes())?;
+        write_fsync_atomic(&self.path(), json.as_bytes()).map_err(StoreIoError::Io)?;
 
         // ---- 3. GC：清除未被引用的 parsed 文件（单进程串行——服务态无并发写）
         self.gc_parsed()?;
@@ -198,8 +198,17 @@ impl StoreFile {
     /// 删除目录内未被 db.json 引用的 `parsed-*.json`。
     ///
     /// 失败容忍（GC 是优化不是语义面——残留文件不影响正确性，下次再清）。
+    ///
+    /// #460 语义分流：db.json **存在但读/解析失败**（Defender 锁窗口或损坏）
+    /// → 跳过本轮 GC——读不出引用时当作 keep=None 删光 parsed 文件会误删
+    /// 步骤 1/2 刚落盘刚引用的那份（db.json 的 parsed_ref 悬空 → 下次 load
+    /// 报 Corrupt）。「读不出」与「无引用」是两种语义，不得共用 None。
     fn gc_parsed(&self) -> Result<(), StoreIoError> {
-        let keep = self.current_parsed_ref();
+        let keep = match self.current_parsed_ref_state() {
+            ParsedRefState::Ref(name) => Some(name),
+            ParsedRefState::NoRef => None, // v1 内联 / v2 空 parsed：文件本就不该在，可清
+            ParsedRefState::Unreadable => return Ok(()), // 读/解析失败：跳过本轮，残留留下轮
+        };
         let entries = match std::fs::read_dir(&self.dir) {
             Ok(e) => e,
             Err(_) => return Ok(()),
@@ -213,12 +222,28 @@ impl StoreFile {
         Ok(())
     }
 
-    /// 当前 db.json 引用的 parsed 文件名（无 db.json / v1 内联 → None）。
-    fn current_parsed_ref(&self) -> Option<String> {
-        let raw = std::fs::read_to_string(self.path()).ok()?;
-        serde_json::from_str::<ServiceSnapshot>(&raw)
-            .ok()?
-            .parsed_ref
+    /// db.json 引用状态（#460 三态——取代旧 Option<String> 的两义面）。
+    ///
+    /// - `NoRef`：无 db.json，或可读但无 ref（v1 内联 / v2 空 parsed）；
+    /// - `Unreadable`：db.json 存在但读失败（锁/IO）或解析失败（损坏）——
+    ///   引用未知，消费方（GC）应保守跳过；
+    /// - `Ref`：读成功且带 ref。
+    fn current_parsed_ref_state(&self) -> ParsedRefState {
+        let raw = match std::fs::read_to_string(self.path()) {
+            Ok(r) => r,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return ParsedRefState::NoRef
+            }
+            Err(_) => return ParsedRefState::Unreadable,
+        };
+        match serde_json::from_str::<ServiceSnapshot>(&raw) {
+            Ok(s) => match s.parsed_ref {
+                Some(name) => ParsedRefState::Ref(name),
+                None => ParsedRefState::NoRef,
+            },
+            // 解析失败与读失败同等保守：不猜引用面（损坏件可能正是刚写的）
+            Err(_) => ParsedRefState::Unreadable,
+        }
     }
 }
 
@@ -249,12 +274,6 @@ fn parsed_file_name(bytes: &[u8]) -> String {
 /// Windows：目录 fsync 无对应语义（std 无目录句柄 sync）——文档化容忍，
 /// 进程崩溃安全（rename 原子），掉电面依赖 NTFS 日志。
 ///
-/// 【#368 分支移植说明】本提交把 #575（fix/564-retry-whole-write-sequence）
-/// 的修复连同其依赖的 is_transient_io_error / retry_transient（6 次指数
-/// 退避版）一并移植到本分支的旧版写面（本分支早于 #460/#461 基建合入，
-/// 无 retry_transient 基础设施）。GC 三态（current_parsed_ref_state）不
-/// 随行——本分支 gc_parsed 为两态版，属 #460 范畴，不在本修复面。
-///
 /// #460：`File::create` / `fs::rename` 接瞬态重试（Windows Defender 扫描
 /// 窗口撞锁 → os error 2/5/32；实测证据：e2e_pipeline 假红两撞，见 issue）。
 ///
@@ -264,20 +283,30 @@ fn parsed_file_name(bytes: &[u8]) -> String {
 /// 失败的操作（源不存在，os error 2 恒返），烧完预算后失败。实测：main
 /// f0e3ca9a（#461 已合入）run 992 仍红，e2e 启动后 140ms panic = 3 次尝试
 /// × 2 次 50ms 退避被完整烧穿的时间线。修正后整个「create→write→sync→
+/// **单一真源（#546）**：本函数是全仓唯一的 `write_fsync_atomic` 定义点
+/// ——[`profile_io`]（bidder-profile.json 落盘）改调此处，不再自备副本。
+/// 原双副本纪律分裂面：#457（profile_io 自备）× #460/#461（本处加有界
+/// 重试）——收敛后重试语义自动覆盖两侧。返回裸 [`std::io::Result`]：
+/// 错误类型适配（StoreIoError::Io / FormError::Io）由调用方 map_err 承担。
+///
 /// rename」序列作为一个闭包进 retry_transient：任何一步瞬态失败 → 重做
 /// 全序列（重建 tmp）。#411 的 fsync 纪律不变——重试只针对路径竞态，
 /// 不取消刷盘；sync_all 也随之获得瞬态重试覆盖。
-fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> Result<(), StoreIoError> {
+pub fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("json.tmp");
-    retry_transient(|| -> std::io::Result<()> {
+    // 重试耗尽后清 tmp 残骸（#457 增量，#546 统一后两侧同享）——
+    // 注意闭包内部的重试成功路径不经过此分支。
+    if let Err(e) = retry_transient(|| -> std::io::Result<()> {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all()?; // 提交点前刷盘（#411）
         drop(f); // 关句柄再 rename（Windows: 句柄在开时 rename 失败面更大）
         std::fs::rename(&tmp, path)?; // 原子提交点
         Ok(())
-    })
-    .map_err(StoreIoError::Io)?;
+    }) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
     if cfg!(unix) {
         if let Some(parent) = path.parent() {
             if let Ok(d) = std::fs::File::open(parent) {
@@ -286,6 +315,16 @@ fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> Result<(), StoreIoError> {
         }
     }
     Ok(())
+}
+
+/// db.json 引用状态三态（[`StoreFile::current_parsed_ref_state`] 返回值）。
+enum ParsedRefState {
+    /// 无 db.json / 可读但无 ref（v1 内联、v2 空 parsed）。
+    NoRef,
+    /// db.json 存在但读/解析失败——引用未知，消费方应保守跳过。
+    Unreadable,
+    /// 读成功且带 ref。
+    Ref(String),
 }
 
 /// #460：Windows 瞬态 IO 错误判定（Defender 扫描窗口/文件锁竞态）。
@@ -820,6 +859,26 @@ mod tests {
         assert!(r.is_err());
         assert_eq!(calls, 1, "非瞬态只调一次（直报）");
     }
+
+    /// #460 GC 三态之一（Unreadable）：db.json 损坏 → 跳过本轮——
+    /// 刚落盘的 parsed 文件不得被误删（悬空引用防护）。
+    #[test]
+    fn gc_skips_when_db_json_corrupt_keeps_parsed_alive() {
+        let dir = tmp_store("gc-corrupt");
+        let sf = StoreFile::new(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // 模拟「步骤 2 rename 后 Defender 锁窗口读到半截/损坏内容」：
+        // 写一个合法 parsed 文件 + 损坏的 db.json
+        std::fs::write(dir.join("parsed-0123abcd.json"), b"[]").unwrap();
+        std::fs::write(sf.path(), b"{ not valid").unwrap();
+        sf.gc_parsed().unwrap();
+        assert!(
+            dir.join("parsed-0123abcd.json").exists(),
+            "db 读不出引用时必须跳过本轮 GC——parsed 误删 = db.json 悬空引用"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// #460 GC 三态之二（Ref）：正常引用保留、孤儿清除。
     #[test]
     fn gc_keeps_referenced_removes_orphan() {
