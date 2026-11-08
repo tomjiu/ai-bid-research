@@ -118,7 +118,35 @@ jobs:
         run: |
           python3 -m pip install --quiet \
             python-docx==1.2.0 reportlab==4.4.9 openpyxl==3.1.5 \
-            Pillow==11.3.0 pdfplumber==0.11.9 pymupdf==1.26.7
+            Pillow==11.3.0 pdfplumber==0.11.9 pymupdf==1.26.7 \
+            numpy==2.2.6
+
+      - name: Cache SarasaMonoSC font
+        # T0d/T6 需要 SarasaMonoSC（中日韩等宽渲染字体，像素层钉版）。
+        # 缺失时 B2/D5a/D5b/插图生成全空白（Task 16 字体陷阱）。
+        # 2026-11-08 加：run_tests.py 主链接进 CI 后暴露此依赖（#561）。
+        # 脚本侧探测口径见 run_tests.py:170 / fixture_gen.py:49 等——
+        # 均为 /usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf。
+        id: sarasa-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf
+          key: sarasa-mono-sc-regular-v1
+
+      - name: Install SarasaMonoSC font
+        if: steps.sarasa-cache.outputs.cache-hit != 'true'
+        # 来源：be5invis/Sarasa-Gothic v1.0.29 TTF 包解出的 Regular 单文件，
+        # 已上传到 mdcore release ci-deps-v1（25.5 MB，SHA256 507add5a...）。
+        # 不走 7z 解压（CI 无 7z），直接下单个 ttf。
+        run: |
+          sudo mkdir -p /usr/share/fonts/truetype/chinese
+          sudo curl -fsSL -o /usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf \
+            https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/SarasaMonoSC-Regular.ttf
+          ls -la /usr/share/fonts/truetype/chinese/
+          test -s /usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf || {
+            echo "::error::SarasaMonoSC-Regular.ttf 下载失败"; exit 1; }
+          fc-cache -f > /dev/null 2>&1 || true
+          echo "SarasaMonoSC 就位——T0d/T6 解跳"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

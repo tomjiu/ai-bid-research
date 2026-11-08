@@ -306,6 +306,21 @@
    "path": "queries/exact-25.jsonl",
    "sha256": "97e1676b410231d35e3cb659f34b68c169bc9cef558c3e5678fac9a60f13cee9",
    "bytes": 5535
+  },
+  {
+   "path": "corpus-A/files/D-技术标-第一章.md",
+   "sha256": "c97017982d656602b609c8efd6557dd36705c57395bf65a443bb5d8c84dc2c07",
+   "bytes": 776
+  },
+  {
+   "path": "corpus-A/files/澄清修改文件-3.1.1.docx",
+   "sha256": "019c15d0b7bd4184718455e1b5876ebdc72261f31b122b3d0832258a08afb3c3",
+   "bytes": 36799
+  },
+  {
+   "path": "corpus-A/ground-truth/meta.json",
+   "sha256": "aaaa09ca78435dbec134802409028c333235523e1ff402cac98c362a3698feea",
+   "bytes": 295
   }
  ]
 }
