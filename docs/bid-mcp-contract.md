@@ -1266,7 +1266,7 @@ out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
 
 ## 23. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
 
-## 25. list_packages（#316 分包清单 · 只读）
+## 26. list_packages（#316 分包清单 · 只读）
 
 > 背景：真实招标常分包（batch2 实证：`…-第2包.doc`），一包一投或全投；
 > 引擎在 extract_requirements 时按三形态识别（文件名/章节结构/分包清单
