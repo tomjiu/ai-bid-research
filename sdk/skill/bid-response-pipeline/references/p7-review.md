@@ -193,10 +193,25 @@ status / project_version
 放行）；`set_param_responses`（技术参数应答
 录入——偏离表唯一入口，偏离判定派生态）。
 
-与 validate 的关系（诚实桥接）：`validate_bid_document` 的 MAJOR finding
-**不自动生成 RT**——它的修订闭环 = 回 P5 重提该章正文 + `scope` 重跑
-validate；引擎的 RT 只由过门 findings 里的 BLOCKER 派生。阶段表「每个
-MAJOR finding 有 RT 且 DONE」的编排纪律按此对应执行。
+与 validate 的关系（诚实桥接，#534/C-29 残留口径）：`validate_bid_document`
+的 MAJOR finding **不自动生成 RT**——引擎的 RT 只由过门 findings 里的
+BLOCKER 派生。MAJOR 的修订闭环**按项目状态分流**（#243 后推进只看
+blocker==0，M_ 不拦——scope=all 且 ok=true 即进 VALIDATING，而该态无
+内容写入工具）：
+
+- **DRAFTING 期（主路径，闭环完整）**：`scope=sections` 章节级检查同样跑
+  模型复核（M_ findings 起草期即可拿全）→ 读 finding →
+  `draft_response_section` 重提该章 → 复跑受影响章。**纪律：M_ MAJOR
+  清零后才 scope=all**（见 p6-validation.md 模型检查节）；
+- **已进 VALIDATING 后出现/新出现的 M_**：内容修订当前**无工具出口**——
+  `draft_response_section` E_STATE / `recover_validating_state` 拒绝健康态
+  （仅服务缺章）/ `reopen_section` 仅适用 ACCEPTED / `rewrite_section_
+  partial` 仅消费补遗指令。RT 闭环（`assign_revision`/`advance_revision`/
+  `complete_revision`）仍可**记账**，但改不了稿——如实向用户报告并升级
+  Lead 裁定（行为方案 A/B/C 见 #534），不自创绕行（手改 db.json 禁止）。
+
+阶段表「每个 MAJOR finding 有 RT 且 DONE」的编排纪律按此口径执行（RT
+记账面照走，内容面按上述分流）。
 
 ## #180 审核内容绑定（过门后改稿 → 旧审核失效）
 
