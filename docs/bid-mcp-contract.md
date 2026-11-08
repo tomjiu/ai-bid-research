@@ -8,11 +8,11 @@
 
 ## 0. 通用约定
 
-- **错误码**：`E_AUTH` / `E_NOTFOUND` / `E_STATE`（状态机拒绝越级或非法转换）/ `E_CONFLICT`（project_version 过期）/ `E_PARTIAL`（部分条目失败，附 item_errors）/ `E_UNPROCESSABLE`（解析不可恢复）/ `E_DRAFT_INCOMPLETE`（#243——全稿最终校验前置拒：起草未完成，附 `missing` 叶清单，零副作用）/ `E_RATE` / `E_INTERNAL`。
+- **错误码**：`E_NOTFOUND` / `E_STATE`（状态机拒绝越级或非法转换）/ `E_CONFLICT`（project_version 过期）/ `E_PARTIAL`（部分条目失败，附 item_errors）/ `E_UNPROCESSABLE`（解析不可恢复）/ `E_DRAFT_INCOMPLETE`（#243——全稿最终校验前置拒：起草未完成，附 `missing` 叶清单，零副作用）/ `E_COVERAGE_INCOMPLETE`（#244——建纲覆盖闭环前置拒：标记集非空且存在未判块，附 `unjudged_blocks`+`gaps` 区间清单，零副作用）/ `UNIMPLEMENTED_INTERNAL`（骨架纪律保留面——当前工具面已全接线，代理勿重试）。（`E_AUTH` / `E_RATE` / `E_INTERNAL` 为**预留位，当前未实现**——鉴权/限流由宿主进程边界承担，工具面无此分类；未来实现时在此补记。）
 - **行协议信封（#279）**：stdio 裸 JSON 路径（`bid-mcp-stdio` / `dispatch_json`）每行一个 `{"tool":"...","args":{...}}`。参数放**顶层**（`{"tool":..,"name":..}`）时历史行为是 serde 静默吞掉 + 工具层报误导性的「字段缺失」（#269 六场 11 次失败调用）；#279 起顶层出现该工具已知参数名 → 直接报**信封结构错误**：`ToolCall 解析失败：参数须嵌套在 "args" 下（收到顶层字段 name、bid_deadline，未见 args）`。未知顶层字段不触发（不越权猜测，维持工具层原语义）。
 - **project_version 乐观并发（#279 第 3 项）**：写工具接受三种形态——① 非负整数：强一致 CAS，过期 `E_CONFLICT`（报错带对齐建议，不变）；② 字符串 `"latest"`：显式声明「我确认无并发」，跳过检查（单代理顺序作业不必追踪版本号）；③ 缺省/null：内部步骤语义，跳过检查（现状不变）。非法字符串 → `E_UNPROCESSABLE`（文案指明合法形态）。
 - **agent 声明过门（#277 方案 A——用户裁定「ai可以操控这个过去但是留痕」）**：审核门（record_review_gate / record_addendum_waiver）双路验签——人类签域（#182 现状）+ agent 签域（scope 带 `:agent` 后缀 + actor_type=agent，agent 持钥自签声明）。通道开关 = 工作区配置 `<ws>/.mang/config.json` 的 `require_human_receipt`（缺省 **true** 严格模式——Q1 裁定：保守，自动化跑批显式写 false）。放行面：GatePassRecord 审计账（GP-xxxx，append-only——谁/什么身份/什么方法/何时/为什么，reason 必填非空）+ 导出警告横幅（Q3 措辞）+ 响应面 `agent_waivers`/`human_review_complete` + 事后人工追认（重过门追加 human 条，最新条定警告，两账可追溯）。防线不弱化：混用签域双向拒（NOT_AGENT_ACTOR / NOT_HUMAN_ACTOR——scope 进 MAC）；System 恒拒。
-- **幂等策略**：写操作接受 `idempotency_key`；同一 key 重复调用返回首次结果（不重复执行）。文件按 `sha256` 天然幂等；条款抽取按 `dedupe_hash` 幂等合并。
+- **幂等策略**（实然四件）：文件按 `sha256` 天然幂等；条款抽取按 `dedupe_hash` 幂等合并；export 按服务端从参数派生的幂等键重放首次结果（同参重导不重复执行）；写操作携 `project_version` 走 CAS（过期 `E_CONFLICT`）。（调用方自报 `idempotency_key` 为**预留位，当前未实现**——传入会被静默忽略，调用方防重放请按上述四机制对齐设计。）
 - **大结果分页（S-4，V3-5）**：列表类工具（get_compliance_matrix / list_evidence / list_tasks，及 M2-b 的 search_evidence）不得一次返回全量（12,000 行矩阵 / 10,000 条证据量级）——统一游标信封：
   `in : { project_id, filters:{...}, cursor?, limit?, page?(仅矩阵兼容) }`；
   `out: { rows|items, total(过滤后总数), limit(生效页宽), cursor(本次生效游标), next_cursor: string|null }`，`next_cursor=null` 即取完，原样回传取下一页。
