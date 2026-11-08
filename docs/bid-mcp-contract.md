@@ -1190,6 +1190,7 @@ out: { file_id, file_name,
       全部真值未捕获的诚实口径，warnings 提示先 extract）。
 明确不做: 不自动补标（只报告——补标由 Agent/人决策：submit_block_marks
       substantive=true 后重跑 extract_requirements）；不改抽取逻辑；无 UI。
+```
 
 ## LT. list_tools（#279 行协议发现面 · 只读）
 ```
@@ -1239,7 +1240,6 @@ out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
       = 选中档位目标）动态判——档位化后自动按选中档生效（非固定 844,000）。
 ```
 
-<<<<<<< HEAD
 ## 23. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
 ```
 in : { project_id,
@@ -1320,7 +1320,7 @@ out: { directive:{…处置后状态…}, section_id, dry_run,
       越界段 / 空白内容 / 引用回查失败 / dismiss+rewrites 互斥）；
       E_CONFLICT（expected_version 过期——无部分写入）。
 状态: MATRIX_READY+ 含 Exported（与 register 同窗口）。
-=======
+```
 ## 12-A. assign_revision（#321/A-23 · RT 认领/改派）
 ```
 in : { project_id, rt_id(RT-xxxx), owner(修订执行者——任意操作者面，
@@ -1396,5 +1396,4 @@ out: { total, added, note, project_version, request_id }
       上游缺口）；偏离判定是派生态（derive_deviation 单一真源：数值主判
       > 语义标记 > 不可比），导出时自动逐行判定真偏离；幂等（同键重放
       added=0）。
->>>>>>> e465818 (feat(#321): RT 生命周期 + 分工 + 章节重开 + 参数应答七工具入 MCP 面（R-03/A-23）)
 ```
