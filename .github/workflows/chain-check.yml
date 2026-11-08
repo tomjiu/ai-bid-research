@@ -83,7 +83,18 @@ jobs:
           pkg-config --exists gtk+-3.0 || { echo "::error::gtk+-3.0 dev 缺失"; exit 1; }
           pkg-config --exists webkit2gtk-4.1 || { echo "::error::webkit2gtk-4.1 dev 缺失"; exit 1; }
 
+      - name: Cache chi_sim traineddata
+        # 缓存 OCR 语言包（2.47 MB）——避免每次 CI 重复下载：
+        # 2026-11-08 实测 GitHub raw CDN 返回 504 导致主链 T0-T19 恒红，
+        # 命中缓存后不再依赖外部下载（本步骤仅在缓存未命中时执行）。
+        id: chi-sim-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.tessdata/chi_sim.traineddata
+          key: tessdata-chi-sim-v1
+
       - name: Install chi_sim to ~/.tessdata (tessdata_fast —— 解跳 T0c/T4c-OCR)
+        if: steps.chi-sim-cache.outputs.cache-hit != 'true'
         # 脚本侧（run_tests.py T0c/T4c）的探测口径是 ~/.tessdata/（与
         # bid-parse env_preflight::tessdata_dir 同口径：TESSDATA_PREFIX 优先，
         # 否则用户主目录）。系统级 tesseract-ocr-chi-sim 不在该口径上——
