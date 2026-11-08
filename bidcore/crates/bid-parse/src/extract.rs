@@ -497,6 +497,128 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
         s.is_empty() || s.matches('.').count() >= 6 || s.contains("……")
     };
 
+    // ---- #450（B-18）：页界噪声预计算（页码行 + 重复页眉/页脚）----
+    // 机制：pdftotext 页间插入页码行（「12」/「— 12 —」/「-第N⻚-」）与页眉/
+    // 页脚行（「XX 水库除险加固工程招标文件」）——段落扩展循环只看行内特征，
+    // 噪声被拼进条款 para_text（excerpt 污染 + 否决词被噪声行截断的
+    // missed 面）。识别后「不吞不截」：不进 para_text/anchors，但扩展
+    // 透明穿越（跨页条款整段还原，词表跨页匹配）。
+    // 保守护栏（识别不全好过误杀正文）：
+    //   页码行 = 全行仅页号数字 + 白名单装饰（裸数字/— N —/- N -/· N ·/
+    //   第 N 页/⻚/頁 形态，NFKC 先归一——康熙部首 ⾴→頁、全角落回半角；
+    //   CJK 部首区 ⻚ 无 NFKC 分解、白名单显式收编），且数字 == 本行
+    //   locator 页号（页号不匹配的数字行是正文，如「12 万元」被拆行后的
+    //   「12」）；
+    //   页眉/页脚 = 同一文本（≤40 字、非条款头/章节头/小节头/部分头、非
+    //   skip 行、尾非冒号）出现在 ≥3 个不同页的首 2 行或末 2 行（真件
+    //   实证：真页眉重复 3~122 页，巧合命中恰好 ≤2 页——阈值与护栏的
+    //   校准依据见下方 repeated_edges 注释）。
+    // 零激活纪律：单页文档/无页界噪声的输入上新逻辑完全沉默（与 #272
+    // 仲裁同款「新增面只在噪声形态在场时激活」）。
+    let page_noisy: std::collections::HashSet<usize> = {
+        let is_dressed_page_no = |t: &str, page: Option<u32>| -> bool {
+            let Some(p) = page else { return false };
+            // 先 NFKC 归一：康熙部首（⾴→頁）与全角（２８→28、－→-）落回常用形
+            let t = nfkc(t);
+            let t = t.trim();
+            if t.is_empty() {
+                return false;
+            }
+            // 页号必须是**单一连续数字游程**：「12」「— 12 —」「-第28⻚-」。
+            // 多游程是条款号/编号列举形态——实测误杀面（黑龙江 wenming 件
+            // 评分表单元格「2.1」在页 21：数字拼接「21」撞页号 → 裸拼接
+            // 会把条款号行当页码噪声 → 评分项 REQ 丢失 18→17）。
+            let mut runs = t.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty());
+            let digits = match (runs.next(), runs.next()) {
+                (Some(d), None) => d,
+                _ => return false,
+            };
+            let Ok(d) = digits.parse::<u32>() else { return false };
+            if d != p {
+                return false;
+            }
+            // 全行只剩数字 + 白名单装饰符（防「12.5」「12 万元」类正文误杀
+            // ——点号**不在**白名单：issue 形态清单「12 / — 12 — / - 12 - /
+            // · 12 · / 第 12 页」无点号形态，「21.」类条款号行不判）。
+            // ⻚（U+2EDA，CJK 部首区）无 NFKC 分解——真实政采 PDF 的
+            // ToUnicode 常把「页」映到 ⻚（实测黑龙江 batch1 页脚
+            // 「-第28⻚-」），白名单显式收编 ⻚/頁（⾴ 经 NFKC 已落为 頁）。
+            let dressed: String = t
+                .chars()
+                .filter(|c| !c.is_ascii_digit() && !"—–-－· \t第页⻚頁".contains(*c))
+                .collect();
+            dressed.trim().is_empty()
+        };
+        // 页序分组（保序——页号变化开新组；无页号的行不参与边缘统计）
+        let mut page_runs: Vec<(Option<u32>, Vec<usize>)> = Vec::new();
+        for (idx, b) in blocks.iter().enumerate() {
+            let page = crate::page_line_of(&b.locator).0;
+            match page_runs.last_mut() {
+                Some((last_page, members)) if *last_page == page => members.push(idx),
+                _ => page_runs.push((page, vec![idx])),
+            }
+        }
+        // 边缘候选计数：每页首 2 / 末 2 个行块的文本 → 跨页重复集合
+        let mut edge_counts: std::collections::HashMap<&str, std::collections::BTreeSet<u32>> =
+            std::collections::HashMap::new();
+        for (page, members) in page_runs.iter() {
+            let Some(p) = *page else { continue };
+            let line_members: Vec<usize> = members
+                .iter()
+                .copied()
+                .filter(|&idx| {
+                    matches!(blocks[idx].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                })
+                .collect();
+            if line_members.len() < 2 {
+                continue; // 单行页无边缘结构（也防单行页误配）
+            }
+            let mut edges: Vec<usize> = Vec::new();
+            edges.extend(line_members.iter().take(2));
+            edges.extend(line_members.iter().rev().take(2));
+            for idx in edges {
+                let t = blocks[idx].text.trim();
+                let is_head_form = re_clause.is_match(t)
+                    || re_chapter.is_match(&nfkc(t))
+                    || re_subsection.is_match(t)
+                    || re_part_head.is_match(t);
+                if t.is_empty()
+                    || is_head_form
+                    || t.chars().count() > 40
+                    || is_skip_line(t)
+                {
+                    continue;
+                }
+                edge_counts.entry(t).or_default().insert(p);
+            }
+        }
+        // 阈值 ≥3 页 + 尾随冒号不判——真件实证校准（探针全量统计）：
+        //   真页眉/页脚重复 3~122 页（水利卷标头 122/283 页、评审表头 5/76 页、
+        //   签署模板「年 月 日」11/76 页）；而黑龙江 batch1 的 ≥2 重复**全部**
+        //   为巧合命中（「采购包3：」2 页恰落两页页首、「序号 资格审查要求
+        //   概况…」表头 2 页）——2 页门槛会把包标签/表头误判噪声 → 段界
+        //   移动吞 REQ（实测 hq 件资格条件 32→28）。3 页门槛恰好把巧合面
+        //   全挡掉、真页眉（≥3 页）全覆盖；冒号护栏再防 3+ 页巧合的标签
+        //   形态（「采购包N：」「附件一：」是内容引入标签，非页缘家具）。
+        let repeated_edges: std::collections::HashSet<&str> = edge_counts
+            .into_iter()
+            .filter(|(t, pages)| {
+                pages.len() >= 3 && !t.ends_with('：') && !t.ends_with(':')
+            })
+            .map(|(t, _)| t)
+            .collect();
+        blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                matches!(b.kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                    && (is_dressed_page_no(&b.text, crate::page_line_of(&b.locator).0)
+                        || repeated_edges.contains(b.text.trim()))
+            })
+            .map(|(idx, _)| idx)
+            .collect()
+    };
+
     let n = blocks.len();
     // para_end[i]：行 i 所在段落的末行（含自身）；para_start[i]：首行。
     // 段落成员行（para_start[i] < i）由首行统一处理（防段落尾行双抽）。
@@ -504,7 +626,12 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     let mut para_start = vec![0usize; n];
     let mut i = 0usize;
     while i < n {
-        if !matches!(blocks[i].kind, BlockKind::PdfLine | BlockKind::OcrLine) || is_skip_line(blocks[i].text.trim()) {
+        if !matches!(blocks[i].kind, BlockKind::PdfLine | BlockKind::OcrLine) || is_skip_line(blocks[i].text.trim())
+            // #450（B-18）：噪声行不做段头——做段头会让真续行沦为
+            // 非首成员被主循环去重丢弃（整段内容损失）；噪声行独立
+            // 成组（para_start=para_end=自身），主循环另按噪声集跳过。
+            || page_noisy.contains(&i)
+        {
             para_end[i] = i;
             para_start[i] = i;
             i += 1;
@@ -517,10 +644,18 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             if ends_sentence(cur) {
                 break;
             }
-            let Some(next) = blocks.get(j + 1) else { break };
+            // #450（B-18）：向后找真续行——页界噪声行透明穿越（不吞不截：
+            // 噪声不进文本，但也不截断条款——跳过连续噪声后看真行的
+            // 可拼接性；跳过位置（噪声区间）落入段落成员范围，由
+            // para_text/para_anchors 统一排除）。
+            let mut k = j + 1;
+            while k < n && page_noisy.contains(&k) {
+                k += 1;
+            }
+            let Some(next) = blocks.get(k) else { break };
             if !matches!(next.kind, BlockKind::PdfLine | BlockKind::OcrLine)
                 || is_skip_line(next.text.trim())
-                || is_clause_start(j + 1, next.text.trim())
+                || is_clause_start(k, next.text.trim())
                 // #68 阶段 4（G——根因修复）：列举条目行强制断段。missed 样例：
                 // 「5.1.1 形式评审标准：（见附表三：评标表-4）」尾缀 ）非终结
                 // 标点 → ⑴⑵⑶ 审查条目被拼进编号段 → 段落去重吞掉条目、
@@ -530,7 +665,7 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             {
                 break;
             }
-            j += 1;
+            j = k;
         }
         for k in i..=j {
             para_end[k] = j;
@@ -542,7 +677,10 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     let para_text = |start: usize, end: usize| -> String {
         let mut s = String::new();
         for k in start..=end {
-            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine) {
+            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                // #450（B-18）：页界噪声不拼进段落文本（excerpt 保真）
+                && !page_noisy.contains(&k)
+            {
                 s.push_str(blocks[k].text.trim());
             }
         }
@@ -551,7 +689,10 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     // 段落 anchors（每行一个，excerpt 保真）
     let para_anchors = |start: usize, end: usize| -> Vec<Anchor> {
         (start..=end).filter_map(|k| {
-            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine) {
+            if matches!(blocks[k].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                // #450（B-18）：噪声行不是条款内容——不产锚（防回查噪声）
+                && !page_noisy.contains(&k)
+            {
                 Some(anchor(f, &blocks[k]))
             } else {
                 None
@@ -679,6 +820,11 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
         }
         // #266 语义表/值行接管：同款区域跳过
         if sem_consumed.contains(&i) {
+            continue;
+        }
+        // #450（B-18）：页界噪声行不进主循环（不分类不 REQ）——此前裸
+        // 页码行可经碎片过滤漏网成 junk、页眉行成独立 junk REQ
+        if page_noisy.contains(&i) {
             continue;
         }
         let t = b.text.trim();
