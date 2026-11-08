@@ -237,7 +237,7 @@ fn single_mapping_share_one_matches_history() {
 /// + notes 响亮告警。
 #[test]
 fn unmapped_items_structured_and_loud() {
-    let mut s = store_base(); // REQ-0001/0002 均无 params.section、无账本映射
+    let s = store_base(); // REQ-0001/0002 均无 params.section、无账本映射
     let tree_nodes = bid_domain::scoring::derive_scoring_tree(&s.requirements().to_vec());
     let scorer = SectionScorer::new(tree_nodes, vec![]);
     let doc = scorer.score_document(&[("SEC-01".into(), "写了一点技术方案内容。".into())], None);

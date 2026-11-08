@@ -185,7 +185,7 @@ pub fn line_too_long_tool_reply(limit: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Cursor, Read};
+    use std::io::Cursor;
 
     /// 强制小窗口读取器：fill_buf 每次最多吐 chunk 字节——把「窗口内无换行」
     /// 多窗口路径压出来（Cursor 一次全吐，测不到该路径）。

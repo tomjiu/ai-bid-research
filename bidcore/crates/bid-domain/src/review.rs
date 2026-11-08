@@ -1140,7 +1140,7 @@ mod tests {
         assert!(rec.principal.is_none(), "legacy 快照 principal 缺席 → None");
         assert_eq!(rec.reviewer, "human:zhang");
         // 裁决面宽容：gate_approved 消费既有 Approved（不回溯失效）
-        let mut s = store_at_matrix_ready();
+        let s = store_at_matrix_ready();
         let mut snap = s.to_snapshot();
         snap.reviews.push(rec);
         let restored = DomainStore::restore(snap).unwrap();
