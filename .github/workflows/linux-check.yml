@@ -74,7 +74,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            poppler-utils tesseract-ocr tesseract-ocr-chi-sim
+            poppler-utils poppler-data tesseract-ocr tesseract-ocr-chi-sim
           pdftotext -v
           pdfinfo -v
           pdftoppm -v
@@ -84,6 +84,27 @@ jobs:
             exit 1
           fi
           tesseract --list-langs 2>/dev/null | grep chi_sim
+
+      - name: Verify Poppler CJK mapping (B1 text-layer fixture)
+        # --no-install-recommends omits poppler-data: pdftotext can return 0
+        # with empty text for Adobe-GB1. Verify real text before the m1 chain.
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          source = Path("fixtures/corpus-A/files/B1-设备清单.pdf")
+          result = subprocess.run(
+              ["pdftotext", "-layout", "-enc", "UTF-8", str(source), "-"],
+              capture_output=True, text=True, check=True,
+          )
+          cjk_chars = sum("\u4e00" <= ch <= "\u9fff" for ch in result.stdout)
+          if not result.stdout.strip() or cjk_chars == 0:
+              print("::error::B1 text-layer PDF produced no CJK text; check poppler-data CMap installation")
+              print(result.stderr)
+              raise SystemExit(1)
+          print(f"Poppler CJK mapping verified: chars={len(result.stdout.strip())}, CJK={cjk_chars}")
+          PY
 
       - name: Install gtk/webkit dev (mang-app Linux 构建件)
         # mang-app 的 tao/wry Linux 后端需要 gtk+-3.0 / webkit2gtk-4.1 的
