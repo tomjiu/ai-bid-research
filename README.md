@@ -29,17 +29,23 @@ P7 复核  → record_review_gate（签域四重绑定 + 提交就绪面）
 P8 导出  → export_bid_document（篇幅门 + 矩阵 blocking 清零）
 ```
 
-### 31 个 MCP 工具
+### 44 个 MCP 工具
 
 ```
 建项导入（2）：create_bid_project / import_tender_files
-抽取矩阵（3）：extract_requirements / get_compliance_matrix / set_matrix_override
+抽取矩阵（6）：extract_requirements / get_compliance_matrix / set_matrix_override
+              / get_requirement_provenance / get_block_requirements
+              / get_annotation_overlay（#285② 块级双向索引对账族）
 建纲篇幅（2）：build_outline / recommend_length_profile
 证据（4）：list_evidence / register_evidence / bind_evidence / search_evidence
-起草（5）：draft_response_section / append_section_segment / 
-            rewrite_section_segment / list_section_segments / validate_bid_document
+起草（7）：draft_response_section / append_section_segment /
+            rewrite_section_segment / list_section_segments /
+            register_addendum_changes / rewrite_section_partial（#319 补遗增量重写）
+            / validate_bid_document
 复核评分（6）：record_review_gate / record_addendum_waiver / check_bid_quality
               / score_price / score_section / score_document
+RT 生命周期（7）：assign_revision / advance_revision / complete_revision
+              / batch_task / advance_task / reopen_section / set_param_responses（#321）
 全块覆盖（4）：get_document_chunks / submit_block_marks / get_coverage_report
               / get_star_coverage（★漏标检测）
 状态恢复（3）：get_bid_project_state / save_version / recover_validating_state
@@ -47,6 +53,8 @@ P8 导出  → export_bid_document（篇幅门 + 矩阵 blocking 清零）
 导出（1）：export_bid_document
 发现（1）：list_tools
 ```
+
+（工具面持续演进——以 `list_tools` / `tools/list` 应答为准，#278。）
 
 ### 篇幅档位（四档）
 
