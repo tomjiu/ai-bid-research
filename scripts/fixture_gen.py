@@ -403,14 +403,17 @@ def gen_engine_borrowed(out: Path) -> dict:
 def gen_carried_fixtures(out: Path) -> dict:
     """携带夹具面（#559）：手工制作、非生成器产物的治理域内夹具。
 
-    目前一枚：`corpus-A/files/澄清修改文件-3.1.1.docx`（#425 真实命名补遗
+    目前两枚：`corpus-A/files/澄清修改文件-3.1.1.docx`（#425 真实命名补遗
     夹具——merge_kind_gate_tool.rs 消费；scripts/make_425_addendum.py 可
-    再生成）。它住在 manifest 治理域内但不是生成器产物——本携带面在
-    --out 临时目录模式下字节级复制它（与 gen_engine_borrowed 同款纪律：
-    sha256 恒定），使 T6 再生成比对（仓内 ↔ 临时 manifest 全等）成立。
+    再生成）与 `corpus-A/ground-truth/meta.json`（#491/A-20③ 开标日
+    真源——bid-grade fixtures.rs 消费，缺失回退硬编码）。它们住在 manifest
+    治理域内但不是生成器产物——本携带面在 --out 临时目录模式下字节级
+    复制（与 gen_engine_borrowed 同款纪律：sha256 恒定），使 T6 再生成
+    比对（仓内 ↔ 临时 manifest 全等）成立。
     """
     carried = [
         "corpus-A/files/澄清修改文件-3.1.1.docx",
+        "corpus-A/ground-truth/meta.json",
     ]
     copied = 0
     for rel in carried:

@@ -49,7 +49,7 @@ SCENARIOS = ("TC-01", "TC-02", "TC-07", "TC-11")
 #   + 5 TR2 引擎借鉴夹具（PR #15 引入：word-complex/word-merged/excel-complex + gen-log + PROVENANCE）
 EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 4 + len(S.TRANSITIONS) + 2 + 2 + 1
                            + len(R.OUTPUT_FILES) + 5
-                           + 1)  # #559：澄清修改文件-3.1.1.docx（#425 真实命名补遗夹具——携带面，见 fixture_gen.gen_carried_fixtures）
+                           + 2)  # #559：澄清修改文件-3.1.1.docx（#425）+ ground-truth/meta.json（#491/A-20③）——携带面，见 fixture_gen.gen_carried_fixtures
 _RULE_CODES = ["CERT_EXPIRED", "PRICE_EXCEEDS_BUDGET", "DURATION_MISMATCH", "PAGE_LIMIT",
                "MISSING_SIGNATURE", "DARK_BID_WORD", "TODO_RESIDUE", "INJECTION_PATTERN"]
 _ECHO_RE = None  # 延迟编译（防 import 顺序）
