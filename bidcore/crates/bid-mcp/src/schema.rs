@@ -678,15 +678,16 @@ fn input_schema(name: &str) -> Value {
         }),
         "record_addendum_waiver" => json!({
             "type": "object",
-            "description": "招标包输入件不就绪的逐件人工确认（#184 补遗分级阻塞 + 地图 P0-1 扩面到主件/附件）：任一输入件不处 READY（FAILED/OCR_PENDING）时 draft_response_section 被拒；人工继续必须逐件确认到具体 file_id（非全局布尔）。确认即审计面（file_id/reason/at/principal + actor + #277 过门方式）；放行后起草标 RESTRICTED（受限起草，不静默当完整输入）",
+            "description": "招标包输入件不就绪的逐件人工确认（#184 补遗分级阻塞 + 地图 P0-1 扩面到主件/附件）：任一输入件不处 READY（FAILED/OCR_PENDING）时 draft_response_section 被拒；人工继续必须逐件确认到具体 file_id（非全局布尔）。确认即审计面（file_id/reason/at/principal + actor + #277 过门方式）；放行后起草标 RESTRICTED（受限起草，不静默当完整输入）。#379 拆门：confirm_no_addendum=true = 「本项目无补遗」的全局显式确认（NotProvided 阻塞的唯一出口——逐件 waiver 不再顺手解除它）；两种语义互斥",
             "properties": {
                 "project_id": pid,
-                "file_id": {"type": "string", "description": "TF-* 输入件 id（须真实存在——import 响应 addendum_readiness.not_ready[].file_id 或任何不就绪件；receipt 签域绑定本件）"},
+                "file_id": {"type": "string", "description": "TF-* 输入件 id（须真实存在——import 响应 addendum_readiness.not_ready[].file_id 或任何不就绪件；receipt 签域绑定本件）。confirm_no_addendum=true 时不得携带"},
                 "reason": {"type": "string", "description": "确认理由（非空白——不可审计的确认不成确认；#277 agent 声明路径同构：为什么可以过这个门）"},
-                "receipt": {"type": "string", "description": "#182 宿主签发的审批回执（人类签域 addendum_waiver:<file_id>，件级绑定）——principal 参数已废除，Agent 不得伪造；#277 agent 声明走 agent 签域（addendum_waiver:<file_id>:agent + actor_type=agent），须工作区 require_human_receipt=false"},
+                "receipt": {"type": "string", "description": "#182 宿主签发的审批回执（人类签域 addendum_waiver:<file_id>，件级绑定）——principal 参数已废除，Agent 不得伪造；#277 agent 声明走 agent 签域（addendum_waiver:<file_id>:agent + actor_type=agent），须工作区 require_human_receipt=false；#379 全局确认签域 no_addendum_confirmed"},
+                "confirm_no_addendum": {"type": "boolean", "description": "#379：true = 全局确认「本项目无补遗」（NotProvided 阻塞的人工出口；项目已有补遗件时响亮拒——那是逐件确认/修复重传的场）；缺省 false = 逐件免责（须携带 file_id）"},
                 "project_version": pv
             },
-            "required": ["project_id", "file_id", "reason", "receipt"]
+            "required": ["project_id", "reason", "receipt"]
         }),
         "score_price" => json!({
             "type": "object",
@@ -844,7 +845,7 @@ pub(crate) fn describe(name: &str) -> &'static str {
         "register_evidence" => "证据登记（G2——语义位查重/换版；MATRIX_READY+；#185 来源验证：source_file_id 须指向已导入文件，sha256/指纹由服务端生成；带 locator 且对账通过 → CONTENT_MATCHES + 正文摘录入账，缺省文件级锚 → FILE_EXISTS（#217 四态）；#245 占位：placeholder=true → PLACEHOLDER 占位/待核验——可绑定但不清合规阻塞（矩阵 PENDING_EVIDENCE 待补）、不得声称资质已具备，升级 = 换版重登；verification_tier 不可自报；业绩类可带 client/amount_wan/completed_on 业务面；结构化字段走可选 fields 对象）",
         "bind_evidence" => "证据批量绑定 + 矩阵重算（G2——EXPIRED 禁绑；MATRIX_READY+）",
         "record_review_gate" => "三门记审（G3——matrix/outline/pre_export；#182 receipt 验签——人工确认由宿主签发 receipt 提供；#277 agent 声明过门走 :agent 签域 + reason 必填，留痕 + 导出警告 + 可追认）",
-        "record_addendum_waiver" => "补遗逐件人工确认（#184——分级阻塞的免责面；#182 receipt 验签（签域绑定 file_id）；FILES_IMPORTED+）",
+        "record_addendum_waiver" => "补遗逐件人工确认（#184——分级阻塞的免责面；#182 receipt 验签（签域绑定 file_id）；FILES_IMPORTED+；#379 起 confirm_no_addendum=true 为全局无补遗显式确认——两种语义互斥，逐件 waiver 不再顺手解除 NotProvided）",
         "set_matrix_override" => "人工覆写条款响应状态（#226——否决项死锁出口；NOT_APPLICABLE 必带理由；覆写即重算矩阵；MATRIX_READY+）",
         "recover_validating_state" => "历史异常态恢复（#243——VALIDATING+缺章回 DRAFTING；三重约束 + 审计账；仅 VALIDATING 态）",
         "score_price" => "价格分试算 + 最优报价反推（#100 任务 3——纯计算器，B1 五方法只调用不改）",

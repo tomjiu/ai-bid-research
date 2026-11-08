@@ -375,7 +375,7 @@ impl Blocker {
                 missing.join("；")
             ),
             Blocker::MissingAddendum { files, reason } => match reason {
-                AddendumIssue::NotProvided => "未发现补遗/澄清文件——若本项目曾发过澄清答疑，现行条款可能已被修改。请补充导入补遗件，或明确确认本项目无补遗后再继续".to_string(),
+                AddendumIssue::NotProvided => "未发现补遗/澄清文件——若本项目曾发过澄清答疑，现行条款可能已被修改。请补充导入补遗件，或明确确认本项目无补遗后再继续（#379 起：全局确认走 record_addendum_waiver 的 confirm_no_addendum=true——对具体输入件的逐件确认不再解除本阻塞）".to_string(),
                 AddendumIssue::ParseFailed => format!(
                     "补遗/澄清文件解析失败：{}——补遗里有对条款的实质性修改（控制价/截止时间/参数/评分办法），读不了就等于没收到，按现有条款做标会直接废标。请修复重传，或逐件人工确认后放行（record_addendum_waiver）",
                     format_not_ready_files(files)
@@ -1086,13 +1086,17 @@ fn missing_addendum(store: &DomainStore) -> Option<Blocker> {
 
     let statuses = addendum_statuses(store);
 
-    // ② 一件补遗都没有——L3 阻塞的人工出口：AddendumWaiver 门 Approved
-    //    = 人工确认本项目无补遗（#131 真实语料验证：此前该确认通路不存在，
-    //    单件真实招标文件被死锁——阻塞提示语承诺的「明确确认无补遗后再
-    //    继续」在此落地）。导入补遗件后本分支不再触发，waiver 自然失效。
+    // ② 一件补遗都没有——L3 阻塞的人工出口：NoAddendumConfirmed 门
+    //    Approved = 人工**显式**确认本项目无补遗（#379 拆门——对无关件
+    //    做逐件 waiver 不再顺手解除本阻塞：那是「不知道≠没有」防线的
+    //    旁路，R-07/A-04）。AddendumWaiver 门 OR 兼容消费 = 旧快照迁移
+    //    纪律（#379 前的确认无法区分语义，已放行项目不回锁）。
+    //    导入补遗件后本分支不再触发，确认自然失效。
     //    （#184 语义不变：全局门只救 NotProvided——不掩蔽任何不就绪件。）
     if statuses.is_empty() {
-        if store.gate_approved(bid_domain::review::Gate::AddendumWaiver) {
+        if store.gate_approved(bid_domain::review::Gate::NoAddendumConfirmed)
+            || store.gate_approved(bid_domain::review::Gate::AddendumWaiver)
+        {
             return None;
         }
         return Some(Blocker::MissingAddendum {

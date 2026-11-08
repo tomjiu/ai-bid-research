@@ -13,12 +13,15 @@
 | 矩阵定稿门 | `matrix_approval` | 条款响应矩阵定稿——先定「响应什么」 | MATRIX_READY / EVIDENCE_BOUND / DRAFTING（VALIDATING+ 不再受理——门要在窗口内过） | 无 |
 | 章节树定稿门 | `outline_approval` | 大纲定稿——再定「怎么组织」 | 非 Draft/FilesImported 早期态 | 矩阵门先 Approved |
 | 导出前确认门 | `pre_export_confirm` | 付印前最后一道人眼 | 无状态门 | 前两门均 Approved |
-| 无补遗确认门 | `addendum_waiver` | 单件招标文件（无补遗件）的人工出口——Approved = 确认本项目无补遗 | 无窗口限制（导入后任意时刻可记） | 无（与三门正交，不入导出门序） |
+| 无补遗确认门（legacy） | `addendum_waiver` | #379 前的混语义门——新调用不再写它；旧快照既有 Approved 由 ② 分支 OR 兼容消费（不回锁） | 无窗口限制 | 无（与三门正交，不入导出门序） |
+| 无补遗确认门（#379） | `no_addendum_confirmed` | 单件招标文件（无补遗件）的人工出口——**只有** `record_addendum_waiver` 的 `confirm_no_addendum:true` 显式确认才写；对非补遗件逐件 waiver 不解除 NotProvided | 无窗口限制（导入后任意时刻可记） | 无（与三门正交，不入导出门序） |
 
 跳门/乱序记审 → `E_STATE` typed reject（零副作用）——这就是「绕过门」的
-裁决面。`addendum_waiver` 只解 MissingAddendum 阻塞（单件无补遗场景）；
-补遗件**在场**的不就绪件走 `record_addendum_waiver` 逐件确认（见
-`p1-import.md`「补遗分级门」），waiver 不掩蔽解析失败件。
+裁决面。`no_addendum_confirmed`（#379）只解「未发现补遗/澄清文件」阻塞
+（单件无补遗场景的**显式全局确认**——`record_addendum_waiver` 带
+`confirm_no_addendum:true`，签域 `no_addendum_confirmed`）；补遗件**在场**
+的不就绪件走 `record_addendum_waiver` 逐件确认（见 `p1-import.md`
+「补遗分级门」），waiver 不掩蔽解析失败件、也不解除 NotProvided。
 
 ## 调用形（record_review_gate）
 
@@ -59,7 +62,9 @@ v2.<actor_id>.<actor_type>.<scope>.<issued_at_unix_secs>.<sections_digest>.<hex_
   不进 MCP 工具表——Agent 拿不到密钥**。你的职责是把「请人工确认某门」
   交给用户，由宿主界面完成确认并回填 receipt；
 - **scope 门级绑定**：`review_gate:{gate}`——A 门的 receipt 过不了 B 门
-  （`record_addendum_waiver` 的签域是 `addendum_waiver:{file_id}`，件级绑定）；
+  （`record_addendum_waiver` 逐件签域是 `addendum_waiver:{file_id}` 件级
+  绑定；#379 全局确认签域是 `no_addendum_confirmed`——逐件 receipt 免不
+  了全局确认，反之亦然）；
 - **时效窗**：`issued_at ∈ [now-86400, now+60]`——24h 有效期防陈旧重放，
   +60s 容差吸收宿主/服务侧时钟微漂；
 - **HMAC-SHA256 常量时间比对**——时序侧信道不泄漏签名前缀信息；

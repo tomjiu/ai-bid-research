@@ -66,7 +66,9 @@ fn now_epoch_secs() -> u64 {
 /// 审核门（T-7 规格；issue #11 批次 v3 / V3-4）。三道门对应人类团队评审：
 /// 矩阵定稿门（条款响应矩阵）/ 章节树定稿门（大纲）/ 导出前确认门。
 /// 另有第四道独立闸门 [`Gate::AddendumWaiver`]（无补遗确认——#131 真实
-/// 语料验证落地的 L3 人工出口，不入三道主门的门序链）。
+/// 语料验证落地的 L3 人工出口，不入三道主门的门序链）与第五道
+/// [`Gate::NoAddendumConfirmed`]（#379 拆门——「本项目无补遗」的**全局**
+/// 显式确认，与逐件免责语义分离）。
 ///
 /// `as_str` 取规格原文蛇形（`matrix_approval` 等——门名/错误消息的引用口径）；
 /// serde 形随库惯例 SCREAMING_SNAKE_CASE（持久化面），两形并存各司其职。
@@ -83,7 +85,22 @@ pub enum Gate {
     /// Approved = 人工确认本项目无补遗（`missing_addendum` 放行）；
     /// 与三道主门正交：无状态门、无门序前置（导入后任意时刻可记）。
     /// 导入补遗件后走正常判定，waiver 不再被消费（自然失效）。
+    ///
+    /// #379 语义收缩：本门是 **legacy/兼容面**——#379 前的
+    /// `record_addendum_waiver` 对任意件（含非补遗件）无条件写本门，
+    /// 导致「逐件免责」与「全局无补遗确认」两种语义混写。修复后：
+    /// · 新的全局确认一律写 [`Gate::NoAddendumConfirmed`]；
+    /// · `readiness::missing_addendum` ② 分支 OR 消费两门（旧快照已
+    ///   放行项目不回锁——issue #379 纪律：迁移不得造成回锁）；
+    /// · `record_addendum_waiver` 逐件路径不再写本门（台账照写）。
     AddendumWaiver,
+    /// 「本项目无补遗」全局确认门（#379 拆门——R-07/A-04 修复）：
+    /// 只有**显式**的 no-addendum 确认（`record_addendum_waiver` 的
+    /// `confirm_no_addendum:true` 路径 / 域层 `confirm_no_addendum`）才写
+    /// 本门。对无关输入件做逐件 waiver 不再顺手解除 NotProvided 阻塞
+    /// （#131/#184 的「不知道≠没有」防线不被旁路）。与 AddendumWaiver
+    /// 同窗：无状态门、无门序前置；导入补遗件后走正常判定（自然失效）。
+    NoAddendumConfirmed,
 }
 
 impl Gate {
@@ -93,6 +110,7 @@ impl Gate {
             Gate::OutlineApproval => "outline_approval",
             Gate::PreExportConfirm => "pre_export_confirm",
             Gate::AddendumWaiver => "addendum_waiver",
+            Gate::NoAddendumConfirmed => "no_addendum_confirmed",
         }
     }
 }
@@ -434,6 +452,9 @@ impl DomainStore {
             // 人工出口，与三道主门正交（导入后任意状态可确认；记审语义与
             // 主门一致：Approved 是里程碑事实，Rejected 是过程记录）
             Gate::AddendumWaiver => {}
+            // 「本项目无补遗」全局确认门（#379）：与 AddendumWaiver 同窗——
+            // 无状态门、无门序前置（L3 人工出口，与三道主门正交）
+            Gate::NoAddendumConfirmed => {}
         }
 
         // ---- 4. findings 形状（诚实状态：空分类/空消息的发现是无效记录）
@@ -624,6 +645,8 @@ impl DomainStore {
             Gate::OutlineApproval,
             Gate::PreExportConfirm,
             Gate::AddendumWaiver,
+            // #379：全局无补遗确认的 agent 声明同样入审计面（导出警告判据）
+            Gate::NoAddendumConfirmed,
         ]
         .iter()
         .filter_map(|g| self.latest_gate_pass(*g))
@@ -815,6 +838,9 @@ fn missing_gate_attempted(gate: Gate) -> &'static str {
         // AddendumWaiver 不入 export_allowed 的三门遍历（#131：它是 L3 阻塞的
         // 人工确认出口，不是导出门序的一环）——显式点名而非通配，保穷尽性
         Gate::AddendumWaiver => "export_allowed——addendum_waiver 不属导出门序（不可达）",
+        // NoAddendumConfirmed 同上（#379 拆门：全局无补遗确认是 L3 出口，
+        // 不是导出门序一环）
+        Gate::NoAddendumConfirmed => "export_allowed——no_addendum_confirmed 不属导出门序（不可达）",
     }
 }
 
