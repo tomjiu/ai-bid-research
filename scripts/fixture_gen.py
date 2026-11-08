@@ -46,7 +46,13 @@ FIXTURES = REPO / "fixtures"
 
 pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
 CN_FONT = "STSong-Light"
-NOTO_PATH = "/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf"
+# #565：NOTO_PATH 动态解析（BID_RENDER_FONT → data/fonts/ → Linux 钉版路径），
+# 缺字体时友好报错（裸 OSError: cannot open resource 无补装指引，CI 实证过）。
+NOTO_FONT = S.resolve_render_font()
+if NOTO_FONT is None:
+    print(f"[fixture_gen] {S.RENDER_FONT_HINT}", file=sys.stderr)
+    raise SystemExit(2)
+NOTO_PATH = str(NOTO_FONT)
 # 字体事实记录（2026-10-24 发现）：NotoSansSC[wght].ttf 可变字体在 PIL 下渲染为全空白
 # （FreeType 变量轴实例化失败——0 个暗像素），B2 曾因此生成“只有公章没有文字”的空扫描页；
 # reportlab+B1 不受影响（用内置 CID 字体）。B2 改用静态字体 + 像素级自证断言。
