@@ -17,7 +17,7 @@
   `in : { project_id, filters:{...}, cursor?, limit?, page?(仅矩阵兼容) }`；
   `out: { rows|items, total(过滤后总数), limit(生效页宽), cursor(本次生效游标), next_cursor: string|null }`，`next_cursor=null` 即取完，原样回传取下一页。
   游标规则（fail-closed）：opaque base64（内嵌版本字节/偏移/过滤器指纹）；跨过滤器或跨工具复用游标 → `E_UNPROCESSABLE`；limit 合法域 1..=1000、缺省 100，越界/非整数**显式拒**（不静默 clamp）；游标损坏/版本不认识/偏移越界（底层列表已变化）→ `E_UNPROCESSABLE`。行序确定性（矩阵=条款位置序 CMP-0001..N；证据=id 字典序；任务=target_id 字典序）是分页安全前提，不得破坏。
-- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22，篇幅档位推荐）后工具面 31；#285① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 32；#285② 块级双向索引三工具 `get_requirement_provenance` / `get_block_requirements` / `get_annotation_overlay`（§22 对账族）后工具面 35；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§24，DIRTY 章节局部改写 + 局部复验）后工具面 37；#321 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（assign_revision / advance_revision / complete_revision / batch_task / advance_task / reopen_section / set_param_responses）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
+- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22-A，篇幅档位推荐）后工具面 31；#285① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 32；#285② 块级双向索引三工具 `get_requirement_provenance` / `get_block_requirements` / `get_annotation_overlay`（§22 对账族）后工具面 35；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§25，DIRTY 章节局部改写 + 局部复验）后工具面 37；#321 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（assign_revision / advance_revision / complete_revision / batch_task / advance_task / reopen_section / set_param_responses）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
 
 ## 1. create_bid_project
 ```
@@ -573,7 +573,7 @@ in : { project_id, length_profile?("practical"|"standard"|"conservative"|"maximu
        target_total_chars?(1000..=5000000, 直接给字数覆盖档位),
        max_reqs_per_leaf?(1..=50, 缺省 8),
        package?(#316 选包建纲——PKG id「PKG-02」/原文标签「第2包」/纯序号「2」
-       三口径任一；先用 §23 list_packages 查识别结果；共用条款自动进纲；
+       三口径任一；先用 §24 list_packages 查识别结果；共用条款自动进纲；
        「投全部」= 每包各建一个项目——单存储单大纲的边界，如实呈现),
        project_version }
        三者优先（#287）：target_total_chars 显式给 → 用它；length_profile
@@ -1235,7 +1235,7 @@ out: { count, tools: [{ name, summary }...],
       全量）；本工具是 stdio 裸 JSON 行协议的发现面补口。
 ```
 
-## 22. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+## 22-A. recommend_length_profile（#287 篇幅档位推荐 · 只读）
 ```
 in : { project_id }
 out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
@@ -1271,7 +1271,7 @@ out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
 
 ## 23. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
 
-## 26. list_packages（#316 分包清单 · 只读）
+## 24. list_packages（#316 分包清单 · 只读）
 
 > 背景：真实招标常分包（batch2 实证：`…-第2包.doc`），一包一投或全投；
 > 引擎在 extract_requirements 时按三形态识别（文件名/章节结构/分包清单
