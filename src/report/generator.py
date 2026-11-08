@@ -12,23 +12,35 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
+
+if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期导入，避免运行时强耦合
+    from src.storage.database import BidDatabase
 
 logger = logging.getLogger(__name__)
 
 # 文件名中的非法字符清理
 _UNSAFE_FILENAME_RE = re.compile(r"[^\w\-]+")
 
+# Markdown 表格分隔行（如 |---|---| 或 | :---: | ---: |）
+_TABLE_SEPARATOR_RE = re.compile(
+    r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$"
+)
+
 
 class ReportGenerator:
     """基于 LLM 的投标研究报告生成器。
 
+    可选接入 :class:`~src.storage.database.BidDatabase` 作为数据源，
+    使竞争态势报告基于真实项目清单、单项目报告支持按编号自动取数。
+
     Attributes:
         llm: LLM 客户端实例。
         output_dir: 报告输出目录。
+        db: 可选的招标信息数据库。
     """
 
     #: 导出 HTML 时的页面模板（{title}/{generated_at}/{body} 为占位符）
@@ -88,33 +100,49 @@ class ReportGenerator:
         self,
         llm_client: Optional[LLMClient] = None,
         output_dir: Union[str, Path] = "output/reports",
+        db: Optional["BidDatabase"] = None,
     ) -> None:
         """初始化报告生成器。
 
         Args:
             llm_client: LLM 客户端；缺省时新建默认 :class:`LLMClient`。
             output_dir: 报告输出目录，不存在时自动创建。
+            db: 可选的招标信息数据库；接入后报告将基于库内真实数据。
         """
         self.llm = llm_client or LLMClient()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.db = db
 
     # ------------------------------------------------------------------
     # 报告生成
     # ------------------------------------------------------------------
 
     async def generate_bid_report(
-        self, bid_id: str, analysis_data: Dict[str, Any]
+        self, bid_id: str, analysis_data: Optional[Dict[str, Any]] = None
     ) -> Path:
         """生成单个招标项目的投标分析报告。
 
         Args:
             bid_id: 招标项目编号（用于报告标识与文件名前缀）。
-            analysis_data: 该项目的结构化分析数据（抽取结果等）。
+            analysis_data: 该项目的结构化分析数据；为 ``None`` 且已
+                接入数据库时按 ``bid_id`` 自动取数。
 
         Returns:
             已保存的 Markdown 报告文件路径。
+
+        Raises:
+            ValueError: 既无 ``analysis_data`` 也未接入数据库时。
+            LookupError: 数据库中不存在该编号时。
         """
+        if analysis_data is None:
+            if self.db is None:
+                raise ValueError(
+                    "analysis_data 为空且未接入数据库，无法生成报告"
+                )
+            analysis_data = self.db.get_bid(bid_id)  # type: ignore[union-attr]
+            if analysis_data is None:
+                raise LookupError(f"数据库中不存在招标编号: {bid_id}")
         prompt = PromptTemplates.report_generation(
             json.dumps(analysis_data, ensure_ascii=False, indent=2)
         )
@@ -140,6 +168,9 @@ class ReportGenerator:
     ) -> Path:
         """生成指定关键词近期项目的竞争态势报告。
 
+        接入数据库时基于库内真实项目清单；未接入时退化为占位提示，
+        由模型基于通用行业知识作答。
+
         Args:
             keyword: 检索关键词（行业领域或产品名）。
             days: 回溯天数，用于限定竞争数据的时间窗口。
@@ -147,9 +178,29 @@ class ReportGenerator:
         Returns:
             已保存的 Markdown 报告文件路径。
         """
+        data_source = f"通用行业知识（未接入本地数据库）"
+        if self.db is not None:
+            bid_rows = self.db.query_bids(keyword=keyword, days=days)  # type: ignore[union-attr]
+            data_source = f"本地数据库 {len(bid_rows)} 条项目记录"
+            if bid_rows:
+                bid_list = "\n".join(
+                    f"- {row.get('publish_date') or '日期未知'} | "
+                    f"{row.get('project_name')}（编号 {row.get('bid_id')}，"
+                    f"预算 {row.get('budget') if row.get('budget') is not None else '未知'}，"
+                    f"地区 {row.get('region') or '未知'}，"
+                    f"中标人：{row.get('winner') or '未开标'}）"
+                    for row in bid_rows
+                )
+            else:
+                bid_list = (
+                    f"数据库中关键词「{keyword}」近 {days} 天无记录，"
+                    "请基于行业通用情况作答并明确说明数据缺口。"
+                )
+        else:
+            bid_list = f"（关键词「{keyword}」近 {days} 天的招标与中标项目清单）"
+
         prompt = PromptTemplates.competitor_analysis(
-            keyword=keyword,
-            bid_list=f"（关键词「{keyword}」近 {days} 天的招标与中标项目清单）",
+            keyword=keyword, bid_list=bid_list
         )
         content = await self.llm.chat(
             [
@@ -161,6 +212,7 @@ class ReportGenerator:
         report = (
             f"# 竞争态势报告：{keyword}\n\n"
             f"- 统计窗口：近 {days} 天\n"
+            f"- 数据来源：{data_source}\n"
             f"- 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             "---\n\n"
             f"{content}\n"
@@ -226,8 +278,8 @@ class ReportGenerator:
     def markdown_to_html(markdown_text: str) -> str:
         """将报告使用的 Markdown 子集转换为 HTML。
 
-        支持语法：标题（``#``~``####``）、无序/有序列表、粗体、行内代码、
-        代码块、引用块、水平线与段落。
+        支持语法：标题（``#``~``####``）、无序/有序列表、表格、粗体、
+        行内代码、代码块、引用块、水平线与段落。
 
         Args:
             markdown_text: Markdown 文本。
@@ -238,7 +290,7 @@ class ReportGenerator:
         lines = markdown_text.splitlines()
         blocks: list[str] = []
         buffer: list[str] = []
-        list_type: str | None = None  # "ul" | "ol" | "quote" | "pre"
+        list_type: str | None = None  # "ul" | "ol" | "quote" | "pre" | "table"
 
         def flush() -> None:
             nonlocal buffer, list_type
@@ -264,6 +316,8 @@ class ReportGenerator:
                 blocks.append(f"<blockquote>{quote}</blockquote>")
             elif list_type == "pre":
                 blocks.append(f"<pre><code>{html.escape(text)}</code></pre>")
+            elif list_type == "table":
+                blocks.append(ReportGenerator._render_table(buffer))
             elif buffer:
                 blocks.append(f"<p>{ReportGenerator._render_inline(text)}</p>")
             buffer = []
@@ -335,12 +389,54 @@ class ReportGenerator:
                 buffer.append(quote_text)
                 continue
 
+            # 表格行（以 | 开头；分隔行 |---|---| 跳过不存）
+            if stripped.startswith("|"):
+                if list_type != "table":
+                    flush()
+                    list_type = "table"
+                if buffer and _TABLE_SEPARATOR_RE.match(stripped):
+                    continue
+                buffer.append(stripped)
+                continue
+
             # 普通段落行
             flush()
             buffer.append(stripped)
 
         flush()
         return "\n".join(blocks)
+
+    @staticmethod
+    def _render_table(rows: list[str]) -> str:
+        """将 Markdown 表格行渲染为 HTML ``<table>``。
+
+        首行为表头，其余为数据行；分隔行已在上游被跳过。
+
+        Args:
+            rows: 以 ``|`` 分隔的原始表格行列表。
+
+        Returns:
+            完整 ``<table>`` HTML 片段。
+        """
+
+        def split_cells(line: str) -> list[str]:
+            return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+        header = split_cells(rows[0])
+        body_rows = [split_cells(row) for row in rows[1:]]
+        thead = "<thead><tr>" + "".join(
+            f"<th>{ReportGenerator._render_inline(cell)}</th>" for cell in header
+        ) + "</tr></thead>"
+        tbody = "".join(
+            "<tr>"
+            + "".join(
+                f"<td>{ReportGenerator._render_inline(cell)}</td>"
+                for cell in cells
+            )
+            + "</tr>"
+            for cells in body_rows
+        )
+        return f"<table>{thead}<tbody>{tbody}</tbody></table>"
 
     @staticmethod
     def _render_inline(text: str) -> str:

@@ -6,12 +6,45 @@ LLM 客户端以 MagicMock/AsyncMock 替换，验证报告生成、
 
 import asyncio
 import re
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.report.generator import ReportGenerator
+from src.storage.database import BidDatabase
+
+
+def _make_db_row(bid_id: str, name: str, **overrides) -> dict:
+    """构造模拟的数据库项目记录。
+
+    Args:
+        bid_id: 招标编号。
+        name: 项目名称。
+        overrides: 覆盖默认值的字段。
+
+    Returns:
+        项目记录字典（与 BidDatabase.get_bid 返回结构一致）。
+    """
+    row = {
+        "id": 1,
+        "bid_id": bid_id,
+        "project_name": name,
+        "region": "浙江省 杭州市",
+        "budget": 350.0,
+        "publish_date": datetime.now().strftime("%Y-%m-%d"),
+        "deadline": None,
+        "category": "服务",
+        "purchaser": "某市大数据局",
+        "agency": None,
+        "winner": "云图科技",
+        "source_url": None,
+        "requirements": ["ISO9001 认证"],
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    row.update(overrides)
+    return row
 
 
 @pytest.fixture()
@@ -156,6 +189,32 @@ class TestReportGenerator:
         assert "<script>" not in html_out
         assert "&lt;script&gt;" in html_out
 
+    def test_markdown_to_html_table(self) -> None:
+        """Markdown 表格（含分隔行与对齐写法）渲染为 <table>。"""
+        md = (
+            "| 编号 | 项目 | 预算（万元） |\n"
+            "|---|:---:|---:|\n"
+            "| ZJ-001 | 智慧园区 | 350 |\n"
+            "| ZJ-002 | 智慧交通 | **120** |\n"
+        )
+        html_out = ReportGenerator.markdown_to_html(md)
+        assert "<table>" in html_out and "</table>" in html_out
+        assert "<thead>" in html_out and "<tbody>" in html_out
+        assert "<th>编号</th>" in html_out
+        assert "<th>项目</th>" in html_out
+        assert "<td>ZJ-001</td>" in html_out
+        assert "<td>智慧园区</td>" in html_out
+        # 数据行内粗体正常渲染，分隔行不出现在输出中
+        assert "<strong>120</strong>" in html_out
+        assert "---:" not in html_out
+
+    def test_markdown_to_html_table_then_paragraph(self) -> None:
+        """表格结束后接普通段落，互不干扰。"""
+        md = "| A | B |\n|---|---|\n| 1 | 2 |\n\n表格说明段落。"
+        html_out = ReportGenerator.markdown_to_html(md)
+        assert "<table>" in html_out
+        assert "<p>表格说明段落。</p>" in html_out
+
     def test_report_pipeline_md_to_html_roundtrip(
         self, generator: ReportGenerator
     ) -> None:
@@ -166,3 +225,113 @@ class TestReportGenerator:
         html_path = generator.export_html(md_path)
         assert md_path.exists() and html_path.exists()
         assert "全链路项目" in html_path.read_text(encoding="utf-8")
+
+    # ------------------------------------------------------------------
+    # 数据库集成
+    # ------------------------------------------------------------------
+
+    def test_generate_bid_report_from_db(
+        self, tmp_path: Path, mock_llm: MagicMock
+    ) -> None:
+        """analysis_data 为空时按编号从数据库自动取数。"""
+        db = BidDatabase(tmp_path / "bids.db")
+        try:
+            db.save_bid(
+                {
+                    "bid_id": "DB-001",
+                    "project_name": "数据库取数项目",
+                    "budget": 120.0,
+                }
+            )
+            gen = ReportGenerator(
+                llm_client=mock_llm, output_dir=tmp_path / "r", db=db
+            )
+            path = asyncio.run(gen.generate_bid_report("DB-001"))
+            content = path.read_text(encoding="utf-8")
+            assert "数据库取数项目" in content
+            # 提示词中应包含库内真实数据
+            prompt = mock_llm.chat.await_args.args[0][1]["content"]
+            assert "数据库取数项目" in prompt
+        finally:
+            db.close()
+
+    def test_generate_bid_report_no_data_raises(
+        self, generator: ReportGenerator
+    ) -> None:
+        """既无 analysis_data 又未接库时报 ValueError。"""
+        with pytest.raises(ValueError, match="未接入数据库"):
+            asyncio.run(generator.generate_bid_report("ANY-1"))
+
+    def test_generate_bid_report_db_missing_id_raises(
+        self, tmp_path: Path, mock_llm: MagicMock
+    ) -> None:
+        """数据库中不存在该编号时报 LookupError。"""
+        db = BidDatabase(tmp_path / "bids.db")
+        try:
+            gen = ReportGenerator(
+                llm_client=mock_llm, output_dir=tmp_path / "r", db=db
+            )
+            with pytest.raises(LookupError, match="DB-404"):
+                asyncio.run(gen.generate_bid_report("DB-404"))
+        finally:
+            db.close()
+
+    def test_generate_competition_report_uses_db_rows(
+        self, tmp_path: Path, mock_llm: MagicMock
+    ) -> None:
+        """竞争报告：接入数据库后提示词携带真实项目清单。"""
+        db = BidDatabase(tmp_path / "bids.db")
+        try:
+            db.import_bids(
+                [
+                    _make_db_row(
+                        "C-001", "智慧园区平台一期", budget=300.0, winner="云图科技"
+                    ),
+                    _make_db_row("C-002", "智慧园区平台二期", budget=450.0, winner=None),
+                ]
+            )
+            gen = ReportGenerator(
+                llm_client=mock_llm, output_dir=tmp_path / "r", db=db
+            )
+            path = asyncio.run(
+                gen.generate_competition_report("智慧园区", days=30)
+            )
+        finally:
+            db.close()
+
+        content = path.read_text(encoding="utf-8")
+        assert "本地数据库 2 条项目记录" in content
+        prompt = mock_llm.chat.await_args.args[0][1]["content"]
+        assert "智慧园区平台一期" in prompt
+        assert "智慧园区平台二期" in prompt
+        assert "云图科技" in prompt
+
+    def test_generate_competition_report_db_empty_notes_gap(
+        self, tmp_path: Path, mock_llm: MagicMock
+    ) -> None:
+        """竞争报告：库内无记录时提示词明确说明数据缺口。"""
+        db = BidDatabase(tmp_path / "empty.db")
+        try:
+            gen = ReportGenerator(
+                llm_client=mock_llm, output_dir=tmp_path / "r", db=db
+            )
+            path = asyncio.run(
+                gen.generate_competition_report("量子计算", days=7)
+            )
+        finally:
+            db.close()
+
+        content = path.read_text(encoding="utf-8")
+        assert "本地数据库 0 条项目记录" in content
+        prompt = mock_llm.chat.await_args.args[0][1]["content"]
+        assert "无记录" in prompt
+
+    def test_generate_competition_report_without_db_keeps_placeholder(
+        self, generator: ReportGenerator
+    ) -> None:
+        """未接库时保持占位提示并标注数据来源。"""
+        path = asyncio.run(
+            generator.generate_competition_report("智慧城市", days=7)
+        )
+        content = path.read_text(encoding="utf-8")
+        assert "数据来源：通用行业知识（未接入本地数据库）" in content
