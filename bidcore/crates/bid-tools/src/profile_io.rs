@@ -3,9 +3,11 @@
 //! 迁移动机：bid-domain 头注自declare「本 crate 零 IO（纯逻辑 + 内存态），
 //! 持久化由 bid-tools 层承接」，但 party.rs 的 `BidderProfile::load/save`
 //! 直用 `std::fs` 且 save 是裸 `fs::write`——进程崩溃可留半写档（A-15）。
-//! 本模块把读写接到 bid-tools（纪律归位），写路径按
-//! [`store_io`] 同款原子纪律实现：tmp 写盘 → `sync_all` → rename →
-//! unix 父目录 fsync（#411 先例）。
+//! 本模块把读写接到 bid-tools（纪律归位），写路径调
+//! [`store_io::write_fsync_atomic`] 单一真源（#546）：tmp 写盘 → `sync_all`
+//! → rename（含 #460 瞬态重试 + rename 失败清 tmp）→ unix 父目录 fsync
+//! （#411 先例）。#457 的自备副本已删——重试语义与 store 侧同源，
+//! Windows 杀软钩子下 profile 保存不再假红（#546）。
 //!
 //! 语义逐字保持（调用方零行为变化）：
 //! - 缺档/不可读 → [`FormError::Io`]（service.rs 依赖它判「未建档」告警面）；
@@ -14,8 +16,9 @@
 
 use bid_domain::party::{BidderProfile, FormError};
 use std::fs;
-use std::io::Write;
 use std::path::Path;
+
+use crate::store_io::write_fsync_atomic;
 
 /// 主体信息在工作区里的缺省落盘名（自 party.rs 迁入——#455）。
 pub const PROFILE_FILE: &str = "bidder-profile.json";
@@ -50,42 +53,12 @@ pub fn save(profile: &BidderProfile, workspace: &Path) -> Result<(), FormError> 
         path: workspace.to_path_buf(),
         message: e.to_string(),
     })?;
-    write_fsync_atomic(&path, body.as_bytes())
-}
-
-/// 原子写 + fsync 纪律（与 [`store_io`] 的 `write_fsync_atomic` 同款——
-/// #411 fsync 纪律先例；差异仅一处：rename 失败时顺手清掉自己的 tmp，
-/// 不留残骸）。
-///
-/// 崩溃语义：tmp 写盘 + `sync_all` 之后、rename 之前崩溃 → 原文件不动
-/// （旧档完整）；rename 是唯一提交点（原子）；rename 后 unix 侧 best-effort
-/// fsync 父目录使目录项持久化。
-///
-/// Windows：目录 fsync 无对应语义（std 无目录句柄 sync）——文档化容忍，
-/// 进程崩溃安全（rename 原子），掉电面依赖 NTFS 日志。
-fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> Result<(), FormError> {
-    let tmp = path.with_extension("json.tmp");
-    let io_err = |p: &Path, e: std::io::Error| FormError::Io {
-        path: p.to_path_buf(),
+    // #546：单一真源（store_io::write_fsync_atomic）——#460 瞬态重试 +
+    // #411 fsync 纪律 + rename 失败清 tmp 与 store 侧完全同源。
+    write_fsync_atomic(&path, body.as_bytes()).map_err(|e| FormError::Io {
+        path,
         message: e.to_string(),
-    };
-    {
-        let mut f = fs::File::create(&tmp).map_err(|e| io_err(&tmp, e))?;
-        f.write_all(bytes).map_err(|e| io_err(&tmp, e))?;
-        f.sync_all().map_err(|e| io_err(&tmp, e))?; // 提交点前刷盘（#411）
-    }
-    fs::rename(&tmp, path).map_err(|e| {
-        let _ = fs::remove_file(&tmp); // rename 失败不留 tmp 残骸（对 store_io 的唯一增量）
-        io_err(path, e)
-    })?; // 原子提交点
-    if cfg!(unix) {
-        if let Some(parent) = path.parent() {
-            if let Ok(d) = fs::File::open(parent) {
-                let _ = d.sync_all(); // 目录项持久化（best-effort）
-            }
-        }
-    }
-    Ok(())
+    })
 }
 
 #[cfg(test)]

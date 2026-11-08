@@ -634,7 +634,12 @@ fn load_or_create_approval_key(
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let key = random_approval_key();
-            std::fs::write(&path, key).map_err(crate::store_io::StoreIoError::Io)?;
+            // #580：写入走单一真源原子面（tmp+sync_all+rename，含 #460/#575
+            // 全序列瞬态重试）——裸 fs::write 撞 Defender/掉电产生半截密钥，
+            // 下次 open 即 Corrupt 且无人工出口（工作区砖死、在途 receipt
+            // 全失验）。写入面根本不该允许产生半截文件。
+            crate::store_io::write_fsync_atomic(&path, &key)
+                .map_err(crate::store_io::StoreIoError::Io)?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
