@@ -103,7 +103,7 @@ cargo run -p mang-app
 
 | 工具 | 什么时候能调 | 干什么 |
 |---|---|---|
-| `get_bid_project_state` | 随时 | 看状态 + 下一步允许哪些工具（断点恢复入口——含 DIRTY 章节清单） |
+| `get_bid_project_state` | 随时 | 看状态 + 下一步允许哪些工具（allowed_next_tools，断点恢复入口——含 DIRTY 章节清单）+ 恒可调工具（ungated_tools——无状态门） |
 | `get_compliance_matrix` | 随时 | 看矩阵（要求×响应状态，游标分页） |
 | `list_evidence` / `list_tasks` | 随时 | 证据台账 / 任务分工（过滤 + 游标分页） |
 | `search_evidence` | 随时 | 双通道证据检索（exact 五字段 / semantic 正文摘录） |
@@ -168,8 +168,7 @@ cargo run -p mang-app
 | `assign_revision` / `advance_revision` / `complete_revision` | 矩阵就绪后 | RT 认领/推进/关单（BLOCKER finding 派生；**全部关单才放行导出**） |
 | `batch_task` / `advance_task` | 矩阵就绪后 | 分工批量派工 / 单件推进（人的进度轴） |
 | `reopen_section` | 起草后 | ACCEPTED 章节重开（→ REVISING + dirty，重过验收链） |
-| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
-
+| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
 **状态机**（越级调用会被拒——`E_STATE`）：
 
 ```

@@ -846,7 +846,7 @@ pub(crate) fn describe(name: &str) -> &'static str {
         "list_tools" => "只读：工具清单 + 行协议契约摘要（#279 发现面——无上下文代理的握手入口；返回信封形态/错误码面/CAS 纪律；JSON-RPC 客户端用 tools/list 等价）",
         "validate_bid_document" => "双层校验（确定性规则 + 模型复核）",
         "export_bid_document" => "导出（含暗标模式；#117 表格接线——profile.bid_amount/price_breakdown 报价决策，六表自动注入/附表）",
-        "get_bid_project_state" => "只读：项目状态与 allowed_next_tools",
+        "get_bid_project_state" => "只读：项目状态与 allowed_next_tools + ungated_tools（无状态门恒可调工具——并集=完整可调面；#522）",
         "save_version" => "AI 主动存版本快照（mang-snap 同源）",
         "check_bid_quality" => "只读：生成质量覆盖度检查 + 全局一致性（#423——金额/工期/术语/承诺跨章冲突，位置锚 SEC-xxxx|PR-xxxx）+ 负偏离清单（A-07）+ 报告落盘（#68 阶段 2）",
         "build_outline" => "建纲 + 矩阵首建（G1——#80 第三批补齐；REQUIREMENTS_EXTRACTED 态；#287 篇幅档位：length_profile 四档 practical|standard|conservative|maximum 与 target_total_chars 三者优先，默认档 Conservative 1,200,000≈1422 页；响应 length 回显生效档）",
