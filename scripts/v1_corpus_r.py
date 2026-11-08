@@ -33,10 +33,18 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as rl_canvas
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ooxml_util import XLSX_FIXED_CORE, freeze_zip, freeze_docx, write_json  # noqa: E402
 
-NOTO_PATH = "/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf"
+# #565 补面（#583 实证）：v1_corpus_r 的像素层字体改走 fixture_spec 三级解析
+# （BID_RENDER_FONT → data/fonts/ → Linux 钉版路径）——与 fixture_gen 同源。
+# 此前硬编码 /usr/share/... 在 data/fonts/ 落位的 CI 上 OSError 恒红。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fixture_spec as _S  # noqa: E402
+NOTO_FONT = _S.resolve_render_font()
+if NOTO_FONT is None:
+    print(f"[v1_corpus_r] {_S.RENDER_FONT_HINT}", file=sys.stderr)
+    raise SystemExit(2)
+NOTO_PATH = str(NOTO_FONT)
 # 字体事实（v0.4 B2 修复同步）：NotoSansSC[wght].ttf 可变字体在 PIL 下渲染全空白
 # （FreeType 变量轴实例化失败，0 暗像素）——D5 扫描层图像与导出件插图一律用静态
 # 字体，且生成时做像素级自证断言（防“空扫描页”静默溜过）。

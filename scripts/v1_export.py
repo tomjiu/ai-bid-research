@@ -136,7 +136,12 @@ def _make_org_chart_png(path: Path):
     W, H = 900, 430
     img = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(img)
-    font = ImageFont.truetype("/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf", 20)
+    # #565 补面（#583 实证）：插图字体走 fixture_spec 三级解析（同 fixture_gen）
+    import fixture_spec as _S
+    _font_path = _S.resolve_render_font()
+    if _font_path is None:
+        raise SystemExit(f"[v1_export] {_S.RENDER_FONT_HINT}")
+    font = ImageFont.truetype(str(_font_path), 20)
     boxes = [(360, 30, 540, 80, "项目经理"),
              (140, 150, 320, 200, "网络组"), (390, 150, 510, 200, "安全组"),
              (580, 150, 760, 200, "实施组"), (200, 290, 380, 340, "质检员"),

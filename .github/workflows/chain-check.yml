@@ -127,6 +127,10 @@ jobs:
             | sha256sum -c - || { echo "::error::SarasaMonoSC-Regular.ttf sha256 不符（v1.0.36 hinted 基线 d604b02e…）"; exit 1; }
           mkdir -p data/fonts
           cp /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf data/fonts/
+          # 双落位：data/fonts/（三级探测第 2 级，主路径）+ /usr/share/（第 3 级
+          # 钉版路径——兜底 synth_tender_gen 等仍硬编码的手动工具面）
+          sudo mkdir -p /usr/share/fonts/truetype/chinese
+          sudo cp /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf /usr/share/fonts/truetype/chinese/
           python3 -c "from PIL import ImageFont; f=ImageFont.truetype('data/fonts/SarasaMonoSC-Regular.ttf', 20); print('SarasaMonoSC 可加载——T0d/T6/T7 解跳')"
 
       - name: Install Rust toolchain
