@@ -362,6 +362,88 @@ recent.save → { "ok": true, "count": 1, "file": "…\\recent.json" }
 ```
 
 ---
+### git.log  `{ path?, limit?=80 }` —— 提交列表（只读，「改动/历史」面板）
+系统 `git` 子进程实现（不引 libgit2）；`core.quotepath=off` 保证中文路径原样；输出用 RS(0x1e)/US(0x1f) 分隔符解析，永不 panic。`limit` 夹取 1..=200。
+```jsonc
+→ { "available": true, "branch": "main",
+    "items": [ { "hash": "…", "short": "a1b2c3d", "author": "张三",
+                 "ts": 1699999999000, "subject": "fix: 报价表公式" } ] }
+```
+非 git 仓库 / git 不在 PATH：`{ "available": false, "items": [], "error": "…" }`——**不报错**（面板显示提示）。`path` 过路径围栏（必须在围栏内，`E_FENCE`）。
+
+### git.show  `{ hash, path? }` —— 单提交 diff（只读）
+`hash` 须 ≥4 位十六进制（否则 `bad_args`）；`--stat` 摘要 + patch 全文。
+```jsonc
+→ { "hash": "a1b2c3d…", "patch": "commit a1b2c3d…\nAuthor: …\n\n 1 file changed, 2 insertions(+)" }
+```
+
+### git.status  `{ path? }` —— 工作区未提交改动（只读）
+`--porcelain=v1 --untracked-files=normal`；逐行 XY 码 + 路径。
+```jsonc
+→ { "available": true, "items": [ { "code": " M", "path": "技术标.md" },
+                                   { "code": "??", "path": "新资料/" } ] }
+```
+失败面同 git.log（`available:false + error`，不报错）。
+
+### snapshots.check  `{ paths: […] }` —— 批量自动快照探测（#42 阶段 7）
+对每个文件问 mang-snap「该存吗」（内容指纹没变 → Skipped）。整批围栏失败报错；单条结果分双列：
+```jsonc
+→ { "saved":   [ { "file": "技术标.md", "ts": 1699999999000 } ],
+    "skipped": [ { "file": "README.md", "reason": "内容未变化" } ] }
+```
+
+### snapshots.save  `{ path, message?, kind? }` —— 手动/AI 存版本
+与 bid-mcp `save_version` **同一真源**（mang-snap）。`kind`：`"manual"`（缺省）/ `"ai"`；`message` 缺省空串。
+```jsonc
+→ { "ok": true, "file": "技术标.md", "ts": 1699999999000,
+    "snapshot": ".mang/history/技术标.md/1699999999000.md" }
+```
+
+### snapshots.read  `{ file, snapshot }` —— 版本预览（只读）
+```jsonc
+→ { "file": "技术标.md", "snapshot": "1699999999000", "content": "…全文…", "bytes": 12345 }
+```
+
+### snapshots.rollback  `{ file, snapshot }` —— 回滚（安全序）
+**先把当前内容存成回滚前备份**（backupTs——回错了还能再滚回来），再覆盖目标文件：
+```jsonc
+→ { "ok": true, "file": "技术标.md", "snapshot": "1699999999000",
+    "bytes": 12345, "backupTs": 1700000000000 }
+```
+
+### annotations.load  `{ path }` —— 来源标注浮层数据（只读，#42 阶段 8）
+边车 `.mang/annotations/<file_key>.json`——**浮层是覆盖层，绝不修改文件正文**。
+```jsonc
+→ { "file": "技术标.md", "present": true,
+    "items": [ { "id": "1", "block": "b3", "quote": "本次方案采用分布式架构",
+                 "source": { "file": "招标文件.docx", "page": 12, "section": "3.2",
+                             "quote": "投标人须提供分布式架构方案" },
+                 "status": "confirmed", "note": "" } ] }
+```
+
+### annotations.setStatus  `{ path, id, status }` —— 标注认校验三态落盘
+`status`：`"confirmed" | "pending" | "rejected"`（三态枚举外拒）；原子读-改-写。
+```jsonc
+→ { "ok": true }
+```
+
+### window.info  `{}` —— 窗口状态（自绘标题栏）
+```jsonc
+→ { "maximized": false, "captionHeight": 32, "native": true }
+```
+
+### window.action  `{ action }` —— 窗口动作（七动作枚举）
+`action`：`minimize | maximize | restore | toggle | close | drag | toggleMaximize`（枚举外 `bad_args`）。直接在 UI 线程操作 HWND（不走事件循环 recv——历史教训：同线程等自己 = 每次点击卡 1.5s）。状态即时回推，UI 图标随之切换（不读 window.info 避免旧值）：
+```jsonc
+→ { "action": "maximize", "applied": true, "maximized": true }
+```
+
+### window.buttons  `{ width }` —— 窗口按钮区宽度上报
+UI 上报右上角三按钮占宽；标题栏右端这一段必须让位（不能返回 HTCAPTION，否则点最大化会变成拖窗口）：
+```jsonc
+→ { "width": 138 }
+```
+
 
 ## 7. 事件（无 id）
 
