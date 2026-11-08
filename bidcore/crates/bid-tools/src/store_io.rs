@@ -294,10 +294,12 @@ fn parsed_file_name(bytes: &[u8]) -> String {
 /// 不取消刷盘；sync_all 也随之获得瞬态重试覆盖。
 pub fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
+
     let tmp = path.with_extension("json.tmp");
     // 重试耗尽后清 tmp 残骸（#457 增量，#546 统一后两侧同享）——
     // 注意闭包内部的重试成功路径不经过此分支。
     if let Err(e) = retry_transient(|| -> std::io::Result<()> {
+
 
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(bytes)?;
@@ -309,6 +311,7 @@ pub fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         let _ = std::fs::remove_file(&tmp);
         return Err(e);
     }
+
 
 
     if cfg!(unix) {
