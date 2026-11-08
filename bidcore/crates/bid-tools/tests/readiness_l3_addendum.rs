@@ -527,6 +527,121 @@ fn addendum_waiver_releases_not_provided_blocker() {
     );
 }
 
+/// #379 攻击链负例（核心验收）：对**非补遗件**做逐件 waiver（图纸/附件的
+/// UnreadyInput 人工出口——#184 地图 P0-1 的合法用法）**不得**顺手解除
+/// 「未发现补遗/澄清文件」的 NotProvided 阻塞。修复前：per-file waiver
+/// 无条件写 reviews(AddendumWaiver, Approved) → ② 分支被旁路（R-07/A-04）。
+#[test]
+fn per_file_waiver_on_non_addendum_file_keeps_not_provided_blocker() {
+    let mut store = base_store();
+    // 图纸（非补遗件——kind 与文件名都不命中补遗词面）解析失败
+    let drawing = store
+        .upsert_file("施工图纸.pdf", "图纸", "sha-drawing", 50, 2, 300, 0, ParseStatus::Failed, "engine-pdf @ test")
+        .unwrap()
+        .0;
+    // 确认前：NotProvided 阻塞在场
+    let r = check_draft_readiness(&store, "SEC-0001");
+    let b = has_blocker(&r).expect("无补遗件时 NotProvided 阻塞在场");
+    match b {
+        Blocker::MissingAddendum { reason, .. } => {
+            assert_eq!(*reason, AddendumIssue::NotProvided);
+        }
+        other => panic!("期望 MissingAddendum，实际 {other:?}"),
+    }
+
+    // 对图纸做逐件 waiver（合法用法——UnreadyInput 的人工出口）
+    store
+        .record_addendum_waiver(
+            &drawing,
+            "图纸为参考件，缺失不影响条款响应（人工确认带病放行）",
+            &bid_domain::TrustedPrincipal::human("drawer-lead"),
+        )
+        .unwrap();
+    // 台账在座（逐件语义完整）
+    assert!(store.addendum_waived(&drawing), "逐件台账照写");
+    // ★ 攻击链断言：全局门未被顺手打开——NotProvided 阻塞仍在
+    assert!(
+        !store.gate_approved(bid_domain::review::Gate::AddendumWaiver),
+        "#379：逐件 waiver 不得写 AddendumWaiver 门记录（旧路径的攻击链）"
+    );
+    assert!(
+        !store.gate_approved(bid_domain::review::Gate::NoAddendumConfirmed),
+        "逐件 waiver 更不得写 NoAddendumConfirmed"
+    );
+    let r = check_draft_readiness(&store, "SEC-0001");
+    assert!(
+        has_blocker(&r).is_some(),
+        "#379 核心验收：对非补遗件 waiver 后 NotProvided 阻塞必须仍在场：{:?}",
+        r.blockers
+    );
+}
+
+/// #379 正例：显式全局确认（confirm_no_addendum）解除 NotProvided。
+#[test]
+fn confirm_no_addendum_releases_not_provided_blocker() {
+    let mut store = base_store();
+    let r = check_draft_readiness(&store, "SEC-0001");
+    assert!(has_blocker(&r).is_some(), "确认前阻塞在场（fail-closed）");
+
+    let rec = store
+        .confirm_no_addendum(
+            "招标包仅主件在案，采购网无澄清答疑公告（人工确认）",
+            &bid_domain::TrustedPrincipal::human("real-corpus-lead"),
+        )
+        .unwrap();
+    assert_eq!(rec.gate, bid_domain::review::Gate::NoAddendumConfirmed);
+    assert!(store.gate_approved(bid_domain::review::Gate::NoAddendumConfirmed));
+
+    let r = check_draft_readiness(&store, "SEC-0001");
+    assert!(
+        has_blocker(&r).is_none(),
+        "显式全局确认后 NotProvided 阻塞放行：{:?}",
+        r.blockers
+    );
+}
+
+/// #379 agent 声明面：agent 签域同样可做全局确认（审计账 agent_declared），
+/// 且进 agent_gate_passes（导出警告判据）。
+#[test]
+fn confirm_no_addendum_agent_declaration_audited() {
+    let mut store = base_store();
+    let rec = store
+        .confirm_no_addendum(
+            "导入面仅主件，agent 声明无补遗（待人工追认）",
+            &bid_domain::TrustedPrincipal::agent("agent-379"),
+        )
+        .unwrap();
+    assert_eq!(rec.gate, bid_domain::review::Gate::NoAddendumConfirmed);
+    let gp = store
+        .latest_gate_pass(bid_domain::review::Gate::NoAddendumConfirmed)
+        .expect("agent 声明入审计账");
+    assert_eq!(gp.method, "agent_declared");
+    assert!(!gp.human_confirmed);
+    assert!(!store.human_review_complete(), "agent 声明 → 人工复核未完成");
+    // 放行面同人类路径
+    let r = check_draft_readiness(&store, "SEC-0001");
+    assert!(has_blocker(&r).is_none(), "agent 全局确认同样放行");
+}
+
+/// #379 全局门不掩蔽新失败态（与旧 AddendumWaiver 门同款语义边界）：
+/// 确认后又导入坏补遗 → 阻塞回来（② 分支不再触发，走 ③ 逐件判定）。
+#[test]
+fn confirm_no_addendum_does_not_mask_later_bad_addendum() {
+    let mut store = base_store();
+    store
+        .confirm_no_addendum("先确认无补遗", &bid_domain::TrustedPrincipal::human("lead"))
+        .unwrap();
+    import_addendum(&mut store, "C-补遗文件01.pdf", ParseStatus::Failed, "sha-add-late");
+    let r = check_draft_readiness(&store, "SEC-0001");
+    let b = has_blocker(&r).expect("后导入的坏补遗必须重新阻塞");
+    match b {
+        Blocker::MissingAddendum { reason, .. } => {
+            assert_eq!(*reason, AddendumIssue::ParseFailed);
+        }
+        other => panic!("期望 MissingAddendum，实际 {other:?}"),
+    }
+}
+
 /// 全局门不掩蔽新失败态（#184 后语义更重：不掩蔽**任何**不就绪件——
 /// Failed 与 OcrPending 都不能被「人工确认无补遗」洗白）。
 #[test]

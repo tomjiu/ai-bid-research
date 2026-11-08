@@ -989,11 +989,16 @@ impl DomainStore {
     /// 4. `file_id` 必须存在于 files（对不存在的件做确认 = 凭空免责）。
     ///
     /// 落账：追加 `AddendumWaiverRecord`（同件重复确认追加不覆盖——审计
-    /// 日志语义）+ `GatePassRecord`（#277 审计账——agent 声明面
-    /// human_confirmed=false，导出警告判据）+ content_version + 1（与
-    /// record_review 的「写账即版本」同口径）。不设状态门：与
-    /// Gate::AddendumWaiver 同窗口语义——导入后任意时刻可确认（阻塞可能
-    /// 出现在任何后续阶段）。
+    /// 日志语义）+ content_version + 1（与 record_review 的「写账即版本」
+    /// 同口径）。不设状态门：与 Gate::AddendumWaiver 同窗口语义——导入后
+    /// 任意时刻可确认（阻塞可能出现在任何后续阶段）。
+    ///
+    /// #379 语义收缩：本函数不再写 `reviews(AddendumWaiver, Approved)` 门
+    /// 记录与 `GatePassRecord`——那两处是「全局无补遗确认」的消费面，
+    /// 逐件免责不得顺手打开（对无关件 waiver 静默解除 NotProvided 阻塞
+    /// = R-07/A-04 攻击链）。全局确认走 [`Self::confirm_no_addendum`]。
+    /// 逐件免责自己的消费面是 `addendum_waived(file_id)`
+    /// （`readiness::missing_addendum` ③ 分支），不受影响。
     pub fn record_addendum_waiver(
         &mut self,
         file_id: &str,
@@ -1001,36 +1006,9 @@ impl DomainStore {
         principal: &TrustedPrincipal,
     ) -> Result<AddendumWaiverRecord, ToolError> {
         self.project()?;
-        // #277 方案 A：与 record_review 同款二元组（Human×人类签域 /
-        // Agent×agent 签域；混用拒）——服务层 require_human_receipt 已先裁。
-        let is_agent_pass = match (principal.actor_type, principal.scope_is_agent) {
-            (ActorType::Human, false) => false,
-            (ActorType::Agent, true) => true,
-            (ActorType::System, _) => {
-                return Err(ToolError::EUnprocessable {
-                    reason: format!(
-                        "确认人 {:?} 是 system 身份（过门面不收 System）",
-                        principal.actor_id
-                    ),
-                });
-            }
-            (ActorType::Human, true) => {
-                return Err(ToolError::EUnprocessable {
-                    reason: format!(
-                        "确认人 {:?} 是 Human 身份但携带 agent 签域（签域与身份不匹配）",
-                        principal.actor_id
-                    ),
-                });
-            }
-            (ActorType::Agent, false) => {
-                return Err(ToolError::EUnprocessable {
-                    reason: format!(
-                        "确认人 {:?} 是 agent 身份但未携带 agent 签域（Agent 不得用人类签域冒充真人——agent 声明过门走 :agent 签域，require_human_receipt=false 工作区才放行，见 #277）",
-                        principal.actor_id
-                    ),
-                });
-            }
-        };
+        // #277 方案 A：二元组裁决收敛到共用 helper（与 confirm_no_addendum
+        // 同构——服务层 require_human_receipt 已先裁）
+        let is_agent_pass = Self::waiver_principal_gate(principal)?;
         if reason.trim().is_empty() {
             return Err(ToolError::EUnprocessable {
                 reason: "确认理由不得为空白（不可审计的确认不成确认——agent 声明过门同构：必须说明为什么可以过这个门）".into(),
@@ -1060,36 +1038,23 @@ impl DomainStore {
             trusted: Some(principal.clone()),
         };
         self.addendum_waivers.push(rec.clone());
-        // 【接线修复】豁免记录必须同时写入 Gate 审计面——
-        // `readiness::missing_addendum` 判定的是 `gate_approved(AddendumWaiver)`，
-        // 而本函数此前只 push `addendum_waivers`，两边不通：
-        // 用户记录了「本项目无补遗」确认，起草门仍报「未发现补遗/澄清文件」死锁。
+        // 【#379 拆门】此前的「接线修复」把逐件 waiver 无条件写进
+        // reviews(AddendumWaiver, Approved) + GatePassRecord——但那两处
+        // 的唯一消费面是 `readiness::missing_addendum` ②（全局无补遗分支）。
+        // 后果：对任意非补遗件（如图纸）做逐件 waiver，会顺手解除
+        // 「未发现补遗/澄清文件」的 NotProvided 阻塞——用户从未确认过
+        // 「本项目无补遗」（R-07/A-04）。
         //
-        // 实测复现（2026-11-02，无补遗件的真实招标文件）：
-        //   record_addendum_waiver → ok:true，project_version 6
-        //   draft_response_section → E_UNPROCESSABLE「未发现补遗/澄清文件」
-        //
-        // 两道记录职责不同，不能只写一处：
-        //   · addendum_waivers = 逐件免责台账（哪些件、谁确认、为什么）
-        //   · reviews(AddendumWaiver, Approved) = 门禁消费的放行事实
-        // 与 record_review 同款：内容绑定快照（#180）——补遗确认针对的是当前章节树
-        let review_id = self.next_id("REV");
-        let reviewed_content_version = self.project.as_ref().map_or(0, |p| p.content_version);
-        let reviewed_content_digest = self.sections_digest();
-        self.reviews.push(review::ReviewRecord {
-            id: review_id,
-            gate: review::Gate::AddendumWaiver,
-            // legacy 回显面同款派生（record_review 口径——human/agent 前缀随身份）
-            reviewer: principal_echo,
-            principal: Some(principal.clone()),
-            decision: review::Decision::Approved,
-            findings: Vec::new(),
-            at,
-            reviewed_content_version,
-            reviewed_content_digest,
-        });
-        // #277 方案 A：补遗门过门同步落审计账（与 record_review 的
-        // GatePassRecord 同构——导出警告判据 = 本门最新一条 human_confirmed）
+        // 修复后职责划分：
+        //   · addendum_waivers（本台账）= 逐件免责——③ 分支按 file_id 消费；
+        //   · reviews(NoAddendumConfirmed, Approved) = 全局无补遗确认——
+        //     ② 分支消费，只由 confirm_no_addendum 写入（显式语义）；
+        //   · 旧快照既有 AddendumWaiver×Approved 由 ② 分支 OR 兼容消费
+        //     （不回锁——issue #379 迁移纪律）。
+        // #277 方案 A：逐件确认仍落 GatePassRecord（审计账——`agent_waivers`
+        // / `human_review_complete` / method 回显的数据源）。**注意**：只写
+        // gate_passes 不写 reviews——`gate_approved`（门禁消费面）读的是
+        // reviews，逐件免责不武装全局门（#379 拆门的关键切割点）。
         let gp_id = self.next_id("GP");
         self.gate_passes.push(review::GatePassRecord {
             id: gp_id,
@@ -1109,6 +1074,107 @@ impl DomainStore {
             p.content_version += 1;
         }
         Ok(rec)
+    }
+
+    /// 「本项目无补遗」全局确认（#379 拆门——R-07/A-04 修复的新入口）。
+    ///
+    /// 裁决序（与 record_addendum_waiver 同构——拒绝路径零副作用）：
+    /// 1. project 在场；
+    /// 2. `principal` 身份/签域匹配（#182/#277 同款二元组）；
+    /// 3. `reason` 非空白（不可审计的确认不成确认）。
+    ///
+    /// 「是否存在补遗件」的判定（`is_addendum_file` 词面判定）在 bid-tools
+    /// 服务层（域层无文件业务身份概念——issue #379 锚点）；服务层先裁
+    /// 「有补遗件 → 响亮拒并指引逐件 waiver」，域层本函数只管落账。
+    ///
+    /// 落账：`reviews(NoAddendumConfirmed, Approved)`（含 #180 内容绑定快照
+    /// ——与 record_review 同款）+ `GatePassRecord`（#277 审计账）+
+    /// content_version + 1。与 AddendumWaiver 同窗：无状态门、无门序前置。
+    /// 导入补遗件后走正常判定，本确认自然失效（② 分支不再触发）。
+    pub fn confirm_no_addendum(
+        &mut self,
+        reason: &str,
+        principal: &TrustedPrincipal,
+    ) -> Result<review::ReviewRecord, ToolError> {
+        self.project()?;
+        let is_agent_pass = Self::waiver_principal_gate(principal)?;
+        if reason.trim().is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: "确认理由不得为空白（不可审计的确认不成确认——全局无补遗确认与逐件 waiver 同构：必须说明为什么可以过这个门）".into(),
+            });
+        }
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let principal_echo = if is_agent_pass {
+            format!("agent:{}", principal.actor_id)
+        } else {
+            format!("human:{}", principal.actor_id)
+        };
+        let review_id = self.next_id("REV");
+        let reviewed_content_version = self.project.as_ref().map_or(0, |p| p.content_version);
+        let reviewed_content_digest = self.sections_digest();
+        let rec = review::ReviewRecord {
+            id: review_id,
+            gate: review::Gate::NoAddendumConfirmed,
+            reviewer: principal_echo,
+            principal: Some(principal.clone()),
+            decision: review::Decision::Approved,
+            findings: Vec::new(),
+            at,
+            reviewed_content_version,
+            reviewed_content_digest,
+        };
+        self.reviews.push(rec.clone());
+        // #277 方案 A 同构：过门同步落审计账（导出警告判据 = 本门最新一条
+        // human_confirmed；agent 声明 → human_confirmed=false）
+        let gp_id = self.next_id("GP");
+        self.gate_passes.push(review::GatePassRecord {
+            id: gp_id,
+            gate: review::Gate::NoAddendumConfirmed,
+            actor_id: principal.actor_id.clone(),
+            actor_type: principal.actor_type,
+            method: if is_agent_pass {
+                review::METHOD_AGENT_DECLARED.to_string()
+            } else {
+                review::METHOD_HUMAN_RECEIPT.to_string()
+            },
+            human_confirmed: !is_agent_pass,
+            at,
+            reason: reason.trim().to_string(),
+        });
+        if let Some(p) = self.project.as_mut() {
+            p.content_version += 1;
+        }
+        Ok(rec)
+    }
+
+    /// 逐件/全局确认共用的身份裁决（#277 二元组：Human×人类签域 /
+    /// Agent×agent 签域；System / 混用拒）。返回 is_agent_pass。
+    fn waiver_principal_gate(principal: &TrustedPrincipal) -> Result<bool, ToolError> {
+        match (principal.actor_type, principal.scope_is_agent) {
+            (ActorType::Human, false) => Ok(false),
+            (ActorType::Agent, true) => Ok(true),
+            (ActorType::System, _) => Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "确认人 {:?} 是 system 身份（过门面不收 System）",
+                    principal.actor_id
+                ),
+            }),
+            (ActorType::Human, true) => Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "确认人 {:?} 是 Human 身份但携带 agent 签域（签域与身份不匹配）",
+                    principal.actor_id
+                ),
+            }),
+            (ActorType::Agent, false) => Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "确认人 {:?} 是 agent 身份但未携带 agent 签域（Agent 不得用人类签域冒充真人——agent 声明过门走 :agent 签域，require_human_receipt=false 工作区才放行，见 #277）",
+                    principal.actor_id
+                ),
+            }),
+        }
     }
 
     // ---------------------------------------------------------------- #219 全块覆盖

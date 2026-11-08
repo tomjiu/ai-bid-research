@@ -137,14 +137,19 @@ sections 只列可起草叶）、`score_price` / `score_section` / `score_docume
 > 才推进 VALIDATING。若项目已滞留在 VALIDATING 且缺章（历史异常态），用
 > `recover_validating_state`（reason 必填）回 DRAFTING 续跑。
 
-> **补遗分级门（#184）**：任一补遗/澄清件不处 READY（FAILED=解析失败 /
-> OCR_PENDING=扫描件零文本）→ `draft_response_section` 被 MissingAddendum
-> 拒，拒稿理由逐件点名文件名与原因——**部分失败也算**（坏的那份可能正是改
-> 控制价/截止时间的）。出口两条：修复重传可解析版本（阻塞自然消失）；或
-> 经用户逐件确认后放行（`record_addendum_waiver`，file_id+reason+宿主签发
-> receipt——签域 `addendum_waiver:{file_id}` 件级绑定，#182；逐件留底，
-> 非全局布尔）。import 响应的
-> `addendum_readiness.not_ready[].file_id` 是确认的锚。
+> **补遗分级门（#184 · #379 拆门后）**：任一补遗/澄清件不处 READY
+> （FAILED=解析失败 / OCR_PENDING=扫描件零文本）→
+> `draft_response_section` 被 MissingAddendum 拒，拒稿理由逐件点名文件名
+> 与原因——**部分失败也算**（坏的那份可能正是改控制价/截止时间的）。
+> 出口三条：修复重传可解析版本（阻塞自然消失）；或经用户逐件确认后放行
+> （`record_addendum_waiver`，file_id+reason+宿主签发 receipt——签域
+> `addendum_waiver:{file_id}` 件级绑定，#182；逐件留底，非全局布尔；
+> import 响应的 `addendum_readiness.not_ready[].file_id` 是确认的锚）；
+> 或——仅当阻塞是「**未发现补遗/澄清文件**」（NotProvided，项目里一件
+> 补遗都没有）——经用户**全局确认本项目无补遗**后放行（`record_addendum_waiver`
+> 带 `confirm_no_addendum:true`，receipt 签域 `no_addendum_confirmed`；
+> 对主件/图纸等非补遗件做逐件 waiver **不**解除该阻塞——#379：那是
+> 「不知道≠没有」防线的旁路）。
 
 > **自评面口径（#170 方案 A 落地后 · 2026-11-02）**：
 >

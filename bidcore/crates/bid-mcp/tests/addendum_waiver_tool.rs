@@ -199,6 +199,113 @@ fn waiver_tool_param_and_gate_validation() {
     assert_eq!(err_code(&reply), "E_STATE", "DRAFT 态必须 E_STATE");
 }
 
+// ---------------------------------------------------------------- #379 拆门
+
+/// #379 测试基座：招标主件在案、无补遗件（NotProvided 阻塞的前置形态）。
+fn svc_no_addendum(tag: &str) -> (BidService, String) {
+    let mut svc = BidService::new().with_fs_root(fixtures());
+    ok_result(call(&mut svc, "create_bid_project", json!({
+        "name": "#379 拆门", "bid_deadline": "2026-12-31", "mode": "明标",
+        "external_key": format!("aw379-{tag}"),
+    })));
+    svc.store_mut().upsert_file(
+        "A-招标文件.docx", "招标文件", &format!("sha-379-{tag}"), 1, 0, 5, 0,
+        bid_domain::ParseStatus::Ok, "",
+    ).unwrap();
+    let pid = svc.store().project().unwrap().id.clone();
+    (svc, pid)
+}
+
+/// #379 正例：confirm_no_addendum=true 的全局显式确认——NotProvided 阻塞
+/// 的唯一新出口；响应面 confirmed_no_addendum 块 + 逐件台账不受扰。
+#[test]
+fn confirm_no_addendum_global_confirmation_releases_not_provided() {
+    let (mut svc, pid) = svc_no_addendum("happy");
+    let receipt = svc.issue_approval_receipt("lead-379", "no_addendum_confirmed");
+    let r = ok_result(call(&mut svc, "record_addendum_waiver", json!({
+        "project_id": &pid, "confirm_no_addendum": true,
+        "reason": "招标包仅主件在案，采购网无澄清公告（人工确认）",
+        "receipt": receipt,
+    })));
+    assert_eq!(r["confirmed_no_addendum"]["gate"], "no_addendum_confirmed");
+    assert_eq!(r["confirmed_no_addendum"]["method"], "human_receipt");
+    assert_eq!(r["confirmed_no_addendum"]["human_confirmed"], true);
+    // 全局确认不产生逐件台账（两账分离）
+    assert!(
+        r["addendum_waivers"].as_array().unwrap().is_empty(),
+        "全局确认不写逐件台账"
+    );
+    // 门禁面：NoAddendumConfirmed Approved 在座
+    use bid_domain::review::Gate;
+    assert!(svc.store().gate_approved(Gate::NoAddendumConfirmed));
+    // 起草闸放行（NotProvided 不再拦——起草需先建纲，此处以 readiness 面
+    // 间接断言：gate_approved 即 ② 分支判据，域层直测已覆盖全链）
+}
+
+/// #379 混调用拒：confirm_no_addendum=true + file_id = 两种语义混写。
+#[test]
+fn confirm_no_addendum_with_file_id_rejected() {
+    let (mut svc, pid) = svc_no_addendum("mixed");
+    let receipt = svc.issue_approval_receipt("lead-379", "no_addendum_confirmed");
+    let reply = call(&mut svc, "record_addendum_waiver", json!({
+        "project_id": &pid, "confirm_no_addendum": true, "file_id": "TF-0001",
+        "reason": "混调用", "receipt": receipt,
+    }));
+    let msg = err_code(&reply);
+    assert_eq!(msg, "E_UNPROCESSABLE", "混调用必须响亮拒：{reply:?}");
+    // 零副作用
+    assert!(svc.store().addendum_waivers().is_empty());
+    assert!(!svc.store().gate_approved(bid_domain::review::Gate::NoAddendumConfirmed));
+}
+
+/// #379 fail-closed：项目已有补遗件时全局确认拒（语义矛盾——正确出口是
+/// 逐件 waiver 或修复重传）。
+#[test]
+fn confirm_no_addendum_rejected_when_addendum_present() {
+    let (mut svc, pid) = svc_no_addendum("has-addendum");
+    svc.store_mut().upsert_file(
+        "C-补遗文件01.pdf", "补遗", "sha-379-add", 2, 0, 10, 0,
+        bid_domain::ParseStatus::Failed, "",
+    ).unwrap();
+    let receipt = svc.issue_approval_receipt("lead-379", "no_addendum_confirmed");
+    let reply = call(&mut svc, "record_addendum_waiver", json!({
+        "project_id": &pid, "confirm_no_addendum": true,
+        "reason": "有补遗却确认无补遗（应被拒）", "receipt": receipt,
+    }));
+    let msg = format!("{reply:?}");
+    assert_eq!(err_code(&reply), "E_UNPROCESSABLE");
+    assert!(
+        msg.contains("逐件确认") || msg.contains("record_addendum_waiver"),
+        "报错必须指引正确出口（逐件确认/修复重传）：{msg}"
+    );
+    assert!(!svc.store().gate_approved(bid_domain::review::Gate::NoAddendumConfirmed));
+}
+
+/// #379 签域分离：逐件 receipt（addendum_waiver:TF-xxxx）免不了全局确认
+/// （A 门 receipt 免不了 B 门——#182 同款纪律）。
+#[test]
+fn per_file_receipt_cannot_confirm_no_addendum() {
+    let (mut svc, pid) = svc_no_addendum("scope-split");
+    let wrong_receipt = svc.issue_approval_receipt("lead-379", "addendum_waiver:TF-0001");
+    let reply = call(&mut svc, "record_addendum_waiver", json!({
+        "project_id": &pid, "confirm_no_addendum": true,
+        "reason": "错域 receipt 应拒", "receipt": wrong_receipt,
+    }));
+    assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "签域绑定必须拒：{reply:?}");
+    assert!(!svc.store().gate_approved(bid_domain::review::Gate::NoAddendumConfirmed));
+}
+
+/// #379 类型面：confirm_no_addendum 非布尔 → 响亮拒（不猜测）。
+#[test]
+fn confirm_no_addendum_type_validated() {
+    let (mut svc, pid) = svc_no_addendum("type");
+    let reply = call(&mut svc, "record_addendum_waiver", json!({
+        "project_id": &pid, "confirm_no_addendum": "yes",
+        "reason": "r", "receipt": "v2.x",
+    }));
+    assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "非布尔必须拒：{reply:?}");
+}
+
 // ---------------------------------------------------------------- 2. A→C 全链（draft 闸）
 
 #[test]

@@ -203,6 +203,18 @@ pub(crate) fn opt_str(v: &Value, key: &str, at: &str) -> Result<Option<String>, 
     }
 }
 
+/// #379：可选布尔参数（confirm_no_addendum 等）——类型不对响亮拒
+/// （不猜测、不静默默认——与 opt_str/opt_u64 同口径）。
+pub(crate) fn opt_bool(v: &Value, key: &str, at: &str) -> Result<Option<bool>, ToolError> {
+    match v.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(ToolError::EUnprocessable {
+            what: format!("{at}: {key} 须为布尔"),
+        }),
+    }
+}
+
 pub(crate) fn opt_u64(v: &Value, key: &str, at: &str) -> Result<Option<u64>, ToolError> {
     match v.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -698,7 +710,7 @@ fn import_tender_files(svc: &mut BidService, args: Value) -> ToolResult {
             continue; // 补遗已由 ADDENDUM_NOT_READY 点名——同一件事不报两遍
         }
         warnings.push(format!(
-            "INPUT_FILE_NOT_READY: {} 未就绪（{}）——「已提取出一部分需求」不等于输入完整，起草将被拒；请修复重传或人工确认后放行（record_addendum_waiver）",
+            "INPUT_FILE_NOT_READY: {} 未就绪（{}）——「已提取出一部分需求」不等于输入完整，起草将被拒；请修复重传，或对本件人工确认后放行（record_addendum_waiver file_id=<本件>——逐件免责，不构成「本项目无补遗」确认）",
             f.name, f.reason,
         ));
     }
@@ -5453,8 +5465,23 @@ fn set_matrix_override(svc: &mut BidService, args: Value) -> ToolResult {
 fn record_addendum_waiver(svc: &mut BidService, args: Value) -> ToolResult {
     const TOOL: &str = "record_addendum_waiver";
     let project_id = req_str(&args, "project_id", TOOL)?;
-    let file_id = req_str(&args, "file_id", TOOL)?;
     let reason = req_str(&args, "reason", TOOL)?;
+    // #379 拆门：confirm_no_addendum=true = 「本项目无补遗」的**全局显式
+    // 确认**（NotProvided 阻塞的唯一新出口）。与逐件语义互斥：file_id
+    // 不得同时出现（两种确认混调用 = 语义不清，响亮拒）。
+    let confirm_no_addendum = opt_bool(&args, "confirm_no_addendum", TOOL)?.unwrap_or(false);
+    let file_id = if confirm_no_addendum {
+        if args.get("file_id").map_or(false, |v| !v.is_null()) {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: confirm_no_addendum=true 时不得携带 file_id——全局确认（本项目无补遗）与逐件免责（某文件带病放行）是两种语义，混调用拒"
+                ),
+            });
+        }
+        None
+    } else {
+        Some(req_str(&args, "file_id", TOOL)?)
+    };
     // #182：principal 参数已废除——显式拒绝（参数面先于验签面）
     if args.get("principal").is_some() {
         return Err(ToolError::EUnprocessable {
@@ -5468,6 +5495,57 @@ fn record_addendum_waiver(svc: &mut BidService, args: Value) -> ToolResult {
 
     route_guard(svc, &project_id, TOOL, project_version)?;
 
+    // #379：全局确认路径——receipt 签域 no_addendum_confirmed（与逐件
+    // 签域 addendum_waiver:{file_id} 分离：A 门 receipt 免不了 B 门）。
+    if confirm_no_addendum {
+        let (confirmed, principal) = svc
+            .confirm_no_addendum(&reason, &receipt)
+            .map_err(ToolError::from)?;
+        let waivers: Vec<Value> = svc
+            .store()
+            .addendum_waivers()
+            .iter()
+            .map(|w| {
+                json!({
+                    "file_id": w.file_id,
+                    "reason": w.reason,
+                    "at": w.at,
+                    "principal": w.principal,
+                })
+            })
+            .collect();
+        return Ok(json!({
+            "confirmed_no_addendum": {
+                "review_id": confirmed.id,
+                "gate": "no_addendum_confirmed",
+                "reason": confirmed.reviewer,
+                "at": confirmed.at,
+                "actor": {
+                    "actor_id": principal.actor_id,
+                    "actor_type": principal.actor_type.as_str(),
+                    "authentication_method": principal.authentication_method,
+                },
+                // #277 过门方式（agent_declared 时导出带警告）
+                "method": svc
+                    .store()
+                    .latest_gate_pass(bid_domain::review::Gate::NoAddendumConfirmed)
+                    .map(|p| p.method.clone()),
+                "human_confirmed": svc
+                    .store()
+                    .latest_gate_pass(bid_domain::review::Gate::NoAddendumConfirmed)
+                    .map(|p| p.human_confirmed),
+            },
+            "addendum_waivers": waivers,
+            "addendum_readiness": addendum_readiness_block(svc),
+            "agent_waivers": agent_waivers_json(svc),
+            "human_review_complete": svc.store().human_review_complete(),
+            "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or(""),
+            "project_version": svc.store().content_version(),
+            "request_id": next_request_id(),
+        }));
+    }
+
+    let file_id = file_id.expect("非全局路径 file_id 必在场（上方已校验）");
     let (recorded, principal) = svc
         .record_addendum_waiver(&file_id, &reason, &receipt)
         .map_err(ToolError::from)?;

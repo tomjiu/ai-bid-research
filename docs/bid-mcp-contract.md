@@ -907,7 +907,7 @@ out: { project_id, diagnostic_only(true), result_kind("rule_heuristic"),
 错误: E_UNPROCESSABLE（价格口径非法）；E_STATE（无章节树）
 ```
 
-## 16. record_addendum_waiver（#184 补遗分级阻塞的逐件人工确认；#277 agent 声明面）
+## 16. record_addendum_waiver（#184 补遗分级阻塞的逐件人工确认；#277 agent 声明面；#379 起 confirm_no_addendum 全局确认）
 
 > 背景：#184 前旧判定「3 份补遗坏 1 份不拦工作流」（只有**全部**失败才阻塞），
 > 且 OcrRequired 一律放行——零文本扫描件被当「没有内容」处理。翻案理由：
@@ -918,15 +918,28 @@ out: { project_id, diagnostic_only(true), result_kind("rule_heuristic"),
 > 宿主签发面 → 设计内死锁（P5 全断的成因之一）；#277 方案 A 补 agent 声明面。
 
 ```
-in : { project_id, file_id(TF-*——须真实存在，import 响应/拒稿理由中的
-       addendum_readiness.not_ready[].file_id),
+in : { project_id,
+       file_id(TF-*——须真实存在，import 响应/拒稿理由中的
+       addendum_readiness.not_ready[].file_id；confirm_no_addendum=true
+       时不得携带——两种确认语义互斥),
+       confirm_no_addendum?(#379：true = 「本项目无补遗」的**全局显式确认**
+       ——NotProvided 阻塞（② 无补遗件分支）的唯一出口；项目已有补遗件
+       时响亮拒（语义矛盾——正确出口是逐件确认/修复重传）；缺省 false =
+       逐件免责（须携带 file_id）),
        reason(非空白——不可审计的确认不成确认；#277 agent 路径同构必填),
-       receipt(#182 人类签域：scope=addendum_waiver:{file_id} 件级绑定
-       ——TF-0003 的 receipt 免不了 TF-0004；#277 agent 签域：
-       addendum_waiver:{file_id}:agent + actor_type=agent——须工作区
+       receipt(#182 人类签域：逐件 scope=addendum_waiver:{file_id} 件级绑定
+       ——TF-0003 的 receipt 免不了 TF-0004；#379 全局确认 scope=
+       no_addendum_confirmed（与逐件签域分离——逐件 receipt 免不了全局
+       确认，A 门 receipt 免不了 B 门同款纪律）；#277 agent 签域：上述
+       scope + :agent 后缀 + actor_type=agent——须工作区
        require_human_receipt=false；旧 principal 参数显式拒),
        project_version }
-out: { recorded:{ file_id, reason, at(unix epoch 秒),
+out: { confirmed_no_addendum?{ review_id, gate:"no_addendum_confirmed",
+       reason, at, actor:{…}, method, human_confirmed }（#379——仅
+       confirm_no_addendum=true 路径回显；全局确认不写逐件台账——两账
+       分离：addendum_waivers=逐件免责 / reviews(NoAddendumConfirmed)=
+       全局放行事实）,
+       recorded:{ file_id, reason, at(unix epoch 秒),
        principal(legacy 回显——human/agent:{actor_id} 随身份),
        actor:{ actor_id, actor_type, authentication_method },
        method(#277——human_receipt | agent_declared),
@@ -942,7 +955,14 @@ out: { recorded:{ file_id, reason, at(unix epoch 秒),
       逐件点名）；本工具对具体 file_id 记一条人工确认 → 该件不再构成阻塞。
       非全局布尔——「3 份坏 1 份」要确认到具体哪一份、为什么故意带病放行。
       写账即 content_version +1；导入可解析版本后阻塞自然消失，确认记录
-      无害残留（与 §12 addendum_waiver 门同款语义）。工具名带 addendum 是
+      无害残留（与 §12 addendum_waiver 门同款语义）。
+      #379 拆门：逐件确认**只写台账 + GatePassRecord 审计账，不写
+      reviews 门记录**——「未发现补遗/澄清文件」（NotProvided）的放行
+      只能经 confirm_no_addendum=true 显式确认（NoAddendumConfirmed 门）
+      或旧快照既有的 addendum_waiver 门（OR 兼容——#379 前的确认无法
+      区分语义，已放行项目不回锁）。对无关件（如图纸）做逐件 waiver
+      不再顺手解除 NotProvided 阻塞。
+      工具名带 addendum 是
       #184 历史口径——确认面按 file_id 落账，覆盖所有招标包输入件（证据
       源文件不在此面，可用性归证据系统）。确认放行后起草为**受限起草**
       （§6 out.input_integrity.status = RESTRICTED——放行 ≠ 没问题）。
@@ -953,7 +973,9 @@ out: { recorded:{ file_id, reason, at(unix epoch 秒),
       ocr_pending（逐件真相在 not_ready 清单）。
 状态: FILES_IMPORTED+（含 EXPORTED——与 §12 addendum_waiver 门同窗口：导入
       后任意时刻可确认，阻塞可能出现在任何后续阶段；DRAFT 拒 E_STATE）
-错误: E_UNPROCESSABLE（principal 缺 human: 前缀 / reason 空白）；E_NOTFOUND
+错误: E_UNPROCESSABLE（principal 缺 human: 前缀 / reason 空白 /
+      confirm_no_addendum 与 file_id 混调用 / 项目已有补遗件时全局确认 /
+      confirm_no_addendum 非布尔 / 错域 receipt）；E_NOTFOUND
       （file_id 不存在于 files——对不存在的件做确认 = 凭空免责）；E_STATE
       （DRAFT）；拒绝路径零副作用
 ```

@@ -693,6 +693,18 @@ pub fn agent_addendum_waiver_scope(file_id: &str) -> String {
     format!("{}:agent", addendum_waiver_scope(file_id))
 }
 
+/// #379：全局「本项目无补遗」确认 receipt 的签域——与逐件 waiver 签域
+/// 分离（A 门 receipt 免不了 B 门同款纪律：逐件免责的 receipt 不能顺
+/// 手当全局确认用）。
+pub fn no_addendum_confirmed_scope() -> String {
+    "no_addendum_confirmed".to_string()
+}
+
+/// #379：全局确认的 agent 声明签域（[`no_addendum_confirmed_scope`] + 后缀）。
+pub fn agent_no_addendum_confirmed_scope() -> String {
+    format!("{}:agent", no_addendum_confirmed_scope())
+}
+
 /// #277 方案 A：工作区配置装载（`<dir>/.mang/config.json`）。
 ///
 /// - 文件不存在 / 字段缺席 / null → **true**（严格模式默认，Q1 裁定：保守
@@ -1251,6 +1263,39 @@ impl BidService {
         let rec = self
             .store
             .record_addendum_waiver(file_id, reason, &principal)?;
+        self.auto_checkpoint()?;
+        Ok((rec, principal))
+    }
+
+    /// #379 拆门：「本项目无补遗」的**全局显式确认**（MCP 面
+    /// `record_addendum_waiver` 的 `confirm_no_addendum:true` 路由到此）。
+    ///
+    /// 域前置裁决（fail-closed）：项目已有补遗/澄清件时响亮拒——「确认
+    /// 无补遗」与「补遗在场」矛盾，正确出口是逐件 waiver（坏件免责）或
+    /// 修复重传，不是全局确认。词面判定用 [`crate::readiness::addendum_statuses`]
+    /// 的同源身份面（#188 任一角色命中即算），不另立第二套判据。
+    pub fn confirm_no_addendum(
+        &mut self,
+        reason: &str,
+        receipt: &str,
+    ) -> Result<(bid_domain::review::ReviewRecord, TrustedPrincipal), ToolError> {
+        let principal = self.verify_gate_principal(
+            receipt,
+            &no_addendum_confirmed_scope(),
+            &agent_no_addendum_confirmed_scope(),
+            "record_addendum_waiver(confirm_no_addendum)",
+        )?;
+        let addenda = crate::readiness::addendum_statuses(&self.store);
+        if !addenda.is_empty() {
+            let names: Vec<&str> = addenda.iter().map(|a| a.name.as_str()).collect();
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "项目已有补遗/澄清件（{}）——「确认本项目无补遗」与事实矛盾。坏件的正确出口是逐件确认（record_addendum_waiver file_id=…）或修复重传；全局确认只适用于「未发现补遗」的阻塞（NotProvided）",
+                    names.join("、")
+                ),
+            });
+        }
+        let rec = self.store.confirm_no_addendum(reason, &principal)?;
         self.auto_checkpoint()?;
         Ok((rec, principal))
     }
