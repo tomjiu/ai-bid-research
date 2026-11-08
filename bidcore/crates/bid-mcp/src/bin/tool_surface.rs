@@ -126,9 +126,9 @@ fn check(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(),
     }
 }
 
-/// #494：`draft` 面（draft_tool.rs）只在 check() 消费——write() 未接
-/// 重写（功能缺口另行开单，零行为变更纪律下先 underscore 化）。
-fn write(matrix: &Path, dispatch: &Path, e2e: &Path, _draft: &Path) -> Result<(), Diagnostic> {
+/// #505：`draft` 面（draft_tool.rs）已接线 write()——check/write 全回路
+///（#494 登记的缺口由本变更收口）。
+fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(), Diagnostic> {
     let n = bid_mcp::TOOL_NAMES.len();
 
     let matrix_src = read(matrix)?;
