@@ -8,6 +8,7 @@
 用法：
   python3 checklist.py --stage P1 import.json      # 单文件
   cat reply.json | python3 checklist.py --stage P5 -   # stdin
+  python3 checklist.py --stage P7 rt_close.json    # 审校收官（complete_revision 最后一单应答）
   python3 checklist.py --dump-version reply.json   # 提取 project_version（并发账）
   python3 checklist.py --list                     # 阶段判据速查
 
@@ -56,6 +57,57 @@ def check(path: str, test: Callable[[Any], bool], human: str):
 def _is_ok(doc: dict) -> tuple[bool, str]:
     """P1 之外的通用底座：ok=true（E_PARTIAL 是 P1 的合法中间态，单独处理）。"""
     return doc.get("ok") is True, f"ok = {doc.get('ok')!r}（工具成功）"
+
+
+def _p7_complete_revision(doc: dict) -> tuple[bool, str]:
+    """complete_revision 收官应答（#321 RT 生命周期关单面）。
+
+    SKILL.md 阶段表 P7 行完成判据「每个 MAJOR finding 有 RT 且 DONE」的
+    机器面 = 最后一单关单应答的 open_rt_count（tools.rs 出参实证：
+    export_allowed_hint 是描述文案不是布尔——权威判据用计数，不匹配文案）。
+    """
+    if doc.get("ok") is not True:
+        return False, f"ok = {doc.get('ok')!r}（工具成功）"
+    data = doc.get("data")
+    data = data if isinstance(data, dict) else {}
+    open_count = data.get("open_rt_count")
+    if open_count != 0:
+        return False, (f"open_rt_count = {open_count!r}"
+                       "（应 0——每个 MAJOR finding 的 RT 须 DONE）")
+    open_ids = data.get("open_rt_ids")
+    if open_ids != []:
+        return False, f"open_rt_ids = {open_ids!r}（与 count=0 应一致为空）"
+    return True, "RT 收官：open_rt_count = 0（导出 RT 面放行）"
+
+
+def _p7_review_gate(doc: dict) -> tuple[bool, str]:
+    """record_review_gate APPROVED 应答（审校过门 + 拒审派生 RT 的入口面）。"""
+    if doc.get("ok") is not True:
+        return False, f"ok = {doc.get('ok')!r}（工具成功）"
+    data = doc.get("data")
+    data = data if isinstance(data, dict) else {}
+    receipt = data.get("receipt")
+    receipt = receipt if isinstance(receipt, dict) else {}
+    if receipt.get("decision") != "APPROVED":
+        return False, (f"receipt.decision = {receipt.get('decision')!r}"
+                       "（APPROVED 才算过门里程碑；REJECTED 是过程记录）")
+    spawned = receipt.get("spawned_rt_ids")
+    if not isinstance(spawned, list):
+        return False, "receipt.spawned_rt_ids 缺失（应 list——MAJOR→RT 派生可见）"
+    return True, (f"过门 APPROVED（本次派生 RT {len(spawned)} 条——"
+                  "经 assign/advance/complete 闭环后，用最后一单 complete_revision "
+                  "应答跑本判据收官）")
+
+
+def _p7(doc: dict) -> tuple[bool, str]:
+    """P7 双形状分派：按应答的 tool 字段选判据（收官质检喂最后一单应答）。"""
+    tool = doc.get("tool")
+    if tool == "complete_revision":
+        return _p7_complete_revision(doc)
+    if tool == "record_review_gate":
+        return _p7_review_gate(doc)
+    return False, (f"tool = {tool!r}（P7 接受 complete_revision / "
+                   "record_review_gate 应答——RT 全关的收官确认用前者）")
 
 
 STAGES: dict[str, Stage] = {
@@ -113,6 +165,12 @@ STAGES: dict[str, Stage] = {
         (check("data.project_version", lambda v: isinstance(v, int),
                "响应携带 project_version（发生推进时为新值——传给下一个工具）"),),
     ),
+    "P7": (
+        # SKILL.md 阶段表 P7 行：「每个 MAJOR finding 有 RT 且 DONE」——
+        # #321（RT 生命周期七工具入面）起可机器化：双形状分派（收官确认喂
+        # complete_revision 最后一单应答；过门/派生面喂 record_review_gate）。
+        (_p7,),
+    ),
     "P8": (
         (_is_ok,),
         (check("data.precheck.blockers", lambda v: v == 0,
@@ -132,6 +190,7 @@ STAGE_TITLES = {
     "P4": "绑定 bind_evidence",
     "P5": "起草 draft_response_section",
     "P6": "校验 validate_bid_document",
+    "P7": "审校 complete_revision / record_review_gate",
     "P8": "导出 export_bid_document",
 }
 
