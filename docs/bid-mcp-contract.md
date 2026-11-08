@@ -17,9 +17,7 @@
   `in : { project_id, filters:{...}, cursor?, limit?, page?(仅矩阵兼容) }`；
   `out: { rows|items, total(过滤后总数), limit(生效页宽), cursor(本次生效游标), next_cursor: string|null }`，`next_cursor=null` 即取完，原样回传取下一页。
   游标规则（fail-closed）：opaque base64（内嵌版本字节/偏移/过滤器指纹）；跨过滤器或跨工具复用游标 → `E_UNPROCESSABLE`；limit 合法域 1..=1000、缺省 100，越界/非整数**显式拒**（不静默 clamp）；游标损坏/版本不认识/偏移越界（底层列表已变化）→ `E_UNPROCESSABLE`。行序确定性（矩阵=条款位置序 CMP-0001..N；证据=id 字典序；任务=target_id 字典序）是分页安全前提，不得破坏。
-- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#285 ① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 30。
-
-- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22，篇幅档位推荐）后工具面 31；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§24，DIRTY 章节局部改写 + 局部复验）后工具面 **33**。
+- **工具面沿革（单一真源 = `bidcore/crates/bid-mcp/src/lib.rs` TOOL_NAMES）**：原 8 工具（§1-§9）；V3-5（S-4）增只读三件——`get_bid_project_state`（§4-C，断点恢复入口）、`list_evidence` / `list_tasks`（§4-A/§4-B）→ 11；#42 阶段 10 增 `save_version`（§SV）→ 12；#80 第三批（G1-G3）后 21；#219 全块覆盖三工具（§17/§18/§19）后 24；#226 增 `set_matrix_override`（§4-D，否决项死锁人工出口）→ 25；#243 增 `recover_validating_state`（§20）后 26；#254 增分段三工具（§21-A/B/C）后 29；#279 增 `list_tools`（§LT，行协议发现面）后 30；#287 增 `recommend_length_profile`（§25，篇幅档位推荐）后 31（commit 23a2537「第 31 个」）；#285 ① 增 `get_star_coverage`（§22，★漏标检测）后 32（merge 66465fb「工具面 30->32」）；#285 ② 增块级双向索引三工具（§22-A/B/C——REQ 溯源/块反查/overlay 数据面）后 35；#319 增补遗后增量重写两工具（§23/§24）后 37；#321（A-23）增 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（§12-A~G）后工具面 **44**。
 
 ## 1. create_bid_project
 ```
@@ -176,6 +174,64 @@ out: { items:[{target_id:SEC-*|REQ-*, owner, deadline, status}],
 无状态副作用；任何阶段可调。行序 = target_id 字典序（domain BTree 语义——R-15 可重放）；
 先过滤后分页（过滤下沉 DomainStore::list_tasks 双过滤，工具层只切页）。
 错误: E_UNPROCESSABLE（非法 status、游标与过滤器不匹配、limit 越界）；E_NOTFOUND（项目路由）
+```
+
+## 4-C. get_bid_project_state（只读，S-4——断点恢复入口）
+```
+in : { project_status? }（调试/模拟面：显式带入状态查询该态的允许工具表；
+      合法值 DRAFT|FILES_IMPORTED|REQUIREMENTS_EXTRACTED|MATRIX_READY|
+      EVIDENCE_BOUND|DRAFTING|VALIDATING|REVIEWING|READY_TO_EXPORT|EXPORTED；
+      缺省 = 服务态真实状态——日常断点恢复不传本参数）
+out: { status,
+       allowed_next_tools:[…该态允许调用的工具名——越级防护裁决表的回显…],
+       terminal(是否终态——EXPORTED 后无 next_allowed),
+       dirty_sections:[{ section_id, title, section_status,
+                         pending_directives }](#319 发现面——补遗/重开致脏
+                         章节 + 待处置改写指令计数，断点恢复时「哪些章节
+                         还没追上补遗」一眼可见；无脏零指令 = 空数组),
+       pending_rewrite_directives:[{ id(RD-xxxx), section_id, change_id,
+                         req_id, change_type, old_text, new_requirement,
+                         affected_segments:[{ segment_id, seq, matched_by }],
+                         created_at }],
+       agent_waivers:[…](#277 过门审计面——agent 声明过的门；human_review_
+                         complete=false 时 export 正文插警告横幅),
+       human_review_complete(bool——三门全部人签) }
+```
+> **无 `project_id` 入参**——本工具读服务态当前项目（单项目服务模型）；
+> 建项目前调 → `E_NOTFOUND`（store 无项目）。无状态门（每个状态都可查，
+> `allowed_tools` 表全状态含本工具）。
+> 断点恢复协议（SKILL.md 恢复协议同源）：先调本工具对齐 status /
+> DIRTY 清单 / BLOCKER 计数，再按 `allowed_next_tools` 续作。
+
+## 4-D. set_matrix_override（#226——否决项死锁的人工出口 · 写）
+```
+in : { project_id,
+       requirement_id("REQ-xxxx"——须真实存在；receipt 签域绑定本行，
+                       REQ-0003 的 receipt 免不了 REQ-0004),
+       status("RESPONDED"|"NOT_APPLICABLE"|"NOT_RESPONDED"|"PARTIAL"),
+       deviation?(偏离/不适用说明——status=NOT_APPLICABLE 时必填：
+                 不可审计的豁免不算豁免),
+       receipt(#182 宿主签发的审批回执——签域
+               matrix_override:<project_id>:<requirement_id>:<status>:
+               <理由sha256>，项目/行/状态/理由四重绑定，换任何一项都要
+               换签；principal/operator 参数不存在，Agent 不得伪造——
+               把必选条款标不适用是豁免动作，只认真人),
+       project_version? }
+out: { requirement_id,
+       row(覆写后矩阵行的真实状态——从重算后的矩阵取，不是把入参抄
+           回去；「写成功但没生效」这类 bug 不会被响应体掩盖),
+       override:{ principal, at }(覆写审计面——谁豁免了这一行、何时),
+       actor:{ actor_id, actor_type, authentication_method }
+       (#182 可信身份回显，与 record_addendum_waiver.actor 同款),
+       matrix_rows, blocking_rows(覆写后阻塞行数),
+       status, project_version, request_id }
+语义: 人工覆写某条款的响应状态——典型场景「本次招标不接受联合体」这类
+      招标人规则说明：Agent 无法响应、也无人能提供证据 → 人工裁 NOT_
+      APPLICABLE + 理由，矩阵立即重算（blocking 行随派生清零）。
+窗口: MATRIX_READY+ 含 Exported（矩阵已建才有可覆写对象）。
+错误: E_UNPROCESSABLE（非法 status / NOT_APPLICABLE 缺 deviation /
+      传了 principal|operator 参数）；E_NOTFOUND（REQ 不存在/项目路由）；
+      E_STATE（越级）；E_CONFLICT（project_version 过期）。
 ```
 
 ## 5. search_evidence（知识库检索——双通道；#217 正文摘录面）
@@ -1170,6 +1226,69 @@ out: { file_id, file_name,
       substantive=true 后重跑 extract_requirements）；不改抽取逻辑；无 UI。
 ```
 
+## 22-A. get_requirement_provenance（#285② · REQ→原文溯源 · 只读）
+```
+in : { project_id, req_id }
+out: { project_id, req_id, category, clause_no, substantive(bool——params.star
+       ?? params.substantive ?? false), statement, marked_by, source_file,
+       anchors:[{ file, kind, locator, excerpt,
+                  block_idx(page/line——块位三级真源：
+                    ① Anchor.block_idx（#285② 起抽取时回填）→ resolved_via=
+                       "backfilled"
+                    ② 旧快照锚按 (locator, excerpt) 精确匹配兜底 →
+                       "fallback_match"
+                    ③ 解析不到 → null（跨版本锚失效，诚实可见）→
+                       "unresolved"；文件未解析 → "file_not_parsed"),
+                  page, line(page/line 从 locator 解析——PDF 面；DOCX 章节
+                  路径面为 null) }],
+       next(anchors 空 = "本 REQ 无锚点（合成/人工件）"；
+            否则提示 get_block_requirements(block_idx) 反查原文上下文) }
+```
+> **geometric（quads 页面坐标）不产出**——#285② 不做 mdcore 依赖；几何
+> 投影由 mdcore overlay-pdf 承担（本工具给 block_idx，视图层拿它去
+> mdcore 侧查几何）。多文件多锚形态（GT-07 双锚点）逐锚回显。
+> 无状态门（只读，route_project 项目路由即可）。
+
+## 22-B. get_block_requirements（#285② · 块→REQ 反查 · 只读）
+```
+in : { project_id, file_id, block_idx(0 基块序——get_document_chunks 的
+       chunks[].block_idx 同一序) }
+out: { project_id, file_id, file_name, block_idx,
+       kind(块类型小写), locator, page, line, text(块原文), in_table,
+       verdict(Agent 标记面——未标记 = null：无结论不是「noise」，是
+               「还没看过」；标记来源优先，无标记块由 mark 面兜底),
+       req_ids(派生索引聚合——反查索引现算不持久化),
+       marked_by, next(有 REQ → 提示 get_requirement_provenance 查溯源；
+               无 REQ → 提示 submit_block_marks 补标或修抽取) }
+```
+> 无 REQ 块照常返回（req_ids: []）——「这段原文没被抽成任何要求」可见。
+> 越界 block_idx → E_NOTFOUND（消息带本文件总块数）。
+
+## 22-C. get_annotation_overlay（#285② · 视图层 overlay 数据面 · 只读）
+```
+in : { project_id, file_id, page?(可选——只取该页块，PDF 面；省略 = 全文件) }
+out: { project_id, file_id, file_name,
+       total_blocks, req_bearing_blocks, suspected_miss_blocks,
+       truncated(明细 > 200 块截断——计数全量、明细截断，按 page 分页取),
+       overlay:[{ block_idx, page, line, locator, text,
+                  req_ids,
+                  semantic("emphasis"——★真值块（招标人明示强调，废标线
+                           信号；#285① star_coverage 同源双腿匹配）；
+                           "requirement"——有 REQ 锚定；同块兼有时 emphasis
+                           优先——招标人的强调信号高于我方抽取信号；
+                           其余 null——无信号，视图层不上色),
+                  status("valid"——当前抽取快照内；锚失效检测等文档重导
+                           面先恒 valid，诚实注明),
+                  suspected_miss(bool——#285① missing 块位，与 get_star_
+                           coverage 同源直接复用，两工具口径恒一致) }],
+       warnings(截断提示 + suspected_miss 计数提示),
+       next(无 REQ 锚定块 → 先 extract_requirements；否则视图层按
+            semantic 上色，suspected_miss 块先补标) }
+```
+> 对齐 mdcore OverlayMark 词汇（#239）——标书面只产出有数据源的两值
+> （emphasis/requirement）；渲染上色由视图层决定，本工具只给数据。
+> 无状态门（只读）。
+
 ## LT. list_tools（#279 行协议发现面 · 只读）
 ```
 in : {}（无参数、无状态前置——建项目前即可调）
@@ -1184,7 +1303,7 @@ out: { count, tools: [{ name, summary }...],
       全量）；本工具是 stdio 裸 JSON 行协议的发现面补口。
 ```
 
-## 22. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+## 25. recommend_length_profile（#287 篇幅档位推荐 · 只读）
 ```
 in : { project_id }
 out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
