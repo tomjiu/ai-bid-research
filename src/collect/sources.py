@@ -1,4 +1,5 @@
-"""本地源读取器（JSON / JSONL / CSV 三形态，#601 批次 A；CSV 为 R31 扩展）。
+"""本地源读取器（JSON / JSONL / CSV 三形态，#601 批次 A；CSV 为 R31、
+读取器注册表为 R32 扩展）。
 
 设计说明
 --------
@@ -27,12 +28,12 @@ import csv
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from src.collect.records import AnnouncementRecord
 
-#: 目录源收集的扩展名（小写比较）。
-_SOURCE_SUFFIXES = (".json", ".jsonl", ".csv")
+#: 行式读取器签名：``Path → (items, row_errors)``（同 _read_jsonl_items）。
+RowReader = Callable[[Path], tuple]
 
 
 class SourceError(ValueError):
@@ -78,23 +79,27 @@ def resolve_source_files(source: Union[str, Path]) -> List[Path]:
         排序后的文件路径列表（目录源按文件名排序保证确定性）。
 
     Raises:
-        SourceError: 路径不存在，或目录内无 ``.json``/``.jsonl``/``.csv``
-            文件，或文件扩展名不支持。
+        SourceError: 路径不存在，或目录内无受支持扩展名
+            （``.json`` + 已注册行式读取器）的源文件，
+            或文件扩展名不支持。
     """
     path = Path(source)
     if not path.exists():
         raise SourceError(f"源路径不存在: {path}")
+    suffixes = supported_suffixes()
     if path.is_dir():
         files = sorted(
-            p for p in path.iterdir() if p.suffix.lower() in _SOURCE_SUFFIXES
+            p for p in path.iterdir() if p.suffix.lower() in suffixes
         )
         if not files:
-            raise SourceError(f"目录内无 .json/.jsonl/.csv 源文件: {path}")
+            raise SourceError(
+                f"目录内无 {'/'.join(suffixes)} 源文件: {path}"
+            )
         return files
-    if path.suffix.lower() not in _SOURCE_SUFFIXES:
+    if path.suffix.lower() not in suffixes:
         raise SourceError(
             f"不支持的源文件类型: {path.suffix or '(无扩展名)'}"
-            f"（支持 {'/'.join(_SOURCE_SUFFIXES)}）"
+            f"（支持 {'/'.join(suffixes)}）"
         )
     return [path]
 
@@ -220,6 +225,45 @@ def _read_csv_rows(path: Path) -> tuple:
 
 
 # ----------------------------------------------------------------------
+# 读取器注册表（R32）——研究脚本扩展点
+# ----------------------------------------------------------------------
+
+#: 行式源读取器注册表（后缀 → 读取函数）。注册即可被目录源收集与
+#: 单文件分发自动识别（无需改动本文件）。
+_ROW_READERS: Dict[str, RowReader] = {
+    ".csv": _read_csv_rows,
+    ".jsonl": _read_jsonl_items,
+}
+
+
+def supported_suffixes() -> tuple:
+    """当前受支持的源扩展名（``.json`` + 已注册行式读取器，排序确定性）。"""
+    return tuple(sorted({".json", *_ROW_READERS}))
+
+
+def register_source_reader(suffix: str, reader: RowReader) -> None:
+    """注册行式源读取器（研究面扩展点，R32）。
+
+    注册后目录源自动收集该扩展名、单文件源自动分发——研究脚本
+    无需改动 ``sources.py`` 即可接入新格式（如 ``.tsv``）。
+
+    Args:
+        suffix: 扩展名（须以 ``.`` 开头，大小写不敏感，归一为小写）。
+        reader: 读取函数，签名同 :func:`_read_jsonl_items`：
+            ``Path → (items, row_errors)``。
+
+    Raises:
+        ValueError: suffix 不以 ``.`` 开头，或 reader 不可调用。
+    """
+    name = str(suffix).strip().lower()
+    if not name.startswith("."):
+        raise ValueError(f"扩展名须以 . 开头: {suffix!r}")
+    if not callable(reader):
+        raise ValueError(f"reader 不可调用: {reader!r}")
+    _ROW_READERS[name] = reader
+
+
+# ----------------------------------------------------------------------
 # 装载入口
 # ----------------------------------------------------------------------
 
@@ -258,13 +302,7 @@ def load_records(
     result.files_read = len(files)
 
     for path in files:
-        suffix = path.suffix.lower()
-        if suffix == ".csv":
-            row_reader = _read_csv_rows
-        elif suffix == ".jsonl":
-            row_reader = _read_jsonl_items
-        else:
-            row_reader = None
+        row_reader = _ROW_READERS.get(path.suffix.lower())
 
         if row_reader is not None:
             try:
