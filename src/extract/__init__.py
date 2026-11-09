@@ -5,6 +5,21 @@
 生产提示词分开演进（PYTHON-BOUNDARY.md §2 真源声明）。
 """
 
+from src.extract.engine import (
+    ExtractionOutcome,
+    LLMExtractor,
+    RuleExtractor,
+    extract_record,
+    extract_record_async,
+)
 from src.extract.schema import ExtractionSchemaError, validate_extraction
 
-__all__ = ["ExtractionSchemaError", "validate_extraction"]
+__all__ = [
+    "ExtractionSchemaError",
+    "validate_extraction",
+    "ExtractionOutcome",
+    "LLMExtractor",
+    "RuleExtractor",
+    "extract_record",
+    "extract_record_async",
+]
