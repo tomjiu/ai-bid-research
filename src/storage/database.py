@@ -49,6 +49,21 @@ CREATE TABLE IF NOT EXISTS pending_announcements (
     updated_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_announcements(status);
+
+-- #601 批次 D：研究管道运行台账（审计面——报告基于哪次运行的数据可追溯）
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at   TEXT NOT NULL,
+    finished_at  TEXT,
+    source       TEXT,
+    keyword      TEXT,
+    days         INTEGER,
+    watermark    REAL,
+    stages       TEXT,
+    report_path  TEXT,
+    status       TEXT NOT NULL DEFAULT 'running'
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started ON pipeline_runs(started_at DESC);
 """
 
 # 允许写入 bids 表的业务字段（requirements 以 JSON 文本存储）
@@ -393,6 +408,116 @@ class BidDatabase:
             "skipped": counts.get("skipped", 0),
             "by_reason": by_reason,
         }
+
+    def pipeline_runs_save(
+        self,
+        started_at: str,
+        *,
+        source: Optional[str] = None,
+        keyword: Optional[str] = None,
+        days: Optional[int] = None,
+        watermark: Optional[float] = None,
+    ) -> int:
+        """登记一次管道运行（running 态）——返回运行 ID。
+
+        Args:
+            started_at: 开始时刻（人读 ISO 字符串）。
+            source: 本次源路径。
+            keyword: 分析关键词。
+            days: 时间窗口。
+            watermark: 增量水位（epoch 浮点秒——亚秒精度，
+                与文件 mtime 同口径比较；人读时刻是秒级，
+                直接比对会有同秒竞态）。
+
+        Returns:
+            新运行行的 id（供 finish 用）。
+        """
+        cursor = self._conn.execute(
+            """
+            INSERT INTO pipeline_runs
+                (started_at, source, keyword, days, watermark, status)
+            VALUES (?, ?, ?, ?, ?, 'running')
+            """,
+            (started_at, str(source) if source else None, keyword, days,
+             watermark),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def pipeline_runs_finish(
+        self,
+        run_id: int,
+        *,
+        stages: Optional[List[Dict[str, Any]]] = None,
+        report_path: Optional[str] = None,
+        status: str = "done",
+    ) -> int:
+        """收口一次运行（stages JSON + 报告路径 + 状态）。
+
+        Args:
+            run_id: :meth:`pipeline_runs_save` 返回的运行 ID。
+            stages: 各阶段结果（name/status/detail 序列化面）。
+            report_path: 报告文件路径。
+            status: ``done`` / ``failed``。
+
+        Returns:
+            受影响行数。
+        """
+        cursor = self._conn.execute(
+            """
+            UPDATE pipeline_runs
+            SET finished_at = datetime('now', 'localtime'),
+                stages = ?, report_path = ?, status = ?
+            WHERE id = ?
+            """,
+            (
+                json.dumps(stages, ensure_ascii=False, default=str)
+                if stages is not None
+                else None,
+                report_path,
+                status,
+                run_id,
+            ),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def pipeline_runs_list(
+        self, *, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """列出最近 N 次运行（新在前，stages 已反序列化）。"""
+        cursor = self._conn.execute(
+            "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            if item.get("stages"):
+                try:
+                    item["stages"] = json.loads(item["stages"])
+                except (json.JSONDecodeError, TypeError):
+                    item["stages"] = None  # 损坏兜底（#563 口径）
+            rows.append(item)
+        return rows
+
+    def pipeline_runs_last(self, *, status: str = "done") -> Optional[Dict[str, Any]]:
+        """最近一次指定状态的运行（增量水位的时序基础）。"""
+        cursor = self._conn.execute(
+            "SELECT * FROM pipeline_runs WHERE status = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (status,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        if item.get("stages"):
+            try:
+                item["stages"] = json.loads(item["stages"])
+            except (json.JSONDecodeError, TypeError):
+                item["stages"] = None
+        return item
 
     # ------------------------------------------------------------------
     # 生命周期

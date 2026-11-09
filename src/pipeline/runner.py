@@ -75,6 +75,7 @@ class PipelineResult:
     stages: List[StageResult] = field(default_factory=list)
     report_path: Optional[Path] = None
     payload: Optional[Dict[str, Any]] = None
+    run_id: Optional[int] = None  # pipeline_runs 台账行（审计可溯）
 
     def stage(self, name: str) -> Optional[StageResult]:
         """按阶段名取结果。"""
@@ -122,6 +123,7 @@ class ResearchPipeline:
         keyword: Optional[str] = None,
         days: Optional[int] = None,
         html: bool = False,
+        incremental: bool = False,
     ) -> PipelineResult:
         """运行研究管道（同步编排；extract 内部异步由批次 B 收口）。
 
@@ -130,6 +132,9 @@ class ResearchPipeline:
             keyword: 分析/报告口径关键词。
             days: 分析/报告时间窗口。
             html: 报告落盘后同时导出 HTML。
+            incremental: 增量模式——collect 只读 mtime 晚于上次
+                成功运行的新文件（水位来自 pipeline_runs 台账）；
+                首次运行无水位 = 全量。
 
         Returns:
             管道结果（stages/payload/report_path）。
@@ -142,11 +147,66 @@ class ResearchPipeline:
             SourceError: source 指定但不可读（collect 阶段硬错——
                 管道起步失败没有「继续跑」的语义）。
         """
+        import time as _time
+        from datetime import datetime
+
+        started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        watermark = _time.time()  # 亚秒精度——与文件 mtime 同口径
+        with BidDatabase(self.db_path) as db:
+            run_id = db.pipeline_runs_save(
+                started_at, source=str(source) if source else None,
+                keyword=keyword, days=days, watermark=watermark,
+            )
+            last_run = db.pipeline_runs_last(status="done")
+
+        since: Optional[float] = None
+        if incremental and last_run is not None:
+            value = last_run.get("watermark")
+            since = value if isinstance(value, (int, float)) else None
+            # 水位缺失/损坏 → 退化为全量（不炸管道）
+
+        try:
+            result = self._run_stages(
+                source, keyword=keyword, days=days, html=html, since=since
+            )
+        except Exception:
+            with BidDatabase(self.db_path) as db:
+                db.pipeline_runs_finish(run_id, status="failed")
+            raise
+
+        with BidDatabase(self.db_path) as db:
+            db.pipeline_runs_finish(
+                run_id,
+                stages=[
+                    {
+                        "name": s.name,
+                        "status": s.status,
+                        "detail": s.detail,
+                        "failures": s.failures,
+                    }
+                    for s in result.stages
+                ],
+                report_path=str(result.report_path)
+                if result.report_path
+                else None,
+            )
+        result.run_id = run_id
+        return result
+
+    def _run_stages(
+        self,
+        source,
+        *,
+        keyword,
+        days,
+        html,
+        since: Optional[float],
+    ) -> PipelineResult:
         result = PipelineResult()
 
         new_records: List[Any] = []
         if source is not None:
-            new_records, collect_stage = self._stage_collect(source)
+            new_records, collect_stage = self._stage_collect(source, since=since)
             result.stages.append(collect_stage)
         else:
             result.stages.append(
@@ -188,9 +248,9 @@ class ResearchPipeline:
     # 各阶段
     # ------------------------------------------------------------------
 
-    def _stage_collect(self, source) -> tuple:
-        """collect 阶段：装载 → 去重 → 新/更新分账 upsert。"""
-        loaded = load_records(source)  # SourceError 直抛（管道起步硬错）
+    def _stage_collect(self, source, *, since: Optional[float] = None) -> tuple:
+        """collect 阶段：装载（可水位增量）→ 去重 → 新/更新分账 upsert。"""
+        loaded = load_records(source, since=since)  # SourceError 直抛
         deduped = dedupe_records(loaded.records)
 
         new_records: List[Any] = []

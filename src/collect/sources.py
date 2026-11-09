@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 from src.collect.records import AnnouncementRecord
 
@@ -160,7 +160,10 @@ def _read_jsonl_items(path: Path) -> tuple:
 # ----------------------------------------------------------------------
 
 def load_records(
-    source: Union[str, Path], *, skip_invalid: bool = True
+    source: Union[str, Path],
+    *,
+    skip_invalid: bool = True,
+    since: Optional[float] = None,
 ) -> LoadResult:
     """从本地源装载公告记录（规范化入口：raw → AnnouncementRecord）。
 
@@ -169,6 +172,9 @@ def load_records(
         skip_invalid: ``True``（默认）时坏文件/坏记录登记进
             :attr:`LoadResult.failures` 后继续；``False`` 时第一条
             失败即抛对应异常（严格模式）。
+        since: 增量水位（epoch 秒）——只读 mtime 晚于水位的文件；
+            目录内无新文件时返回**空结果**（零记录零失败，
+            不是错误——「无新文件」是增量的正常结局）。
 
     Returns:
         装载结果（成功记录 + 失败明细 + 文件数）。
@@ -179,6 +185,11 @@ def load_records(
             首个载荷/记录错误。
     """
     files = resolve_source_files(source)
+    if since is not None:
+        # 增量水位：只读新文件（mtime 严格晚于水位）
+        files = [p for p in files if p.stat().st_mtime > since]
+        if not files:
+            return LoadResult(files_read=0)  # 无新文件——空结果不报错
     result = LoadResult()
     result.files_read = len(files)
 
