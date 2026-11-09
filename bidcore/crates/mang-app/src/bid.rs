@@ -1,5 +1,7 @@
 //! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`；
-//! 批 B：`bid.matrix`；批 C：`bid.quality` / `bid.score`；批 D：`bid.coverage`）。
+//! 批 B：`bid.matrix`；批 C：`bid.quality` / `bid.score`；批 D：`bid.coverage`；
+//! #603 批 B 治理面：`bid.matrix_override`——否决死锁人工豁免，
+//! `bid.matrix` 增补 overrides 直读面）。
 //!
 //! 架构（原认领计划 2026-11-07T02:34Z 的批次切片，issue #313）：
 //!   * [`state`]  —— 经 `bid_mcp::dispatch_with` 走真实工具面
@@ -415,6 +417,18 @@ pub fn matrix(
         }
     }
 
+    // #603 批 B：overrides 直读面（DomainStore——bid.outline / bid.gates
+    // 直读先例）。工具面 get_compliance_matrix 行内无覆写标记，本面补
+    // 「哪些行被人工豁免过、谁豁免的、何时、为何」的审计素材（UI 徽章
+    // + 追溯 tooltip）；行状态本身仍是工具面派生真源（override > 证据+
+    // 章节），两处不重复判定。
+    let overrides: serde_json::Map<String, Value> = svc
+        .store()
+        .matrix_overrides()
+        .iter()
+        .map(|(k, o)| (k.clone(), matrix_override_json(o)))
+        .collect();
+
     // 统计摘要：五态恒在（0 兜底——UI 徽章不赌键在场）；blocking/mandatory/
     // substantive/evidence_missing 与行字段同一判定面（工具面输出，不另写
     // 一套字面量）。
@@ -467,6 +481,7 @@ pub fn matrix(
             "evidence_missing": evidence_missing,
         },
         "star_summary": star_summary,
+        "overrides": Value::Object(overrides),
         "warnings": warnings,
         "project_version": project_version,
         "fetched_pages": pages,
@@ -768,6 +783,113 @@ pub fn gate_pass(
         "project": project,
         "gate_pass": tool_out,
     }))
+}
+
+/// `bid.matrix_override` —— 否决死锁人工豁免（写面；#603 批 B——治理面
+/// 写面第二发）。
+///
+/// 流程（#182 宿主签发面——**不进 MCP 工具表，Agent 拿不到**，与
+/// [`gate_pass`] 同款）：壳内真人经 UI 确认（条款/状态/理由）→ 壳用
+/// 服务态密钥签 receipt（scope 四重绑定
+/// `matrix_override:{project_id}:{requirement_id}:{status}:{理由 sha256}`
+/// ——挪行、换状态、偷换理由都过不了工具面验签）→ 经
+/// `dispatch_with(set_matrix_override)` 走真实工具面落账（与 bid-mcp-stdio
+/// 同源裁决：状态窗 MATRIX_READY+ / 幽灵条款拒 / NOT_APPLICABLE 必带
+/// 理由 / 覆写即重算矩阵）→ 工具输出原样放 `matrix_override` 键
+/// （row 覆写后真值回显 / override 审计 / actor 可信身份 /
+/// blocking_rows 即时对账）。
+///
+/// 参数：`requirement_id`、`status`
+/// （RESPONDED|NOT_APPLICABLE|NOT_RESPONDED|PARTIAL——壳侧早拒非法值）、
+/// `deviation`（NOT_APPLICABLE 必填——不可审计的豁免不算豁免）、
+/// `actor_id`（宿主身份命名，缺省 `shell-operator`）、`project_version`
+/// （可选 CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；矩阵未建（早态）→ `state`；
+/// NOT_APPLICABLE 无理由 / 非法状态值 → `bad_args`；幽灵条款 →
+/// `not_found`（域层 ENotFound 透传——防手造 id 刷无效豁免）。
+pub fn matrix_override(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let requirement_id = a.req_str("requirement_id")?.to_string();
+    let status_raw = a.req_str("status")?.to_string();
+    // 壳侧入参早拒（gate_from_str 同款纪律——不进工具面；合法值集与
+    // 工具面 set_matrix_override 的 status 解析同一字面量集）。
+    const STATUS_VALID: [&str; 4] =
+        ["RESPONDED", "NOT_APPLICABLE", "NOT_RESPONDED", "PARTIAL"];
+    if !STATUS_VALID.contains(&status_raw.as_str()) {
+        return Err(IpcError::bad_args(format!(
+            "status 非法：{status_raw}（合法值：RESPONDED | NOT_APPLICABLE | NOT_RESPONDED | PARTIAL）"
+        )));
+    }
+    let deviation = a.str("deviation")?.map(str::to_string);
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发面：scope 四重绑定（项目/条款/状态/理由摘要）——
+    // 签域与实际生效对象恒一致（project_id 取服务态真源，不信调用方）。
+    let scope = bid_mcp::matrix_override_scope(
+        &project_id,
+        &requirement_id,
+        &status_raw,
+        deviation.as_deref().unwrap_or(""),
+    );
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "requirement_id": requirement_id,
+        "status": status_raw,
+        "receipt": receipt,
+    });
+    if let Some(d) = deviation {
+        args["deviation"] = json!(d);
+    }
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "set_matrix_override".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "matrix_override": tool_out,
+    }))
+}
+
+/// MatrixOverride → json（#603 批 B：bid.matrix 的 overrides 直读面）。
+/// 键形状与工具面 set_matrix_override 回显的 `override`/`actor` 同键
+/// 同序——单一真源防两处漂移（gate_pass_json 同款纪律）。
+fn matrix_override_json(o: &bid_domain::matrix::MatrixOverride) -> Value {
+    json!({
+        "status": o.status.as_str(),
+        "deviation": o.deviation,
+        "principal": o.principal,
+        "actor": o.trusted.as_ref().map(|p| json!({
+            "actor_id": p.actor_id,
+            "actor_type": p.actor_type.as_str(),
+            "authentication_method": p.authentication_method,
+        })),
+        "at": o.at,
+    })
 }
 
 /// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
@@ -1717,6 +1839,162 @@ mod tests {
             t["declarations"].as_u64().unwrap() + t["star_truth"].as_u64().unwrap(),
             "★口径恒等式：total = declarations + truth"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // ---------------------------------------------------------------- #603 批 B
+
+    /// 建一个「矩阵就绪 + 否决死锁」项目：资格条件必选条款（REQ-0002）
+    /// 未响应 → blocking=1——`bid.matrix_override` 要解锁的对象面
+    /// （#226：规则说明被判成否决项又无可响应正文，是死锁的典型形态）。
+    fn seed_matrix_ready_with_deadlock(dir: &std::path::Path) {
+        let mut svc = bid_tools::service::BidService::open(dir).unwrap();
+        svc.create_project("死锁项目", "PRJ-DL", "明标", "ext-603-b").unwrap();
+        let store = svc.store_mut();
+        store.advance_project_status(ProjectStatus::FilesImported).unwrap();
+        store
+            .set_requirements(vec![
+                req("REQ-0001", "技术参数", "投标人须提供 2000 路并发能力"),
+                req("REQ-0002", "资格条件", "本次招标不接受联合体投标"),
+            ])
+            .unwrap();
+        svc.prepare_outline_and_matrix(bid_domain::outline::OutlineSpec {
+            target_total_chars: 400,
+            max_reqs_per_leaf: 2,
+        })
+        .unwrap();
+    }
+
+    /// 写面/读面全链：宿主签发 receipt（#182 四重绑定）→ 工具面落账
+    /// （set_matrix_override）→ blocking 即时清零 → bid.matrix overrides
+    /// 直读面对账 → 拒绝面（无理由 / 非法状态 / 幽灵条款）。
+    #[test]
+    fn matrix_override_full_flow_with_host_receipt() {
+        let (dir, _ws) = tmp_ws("flow-603b");
+        seed_matrix_ready_with_deadlock(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // ① 前置对账：资格条件必选未响应 → blocking=1；overrides 空对象恒在
+        let frame = call(&ctx, "bid.matrix");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let m = ok_of(&frame).clone();
+        assert_eq!(m["summary"]["blocking"], json!(1), "必选未响应即阻断：{m:#?}");
+        assert_eq!(
+            m["overrides"].as_object().map(|o| o.is_empty()),
+            Some(true),
+            "无覆写时 overrides 为空对象（UI 不赌键在场）：{m:#?}"
+        );
+
+        // ② 写面：NOT_APPLICABLE + 理由 → 行翻不适用、blocking 即时清零
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({
+                "requirement_id": "REQ-0002",
+                "status": "NOT_APPLICABLE",
+                "deviation": "规则说明性条款（不接受联合体投标类），无可响应正文",
+                "actor_id": "operator-li"
+            }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let mo = ok_of(&frame)["matrix_override"].clone();
+        assert_eq!(mo["row"]["status"], "NOT_APPLICABLE", "行状态即时重算回显（不是抄回入参）：{mo:#?}");
+        assert_eq!(mo["row"]["blocking"], json!(false), "不适用不再阻断：{mo:#?}");
+        assert_eq!(mo["blocking_rows"], json!(0), "死锁解除（覆写即重算矩阵）：{mo:#?}");
+        assert_eq!(mo["actor"]["actor_type"], "human", "#182 宿主签发面：{mo:#?}");
+        assert_eq!(mo["actor"]["actor_id"], "operator-li");
+        assert!(mo["override"]["at"].as_u64().unwrap_or(0) > 0, "覆写审计时刻在场");
+
+        // ③ 读面对账：overrides 面含本行（谁/何时/为何——回溯可查）
+        let frame = call(&ctx, "bid.matrix");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let m = ok_of(&frame).clone();
+        let ov = &m["overrides"]["REQ-0002"];
+        assert_eq!(ov["status"], "NOT_APPLICABLE", "{m:#?}");
+        assert!(
+            ov["deviation"].as_str().unwrap_or("").contains("规则说明"),
+            "豁免理由回显（审计面）：{m:#?}"
+        );
+        assert_eq!(ov["actor"]["actor_id"], "operator-li");
+        assert_eq!(m["summary"]["blocking"], json!(0), "读面同源：阻断已清");
+
+        // ④ NOT_APPLICABLE 无理由 → 工具面拒（bad_args——不可审计的豁免）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "REQ-0001", "status": "NOT_APPLICABLE" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("deviation")
+                || frame["message"].as_str().unwrap_or("").contains("理由"),
+            "拒绝文案要指向理由前置：{frame}"
+        );
+
+        // ⑤ 非法状态值 → 壳侧入参早拒（不进工具面）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "REQ-0001", "status": "APPLICABLE" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("合法值"),
+            "早拒文案列出合法值：{frame}"
+        );
+
+        // ⑥ 幽灵条款 → 域层 ENotFound → not_found（防手造 id 刷无效豁免）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "REQ-9999", "status": "NOT_APPLICABLE", "deviation": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 状态窗：矩阵未建（REQUIREMENTS_EXTRACTED）→ guard_tool E_STATE
+    /// 透传为壳侧 `state` 码（无矩阵 = 无可覆写对象——诚实拒绝）。
+    #[test]
+    fn matrix_override_needs_matrix_ready() {
+        let (dir, _ws) = tmp_ws("early-603b");
+        seed_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({
+                "requirement_id": "REQ-0001",
+                "status": "NOT_APPLICABLE",
+                "deviation": "x"
+            }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "state", "状态窗（MATRIX_READY+）透传为 state：{frame}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 无 db.json → 干净 not_found（合法入参也不落副作用——查看/豁免
+    /// 都不得在工作区凭空创建 .mang/approval.key）。
+    #[test]
+    fn matrix_override_clean_not_found_without_db() {
+        let (dir, _ws) = tmp_ws("nodb-603b");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({
+                "requirement_id": "REQ-0001",
+                "status": "NOT_APPLICABLE",
+                "deviation": "x"
+            }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(!dir.join(".mang").exists(), "豁免面不得在工作区留副作用");
         let _ = std::fs::remove_dir_all(dir);
     }
 

@@ -328,13 +328,14 @@
           { cmp_id: "CMP-0001", requirement: { id: "REQ-0001", clause_no: "3.2.1", category: "技术参数", category_key: "tech_param", statement: "投标人须提供 2000 路并发能力", mandatory: false, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第三章 3.2/REQ-0001", excerpt: "投标人须提供 2000 路并发能力" }, params: {} }, status: "RESPONDED", evidence: [{ ev_id: "EV-0001", title: "并发压测报告", status: "ACTIVE", valid_until: "2027-06-30", verification_tier: "SELF_TEST" }], pending_evidence_ids: [], evidence_required: false, evidence_missing: false, substantive: false, gap: null, response_policy: "default", draft_section_id: "SEC-0002", blocking: false },
           { cmp_id: "CMP-0002", requirement: { id: "REQ-0002", clause_no: "1.4.2", category: "资格条件", category_key: "qualification", statement: "投标人须具备电子与智能化专业承包二级资质", mandatory: true, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第一章 1.4/REQ-0002", excerpt: "投标人须具备电子与智能化专业承包二级资质" }, params: {} }, status: "NOT_RESPONDED", evidence: [], pending_evidence_ids: [], evidence_required: true, evidence_missing: true, substantive: false, gap: null, response_policy: "default", draft_section_id: "SEC-0003", blocking: true },
           { cmp_id: "CMP-0003", requirement: { id: "REQ-0003", clause_no: "3.5.1", category: "技术参数", category_key: "tech_param", statement: "★核心设备须为回产主流型号，提供原厂授权及服务承诺", mandatory: false, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第三章 3.5/REQ-0003", excerpt: "★核心设备须为回产主流型号，提供原厂授权及服务承诺" }, params: { star: true } }, status: "PARTIAL", evidence: [], pending_evidence_ids: [], evidence_required: true, evidence_missing: true, substantive: true, gap: null, response_policy: "default", draft_section_id: "SEC-0002", blocking: false },
-          { cmp_id: "CMP-0004", requirement: { id: "REQ-0004", clause_no: "6.1.1", category: "商务要求", category_key: "commercial", statement: "质保期不少于三年，附服务网点清单", mandatory: false, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第六章 6.1/REQ-0004", excerpt: "质保期不少于三年，附服务网点清单" }, params: {} }, status: "NOT_RESPONDED", evidence: [], pending_evidence_ids: [], evidence_required: true, evidence_missing: true, substantive: false, gap: null, response_policy: "default", draft_section_id: "SEC-0003", blocking: false },
+          { cmp_id: "CMP-0004", requirement: { id: "REQ-0004", clause_no: "6.1.1", category: "商务要求", category_key: "commercial", statement: "质保期不少于三年，附服务网点清单", mandatory: false, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第六章 6.1/REQ-0004", excerpt: "质保期不少于三年，附服务网点清单" }, params: {} }, status: "NOT_APPLICABLE", evidence: [], pending_evidence_ids: [], evidence_required: true, evidence_missing: true, substantive: false, gap: null, response_policy: "default", draft_section_id: "SEC-0003", blocking: false },
           { cmp_id: "CMP-0005", requirement: { id: "REQ-0005", clause_no: "1.4.5", category: "资格条件", category_key: "qualification", statement: "项目经理须持有一级建造师注册证书（扫描件）", mandatory: true, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第一章 1.4/REQ-0005", excerpt: "项目经理须持有一级建造师注册证书（扫描件）" }, params: {} }, status: "PENDING_EVIDENCE", evidence: [{ ev_id: "EV-0002", title: "建造师证书（占位待补）", status: "ACTIVE", valid_until: null, verification_tier: "PLACEHOLDER" }], pending_evidence_ids: ["EV-0002"], evidence_required: true, evidence_missing: true, substantive: false, gap: null, response_policy: "default", draft_section_id: null, blocking: true },
           { cmp_id: "CMP-0006", requirement: { id: "REQ-0006", clause_no: "6.3.2", category: "商务要求", category_key: "commercial", statement: "★付款方式按里程碑分期，响应人须逐项确认", mandatory: false, source_anchor: { file: "A-招标文件.docx", kind: "para", locator: "第六章 6.3/REQ-0006", excerpt: "★付款方式按里程碑分期，响应人须逐项确认" }, params: { star: true } }, status: "RESPONDED", evidence: [{ ev_id: "EV-0003", title: "付款确认函", status: "ACTIVE", valid_until: "2027-12-31", verification_tier: "COUNTERSIGNED" }], pending_evidence_ids: [], evidence_required: true, evidence_missing: false, substantive: true, gap: null, response_policy: "default", draft_section_id: "SEC-0003", blocking: false }
         ],
         total: 6,
-        summary: { by_status: { NOT_RESPONDED: 2, RESPONDED: 2, PARTIAL: 1, NOT_APPLICABLE: 0, PENDING_EVIDENCE: 1 }, blocking: 2, mandatory: 3, substantive: 2, evidence_missing: 4 },
+        summary: { by_status: { NOT_RESPONDED: 1, RESPONDED: 2, PARTIAL: 1, NOT_APPLICABLE: 1, PENDING_EVIDENCE: 1 }, blocking: 2, mandatory: 3, substantive: 2, evidence_missing: 4 },
         star_summary: { total: 2, responded: 1, partial: 0, not_responded: 1, not_applicable: 0, responded_share: 0.5, note: "★实质性条款（params.star）——一条不响应即响应无效；not_responded>0 时不废标风险存在" },
+        overrides: { "REQ-0004": { status: "NOT_APPLICABLE", deviation: "按招标文件第六章口径，服务网点承诺并入质保函提交——不单列附件", principal: "human:operator-wang", actor: { actor_id: "operator-wang", actor_type: "human", authentication_method: "hmac_receipt_v2" }, at: Math.floor(now / 1000) - 7200 } },
         warnings: [],
         project_version: 12,
         fetched_pages: 1
@@ -506,6 +507,50 @@
         }
       });
     }
+    // #603 批 B：演示桥的矩阵覆写可变态（真改演示行——与真实壳同语义：
+    // 覆写即重算 blocking、overrides 台账留审计、状态徽章同源刷新）
+    const demoMatrix = JSON.parse(JSON.stringify(DEMO_BID.matrix));
+    function demoMatrixOverride(m) {
+      const reqId = String(m.requirement_id || "");
+      const status = String(m.status || "");
+      const deviation = String(m.deviation || "");
+      const actor = String(m.actor_id || "shell-operator");
+      const valid = ["RESPONDED", "NOT_APPLICABLE", "NOT_RESPONDED", "PARTIAL"];
+      if (valid.indexOf(status) < 0) return fail(m.id, "bad_args", "演示模式：status 非法（合法值：RESPONDED | NOT_APPLICABLE | NOT_RESPONDED | PARTIAL）");
+      if (status === "NOT_APPLICABLE" && !deviation.trim()) return fail(m.id, "bad_args", "演示模式：deviation 必填——NOT_APPLICABLE 不给理由 = 不可审计的豁免");
+      const row = demoMatrix.rows.find((r) => r.requirement && r.requirement.id === reqId);
+      if (!row) return fail(m.id, "not_found", "演示模式：requirement " + reqId + " 不存在（防手造 id 刷无效豁免）");
+      row.status = status;
+      // blocking 派生同域层口径：必选类未响应/待补即阻断，其余不阻断
+      row.blocking = !!((row.requirement && row.requirement.mandatory) && (status === "NOT_RESPONDED" || status === "PENDING_EVIDENCE"));
+      const at = Math.floor(Date.now() / 1000);
+      demoMatrix.overrides[reqId] = { status: status, deviation: deviation || null, principal: "human:" + actor, actor: { actor_id: actor, actor_type: "human", authentication_method: "hmac_receipt_v2" }, at: at };
+      demoMatrix.project_version = (demoMatrix.project_version || 0) + 1;
+      // summary 重算（by_status / blocking——徽章计数与表格同一真源）
+      const byStatus = {};
+      let blocking = 0;
+      demoMatrix.rows.forEach((r2) => {
+        byStatus[r2.status] = (byStatus[r2.status] || 0) + 1;
+        if (r2.blocking) blocking += 1;
+      });
+      demoMatrix.summary.by_status = byStatus;
+      demoMatrix.summary.blocking = blocking;
+      return respond(m.id, {
+        present: true,
+        workspace: root,
+        project: demoMatrix.project,
+        matrix_override: {
+          requirement_id: reqId,
+          row: { id: row.cmp_id, requirement_id: reqId, status: row.status, deviation: deviation || null, blocking: row.blocking, evidence_ids: (row.evidence || []).map((e) => e.ev_id) },
+          override: { principal: "human:" + actor, at: at },
+          actor: { actor_id: actor, actor_type: "human", authentication_method: "hmac_receipt_v2" },
+          matrix_rows: demoMatrix.rows.length,
+          blocking_rows: blocking,
+          status: demoMatrix.project.status,
+          project_version: demoMatrix.project_version
+        }
+      });
+    }
     return {
       mode: "demo",
       post(msg) {
@@ -521,7 +566,11 @@
             case "bid.outline":
               return respond(m.id, DEMO_BID.outline);
             case "bid.matrix":
-              return respond(m.id, DEMO_BID.matrix);
+              // #603 批 B：演示桥回可变矩阵（matrix_override 会真改——覆写后
+              // 行状态/徽章/overrides 审计同源刷新）
+              return respond(m.id, demoMatrix);
+            case "bid.matrix_override":
+              return demoMatrixOverride(m);
             case "bid.quality":
               return respond(m.id, DEMO_BID.quality);
             case "bid.score":
@@ -652,7 +701,7 @@
     bid: {
       status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
       matrix: { status: "idle", data: null, error: "" },
-      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" },
       coverage: { status: "idle", data: null, error: "", code: "" },
       cov: { expandedFile: "" }
     },
@@ -1969,18 +2018,65 @@
     if (node) renderBidDetail(host, node);
     else panel.innerHTML = "";
   }
-  /** 矩阵行 → 展开详情（条款原文/锚点/证据/响应章节——「点未响应项看原文」） */
+  /* ============ #603 批 B：矩阵人工处置面（overrides 读面 + 覆写表单） ============ */
+  /** #603 批 B：overrides 读面（bid.matrix 响应——UI 徽章/审计唯一真源） */
+  function bidMxOverrides() {
+    const mx = state.bid.matrix;
+    const o = mx && mx.data && mx.data.overrides;
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  }
+  /** #603 批 B：人工覆写表单（展开详情内联——状态 + 偏离理由；
+   * NOT_APPLICABLE 必填理由与域层同口径，客户端早拦不假提交） */
+  function bidMxOverrideFormHtml(r, ov) {
+    const q = r.requirement || {};
+    const cur = (ov && ov.status) || "NOT_APPLICABLE";
+    let opts = "";
+    for (const k of ["NOT_APPLICABLE", "RESPONDED", "PARTIAL", "NOT_RESPONDED"]) {
+      opts += '<option value="' + k + '"' + (cur === k ? " selected" : "") + ">" + bidMxStatusZh(k) + "</option>";
+    }
+    return (
+      '<div class="bid-mx-ovr-form" data-mx-ovr-form="' + esc(q.id) + '">'
+      + '<div class="bid-mx-ovr-title">' + ICON.shield + " 人工覆写 " + esc(q.id) + (q.clause_no ? " · " + esc(q.clause_no) : "") + "</div>"
+      + '<div class="bid-mx-ovr-sub">由宿主用本工作区审批密钥签发回执（#182 四重绑定：项目/条款/状态/理由——Agent 不可伪造），经 set_matrix_override 工具落账：覆写即重算矩阵（阻断即时清零）、审计留痕不可抹除。NOT_APPLICABLE 必须给理由——不可审计的豁免不算豁免。</div>'
+      + '<label class="bid-mx-ovr-field"><span>覆写状态</span><select class="bid-mx-select" data-mx-ovr-status>' + opts + "</select></label>"
+      + '<label class="bid-mx-ovr-field"><span>偏离说明 / 豁免理由（NOT_APPLICABLE 必填）</span><textarea class="bid-mx-ovr-text" rows="2" data-mx-ovr-deviation placeholder="如：规则说明性条款（不接受联合体投标类），无可响应正文">' + esc((ov && ov.deviation) || "") + "</textarea></label>"
+      + '<div class="bid-mx-ovr-actions">'
+      + '<button class="btn btn-sm btn-primary" data-mx-ovr-confirm="' + esc(q.id) + '"' + (state.bid.mx.passing ? " disabled" : "") + ">确认覆写</button>"
+      + '<button class="btn btn-sm" data-mx-ovr-cancel>取消</button>'
+      + "</div></div>"
+    );
+  }
+  /** 矩阵行 → 展开详情（条款原文/锚点/证据/响应章节 + 人工处置块——
+   *  #603 批 B：覆写审计与豁免入口也在此（「点未响应项看原文并处置」）） */
   function bidMxDetailRow(r) {
     const q = r.requirement || {};
     const a = q.source_anchor || {};
     const evs = r.evidence || [];
     const pends = r.pending_evidence_ids || [];
+    const ov = bidMxOverrides()[q.id] || null;
+    const f = state.bid.mx;
     const evHtml = evs.length
       ? evs
           .map((e) => '<div class="bid-mx-ev-line">' + esc(e.ev_id) + " · " + esc(e.title || "") + (e.verification_tier ? ' <span class="bid-mx-ev-tier">[' + esc(e.verification_tier) + "]</span>" : "") + "</div>")
           .join("")
       : '<div class="bid-mx-ev-line dim">无在绑证据' + (r.evidence_required ? "（本条款要求证明材料——#241 证据缺口面）" : "") + "</div>";
     const pendHtml = pends.length ? '<div class="bid-mx-ev-line pend">待补占位：' + esc(pends.join("、")) + "（#245 待补可追踪，不清阻塞）</div>" : "";
+    // 人工处置块（#603 批 B）：覆写审计（谁/何时/为何）+ 豁免入口
+    const ovAuditHtml = ov
+      ? '<div class="bid-mx-ev-line ovr">人工覆写在册：' + esc(bidMxStatusZh(ov.status))
+        + " · " + esc((ov.actor && ov.actor.actor_id) || ov.principal || "")
+        + " · " + bidGtTime(ov.at)
+        + (ov.deviation ? ' · <span title="' + esc(ov.deviation) + '">' + esc(String(ov.deviation).slice(0, 40)) + "</span>" : "")
+        + "</div>"
+      : "";
+    const disposeHtml =
+      '<div class="bid-mx-d-block"><div class="bid-mx-d-k">人工处置（#603）</div><div class="bid-mx-d-v">'
+      + (r.blocking ? '<div class="bid-mx-ev-line pend">必选未响应/待补——阻断导出；若本条是规则说明性条款（无可响应正文），人工豁免是唯一诚实出口</div>' : "")
+      + ovAuditHtml
+      + '<button class="btn btn-sm" data-mx-ovr="' + esc(q.id) + '">' + (ov ? "重新覆写" : "人工覆写状态") + "</button>"
+      + '<span class="bid-mx-d-hint">宿主签发回执（#182——Agent 不可伪造），覆写即重算矩阵并留审计</span>'
+      + "</div></div>";
+    const formHtml = f.formReq === q.id ? bidMxOverrideFormHtml(r, ov) : "";
     return (
       '<tr class="bid-mx-detail"><td colspan="6">'
       + '<div class="bid-mx-d-grid">'
@@ -1990,7 +2086,10 @@
       + '<div class="bid-mx-d-block"><div class="bid-mx-d-k">响应章节</div><div class="bid-mx-d-v">' + (r.draft_section_id
         ? '<button class="bid-mx-link" data-mx-sec="' + esc(r.draft_section_id) + '">跳转 ' + esc(bidMxSectionTitle(r.draft_section_id) || r.draft_section_id) + "</button>"
         : "未归属——大纲树尚无章节覆盖本条款") + "</div></div>"
-      + "</div></td></tr>"
+      + disposeHtml
+      + "</div>"
+      + formHtml
+      + "</td></tr>"
     );
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */
@@ -2020,6 +2119,8 @@
     const byStatus = sum.by_status || {};
     const star = d.star_summary || {};
     const f = state.bid.mx;
+    const ovs = bidMxOverrides();
+    const ovrN = Object.keys(ovs).length;
     const cats = bidMxCategories(rows);
     const filtered = bidMxFiltered(rows);
     const totalPages = Math.max(1, Math.ceil(filtered.length / f.pageSize));
@@ -2053,7 +2154,10 @@
       + sizeSel
       + '<button class="btn btn-sm" data-mx-export title="导出当前筛选下的全量行（UTF-8 BOM CSV，Excel 可直接打开）">导出 CSV</button>'
       + "</div></div>"
-      + '<div class="bid-mx-sum">共 ' + fmtChars(d.total) + " 条 · 筛选后 " + fmtChars(filtered.length) + " 条 · 阻断 " + fmtChars(sum.blocking || 0) + " · ★实质性 " + fmtChars(star.total != null ? star.total : sum.substantive || 0) + (star.total > 0 ? "（已响应 " + fmtChars(star.responded || 0) + "/" + fmtChars(star.total) + "）" : "") + " · 缺证据 " + fmtChars(sum.evidence_missing || 0) + "</div>";
+      + '<div class="bid-mx-sum">共 ' + fmtChars(d.total) + " 条 · 筛选后 " + fmtChars(filtered.length) + " 条 · 阻断 " + fmtChars(sum.blocking || 0) + " · ★实质性 " + fmtChars(star.total != null ? star.total : sum.substantive || 0) + (star.total > 0 ? "（已响应 " + fmtChars(star.responded || 0) + "/" + fmtChars(star.total) + "）" : "") + " · 缺证据 " + fmtChars(sum.evidence_missing || 0) + " · 人工覆写 " + fmtChars(ovrN) + "</div>";
+    // 写面消息（#603 批 B——域层拒绝原样透传，不假成功）
+    if (f.passInfo) html += '<div class="bid-mx-msg ok">' + ICON.check + " " + esc(f.passInfo) + "</div>";
+    if (f.passError) html += '<div class="bid-mx-msg err">' + ICON.warning + " " + esc(f.passError) + "</div>";
     if (!rows.length) {
       html +=
         '<div class="view-state"><div class="view-state-title">条款集为空</div><div>MCP 管线 extract_requirements 之后，这里显示 REQ × 响应状态 × 证据 × 章节的合规矩阵</div></div>';
@@ -2085,6 +2189,7 @@
           + '<td class="bid-mx-marks">'
           + (r.substantive ? '<span class="bid-mx-star" title="★实质性条款——一条不响应即响应无效">★</span>' : "")
           + (r.blocking ? '<span class="bid-mx-block" title="必选未响应/待补——阻断导出（R-03/R-04 闸门）">阻断</span>' : "")
+          + (ovs[q.id] ? '<span class="bid-mx-ovr-badge" title="人工覆写在册（#603）——谁/何时/为何见展开详情">覆写</span>' : "")
           + "</td></tr>";
         if (expanded) html += bidMxDetailRow(r);
       }
@@ -2158,6 +2263,40 @@
       b.addEventListener("click", (e) => {
         e.stopPropagation();
         ui.openPath(absPathOf(b.dataset.mxSrc));
+      })
+    );
+    // ---- #603 批 B：人工覆写交互（展开/收起表单 + 确认提交——域层裁决）
+    panel.querySelectorAll("[data-mx-ovr]").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.mxOvr;
+        state.bid.mx.formReq = state.bid.mx.formReq === id ? "" : id;
+        renderBidMatrixPanel(host, panel);
+      })
+    );
+    panel.querySelectorAll("[data-mx-ovr-cancel]").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        state.bid.mx.formReq = "";
+        renderBidMatrixPanel(host, panel);
+      })
+    );
+    panel.querySelectorAll("[data-mx-ovr-confirm]").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.mxOvrConfirm;
+        const form = panel.querySelector('[data-mx-ovr-form="' + id + '"]');
+        const statusEl = form && form.querySelector("[data-mx-ovr-status]");
+        const devEl = form && form.querySelector("[data-mx-ovr-deviation]");
+        const status = statusEl ? statusEl.value : "";
+        const deviation = devEl ? devEl.value.trim() : "";
+        // 客户端早拦（与域层同口径——不假提交；域层仍是最终裁决面）
+        if (status === "NOT_APPLICABLE" && !deviation) {
+          state.bid.mx.passError = "NOT_APPLICABLE 必须给偏离说明（不适用不给理由 = 不可审计的豁免）";
+          renderBidMatrixPanel(host, panel);
+          return;
+        }
+        ui.overrideBidMatrixRow(id, status, deviation || undefined);
       })
     );
     const expBtn = panel.querySelector("[data-mx-export]");
@@ -4109,7 +4248,7 @@
       state.bid = {
         status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
         matrix: { status: "idle", data: null, error: "" },
-        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" },
         coverage: { status: "idle", data: null, error: "", code: "" },
         cov: { expandedFile: "" }
       };
@@ -4172,7 +4311,7 @@
         state.bid.error = st.reason && (st.reason.message || st.reason.code) || "bid.state 读取失败";
         // 项目面已失（切工作区/项目被移）——矩阵缓存一并失效，不留旧项目数据
         state.bid.matrix = { status: "idle", data: null, error: "" };
-        state.bid.mx = { status: "", cat: "", blockingOnly: false, page: 1, pageSize: state.bid.mx.pageSize || 50, expandedId: "" };
+        state.bid.mx = { status: "", cat: "", blockingOnly: false, page: 1, pageSize: state.bid.mx.pageSize || 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" };
         // 覆盖缓存一并失效（批 D——不留旧项目数据）
         state.bid.coverage = { status: "idle", data: null, error: "", code: "" };
         state.bid.cov = { expandedFile: "" };
@@ -4364,6 +4503,32 @@
       state.bidGates.passing = false;
       // 台账 + 侧栏门审摘要同源刷新（agent_waivers/human_review_complete 两处都消费）
       ui.loadBidGates(true);
+      ui.loadBid(true);
+    },
+    /** #603 批 B：否决死锁人工豁免（bid.matrix_override——宿主签发 receipt
+     * （#182 四重绑定）后经真实工具面 set_matrix_override 落账）。壳侧
+     * 不校验状态窗/幽灵条款——域层裁决原样透传（state/not_found/bad_args
+     * 码 → 引导文案，不假成功）。 */
+    async overrideBidMatrixRow(reqId, status, deviation) {
+      if (!state.bridge || state.bid.mx.passing) return;
+      state.bid.mx.passing = true;
+      state.bid.mx.passError = "";
+      state.bid.mx.passInfo = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const body = { requirement_id: reqId, status: status };
+        if (deviation) body.deviation = deviation;
+        const r = await ipc("bid.matrix_override", body, 3e4);
+        const mo = r && r.matrix_override;
+        state.bid.mx.passInfo = "已覆写 " + reqId + " → " + bidMxStatusZh(status)
+          + (mo && typeof mo.blocking_rows === "number" ? "（剩余阻断 " + mo.blocking_rows + " 行）" : "");
+        state.bid.mx.formReq = "";
+      } catch (err) {
+        state.bid.mx.passError = err && (err.message || err.code) || "bid.matrix_override 失败";
+      }
+      state.bid.mx.passing = false;
+      // 矩阵 + 侧栏统计同源刷新（blocking 计数两处都消费）
+      ui.loadBidMatrix(true);
       ui.loadBid(true);
     },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；

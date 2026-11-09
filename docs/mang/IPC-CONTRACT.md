@@ -384,7 +384,7 @@ DomainStore 直读章节树（MCP 工具面无此视图）。节点按 `order` �
 > `workspace.open` 切根或外部进程（bid-mcp-stdio / Agent）改写 db.json 后，
 > 下一条 bid.* 命令自动重开，无需重启。
 
-### bid.matrix —— 合规矩阵全量（只读；#313 批 B）
+### bid.matrix —— 合规矩阵全量（只读；#313 批 B；#603 批 B 增补 overrides 面）
 经 `bid_mcp::dispatch_with(get_compliance_matrix)` 走真实工具面（与
 bid-mcp-stdio 同源裁决，方案 A 直链）。工具面按 S-4 游标分页（limit ≤1000、
 游标绑过滤器指纹与数据版本）——壳内循 `next_cursor` 聚合**全量行**后一次
@@ -562,6 +562,49 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
               "total": { "star_total": 50, "declarations": 2,
                          "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
 ```
+
+### bid.matrix_override —— 否决死锁人工豁免（写面；#603 批 B——治理面写面第二发）
+`{ requirement_id, status, deviation?, actor_id?, project_version? }`
+
+#226 层 1 的 UI 接线：必选条款被判成否决项（如「本次招标不接受联合体投标」
+这类规则说明）又无可响应正文 → 章节永久不可起草的死锁，人工标
+NOT_APPLICABLE（附理由）是唯一诚实出口。流程（#182 宿主签发面——**不进
+MCP 工具表，Agent 拿不到**，与 bid.gate_pass 同款）：壳内真人经 UI 确认 →
+壳用服务态密钥签 receipt（scope 四重绑定
+`matrix_override:{project_id}:{requirement_id}:{status}:{理由 sha256}`——
+挪行、换状态、偷换理由都过不了验签）→ 经
+`bid_mcp::dispatch_with(set_matrix_override)` 走真实工具面落账 → 工具输出
+原样放 `matrix_override` 键。**覆写即重算矩阵**（rebuild_matrix_for_override）
+——blocking_rows 在响应里即时对账，调用方不必再拉一次矩阵。
+
+参数：`requirement_id`；`status` = RESPONDED|NOT_APPLICABLE|NOT_RESPONDED|
+PARTIAL（壳侧早拒非法值）；`deviation`（NOT_APPLICABLE **必填**——不可审计
+的豁免不算豁免）；`actor_id`（宿主身份命名，缺省 `shell-operator`）；
+`project_version`（可选 CAS）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "matrix_override": { "requirement_id": "REQ-0002",
+                    "row": { "id": "CMP-0002", "requirement_id": "REQ-0002",
+                             "status": "NOT_APPLICABLE",
+                             "deviation": "规则说明性条款，无可响应正文",
+                             "blocking": false, "evidence_ids": [] },
+                    "override": { "principal": "human:operator-li", "at": 1790000000 },
+                    "actor": { "actor_id": "operator-li", "actor_type": "human",
+                               "authentication_method": "hmac_receipt_v2" },
+                    "matrix_rows": 1120, "blocking_rows": 0,
+                    "status": "DRAFTING", "project_version": 5 } }
+```
+拒绝面：无 db.json → `not_found`；矩阵未建（早态）→ **`state`**（状态窗
+MATRIX_READY+——无矩阵 = 无可覆写对象）；NOT_APPLICABLE 无理由 / 非法状态值
+→ **`bad_args`**；幽灵条款（requirement_id 不存在）→ **`not_found`**
+（域层 ENotFound 透传——防手造 id 刷无效豁免）。
+
+伴生读面：`bid.matrix` 响应增补 `overrides` 对象（#603 批 B——DomainStore
+直读，键 = requirement_id，值 = `{status, deviation, principal, actor, at}`；
+无覆写时为空对象 `{}` 恒在）。行状态本身仍是工具面派生真源（override >
+证据+章节），overrides 只补「谁豁免的、何时、为何」的审计素材——UI 徽章
+与追溯 tooltip 的唯一真源。
 
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。

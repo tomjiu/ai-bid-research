@@ -475,6 +475,11 @@ impl Ctx {
 
             "bid.gate_pass" => crate::bid::gate_pass(&ws, &self.bid, &a),
 
+            // ── #603 批 B：否决死锁人工豁免（宿主签发 receipt（#182 四重
+            //    绑定）后经真实工具面 set_matrix_override 落账，覆写即重算
+            //    矩阵——blocking 即时对账）──────────
+            "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
+
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 

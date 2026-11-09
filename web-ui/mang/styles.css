@@ -4201,3 +4201,87 @@ html[data-chrome="native"][data-maximized="1"] #app {
     max-width: 1100px;
   }
 }
+
+/* ============ #603 批 B：矩阵人工处置面（覆写表单 + 徽章 + 消息）============ */
+.bid-mx-ovr-badge {
+  color: #6b4f00;
+  background: color-mix(in srgb, #d97706 18%, transparent);
+  font-size: 10.5px;
+  border-radius: 3px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, #d97706 35%, transparent);
+}
+.bid-mx-ev-line.ovr {
+  color: #6b4f00;
+}
+.bid-mx-d-hint {
+  display: block;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.bid-mx-ovr-form {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #d97706 35%, transparent);
+  background: color-mix(in srgb, #d97706 6%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bid-mx-ovr-title {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bid-mx-ovr-title svg {
+  width: 13px;
+  height: 13px;
+}
+.bid-mx-ovr-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+.bid-mx-ovr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  max-width: 520px;
+}
+.bid-mx-ovr-text {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #d1d5db);
+  background: var(--bg, #fff);
+  color: var(--fg, #1f2328);
+  resize: vertical;
+  min-width: 0;
+}
+.bid-mx-ovr-actions {
+  display: flex;
+  gap: 8px;
+}
+.bid-mx-msg {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  line-height: 1.6;
+  margin: 4px 0 6px;
+}
+.bid-mx-msg.ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.bid-mx-msg.err {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}

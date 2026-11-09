@@ -7,6 +7,7 @@
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
 //!       / bid.quality+bid.score（#313 批 C：早态 E_STATE→state 码 / MATRIX_READY 后真实读取）
 //!       / bid.gates+bid.gate_pass（#603 批 A：五门台账 / 人工过门宿主签发 receipt / 门序跳跃拒 / 非法门早拒）
+//!       / bid.matrix_override（#603 批 B：否决死锁人工豁免 / overrides 读面对账 / 无理由拒 / 非法状态早拒）
 //!       / bid.matrix（#313 批 B：无 db.json not_found / 真实项目 / db.json 变更重开）
 //!       / bid.coverage（#313 批 D：未导入件诚实口径 total_blocks=0 + next 引导）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
@@ -664,6 +665,51 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     let resp = call(&ctx, json!({"id":"t-bid-gp2","cmd":"bid.gate_pass","gate":"no_addendum_confirmed","decision":"APPROVED"}));
     r.check(
         "bid.gate_pass(非法门早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
+    // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
+    // 读面：overrides 空对象恒在（UI 不赌键在场）
+    let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));
+    let bm = result(&resp);
+    r.check(
+        "bid.matrix(overrides 读面)",
+        resp["ok"] == json!(true)
+            && bm["overrides"].as_object().is_some(),
+        format!("overrides={}", bm["overrides"].as_object().map(|o| o.len()).unwrap_or(0)),
+    );
+    // 写面：NOT_APPLICABLE + 理由 → 行翻不适用、human 回执（#182）
+    let resp = call(&ctx, json!({"id":"t-bid-mo1","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"NOT_APPLICABLE","deviation":"规则说明性条款，无可响应正文","actor_id":"selftest-operator"}));
+    let bmo = result(&resp);
+    r.check(
+        "bid.matrix_override(人工豁免)",
+        resp["ok"] == json!(true)
+            && bmo["matrix_override"]["row"]["status"] == json!("NOT_APPLICABLE")
+            && bmo["matrix_override"]["actor"]["actor_type"] == json!("human"),
+        format!("blocking_rows={}", bmo["matrix_override"]["blocking_rows"]),
+    );
+    // 读面对账：overrides 面含本行（谁/何时/为何——回溯可查）
+    let resp = call(&ctx, json!({"id":"t-bid-mo2","cmd":"bid.matrix"}));
+    let bm2 = result(&resp);
+    r.check(
+        "bid.matrix(豁免后对账)",
+        resp["ok"] == json!(true)
+            && bm2["overrides"]["REQ-0001"]["status"] == json!("NOT_APPLICABLE")
+            && bm2["overrides"]["REQ-0001"]["actor"]["actor_id"] == json!("selftest-operator"),
+        format!("deviation={:?}", bm2["overrides"]["REQ-0001"]["deviation"].as_str().map(|s| s.chars().take(12).collect::<String>())),
+    );
+    // 写面：NOT_APPLICABLE 无理由 → 工具面拒（不可审计的豁免不算豁免）
+    let resp = call(&ctx, json!({"id":"t-bid-mo3","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"NOT_APPLICABLE"}));
+    r.check(
+        "bid.matrix_override(无理由拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // 写面：非法状态值 → 壳侧入参早拒（不进工具面）
+    let resp = call(&ctx, json!({"id":"t-bid-mo4","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"APPLICABLE"}));
+    r.check(
+        "bid.matrix_override(非法状态早拒)",
         resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
         format!("{}", err_code(&resp)),
     );

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// #313 批 A + 批 B + 批 C + #603 批 A：标书数据面/治理面接线的源级回归门（web-ui 侧）。
+// #313 批 A + 批 B + 批 C + #603 批 A + #603 批 B：标书数据面/治理面接线的源级回归门（web-ui 侧）。
 //
 // 用法（零依赖）：
 //   node web-ui/tests/bid-panels.test.mjs
@@ -8,6 +8,7 @@
 //   * UI 侧：app.js 的活动栏入口 / 工作台伪标签页 / IPC 调用 / 演示桥 stub /
 //     章节跳转 / 进度条「不足标红」/ 矩阵页签（筛选/分页/导出/章节跳转）
 //     / 自评页签 / 审核门页签（#603 批 A：五门台账/追认/过门拒审）
+//     / 矩阵人工处置面（#603 批 B：overrides 徽章/审计 + 覆写表单）
 //     ；styles.css 的面板样式与响应式断点。
 //   * 壳侧（防 UI 接了壳没接）：mang-app/src/bid.rs 在场、ipc.rs 分发
 //     bid.state / bid.outline / bid.matrix、bid.state / bid.matrix 经
@@ -502,6 +503,96 @@ check(
   "契约文档登记 bid.gates / bid.gate_pass（#603 批 A）",
   contract.includes("### bid.gates") && contract.includes("### bid.gate_pass"),
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+
+// ---------- 壳侧：IPC 命令真实在场（#603 批 B：否决死锁人工豁免） ----------
+check(
+  "mang-app bid.rs 提供 matrix_override（写面）+ overrides 直读面（读面）",
+  bidRs.includes("pub fn matrix_override(") && bidRs.includes("matrix_overrides()") && bidRs.includes("fn matrix_override_json("),
+  "治理面写面模块被删"
+);
+check(
+  "bid.matrix_override 走宿主签发面 + 真实工具面（#182 四重绑定 → set_matrix_override）",
+  /matrix_override_scope\(/.test(bidRs) && bidRs.includes("issue_approval_receipt") && bidRs.includes("set_matrix_override"),
+  "receipt 签发链被绕过（Agent 可伪造面）"
+);
+check(
+  "壳侧状态早拒（合法值集与工具面同源——不进工具面）",
+  /STATUS_VALID/.test(bidRs) && bidRs.includes("RESPONDED | NOT_APPLICABLE | NOT_RESPONDED | PARTIAL"),
+  "非法状态值会打到工具面"
+);
+check(
+  "ipc.rs 分发 bid.matrix_override",
+  /"bid\.matrix_override" => crate::bid::matrix_override\(/.test(ipcRs),
+  "命令没接进 IPC 分发"
+);
+check(
+  "壳侧单测覆盖 matrix_override（全链 + 状态窗 + 无 db 副作用）",
+  bidRs.includes("matrix_override_full_flow_with_host_receipt") && bidRs.includes("matrix_override_needs_matrix_ready") && bidRs.includes("matrix_override_clean_not_found_without_db"),
+  "壳侧单测面被删"
+);
+check(
+  "selftest 覆盖治理面写面（人工豁免 + overrides 对账 + 无理由拒 + 非法状态早拒）",
+  bidRs.includes("seed_matrix_ready_with_deadlock") && /matrix_override\(人工豁免\)/.test(readFileSync(join(ROOT, "bidcore", "crates", "mang-app", "src", "selftest.rs"), "utf8")),
+  "自检清单漏治理面写面"
+);
+
+// ---------- app.js：#603 批 B——矩阵人工处置面接线 ----------
+check(
+  "写面调用 bid.matrix_override（真实 IPC）+ 成功回显剩余阻断行数",
+  /ipc\("bid\.matrix_override", body, 3e4\)/.test(app) && /blocking_rows/.test(app),
+  "覆写 IPC 调用被删或改形"
+);
+check(
+  "演示桥补 bid.matrix_override stub + 可变矩阵（覆写真改演示行/徽章/审计）",
+  /case "bid\.matrix_override":/.test(app) && /demoMatrixOverride/.test(app) && /case "bid\.matrix":[\s\S]{0,220}demoMatrix/.test(app),
+  "演示模式矩阵面会空转/覆写不落地"
+);
+check(
+  "overrides 读面唯一真源（bidMxOverrides——徽章/审计/计数同源）",
+  /function bidMxOverrides\(\)/.test(app) && /bid-mx-ovr-badge/.test(app) && / · 人工覆写 "/.test(app),
+  "覆写状态被第二套实现取代"
+);
+check(
+  "展开详情含人工处置块（覆写审计 + 豁免入口 + 死锁引导）",
+  /人工处置（#603）/.test(app) && /人工覆写在册/.test(app) && /人工豁免是唯一诚实出口/.test(app),
+  "处置块被删"
+);
+check(
+  "覆写表单四件套（状态选择 + 偏离说明 + 确认/取消）",
+  /data-mx-ovr-status/.test(app) && /data-mx-ovr-deviation/.test(app) && /data-mx-ovr-confirm/.test(app) && /data-mx-ovr-cancel/.test(app),
+  "表单接线被删"
+);
+check(
+  "NOT_APPLICABLE 必填理由（前端预检 + 域层兜底）",
+  /NOT_APPLICABLE 必须给偏离说明/.test(app),
+  "不可审计的豁免会被放行"
+);
+check(
+  "覆写后矩阵 + 侧栏统计同源刷新",
+  /overrideBidMatrixRow/.test(app) && /ui\.loadBidMatrix\(true\)/.test(app),
+  "覆写生效后面板不刷新（看到旧 blocking）"
+);
+check(
+  "mx 面板态含写面字段（formReq / passing / passError / passInfo）",
+  /formReq: ""/.test(app) && /passing: false/.test(app),
+  "表单状态字段被删"
+);
+
+// ---------- styles.css：#603 批 B 矩阵人工处置面样式 ----------
+for (const sel of [".bid-mx-ovr-badge", ".bid-mx-ovr-form", ".bid-mx-ovr-title", ".bid-mx-ovr-field", ".bid-mx-ovr-text", ".bid-mx-msg"]) {
+  check(
+    `styles.css 提供 ${sel} 样式`,
+    css.includes(sel),
+    "覆写面样式被删"
+  );
+}
+
+// ---------- 契约：IPC-CONTRACT.md 登记（#603 批 B） ----------
+check(
+  "契约文档登记 bid.matrix_override + overrides 读面（#603 批 B）",
+  contract.includes("### bid.matrix_override") && /overrides/.test(contract),
+  "治理面写面没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
