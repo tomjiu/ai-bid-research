@@ -101,6 +101,7 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `bad_args` | 参数缺失或类型不对 | `fs.read` 无 `path` |
 | `unknown_cmd` | 没有这个命令 | `nope.cmd` |
 | `not_found` | 路径不存在 | 文件被删/改名 |
+| `state` | bid 项目未到该命令的状态窗（工具面 E_STATE 透传） | 矩阵未建时 `bid.quality` / `bid.score` |
 | `denied` | 存在但越权（写工作区非 `.mang/`、拒绝访问） | `fs.writeBytes` 写正文 |
 | `outside_workspace` | 解析后不在工作区内（`../` 穿越、盘符外绝对路径） | 安全拦截 |
 | `too_large` | 超过该命令的体积上限 | 50MB 的 pdf 用 `fs.read` |
@@ -420,6 +421,44 @@ bid-mcp-stdio 同源裁决，方案 A 直链）。工具面按 S-4 游标分页�
     "warnings": [ ],                          // 如 EMPTY_MATRIX: 条款集为空
     "project_version": 12, "fetched_pages": 2 }
 ```
+### bid.quality —— 质量覆盖度检查（只读；#313 批 C）
+主体经 `bid_mcp::dispatch_with(check_bid_quality)` 走真实工具面（与 bid-mcp-stdio
+同源裁决），工具输出原样放 `quality` 键（summary 起草/失败/未覆盖/带外/无锚/查重/
+字数偏离、needs_human、submission_readiness【#241 两分账：导出可过而提交未就绪
+是合法状态】、sections 逐章明细、global_conflicts【#423 金额/工期/术语/承诺跨章
+冲突】、negative_deviations【A-07 负偏离】、artifact 报告落盘位置、warnings）。
+服务缓存与批 A 同款（工作区根 + db.json 指纹）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "quality": { …check_bid_quality 工具输出原样（project_id / summary /
+               needs_human / submission_readiness / sections / global_conflicts /
+               negative_deviations / artifact / warnings / request_id）… } }
+```
+拒绝面：无 db.json → `not_found`；项目未到 MatrixReady+ 或无章节树 →
+**`state`**（工具面 E_STATE 原文透传，如
+「REQUIREMENTS_EXTRACTED 态无章节树——先建纲再查质量」——UI 据此分支成
+「尚未开放」引导卡，不是故障）。
+
+### bid.score —— 全文档规则自评（只读；#313 批 C）
+主体经 `bid_mcp::dispatch_with(score_document)` 走真实工具面，工具输出原样放
+`score` 键（`diagnostic_only`/`result_kind`【#186 语义降级：规则诊断非评标模拟——
+UI 必须原样展示徽章】、technical / commercial / price / total / target / gap、
+by_item 逐项明细【estimated / tier / coverage / contributions / rule_checkpoints】、
+mappings【#224 双向追溯】、unmapped_scoring_items、notes、sections_scored）。
+**范围纪律：本命令不带价格推演入参**（bid_price / method 等——报价试算走既有
+`score_price` 工具）；未报价时 `score.price` 为 **null**（诚实显示「价格分不计」，
+不伪缺 0）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "score": { …score_document 工具输出原样（diagnostic_only=true /
+             result_kind="rule_heuristic" / technical / commercial / price /
+             total / target / gap / by_item / breakdown / mappings /
+             unmapped_scoring_items / notes / price_input / sections_scored）… } }
+```
+拒绝面与 `bid.quality` 同：`not_found` / `state`。
+
 
 ### bid.coverage —— 覆盖报告 + ★条款覆盖（只读；#313 批 D）
 主体经 `bid_mcp::dispatch_with(get_coverage_report)` 走真实工具面（与
