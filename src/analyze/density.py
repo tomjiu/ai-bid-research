@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from src.analyze.dataset import AnalysisDataset
 
