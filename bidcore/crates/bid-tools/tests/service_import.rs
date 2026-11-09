@@ -141,6 +141,16 @@ fn ocr_blank_scan_surfaces_per_file_warning() {
     ) {
         return;
     }
+    // #591 误报根治：生成器依赖（python3 + reportlab）也走环境门——
+    // 旧版只在下方 assert! 处判红（CI 装齐 poppler+tesseract+chi_sim 却缺
+    // reportlab → 判红，但业务代码零缺陷）。现在缺件走 SKIP 横幅，
+    // 与 FULL_PDF_CHAIN 同口径（issue #9：依赖缺失不得伪装成业务 FAIL）。
+    if bid_parse::env_preflight::skip_if_env_missing(
+        "ocr_blank_scan_surfaces_per_file_warning",
+        bid_parse::env_preflight::SYNTH_FIXTURE_DEPS,
+    ) {
+        return;
+    }
     // 现场生成空白扫描形 PDF（#380 同款纪律：python3+reportlab 现场生成，
     // 缺件跳过横幅——不留仓内大文件）
     let tmp = std::env::temp_dir().join(format!("b13-blank-{}", std::process::id()));
