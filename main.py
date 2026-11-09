@@ -22,6 +22,10 @@
     python main.py pipeline --announcements ann/ --raw-texts raw/ --db data/bids.db
     python main.py pipeline --announcements ann/ --dry-run   # 全链预演零副作用
 
+    # 抽取质量评估（gold 标注语料上的字段命中率）
+    python main.py eval --gold fixtures/announcements/gold-extraction.json
+    python main.py eval --gold fixtures/announcements/gold-extraction.json --mode api
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -64,6 +68,7 @@ from src.extract import (
     load_raw_texts,
     run_extraction,
 )
+from src.extract.eval import evaluate_extractor, load_gold
 from src.extract.runner import resolve_raw_files
 from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
@@ -313,6 +318,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="全链预演：各阶段只统计将做什么，零副作用",
     )
 
+    # eval 子命令（#601 批次 E：抽取质量评估）
+    ev = sub.add_parser(
+        "eval",
+        help="抽取质量评估（gold 标注语料上的字段命中率）",
+    )
+    ev.add_argument(
+        "--gold",
+        type=Path,
+        default=Path("fixtures/announcements/gold-extraction.json"),
+        help="gold 标注 JSON 路径",
+    )
+    ev.add_argument(
+        "--texts",
+        type=Path,
+        default=None,
+        help="原文目录（缺省取 gold 同目录的 raw/）",
+    )
+    ev.add_argument(
+        "--mode",
+        choices=("rule", "api"),
+        default="rule",
+        help="评估的抽取引擎（默认 rule 离线基线）",
+    )
+
     # db 子命令
     db = sub.add_parser(
         "db", help="招标信息数据库管理（导入/统计）"
@@ -554,6 +583,22 @@ def _has_api_key() -> bool:
     )
 
 
+class _SyncLLMEngine:
+    """LLM 引擎的同步适配（评估面统一同步语义——逐用例 asyncio.run）。"""
+
+    mode = "api"
+
+    def __init__(self) -> None:
+        from src.extract import LLMExtractor
+
+        self._extractor = LLMExtractor(LLMClient())
+
+    def extract(self, text: str) -> dict:
+        import asyncio
+
+        return asyncio.run(self._extractor.extract(text))
+
+
 def _build_llm_extractor():
     """构建 LLM 抽取引擎（密钥缺失时返回 None）。"""
     if not _has_api_key():
@@ -682,6 +727,53 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return 0 if run.all_ok else 1
 
 
+def run_eval(args: argparse.Namespace) -> int:
+    """执行 eval 子命令：gold 语料上的抽取字段命中率。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 评估完成；1 命中率低于 80% 基线；2 配置错误）。
+    """
+    if not args.gold.is_file():
+        print(f"错误：gold 标注文件不存在: {args.gold}", file=sys.stderr)
+        return 2
+    texts_dir = args.texts or args.gold.parent / "raw"
+    if not texts_dir.is_dir():
+        print(f"错误：原文目录不存在: {texts_dir}", file=sys.stderr)
+        return 2
+
+    try:
+        gold = load_gold(args.gold)
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"错误：gold 标注不可用: {exc}", file=sys.stderr)
+        return 2
+
+    texts = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted(texts_dir.glob("*.txt"))
+    }
+
+    if args.mode == "api":
+        if not _has_api_key():
+            print(
+                "错误：api 模式需要 DEEPSEEK_API_KEY 或 OPENAI_API_KEY",
+                file=sys.stderr,
+            )
+            return 2
+        engine = _SyncLLMEngine()
+    else:
+        engine = RuleExtractor()
+
+    report = evaluate_extractor(engine, gold, texts)
+    print(report.format_summary())
+    if report.overall_hit_rate is not None and report.overall_hit_rate < 0.8:
+        print("基线告警：字段命中率低于 80%——抽取面可能退化", file=sys.stderr)
+        return 1
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -783,6 +875,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return run_analyze(args)
         if args.command == "pipeline":
             return run_pipeline(args)
+        if args.command == "eval":
+            return run_eval(args)
         if args.command == "db":
             return run_db(args)
         if args.command == "templates":
