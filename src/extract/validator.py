@@ -35,7 +35,8 @@ RECOMMENDED_FIELDS = (
 )
 
 #: 完整度分母：全部规范业务字段（不含 created_at 等元数据列）。
-_ALL_CANONICAL_FIELDS = (
+#: 公共常量（#601 批次 E：字段级质量评估面共用）。
+ALL_FIELDS = (
     "bid_id",
     "project_name",
     "region",
@@ -51,8 +52,11 @@ _ALL_CANONICAL_FIELDS = (
 )
 
 
-def _is_filled(value: Any) -> bool:
-    """字段「已填」判定：非 None/非空串/非空列表。"""
+def is_filled(value: Any) -> bool:
+    """字段「已填」判定：非 None/非空串/非空列表。
+
+    公共谓词（#601 批次 E：字段级质量评估面共用）。
+    """
     if value is None:
         return False
     if isinstance(value, str) and not value.strip():
@@ -90,16 +94,16 @@ def validate_fields(fields: Dict[str, Any]) -> ValidationResult:
     Returns:
         校验结果（valid / 缺失清单 / 命中率）。
     """
-    filled = [name for name in _ALL_CANONICAL_FIELDS if _is_filled(fields.get(name))]
+    filled = [name for name in ALL_FIELDS if is_filled(fields.get(name))]
     missing_required = [
-        name for name in REQUIRED_FIELDS if not _is_filled(fields.get(name))
+        name for name in REQUIRED_FIELDS if not is_filled(fields.get(name))
     ]
     missing_recommended = [
         name
         for name in RECOMMENDED_FIELDS
-        if not _is_filled(fields.get(name))
+        if not is_filled(fields.get(name))
     ]
-    hit_rate = len(filled) / len(_ALL_CANONICAL_FIELDS)
+    hit_rate = len(filled) / len(ALL_FIELDS)
     return ValidationResult(
         valid=not missing_required,
         missing_required=missing_required,

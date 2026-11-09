@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
 from src.analyze.density import competition_density
+from src.analyze.quality import field_quality
 from src.analyze.keywords import common_bigrams, keyword_frequency
 from src.analyze.stats import (
     budget_summary,
@@ -50,6 +51,7 @@ def build_analysis_payload(
         "keywords": dict(list(keyword_frequency(dataset).items())[:15]),
         "bigrams": common_bigrams(dataset, top=10),
         "density": competition_density(dataset),
+        "field_quality": field_quality(dataset),
     }
 
 
@@ -195,6 +197,28 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
         f"- 定标率：{_fmt_pct(density['award_rate'])}；"
         f"中标人 top3 占 {_fmt_pct(density['winner_top3_share'])}",
         "",
+    ]
+
+    quality = payload.get("field_quality") or {}
+    if quality.get("most_missing"):
+        rows = [
+            [
+                name,
+                _fmt_pct(quality["fields"][name]["rate"]),
+                f"{quality['fields'][name]['filled']}/{quality['records']}",
+            ]
+            for name in quality["most_missing"]
+        ]
+        sections += [
+            "## 七、数据质量（系统性缺口——下一步补采行动面）",
+            "",
+            _render_table(["最缺字段", "填充率", "已填/总数"], rows),
+            "",
+            f"整体字段填充率：{_fmt_pct(quality.get('overall'))}",
+            "",
+        ]
+
+    sections += [
         "## 口径说明",
         "",
         "- 本报告为研究工具**离线数据报告**（PYTHON-BOUNDARY 非生产口径）。",
