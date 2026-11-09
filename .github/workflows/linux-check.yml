@@ -39,7 +39,11 @@ jobs:
   linux:
     name: linux / 真件链（poppler + tesseract + gtk 全装面）
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # #584：main push 阶段 --include-ignored 全量重测需要时长余量——
+    # 15 个重型验收测试 Windows 实测合计 ~59 分钟（windows-check 口径），
+    # Linux runner 通常更快；PR 阶段仍默认跳过、快速退出，不受本值影响
+    #（GitHub 按实际用时分计费，抬高上限不空耗）。首跑如实以结果为准。
+    timeout-minutes: 150
     env:
       # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
       # ——与 windows-check 同款条件执行模式。
@@ -173,19 +177,39 @@ jobs:
         working-directory: bidcore
         run: cargo check --workspace --all-targets
 
-      - name: cargo test (全量 workspace，真件链真跑)
+      - name: cargo test (全量 workspace，真件链真跑；main 阶段含重型验收面)
         # 与 windows-check 同款 --no-fail-fast + --nocapture：
         #   · --no-fail-fast：一次看全所有红灯（2026-11-02 教训）；
         #   · --nocapture：SKIP 横幅（单行 eprintln! 写 stderr）可见，
         #     下方双向断言/汇总步骤才有日志可读（FG-03 ③ 同因）。
         # bash 的 `set -o pipefail` 保证 tee 不吞 cargo 退出码（pwsh 管道
         # 吞码坑在 bash 不存在——FG-03 ② 的 Windows 侧形态不适用）。
+        #
+        # #584 分层镜像（windows-check.yml:227-244 同型，bash 版）：
+        # 15 个重型验收测试（6 二进制：block_bidi_acceptance /
+        # star_coverage_acceptance / structure_probe_272 /
+        # coverage_gate_corpus / cross_platform_structure /
+        # real_corpus_e2e，单个 6-13 分钟真实语料全量解析）已标 #[ignore]，
+        # 文案承诺「main 阶段 --include-ignored 全跑」——此前只在
+        # windows-check 兑现，Linux 侧任何触发面都不带 --include-ignored，
+        # cross_platform_structure 4 个跨平台结构不变量在 Unix 侧
+        # 永久零 CI（#584 假绿缺口）。本步补齐 Linux 兑现面：
+        #   PR 阶段   = 默认口径（libtest 自动跳过 ignore）→ 快反馈；
+        #   push main = --include-ignored 全量回归 → Unix 侧重型面补齐。
+        # 本地手动跑重测试：cargo test -p <crate> -- --ignored
         working-directory: bidcore
         shell: bash
         run: |
           set -o pipefail
-          cargo test --workspace --no-fail-fast -- --nocapture 2>&1 |
-            tee "$RUNNER_TEMP/test-output.log"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "PR 阶段：默认口径（15 个重型验收测试 #[ignore] 自动跳过）"
+            cargo test --workspace --no-fail-fast -- --nocapture 2>&1 |
+              tee "$RUNNER_TEMP/test-output.log"
+          else
+            echo "main 阶段：--include-ignored 全量（含 15 个重型验收测试）"
+            cargo test --workspace --no-fail-fast -- --nocapture --include-ignored 2>&1 |
+              tee "$RUNNER_TEMP/test-output.log"
+          fi
 
       - name: 失败测试清单（一眼可读——区分真失败与 #[should_panic] 预期 panic）
         # 排查教训：`panicked at ...` 行在两种情况下都会打印——
