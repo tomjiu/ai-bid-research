@@ -62,7 +62,31 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
   （ID/分类/★条款/矩阵状态）**无映射关系**，禁止拿它做合规判定；
 - **反序列化兜底**：损坏数据在 `BidDatabase._row_to_dict` 中回退为空列表。
 
-## 4. CI 隔离
+## 4. 研究管道使用面（#601）
+
+```bash
+# 全链：公告源 → 采集 → LLM 抽取 → 分析 → 报告（一条命令）
+python main.py pipeline --source announcements/ --db data/bids.db --incremental --html
+
+# 分阶段单命令
+python main.py collect  --source announcements/ --dry-run     # 演练（不写库）
+python main.py extract  --source announcements/              # LLM 抽取（失败进 pending）
+python main.py extract  --retry                               # 重试 pending 面（需 API key）
+python main.py analyze  --keyword 智慧城市 --days 90 --html   # 离线纯数据报告
+```
+
+- **离线可测**：无 `DEEPSEEK_API_KEY`/`OPENAI_API_KEY` 或 `--no-llm`
+  时抽取阶段自动降级直通（警告一次，不静默）；
+- **失败降级**：LLM 失败/校验拒收的公告进 `pending_announcements`
+  表（可重放载荷），`extract --retry` 换模型/提示词后重跑；
+- **增量水位**：`pipeline --incremental` 只读上次成功运行后的
+  新文件（`pipeline_runs.watermark`，亚秒精度）；
+- **审计台账**：每次管道运行（含失败）自动登记 `pipeline_runs`
+  （stages 明细 + 报告路径），研究可复现「报告基于哪次运行」；
+- **fixture 全链**：`tests/fixtures/announcements/`（合成脱敏）+
+  `tests/test_e2e_pipeline.py` 覆盖全部特性面，`pytest` 离线可跑。
+
+## 5. CI 隔离
 
 ```
 .github/workflows/python-tests.yml
@@ -76,7 +100,7 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
 - 该 workflow 同样挂 concurrency 组（#568 全仓纪律），
   `cancel-in-progress: true`（检查类，可安全取消）。
 
-## 5. .gitignore 钉死项
+## 6. .gitignore 钉死项
 
 ```
 output/            # Python 报告输出目录（研究快照，可再生）
