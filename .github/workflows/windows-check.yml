@@ -142,21 +142,32 @@ jobs:
       # timeout-minutes 是挂死的根治面：continue-on-error 只救「失败」，
       # 救不了「不结束」；上限把 30-40 分钟挂死钳成有界损失。
       # restore 上限 10 分钟：下载解包大缓存（bidcore/target 全量 ~GB 级）。
-      - name: Restore cargo cache (#308 拆分——Post save 挂死面根治)
+      # #308 拆分（Post save 挂死面根治）+ #591 分层（registry / target 双 key）
+      - name: Restore cargo registry cache (#591——秒级)
         id: cache-cargo
         uses: actions/cache/restore@v4
         continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 5
         with:
           path: |
             ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            bidcore/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('bidcore/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('bidcore/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Restore cargo target cache (#591——GB 级，省编译时间)
+        id: cache-target
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: bidcore/target/
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('bidcore/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
 
       - name: cargo check
         working-directory: bidcore
@@ -213,7 +224,24 @@ jobs:
         #    并行测试不撕裂）。corpus_probe.rs 头注释本就以该模式运行。
         shell: pwsh
         run: |
-          cargo test --workspace --no-fail-fast -- --nocapture 2>&1 |
+          # #591 CI 提速：分层测试（实测 windows-check 100 分钟里 cargo test 占 82.9 分钟）。
+          # 最慢的 6 个验收测试二进制合计 59 分钟（单个 6-13 分钟，真实语料全量解析）：
+          #   block_bidi_acceptance 12.7m / star_coverage_acceptance 12.2m /
+          #   structure_probe_272 11.9m / coverage_gate_corpus 8.4m /
+          #   cross_platform_structure 7.8m / real_corpus_e2e 6.0m
+          # 这 6 个文件的 15 个测试已标 #[ignore]（重型验收面，不是每次改动都需重验）：
+          #   PR 阶段   = 默认跑（libtest 自动跳过 ignore）→ 快反馈约 40 分钟；
+          #   push main = --include-ignored 全量回归 → 完整覆盖约 100 分钟。
+          # 本地手动跑重测试：cargo test -p <crate> -- --ignored
+          $skipArgs = @()
+          if ($env:GITHUB_EVENT_NAME -eq "pull_request") {
+            $skipArgs = @("--", "--nocapture")
+            Write-Host "PR 阶段：默认口径（15 个重型验收测试 #[ignore] 自动跳过）"
+          } else {
+            $skipArgs = @("--", "--nocapture", "--include-ignored")
+            Write-Host "main 阶段：--include-ignored 全量（含 15 个重型验收测试）"
+          }
+          cargo test --workspace --no-fail-fast @skipArgs 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP\test-output.log" | Out-Host
           $code = $LASTEXITCODE
           Write-Host "cargo test exit code: $code"
@@ -227,6 +255,44 @@ jobs:
       # （bid-parse FULL_PDF_CHAIN = pdftotext/pdftoppm/pdfinfo/tesseract +
       # chi_sim.traineddata）实测环境；③ 两个方向都可能显式红：
       # 缺件却无横幅 = SKIP 机制静默失效；工具齐备却出横幅 = 横幅误报。
+      # 排查教训（#591）：`panicked at ...` 行在两种情况下都打印——
+      #   · #[should_panic] 测试**通过**时（libtest 打 panic 消息但 test ok）
+      #   · 真实失败时
+      # 人眼扫日志先看到 panicked 会误判（实测排查被带偏 3 次）。
+      # 本步骤只认 `test <name> ... FAILED` 与 `test result: FAILED`，
+      # 输出纯失败清单到 step summary + 注解，让「哪里红了」一眼可读。
+      - name: 失败测试清单（一眼可读——区分真失败与 #[should_panic] 预期 panic）
+        if: always()
+        working-directory: bidcore
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\test-output.log"
+          if (-not (Test-Path $log)) {
+            Write-Host "::warning::测试日志缺失（$log）——跳过失败清单汇总"
+            exit 0
+          }
+          $lines = Get-Content $log
+          $failed = @($lines | Where-Object { $_ -match "^test .+ \.\.\. FAILED" } |
+            ForEach-Object { ($_ -replace "^test ", "") -replace " \.\.\. FAILED$", "" } |
+            Sort-Object -Unique)
+          $summaries = @($lines | Where-Object { $_ -match "^test result: FAILED" })
+          "### 失败测试清单（windows-check）" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($failed.Count -eq 0) {
+            "- 零失败 ✅（日志里的 panicked 行均来自 #[should_panic] 预期 panic）" |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "== 失败测试: 0 =="
+          } else {
+            "**$($failed.Count) 个测试失败**：" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            foreach ($t in $failed) { "- ``$t``" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            foreach ($s in $summaries) { $s | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+            "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "== 失败测试: $($failed.Count) =="
+            foreach ($t in $failed) { Write-Host "  ✗ $t" }
+            Write-Host "::error::$($failed.Count) 个测试失败（清单见上 / step summary）"
+          }
+
       - name: Verify SKIP banner emitted (日志回放 + 双向断言)
         working-directory: bidcore
         shell: pwsh
@@ -319,16 +385,28 @@ jobs:
       #   常态数分钟）；30-40 分钟挂死被钳成有界损失。若 Lead 想更紧
       #   （issue 草案 3 分钟）可直接调小——代价是正常大缓存 save 被杀、
       #   缓存停更（只慢不红）。
-      - name: Save cargo cache (#308——save 不再挂 Post 阻塞 run)
+      # #591 CI 提速：save 分层——registry 每次存（秒级），target 只由 main 存。
+      # 实测 target/ 是 GB 级（压缩+上传 ~10 分钟），而 PR 每次都存一份「新的
+      # 差分 target」价值极低（PR 合完即废弃）。main 存的那份供所有 PR restore。
+      # 两个独立步骤而非单步条件 path：actions/cache 对空 path 项行为不可靠。
+      - name: Save cargo registry cache (#591——秒级，PR/main 都存)
         if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 5
         with:
           path: |
             ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            bidcore/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('bidcore/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('bidcore/Cargo.lock') }}
+
+      - name: Save cargo target cache (#591——GB 级，仅 push main 存)
+        if: always() && github.event_name != 'pull_request' && steps.cache-target.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 15
+        with:
+          path: bidcore/target/
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('bidcore/Cargo.lock') }}

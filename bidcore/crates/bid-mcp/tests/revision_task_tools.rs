@@ -411,10 +411,11 @@ fn reopen_section_tool() {
     assert!(err_msg(&reply).contains("ACCEPTED"), "{}", err_msg(&reply));
 
     // 域层推进到 ACCEPTED（Drafted→Validating→Accepted——本测试的编排前置）
-    let st = svc.store_mut();
-    st.advance_section_status(&sec, SectionStatus::Validating).unwrap();
-    st.advance_section_status(&sec, SectionStatus::Accepted).unwrap();
-    drop(st);
+    {
+        let st = svc.store_mut();
+        st.advance_section_status(&sec, SectionStatus::Validating).unwrap();
+        st.advance_section_status(&sec, SectionStatus::Accepted).unwrap();
+    }
 
     // 重开 → REVISING + dirty
     let r = ok_result(call(&mut svc, "reopen_section", json!({

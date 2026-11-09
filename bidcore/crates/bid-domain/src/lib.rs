@@ -63,10 +63,12 @@ pub mod outline;
 pub mod packages;
 pub mod param;
 pub mod party;
+pub mod performance;
 pub mod pricing;
 pub mod principal;
 pub mod review;
 pub mod scoring;
+pub mod scoring_coverage;
 pub mod scoring_outline;
 pub mod coverage;
 pub mod rewrite;
@@ -117,6 +119,35 @@ impl ToolError {
 }
 
 // ---------------------------------------------------------------- 项目状态机（domain-model §2）
+
+/// 无状态门工具清单（#522/C-22：`ungated_tools` 回显的单一真源）。
+///
+/// 这些工具**不参与状态机门**——不出现在任何 [`ProjectStatus::allowed_tools`]
+/// 中，调用它们不应触发状态变迁裁决。语义注意：
+/// - 无状态门 ≠ 无前置——`list_tasks` / `list_evidence` / #285② 对账三工具
+///   仍要求项目存在（壳层 route_project 把关：项目不存在 → E_NOTFOUND）；
+/// - `list_tools` / `save_version` / `score_price` 连项目也不需要；
+/// - 与各状态 `allowed_tools` 的**并集 = 当前完整可调面**（get_bid_project_state
+///   以 `allowed_next_tools` + `ungated_tools` 两字段分别回显）。
+///
+/// 护栏：bid-mcp dispatch_contract 有二分不变量测试（TOOL_NAMES == 状态门
+/// 并集 ∪ 本清单，两集不相交）——新工具要么进门表要么登记在此，漏登即红。
+pub const UNGATED_TOOLS: &[&str] = &[
+    "list_tools",
+    "list_tasks",
+    "list_evidence",
+    "save_version",
+    "score_price",
+    "get_requirement_provenance",
+    "get_block_requirements",
+    "get_annotation_overlay",
+    // #347：评分细则覆盖检查（只读诊断——不受标书状态门约束）
+    "check_scoring_coverage",
+    // #315：业绩材料库（库操作与标书状态机正交——登记/列出/推荐都不推状态）
+    "register_performance",
+    "list_performance",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProjectStatus {
@@ -192,6 +223,9 @@ impl ProjectStatus {
                 "get_compliance_matrix",
                 "search_evidence",
                 "get_bid_project_state",
+                // #315 业绩匹配推荐（只读——抽取后 REQ 陈述/评分项构成匹配
+                // 语料；建纲前也能看推荐，帮用户决定库里的业绩够不够投）
+                "recommend_performance",
                 // #80 第三批 MCP 补齐 G1：建纲+矩阵首建（P3 的前置）
                 "build_outline",
                 // #287 篇幅档位推荐（建纲前只读——建议+理由+alternatives 交用户确认）
@@ -226,6 +260,10 @@ impl ProjectStatus {
                 "get_compliance_matrix",
                 "search_evidence",
                 "get_bid_project_state",
+                // #315 业绩库（推荐只读；一键写入 = 证据登记+绑定+分段写入的
+                // 组合面——三个组成工具都在本窗口，组合面同窗）
+                "recommend_performance",
+                "write_performance_section",
                 "draft_response_section",
                 // #254 分段写入（与整稿同窗口——矩阵就绪即可续写）
                 "append_section_segment",
@@ -269,6 +307,9 @@ impl ProjectStatus {
                 "get_compliance_matrix",
                 "search_evidence",
                 "get_bid_project_state",
+                // #315 业绩库（推荐只读 + 一键写入——起草期补业绩章/补证据）
+                "recommend_performance",
+                "write_performance_section",
                 "draft_response_section",
                 // #254 分段写入（起草主战场——长章节安全续写）
                 "append_section_segment",
@@ -317,6 +358,8 @@ impl ProjectStatus {
                 "list_packages",
                 "search_evidence",
                 "get_bid_project_state",
+                // #315 业绩推荐（只读——校验期对账：缺业绩时看库里还有什么可用）
+                "recommend_performance",
                 // #254 只读段账本（校验期对账面——写作工具不重开）
                 "list_section_segments",
                 "validate_bid_document",
@@ -360,6 +403,8 @@ impl ProjectStatus {
                 "list_packages",
                 "search_evidence",
                 "get_bid_project_state",
+                // #315 业绩推荐（只读——导出前最后对账）
+                "recommend_performance",
                 // #254 只读段账本（复核期对账面）
                 "list_section_segments",
                 "validate_bid_document",
@@ -1201,6 +1246,8 @@ impl DomainStore {
         // / `human_review_complete` / method 回显的数据源）。**注意**：只写
         // gate_passes 不写 reviews——`gate_approved`（门禁消费面）读的是
         // reviews，逐件免责不武装全局门（#379 拆门的关键切割点）。
+        // #277 方案 A：补遗门过门同步落审计账（与 record_review 的
+        // GatePassRecord 同构——导出警告判据 = 本门最新一条 human_confirmed）
         let gp_id = self.next_id("GP");
         self.gate_passes.push(review::GatePassRecord {
             id: gp_id,
@@ -1271,6 +1318,9 @@ impl DomainStore {
             at,
             reviewed_content_version,
             reviewed_content_digest,
+            // A-10/#474：计分面摘要（全部门记录统一携带；判定面只消费
+            // PreExportConfirm——与 reviewed_content_digest 同纪律）。
+            reviewed_scoring_digest: self.scoring_surface_digest(),
         };
         self.reviews.push(rec.clone());
         // #277 方案 A 同构：过门同步落审计账（导出警告判据 = 本门最新一条

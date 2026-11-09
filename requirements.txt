@@ -1,0 +1,9 @@
+# ai-bid-research —— 运行时与测试依赖
+# Python 3.10+
+
+# --- 运行时 ---
+openai>=1.30.0          # AsyncOpenAI 客户端（DeepSeek 兼容接口）
+
+# --- 测试 ---
+pytest>=7.4.0
+pytest-asyncio>=0.23.0

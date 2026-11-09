@@ -266,7 +266,6 @@ fn pdf_export_idempotent_same_artifact() {
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "pdf", "output_path": "out/i.pdf",
     })));
-    let sha_a = a["artifact"]["sha256"].as_str().unwrap().to_string();
     let mtime_a = std::fs::metadata(
         a["artifact"]["url"].as_str().unwrap()
     ).unwrap().modified().unwrap();

@@ -15,6 +15,8 @@ pub mod placeholder;
 // #455（审计 A-15）：bidder-profile.json 持久化自 bid-domain/party.rs 迁入——
 // bid-domain 恢复真零 IO；写路径 tmp→fsync→rename 原子纪律（store_io 同款）
 pub mod profile_io;
+// #315 业绩材料库（跨项目持久化 + 匹配推荐 + 一键写入）
+pub mod performance;
 pub mod quality;
 pub mod readiness;
 // #319 补遗后增量重写（登记编排 + 局部改写编排）
@@ -31,5 +33,6 @@ pub mod tables;
 pub mod validate;
 
 pub use runner::{run_scenario, write_run, RunOutput};
+pub use performance::{PerfListFilter, PerfRegisterReport, PerfWriteReport};
 pub use service::{import_files, BidService, ImportReport, ImportSpec};
 pub use store_io::{StoreFile, StoreIoError};

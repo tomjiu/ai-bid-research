@@ -25,7 +25,7 @@ description: >
 | P3 矩阵 | 建响应矩阵+资格判断 | get_compliance_matrix | 资格/否决行 policy 全填；资格三态结论（eligible/conditional/not_eligible）向用户报告；**not_eligible → 停止流程，只产审查报告**（ark 闸门） | 矩阵只读，随时重查 |
 | P4 证据 | 绑定证据+补缺清单 | search_evidence | 每条必选项≥1 条 OK 证据；EXPIRED 禁绑；缺失项形成补料清单交用户 | 缺料→等待用户补充后仅补跑受影响行 |
 | P5 起草 | 逐章节起草 | draft_response_section, save_version | unanchored_claims=0；citations 全部来自已绑定 EV；**每完成一个章节，调用 save_version 存版本**（message 写明章节与完成内容——桌面壳「改动」面板可预览/对比/回滚） | per-SEC 重试，不影响其他章节 |
-| P6 校验 | 双层校验 | validate_bid_document | deterministic findings 清零（BLOCKER 必须 Resolved/Waived） | 按 scope 重跑 |
+| P6 校验 | 双层校验 | validate_bid_document | deterministic findings 清零（每类 BLOCKER 走真实出口：矩阵覆写/换证/补写——无通用豁免通道，见 Skill p6-validation.md） | 按 scope 重跑 |
 | P7 审校 | 模型审校→修订任务闭环 | validate + (后端)RT | 每个 MAJOR finding 有 RT 且 DONE | 只重跑 DIRTY 章节 |
 | P8 导出 | 预检+导出 | export_bid_document | precheck.blockers=0；artifact sha256 复述 | 同参幂等 |
 

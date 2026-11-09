@@ -49,7 +49,10 @@ SCENARIOS = ("TC-01", "TC-02", "TC-07", "TC-11")
 #   + 2 查询集 + 2 缺陷草稿 + 1 corpus-R README + 5 corpus-R 结构层
 #   + 5 TR2 引擎借鉴夹具（PR #15 引入：word-complex/word-merged/excel-complex + gen-log + PROVENANCE）
 EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 5 + len(S.TRANSITIONS) + 2 + 2 + 1
-                           + len(R.OUTPUT_FILES) + 5)
+                           + len(R.OUTPUT_FILES) + 5
+                           + 2)  # #577：TRANSITIONS 4->5（#490 meta.json 进 TRANSITIONS 计数）；
+                                # #559：澄清修改文件-3.1.1.docx（#425）+ ground-truth/meta.json（#491/A-20③）携带面
+
 _RULE_CODES = ["CERT_EXPIRED", "PRICE_EXCEEDS_BUDGET", "DURATION_MISMATCH", "PAGE_LIMIT",
                "MISSING_SIGNATURE", "DARK_BID_WORD", "TODO_RESIDUE", "INJECTION_PATTERN"]
 _ECHO_RE = None  # 延迟编译（防 import 顺序）
@@ -99,15 +102,31 @@ def require_tools_or_skip(name: str, tools: list[str], what: str) -> bool:
 
 
 def write_env_blocked():
-    """缺失清单追加 baseline/ENV_BLOCKED.md（B1 机制复用，issue #9 要求 4）。"""
+    """缺失清单追加 baseline/ENV_BLOCKED.md（B1 机制复用，issue #9 要求 4）。
+
+    幂等（#559）：同日同缺失组合已登记 → 不重复追加。原实现每跑一次追加
+    一块——受跟踪文件被运行时副作用无界改写（脏工作区 + 无信息量 diff；
+    本机三连跑实证长了三块）。登记价值在「缺什么+怎么补」，不在次数。
+    """
     if not _ENV_MISSING:
         return
     import datetime
     p = REPO / "baseline" / "ENV_BLOCKED.md"
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    # 幂等（#559）：同日同缺失组合已登记 → 不重复追加（受跟踪文件不被
+    # 运行时副作用无界改写）。登记价值在「缺什么+怎么补」，不在次数。
+
+    now = datetime.datetime.now()
+    items = [f"- {tool} —— {hint}" for tool, hint in _ENV_MISSING.items()]
+    key = "\n".join(items)
+    existing = p.read_text(encoding="utf-8") if p.exists() else ""
+    # 末块同日且同缺失组合 → 已登记，跳过
+
+    last_block = existing.rsplit("## ", 1)[-1]
+    if key in last_block and now.strftime("%Y-%m-%d") in last_block.split("\n", 1)[0]:
+        return
+    stamp = now.strftime("%Y-%m-%d %H:%M")
     lines = ["", f"## {stamp} run_tests.py 预检登记（issue #9 SKIP 机制）", ""]
-    for tool, hint in _ENV_MISSING.items():
-        lines.append(f"- {tool} —— {hint}")
+    lines += items
     lines += ["", f"受影响测试项已 SKIP（{len(_skipped)} 项），未计为失败。", ""]
     with open(p, "a", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -180,10 +199,19 @@ def t_env_preflight():
         check("T0d SarasaMonoSC 渲染字体在位（像素层钉版）", True, str(font))
 
     # T0e Rust 工具链（m1 并行线 T10~T13 与 bidcore cargo 回归）
+    # #565：与 T0b/T0c/T0d/T0f 同构——缺件登记 + SKIP（本地无 Rust 面时
+    # T10~T13/T17e/T18/T19 SKIP 而非红链；此前 T0e 判 FAIL 且 t_m1 的
+    # _cargo() fallback 不验存在性直接 FileNotFoundError 崩整链——同修）。
     cargo_path = Path.home() / ".cargo" / "bin" / "cargo"
     ok_e = bool(_sh.which("cargo")) or cargo_path.exists()
-    check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", ok_e,
-          "" if ok_e else "补装：sh data/rustup-init.sh -y --profile minimal --default-toolchain stable")
+    if ok_e:
+        check("T0e cargo 工具链可达（rustup stable，实测 1.99.1）", True, "")
+    else:
+        register_env_missing(
+            "cargo",
+            "sh data/rustup-init.sh -y --profile minimal --default-toolchain stable（T10~T13/T17e/T18/T19 需要）")
+        skip("T0e cargo 工具链可达（rustup stable，实测 1.99.1）",
+             "ENV_MISSING: cargo——T10~T13/T17e/T18/T19 将 SKIP（非失败）")
 
     # T0f numpy（#565：T4c-OCR 像素层统计依赖——CI 链路实测缺件恒红的环境门收口）
     try:
@@ -312,8 +340,16 @@ def t_fixture_integrity():
         elif hashlib.sha256(p.read_bytes()).hexdigest() != f["sha256"]:
             bad.append(f"{f['path']} 哈希不符")
     # R2 P1-4：反向校验——磁盘→manifest（游离文件会被真实流水线当语料摄入）
+    # #559 范围收口：只巡查 **manifest 治理域**（从条目动态派生顶层目录）。
+    # 原实现扫全 fixtures 树——那是写它时的事实（当时 fixtures/ 只有 corpus-A/
+    # queries/corpus-R）。其后 real-tender-batch1/2、songling-232762、
+    # synth-tender 相继入库（各有自己的 README/溯源，本就不在本 manifest
+    # 治理域）→ 102 个域外文件被误报游离，T3a 恒红无人见（主链不在 CI）。
+    governed = {f["path"].split("/", 1)[0] for f in manifest["files"]}
     on_disk = {str(p.relative_to(FIXTURES)) for p in FIXTURES.rglob("*")
-               if p.is_file() and p.name != "manifest.json" and not p.name.endswith(".tmp")}
+
+               if p.is_file() and p.name != "manifest.json" and not p.name.endswith(".tmp")
+               and p.relative_to(FIXTURES).parts[0] in governed}
     stray = sorted(on_disk - {f["path"] for f in manifest["files"]})
     if stray:
         bad.append(f"游离文件未入清单：{stray[:3]}")
@@ -419,7 +455,13 @@ def t_readback():
 
 # ---------------------------------------------------------------- T7~T12：M1 Rust 流水线
 def _cargo() -> str | None:
-    return shutil.which("cargo") or str(Path.home() / ".cargo" / "bin" / "cargo")
+    # #565：fallback 路径必须验存在性——否则 which 未命中且 ~/.cargo/bin/cargo
+    # 不存在时返回幽灵路径，t_m1 守卫失效直接 FileNotFoundError 崩整链。
+    w = shutil.which("cargo")
+    if w:
+        return w
+    fb = Path.home() / ".cargo" / "bin" / "cargo"
+    return str(fb) if fb.exists() else None
 
 
 def _m1_run(scenario: str, out: Path) -> tuple[int, str]:
@@ -459,12 +501,14 @@ def t_m1():
     # 缺件则 T10~T13 整组 SKIP（测试需真实 OCR 通道，非业务失败）
     if not require_tools_or_skip(
             "T10~T13 m1 并行线（构建/单测/场景/覆盖/确定性）",
-            ["pdftotext", "pdfinfo", "tesseract", "chi_sim.traineddata"],
-            "m1 OCR 链路"):
+            ["cargo", "pdftotext", "pdfinfo", "tesseract", "chi_sim.traineddata"],
+            "m1 OCR 链路 + Rust 工具链"):
         return
     cargo = _cargo()
     if not cargo:
-        check("T10a cargo 可用（~/.cargo/bin）", False, "未找到 cargo 工具链")
+        # 防御面（正常已在 T0e 登记、组门 SKIP——此处仅兜底）
+        skip("T10~T13 m1 并行线（构建/单测/场景/覆盖/确定性）",
+             "ENV_MISSING: cargo（Rust 工具链不在场）")
         return
     b = subprocess.run([cargo, "build", "--release"], capture_output=True, text=True,
                        cwd=M1_DIR, env={**os.environ, "PATH": f"{Path.home()}/.cargo/bin:{os.environ['PATH']}"})
@@ -750,6 +794,12 @@ def t_b5_gt_eval():
     「不低于冻结基线」（基线锚定 HEAD 实测，回归即红）；「引擎 ≥ 旧路径」
     的交换等价性由 engine-diff-r3 100% EQ 冻结验收承载。"""
     print("[T18] B5 引擎路径 GT-25 抽取质量评测（冻结基线地板）")
+    # #565：评测需构建 bid-engine（cargo）——缺件 SKIP（b5_engine_gt_eval 的
+    # find_cargo 抛 FileNotFoundError 的红是环境红，同 T19 口径）。
+    if not require_tools_or_skip(
+            "T18 B5 引擎路径 GT-25 抽取质量评测（冻结基线地板）",
+            ["cargo"], "bid-engine 评测构建（Rust 工具链）"):
+        return
     import subprocess as _sp
     _p = _sp.run([sys.executable, "scripts/b5_engine_gt_eval.py"],
                  capture_output=True, text=True, cwd=REPO, timeout=400)
@@ -787,8 +837,22 @@ def t_bidcore_cargo():
             f"清理 cargo target 或扩容后重跑；磁盘满时编译失败是假红，FG-15）",
         )
         return
-    _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
-                 cwd=REPO / "bidcore", timeout=900)
+    # #571 前置缓解（PR#583）：预算参数化 + 超时不再裸崩整链。
+    #   · T19_TIMEOUT_S 环境变量可调（默认 900 不变——本地行为零变化）；
+    #   · TimeoutExpired 捕获后转**诊断性 FAIL**（保留超时值/已耗时/已有
+    #     输出尾部），主链汇总与退出码语义保持（#571 任务 1 的最小切片，
+    #     进程树清理与冷/热缓存实测仍归 #571 本线）。
+    _t19_timeout = int(os.environ.get("T19_TIMEOUT_S", "900"))
+    try:
+        _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
+                     cwd=REPO / "bidcore", timeout=_t19_timeout)
+    except _sp.TimeoutExpired as _te:
+        _tail = ((_te.stdout or "") + (_te.stderr or ""))[-400:]
+        check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
+              False,
+              f"TIMEOUT：cargo test --workspace 超 {_t19_timeout}s 未完（冷缓存编译面超预算——"
+              f"链上证据 run 42492183787；调 T19_TIMEOUT_S 或清缓存重跑。输出尾部：{_tail!r}")
+        return
     out = _p.stdout + _p.stderr
     # 汇总行口径：各 crate 的 "test result: ok. N passed" 汇总 + 零 failed
     import re as _re

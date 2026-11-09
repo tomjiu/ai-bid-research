@@ -108,7 +108,7 @@ bid-mcp --init --client claude --ws /path/to/workspace   # 或 cursor / continue
 | P3 矩阵 | 定标+选包+建纲+矩阵+资格判断 | `recommend_length_profile` → （多包时 `list_packages` + 用户选包）→ `build_outline` → `get_compliance_matrix` | 篇幅档已按「配额定标」流程确定（用户确认或免确认例外）并复述；**多包件（extract 响应 packages.detected≥2）必须先问用户投哪个包**（「投全部」= 每包各建一个项目——单项目单大纲，不混包；共用条款自动进纲，见 p3-matrix.md「多标段/多包」）；build_outline 返回 MATRIX_READY；资格/否决行 policy 全填；资格三态结论（eligible/conditional/not_eligible）向用户报告；**not_eligible → 停止流程，只产审查报告** | 矩阵只读（get_compliance_matrix），随时重查 |
 | P4 证据 | 登记+绑定证据、补缺清单 | `register_evidence` / `bind_evidence` / `list_evidence` / `search_evidence`* | 每条必选项≥1 条**有效**证据（Active/Expiring 且**非占位**——PLACEHOLDER 不清阻塞，#245 引擎派生面已落地；占位只进 pending_evidence_ids 追踪面）；**有效证据的质量双条件**：带 locator 登记过服务端核验（CONTENT_MATCHES 档——无 locator 的 FILE_EXISTS 档虽计有效但不完整，补料优先补 locator）**且非招标文件本体**（拿招标文件自证条款=自证不是证据，C-23 攻击面）；EXPIRED 禁绑；缺失项形成补料清单交用户；bind 后 matrix.blocking=0（blocking 只证明「绑了有效证据」，材料真伪与效力仍需人工审校确认——P7） | 缺料→等待用户补充后仅补跑受影响行 |
 | P5 起草 | 逐章节起草（**正文由你写**） | `draft_response_section` / `save_version` | unanchored_claims=0；citations 全部来自已绑定 EV；**每完成一个章节，调用 save_version 存版本**（message 写明章节与完成内容） | per-SEC 重试，不影响其他章节 |
-| P6 校验 | 双层校验（**全稿完成后才 scope=all**） | `validate_bid_document` | 全部叶起草完成才 scope=all（缺章 → `E_DRAFT_INCOMPLETE` 零副作用拒，按 missing 清单回 P5 补）；起草期用 scope=sections 章节级检查；deterministic findings 清零（BLOCKER 必须 Resolved/Waived）；失败留在 DRAFTING 可修订重试；`ok=true` ≠ 可提交——**提交就绪**看响应内 `submission_readiness.ready`（#241：正文已响应但证据缺口的必选条款不拦导出、拦正式提交，按 `evidence_missing` 清单补件或人工豁免） | 按 scope 重跑 |
+| P6 校验 | 双层校验（**全稿完成后才 scope=all**） | `validate_bid_document` | 全部叶起草完成才 scope=all（缺章 → `E_DRAFT_INCOMPLETE` 零副作用拒，按 missing 清单回 P5 补）；起草期用 scope=sections 章节级检查；deterministic findings 清零（每类 BLOCKER 走真实出口：矩阵覆写/换证/补写——无通用豁免通道，出口表见 p6-validation.md）；失败留在 DRAFTING 可修订重试；`ok=true` ≠ 可提交——**提交就绪**看响应内 `submission_readiness.ready`（#241：正文已响应但证据缺口的必选条款不拦导出、拦正式提交，按 `evidence_missing` 清单补件或人工豁免） | 按 scope 重跑 |
 | P7 审校 | 模型审校→修订任务闭环 | `validate_bid_document` +（后端）RevisionTask | 每个 MAJOR finding 有 RT 且 DONE | 只重跑 DIRTY 章节 |
 | P8 导出 | 预检+导出 | `export_bid_document` | precheck.blockers=0；artifact sha256 复述；**暗标项目**：响应 `dark_bid.manual_review` 清单须逐条向用户复述（联系方式/EXIF/路径等人工确认项——不静默跳过），复验 BLOCKER 归零由引擎保证（不过则导出被拒并附处置清单） | 同参幂等 |
 
@@ -122,7 +122,11 @@ semantic / exact 三模式、top_k 1..=1000、确定性排序可重放；#217 �
 辅助工具（不占阶段）：`get_bid_project_state`（断点恢复入口）、
 `check_bid_quality`（章节发现面——**外部 Agent 获取章节清单的正式查询口**，
 sections 只列可起草叶）、`score_price` / `score_section` / `score_document`
-（自评面：该报多少价、这份标书能得几分）、`record_review_gate`（人工复审门，
+（自评面：该报多少价、这份标书能得几分）、`check_scoring_coverage`（#318
+细则逐条响应覆盖检查——拆出每条评分细则「要求的点」，对照射章节正文报
+「哪个点写了/漏了哪点/建议扣分」；字面口径（语义等价表述不识别），
+只报不补——漏点面用分段工具补写后复跑，P6 校验前查一遍防「不完整」扣分）、
+`record_review_gate`（人工复审门，
 见下）、`record_addendum_waiver`（补遗不就绪件的逐件人工确认——见下）、
 `recover_validating_state`（历史异常态恢复：项目滞留在 VALIDATING 且仍有
 未起草叶（旧版校验误推进所致）→ 回 DRAFTING 解锁起草面，#243；三重约束
@@ -357,7 +361,7 @@ project_version 恒为本次完成后最新值，直接传给下一个工具。
 - `references/p4-evidence.md`——证据登记/绑定面、有效期核对法、补料清单模板
 - `references/p5b-segments.md`——章节分段写入三工具（#254：长章节分批写作的引擎对偶面——append/rewrite/list、幂等与 CAS、恢复流程）
 - `references/addendum-rewrite.md`——补遗后的增量重写两工具（#319：起草后补遗到达——登记变更生成指令、dry_run 预览、只改受影响段、局部复验）
-- `references/p6-validation.md`——确定性规则清单与模型检查范围、WAIVED 审批话术
+- `references/p6-validation.md`——确定性规则清单、模型检查范围与 BLOCKER 出口表（按类别走真实工具，无通用豁免）
 - `references/p7-review.md`——四道审门与 receipt 验签、RevisionTask 闭环、质量复核收口清单
 - `references/p8-export.md`——导出双前置门、六表七件对账、暗标与幂等、产物验证
 - `scripts/checklist.py`——无依赖质检脚本（核对工具返回 JSON 与预期）

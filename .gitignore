@@ -47,5 +47,9 @@ artifacts/real-corpus-e2e/latest/*/06_*
 artifacts/real-corpus-e2e/latest/*/07_*
 artifacts/real-corpus-e2e/latest/*/08_*
 
+# Python 工具缓存（feature/llm-module 新增）
+.pytest_cache/
+output/
+
 # #565 渲染字体项目内放置位（SarasaMonoSC，OFL——不入库，CI/本地可放置；探测见 fixture_spec.resolve_render_font）
 data/fonts/

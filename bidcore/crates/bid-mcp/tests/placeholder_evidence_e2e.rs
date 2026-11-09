@@ -368,6 +368,13 @@ fn placeholder_accident_blocked_then_upgraded_exports() {
     ));
     assert_eq!(v2["ok"], json!(true), "升级后校验过: {}", v2["errors"]);
     approve_pre_export(&mut svc);
+    // 调试：打印记录与当前摘要
+    eprintln!("DEBUG 记录后 scoring_digest = {}", svc.store().scoring_surface_digest());
+    if let Some(last) = svc.store().reviews().iter().rev().find(|r| {
+        r.gate == Gate::PreExportConfirm && r.decision == Decision::Approved
+    }) {
+        eprintln!("DEBUG 记录的 = {}  (id={})", last.reviewed_scoring_digest, last.id);
+    }
     let r = ok_result(call(
         &mut svc,
         "export_bid_document",
@@ -526,6 +533,11 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
         )
         .unwrap();
     }
+    // #474 兼容：矩阵覆写会改 scoring_surface_digest，前置裁决面先拦「计分面
+    // 已变更」。这是正确的业务拦截，但本测试要验证的是「占位门不因覆写豁免」
+    // ——因此按真实流程重过一次 pre_export_confirm 把摘要重新绑定，再看占位门。
+    approve_pre_export(&mut svc);
+
     let reply_resp = call(
         &mut svc,
         "export_bid_document",
@@ -549,6 +561,10 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
             .unwrap();
     }
     let _ = svc.store_mut().rebuild_matrix_for_override().unwrap();
+    // #474 兼容：人工豁免覆写也改 scoring_surface_digest，导出前重过一次
+    // pre_export_confirm 把摘要重新绑定（与上面 Responded 覆写同款处理）。
+    approve_pre_export(&mut svc);
+
     let r = ok_result(call(
         &mut svc,
         "export_bid_document",

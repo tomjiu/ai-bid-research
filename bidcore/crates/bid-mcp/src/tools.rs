@@ -85,6 +85,8 @@ pub(crate) fn invoke(name: &str, args: Value, svc: &mut BidService) -> ToolResul
         "get_requirement_provenance" => crate::bidi_tools::get_requirement_provenance(svc, args),
         "get_block_requirements" => crate::bidi_tools::get_block_requirements(svc, args),
         "get_annotation_overlay" => crate::bidi_tools::get_annotation_overlay(svc, args),
+        // ---- #318 评分细则逐条响应覆盖检查（只读诊断——拆点/命中/漏点/建议扣分） ----
+        "check_scoring_coverage" => crate::coverage_tools::check_scoring_coverage(svc, args),
         "score_section" => score_section(svc, args),
         "score_document" => score_document(svc, args),
         // ---- #145 任务 1：双通道证据检索（契约 §5——朴素实现，真向量库见 M2-b）----
@@ -99,6 +101,11 @@ pub(crate) fn invoke(name: &str, args: Value, svc: &mut BidService) -> ToolResul
         "set_param_responses" => set_param_responses(svc, args),
         // ---- #279：行协议发现面（无状态前置的只读握手——工具清单 + 契约摘要）----
         "list_tools" => list_tools(),
+        // ---- #315 业绩材料库四工具（登记/列表无项目路由；推荐/写入有）----
+        "register_performance" => crate::perf_tools::register_performance(svc, args),
+        "list_performance" => crate::perf_tools::list_performance(svc, args),
+        "recommend_performance" => crate::perf_tools::recommend_performance(svc, args),
+        "write_performance_section" => crate::perf_tools::write_performance_section(svc, args),
         other => Err(ToolError::ENotFound {
             what: format!("未接入的工具 {other}"),
         }),
@@ -155,7 +162,7 @@ fn list_tools() -> ToolResult {
 ///   （跳过检查），但**意图可见**：单代理顺序作业时调用方不必追踪版本号，
 ///   也不再因为揣着过期数字吃 E_CONFLICT 重试；误用时审计面上可辨认；
 /// - 缺省 / null → `None`：内部步骤语义（现状不变）。
-fn opt_cas_version(v: &Value, at: &str) -> Result<Option<u64>, ToolError> {
+pub(crate) fn opt_cas_version(v: &Value, at: &str) -> Result<Option<u64>, ToolError> {
     match v.get("project_version") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Number(n)) => n.as_u64().map(Some).ok_or_else(|| ToolError::EUnprocessable {
@@ -170,7 +177,10 @@ fn opt_cas_version(v: &Value, at: &str) -> Result<Option<u64>, ToolError> {
 
 /// 契约 §2 `files[].kind` 枚举（MCP 壳校验面；服务层不重复——运行器自有
 /// 类别如「证据」不受此限，见 service.rs 分层说明）。
-const TENDER_FILE_KINDS: [&str; 7] = [
+/// #473：并入「报价文件」「扫描件」——B1/B2 抽取分支的 kind 判据
+/// （extract.rs Some("报价文件")/Some("扫描件")）此前不在导入值域内，
+/// 是不可达死分支（生产只能靠 B1/B2 文件名前缀触达——#196 在 B1/B2 面回归）。
+const TENDER_FILE_KINDS: [&str; 9] = [
     "招标文件",
     "附件",
     "图纸",
@@ -178,6 +188,8 @@ const TENDER_FILE_KINDS: [&str; 7] = [
     "答疑",
     "评分办法",
     "格式模板",
+    "报价文件",
+    "扫描件",
 ];
 
 pub(crate) fn req_str(v: &Value, key: &str, at: &str) -> Result<String, ToolError> {
@@ -232,8 +244,8 @@ pub(crate) fn opt_u64(v: &Value, key: &str, at: &str) -> Result<Option<u64>, Too
     }
 }
 
-/// 可选数值参数（#100 任务 3——score_price/score_document 的报价与规格面）。
-fn opt_f64(v: &Value, key: &str, at: &str) -> Result<Option<f64>, ToolError> {
+/// 可选数值参数（#100 任务 3 报价与规格面 / #315 业绩库预算与金额窗）。
+pub(crate) fn opt_f64(v: &Value, key: &str, at: &str) -> Result<Option<f64>, ToolError> {
     match v.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Number(n)) => n
@@ -380,6 +392,10 @@ fn get_bid_project_state(svc: &mut BidService, args: Value) -> ToolResult {
     Ok(json!({
         "status": status.as_str(),
         "allowed_next_tools": status.allowed_tools(),
+        // #522（C-22）：无状态门恒可调工具（与 allowed_next_tools 并集 = 完整
+        // 可调面——单一真源 bid_domain::UNGATED_TOOLS；无门≠无前置，多数仍
+        // 需项目存在，见常量注）
+        "ungated_tools": bid_domain::UNGATED_TOOLS,
         "terminal": status.next_allowed().is_empty(),
         "dirty_sections": dirty_sections,
         "pending_rewrite_directives": pending_directives,
@@ -1174,11 +1190,12 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
     }
     // Agent 标必选且类别不在类别阻断面（资格条件/否决项）——这些条款经
     // matrix.rs `agent_mandatory` 接线进入矩阵 blocking 面（未响应即拦
-    // 起草/导出）。信息性提示：告诉 Agent 这些标记现在有阻断力，重跑
-    // build_matrix 后生效，响应（绑证据/覆写）后放行。
+    // 起草/导出）。信息性提示：告诉 Agent 这些标记现在有阻断力，矩阵下次
+    // 重算时生效（build_outline 时自动重算——#551 措辞不教域函数名），响应
+    // （绑证据/覆写）后放行。
     if merge_stats.agent_mandatory_offcategory > 0 {
         warnings.push(format!(
-            "AGENT_MANDATORY_OFFCATEGORY: {} 条 Agent 标必选且类别不在资格/否决阻断面——已进入矩阵 blocking 面（重跑 build_matrix 后未响应将拦起草/导出；响应或人工 receipt 覆写后放行）",
+            "AGENT_MANDATORY_OFFCATEGORY: {} 条 Agent 标必选且类别不在资格/否决阻断面——已进入矩阵 blocking 面（矩阵下次重算时生效——build_outline 时自动重算；未响应将拦起草/导出；响应或人工 receipt 覆写后放行）",
             merge_stats.agent_mandatory_offcategory
         ));
     }
@@ -3271,7 +3288,8 @@ fn score_document(svc: &mut BidService, args: Value) -> ToolResult {
         // #224：section_id = 首映射（契约 §15 旧键保留）；mapping_ids = 全部
         // 映射章节（多对多新面）；weight_share = 首映射摊分比
         let primary = it.mappings.first();
-        if is_price_item_mirror(it) {
+        // #538：直连域层单一真源（is_price_item 已 pub——镜像删除，词面不再两处同步）
+        if bid_domain::scoring::is_price_item(it) {
             // 价格类叶：内容自评无意义（价格分 = f(报价)）——estimated 取 B1 实算值
             by_item.push(json!({
                 "item_id": it.requirement_id,
@@ -3651,13 +3669,6 @@ fn build_scorer(
         items,
         ledger_effective,
     )
-}
-
-/// 价格类评分项判定（`bid_domain::scoring::is_price_item` 的镜像——该函数
-/// 未 pub；关键词面同步自同一真源，两处修改必须一起）。
-fn is_price_item_mirror(it: &bid_domain::scoring::ScoringItem) -> bool {
-    let c = &it.criteria;
-    c.contains("价格分") || c.contains("投标报价") || c.contains("下浮率") || c.contains("基准价")
 }
 
 /// 价格分规格解析（score_price / score_document 共用——字符串糖 + 完整
@@ -4156,6 +4167,9 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "form_titles": outcome.report.form_titles,
         "content_version_snapshot": svc.store().content_version(),
         "project_status": svc.store().project().map(|p| p.status.as_str()).unwrap_or("UNKNOWN"),
+        // precheck.waived 恒空——预留字段（无通用豁免通道：每类 BLOCKER 走
+        // 各自出口——矩阵覆写/换证/补写/RT 关单，见 Skill p6-validation.md
+        // 出口表；#508 诚实化，不再承诺 VF-* 清单）
         "precheck": { "blockers": 0, "waived": [] },  // 双前置门已过（失败路径在 Err 面）
         // #277 方案 A：agent 声明过门清单 + 人工复核完成度（machine-readable
         // ——导出带警告横幅时，响应面同步携带判据与追认指引）
