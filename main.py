@@ -304,6 +304,16 @@ def build_parser() -> argparse.ArgumentParser:
     db.add_argument(
         "--days", type=int, default=None, help="查询回溯天数（配合 --query）"
     )
+    db.add_argument(
+        "--pending",
+        action="store_true",
+        help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
+    )
+    db.add_argument(
+        "--pending-stats",
+        action="store_true",
+        help="pending 面统计（按状态/原因分组）",
+    )
 
     # templates 子命令
     sub.add_parser(
@@ -705,7 +715,7 @@ def run_db(args: argparse.Namespace) -> int:
     Returns:
         进程退出码。
     """
-
+    db_path: Path = args.db
     creating = args.import_file is not None
     if not creating and not db_path.exists():
         print(f"错误：数据库不存在: {db_path}", file=sys.stderr)
@@ -740,12 +750,47 @@ def run_db(args: argparse.Namespace) -> int:
                     f"中标人：{row['winner'] or '未开标'}）"
                 )
 
-        if args.stats or (args.import_file is None and not args.query):
-            stats = db.stats()
+        if args.pending:
+            rows = db.list_pending(limit=50)
+            print(f"pending 面待处理 {len(rows)} 条（最近 50 条）：")
+            for row in rows:
+                print(
+                    f"  [{row['reason']}] {row['bid_id'] or '（缺编号）'}"
+                    f" · 指纹 {row['fingerprint']}"
+                    f" · 原文 {'有' if row.get('raw_text') else '无'}"
+                    f" · {row.get('error') or '原因见 reason'}"
+                )
+
+        if args.pending_stats:
+            pending = db.pending_stats()
             print(
+                f"pending 统计：共 {pending['total']} 条"
+                f"（待处理 {pending['pending']} / "
+                f"已解决 {pending['resolved']} / 跳过 {pending['skipped']}）"
+            )
+            if pending["by_reason"]:
+                for reason, count in pending["by_reason"].items():
+                    print(f"  · {reason}: {count}")
+
+        if args.stats or (
+            args.import_file is None
+            and not args.query
+            and not args.pending
+            and not args.pending_stats
+        ):
+            stats = db.stats()
+            runs = db.pipeline_runs_list(limit=1)
+            line = (
                 f"数据库统计：共 {stats['total']} 条项目，"
                 f"其中 {stats['awarded']} 条已定中标人"
             )
+            if runs:
+                run = runs[0]
+                line += (
+                    f"｜最近管道运行 #{run['id']}（{run['status']}，"
+                    f"{run['started_at']}）"
+                )
+            print(line)
     return 0
 
 
