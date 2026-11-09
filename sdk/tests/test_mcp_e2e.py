@@ -858,8 +858,21 @@ async def _case_initialize_and_tools(rec: Recorder) -> None:
         }
         caps = getattr(info, "capabilities", None)
         caps_dict = caps.model_dump() if caps is not None else {}
-        server_name = getattr(getattr(info, "serverInfo", None), "name", "")
-        server_ver = getattr(getattr(info, "serverInfo", None), "version", "?")
+        # #591 诊断：serverInfo 取不到时打印 info 的真实形态（CI 与本地 SDK
+        # 版本可能不同——本地 1.28.1 字段名为 serverInfo，CI Python 3.14 面
+        # 装的版本未核实；空值时一次看清是 None / dict / 改名）。
+        si = getattr(info, "serverInfo", None)
+        if si is None:
+            print(f"[diag] info type={type(info).__name__} fields={list(getattr(info, 'model_fields', {}) or {})}")
+            try:
+                print(f"[diag] info dump={info.model_dump()}")
+            except Exception as e:
+                print(f"[diag] model_dump failed: {e!r}  raw={info!r}")
+        server_name = ""
+        server_ver = "?"
+        if si is not None:
+            server_name = getattr(si, "name", None) or (si.get("name", "") if isinstance(si, dict) else "")
+            server_ver = getattr(si, "version", None) or (si.get("version", "?") if isinstance(si, dict) else "?")
         checks = [
             ("握手: initialize 成功且 serverInfo.name == 'bid-mcp'", server_name == "bid-mcp"),
             ("握手: protocolVersion 已协商", bool(getattr(info, "protocolVersion", None))),
