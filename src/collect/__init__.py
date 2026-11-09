@@ -5,5 +5,12 @@
 """
 
 from src.collect.records import AnnouncementRecord, RecordValidationError
+from src.collect.sources import LoadResult, SourceError, load_records
 
-__all__ = ["AnnouncementRecord", "RecordValidationError"]
+__all__ = [
+    "AnnouncementRecord",
+    "RecordValidationError",
+    "LoadResult",
+    "SourceError",
+    "load_records",
+]
