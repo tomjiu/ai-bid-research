@@ -30,6 +30,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# #591：并发防线（与 windows-check / web-ui-tests / mdcore-rev-sync 同款）——
+# 同 workflow + 同 ref 只保留最新 run。主仓 #568 给另外三个 workflow 加了本组，
+# linux-check 漏加：实测 main 连推两个 commit（027d0e5 → 47c87aa）时，
+# 旧 run 的 linux-check 仍在跑（~50 分钟），占满并发位并与新 run 抢 runner。
+# 注意：cancelled 不是失败——GitHub UI 里会显示成中断，但那是预期行为。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_RETRY: 3
