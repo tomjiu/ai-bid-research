@@ -23,7 +23,10 @@
 // 有变化才按「旧集 gap 段 + 各窗口重算块」用 RangeSetBuilder 有序拼装。
 // 原子装饰集随主集一起增量拼装，atomicRanges facet 改为 O(1) 取缓存
 //（原先每次 selection 事务对全 doc 过滤一遍是第二热点）。等价性护栏
-// 见 web_smoke.py W12（增量 == 强制全量，deco+atomic 逐项对比）。
+// W12 语义（增量 == 强制全量，deco+atomic 逐项对比）——web_smoke.py
+// 不在仓（R-18：断言实现在仓（computeDecorations/dumpDecorations，
+// __debug 暴露），但无 CI 执行承载（需浏览器 E2E，D-06 在案））；
+// 零依赖结构面承载见 tests/web-smoke-claims.test.mjs。
 //
 // R16 — 10MB 非门双项（终态堆 <600MB + 渐进 TTI <300ms）：
 // ① blocks_json 分片出口（Rust 核侧 blocks_count/blocks_json_range），
@@ -37,8 +40,10 @@
 // ④ pushRender 加 revision 守卫（核未变则免 to_markdown/比对/重建）与
 //   force 语义（测量口径仍可强制全量）；流式 buildBigChunks 边生成边
 //   切 chunk，TTI 路径不再物化全量 10MB 字符串 + 三次 split/join 扫描。
-// 等价性护栏：W7 新增「增量建图 ≡ 强制全量重建」逐项比对；W12/R15
-// 增量装饰、W1-W11 语义不变。
+// 等价性护栏历史：W7 曾「增量建图 ≡ 强制全量重建」逐项比对、W12/R15
+// 增量装饰、W1-W11 语义不变——web_smoke.py 不在仓（R-18：W1-W13 无
+// 门禁承载，D-06 在案）；当前零依赖承载仅结构面（见
+// tests/web-smoke-claims.test.mjs），行为等价无 CI 承载。
 //
 // op 形状 = crates/mdcore/src/op.rs serde（tag="t", snake_case）；偏移单位
 // = char（ropey），CM6 侧 UTF-16 offset 经 code-point 计数换算。
@@ -86,7 +91,8 @@ import { t, tCount, initI18n, applyStaticI18n } from './i18n/index.js';
 // 单位宪法（R17 / 主档 P1-9 / ADR-V2）：核侧（ropey / op / Anchor）= Unicode
 // 码点；CM6 / JS 串 = UTF-16 码元。全桥所有跨单位换算必须经本函数对，
 // 禁止散落手工计数（[...s].length / codePointAt 循环）。语义测试锁：
-// crates/mdcore/tests/r17_utf16_mapping.rs；浏览器端到端：冒烟 W13。
+// crates/mdcore/tests/r17_utf16_mapping.rs（在仓）；浏览器端到端冒烟
+// W13——web_smoke.py 不在仓（R-18：该面无门禁承载，D-06 在案）。
 // ---------------------------------------------------------------------------
 
 /** UTF-16 码元位置（或缺省=全串）→ Unicode 码点数。 */
@@ -190,7 +196,9 @@ class BlockMap {
 
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
-      // R17 修复（行对齐漂移，W13 抓出）：rebuild 的 docText 在 fallback 后
+      // R17 修复（行对齐漂移，开发期冒烟 W13 抓出——脚本已不在仓
+      // R-18，但修复本身经 r17_utf16_mapping.rs 在仓测试锁）：rebuild
+      // 的 docText 在 fallback 后
       // = 用户格式（块间有空行），而本 walk 逐块推进 li 不数空行——首个
       // 空行之后全部行记录错位，快路径对后续块失明（恒走兜底）。boot 文档
       // = to_markdown 规范式（无空行）时跳过循环零次，行为不变。
@@ -292,8 +300,10 @@ class BlockMap {
    * markdown::render 的行前缀规则（quote 祖先 "> "×q、list 祖先 2 空格
    * ×lst、marker+1）保证解析器产物下行内容 = 前缀 + 块文本行，两路
    * 逐字段一致（多行 list_item 文本是解析器不可能产物，其防御分支只在
-   * rebuild 全量路径保留）。等价性护栏 = web_smoke.py W7 的
-   * debugMapVsFullRebuild 逐项比对。
+   * rebuild 全量路径保留）。等价性护栏曾为 web_smoke.py W7 的
+   * debugMapVsFullRebuild 逐项比对——脚本已不在仓（R-18），但断言
+   * 实现在仓（CM6View.debugMapVsFullRebuild，__debug 暴露，浏览器/
+   * 宿主可调）；无 CI 执行承载（需浏览器 E2E，D-06 在案）。
    */
   extend(blocksJson: string): void {
     const blocks: BlockInfo[] = JSON.parse(blocksJson) as BlockInfo[];
@@ -328,7 +338,8 @@ class BlockMap {
       const nLines = textLines.length; // ≡ 1 + nl(text)
       let textAcc = 0; // textOffset_k = Σ_{j<k}(cpLen(块文本行 j) + 1)
 
-      // 与 rebuild 的 setBody 保持同一键序（W7 等价比对依赖 stringify）。
+      // 与 rebuild 的 setBody 保持同一键序（W7 stringify 等价比对
+      // 的依赖——脚本已不在仓 R-18，同键序约束仍保留）。
       const pushBody = (prefix: number, textOffset: number, sl: boolean): void => {
         this.lines.push({
           hasBody: true, prefix, textOffset,
@@ -435,8 +446,9 @@ type DocLine = { from: number; to: number; text: string };
 
 /**
  * 单行装饰生成——全量与增量窗口两条路径共享的唯一来源（正则只此一份）。
- * revealed = 选区与 marker 区间严格重叠（Spike S1 光标协商语义，W2 覆盖：
- * 进入揭示、移开再隐藏、行首相邻不揭示）。marker 区间全部单行内，这一
+ * revealed = 选区与 marker 区间严格重叠（Spike S1 光标协商语义：
+ * 进入揭示、移开再隐藏、行首相邻不揭示——原 W2 覆盖，脚本已不在仓
+ * R-18，语义由本注释 + Spike S1 交付记录承载）。marker 区间全部单行内，这一
  * 不变量是增量拼装正确性（无跨窗口边界 span）的前提。
  * 隐藏态 marker 同时写入 atomicOut（原子集与主集同源，永不失同步）。
  */
