@@ -12,6 +12,7 @@ from src.extract.engine import (
     extract_record,
     extract_record_async,
 )
+from src.extract.eval import EvalReport, evaluate_extractor, load_gold
 from src.extract.runner import (
     ExtractRunStats,
     RawLoadStats,
@@ -34,4 +35,7 @@ __all__ = [
     "load_raw_texts",
     "resolve_raw_files",
     "run_extraction",
+    "EvalReport",
+    "evaluate_extractor",
+    "load_gold",
 ]
