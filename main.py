@@ -51,7 +51,7 @@ from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
 from src.report.generator import ReportGenerator
-from src.storage.database import BidDatabase
+from src.storage.database import _BID_COLUMNS, BidDatabase
 
 logger = logging.getLogger("ai-bid-research")
 
@@ -285,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # db 子命令
     db = sub.add_parser(
-        "db", help="招标信息数据库管理（导入/统计）"
+        "db", help="招标信息数据库管理（导入/查询/统计/导出）"
     )
     db.add_argument(
         "--db",
@@ -308,6 +308,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     db.add_argument(
         "--days", type=int, default=None, help="查询回溯天数（配合 --query）"
+    )
+    db.add_argument(
+        "--export",
+        choices=("csv", "json"),
+        help="导出项目记录为研究快照（配合 --query/--days 过滤、--out 落盘）",
+    )
+    db.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="导出目标文件（缺省输出到 stdout；CSV 落盘用 utf-8-sig）",
+    )
+    db.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="导出条数上限（配合 --export；缺省导出全部命中）",
     )
     db.add_argument(
         "--pending",
@@ -740,6 +757,73 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
+    """导出项目记录为研究快照（CSV/JSON，#601 R34）。
+
+    Args:
+        db: 已打开的数据库。
+        args: 命令行参数（--export/--out/--limit/--query/--days）。
+
+    Returns:
+        进程退出码（0 正常；2 目标路径不可写）。
+    """
+    import csv as csv_mod
+
+    keyword = args.query
+    days = args.days
+    total = db.count_bids(keyword=keyword, days=days)
+    limit = args.limit if args.limit is not None else max(total, 1)
+    rows = db.query_bids(keyword=keyword, days=days, limit=limit)
+
+    # 只导业务列（id/created_at 是库内账面，不入研究快照）
+    columns = list(_BID_COLUMNS)
+    out_path = args.out
+
+    if args.export == "csv":
+
+        def _render(fh) -> None:
+            writer = csv_mod.DictWriter(
+                fh, fieldnames=columns, extrasaction="ignore"
+            )
+            writer.writeheader()
+            for row in rows:
+                item = {key: row.get(key) for key in columns}
+                if isinstance(item.get("requirements"), list):
+                    item["requirements"] = ";".join(item["requirements"])
+                writer.writerow(item)
+
+        if out_path is not None:
+            try:
+                with open(
+                    out_path, "w", encoding="utf-8-sig", newline=""
+                ) as fh:
+                    _render(fh)
+            except OSError as exc:
+                print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
+                return 2
+            print(
+                f"已导出 {len(rows)} 条 → {out_path}（CSV，utf-8-sig）",
+                file=sys.stderr,
+            )
+        else:
+            _render(sys.stdout)
+        return 0
+
+    # JSON 快照：requirements 保持列表形态（下游机器可读）
+    snapshot = [{key: row.get(key) for key in columns} for row in rows]
+    payload = json.dumps(snapshot, ensure_ascii=False, indent=2)
+    if out_path is not None:
+        try:
+            out_path.write_text(payload + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
+            return 2
+        print(f"已导出 {len(rows)} 条 → {out_path}（JSON）", file=sys.stderr)
+    else:
+        print(payload)
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -756,6 +840,9 @@ def run_db(args: argparse.Namespace) -> int:
         return 2
 
     with BidDatabase(db_path) as db:
+        if args.export:
+            return _export_bids(db, args)
+
         if args.import_file is not None:
             if not args.import_file.is_file():
                 print(
