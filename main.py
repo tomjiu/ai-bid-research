@@ -439,6 +439,15 @@ def run_collect(args: argparse.Namespace) -> int:
     for dup in deduped.duplicates:
         print(f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件（{dup['reason']}）")
 
+    # 健全性告警面（R33）——告警不拒收，逐条可见供复核
+    warned = [r for r in deduped.unique if r.warnings]
+    if warned:
+        print(f"健全性告警：{len(warned)} 条（不拒收，供复核）")
+        for record in warned[:5]:
+            print(f"  ⚠ {record.bid_id}: {'; '.join(record.warnings)}")
+        if len(warned) > 5:
+            print(f"  … 另有 {len(warned) - 5} 条见记录 warnings")
+
     if args.dry_run:
         print("演练模式：未写库（--dry-run）")
         return 0

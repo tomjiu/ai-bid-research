@@ -27,10 +27,12 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from src.collect.records import AnnouncementRecord
+from src.collect.sanity import apply_sanity_checks
 
 #: 行式读取器签名：``Path → (items, row_errors)``（同 _read_jsonl_items）。
 RowReader = Callable[[Path], tuple]
@@ -272,6 +274,7 @@ def load_records(
     *,
     skip_invalid: bool = True,
     since: Optional[float] = None,
+    today: Union[None, str, date] = None,
 ) -> LoadResult:
     """从本地源装载公告记录（规范化入口：raw → AnnouncementRecord）。
 
@@ -283,9 +286,11 @@ def load_records(
         since: 增量水位（epoch 秒）——只读 mtime 晚于水位的文件；
             目录内无新文件时返回**空结果**（零记录零失败，
             不是错误——「无新文件」是增量的正常结局）。
+        today: 健全性检查的「今天」基准（``date`` / ``YYYY-MM-DD`` /
+            ``None``=系统当前日期，R33）——注入以保证测试确定性。
 
     Returns:
-        装载结果（成功记录 + 失败明细 + 文件数）。
+        装载结果（成功记录——含健全性告警 warnings——+ 失败明细 + 文件数）。
 
     Raises:
         SourceError: 源路径/类型问题（无论 skip_invalid）。
@@ -336,10 +341,13 @@ def load_records(
 
         for origin, payload in iterable:
             try:
-                result.records.append(AnnouncementRecord.from_raw(payload))
+                record = AnnouncementRecord.from_raw(payload)
             except (ValueError, TypeError) as exc:
                 if skip_invalid:
                     result.add_failure(origin, str(exc))
                     continue
                 raise
+            # 健全性告警（R33）——告警不拒收，随记录携带供复核
+            apply_sanity_checks(record, today=today)
+            result.records.append(record)
     return result
