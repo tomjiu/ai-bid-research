@@ -3106,6 +3106,269 @@ html[data-chrome="native"][data-maximized="1"] #app {
   margin: 0 auto;
 }
 
+/* ---- #313 批 B：合规矩阵面板（.bid-mx-*）——表格 + 筛选 chips + 分页 + 展开详情 ---- */
+.bid-mx {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.bid-mx .view-state {
+  margin: 40px auto;
+}
+.bid-mx-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px 8px;
+}
+.bid-mx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.bid-mx-chip {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-chip:hover {
+  border-color: var(--fg-muted);
+  color: var(--fg);
+}
+.bid-mx-chip[data-on="true"] {
+  background: var(--active);
+  border-color: transparent;
+  color: var(--fg);
+  font-weight: 600;
+}
+.bid-mx-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bid-mx-select {
+  height: 24px;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 4px;
+}
+.bid-mx-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bid-mx-sum {
+  flex: none;
+  padding: 0 16px 8px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+.bid-mx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.bid-mx-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 600;
+  color: var(--fg-muted);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.bid-mx-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bid-mx-row {
+  cursor: pointer;
+}
+.bid-mx-row:hover {
+  background: var(--hover);
+}
+.bid-mx-row.expanded {
+  background: var(--active);
+}
+.bid-mx-row.is-blocking .bid-mx-req-id {
+  color: var(--danger);
+}
+.bid-mx-req {
+  max-width: 420px;
+}
+.bid-mx-req-id {
+  display: block;
+  font-size: 11px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-req-st {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg);
+}
+.bid-mx-cat {
+  white-space: nowrap;
+  color: var(--fg);
+}
+.bid-mx-mand {
+  color: var(--warn);
+  font-size: 10.5px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+/* 五态徽章（T-2 + #245）——未响应红 / 已响应绿 / 部分黄 / 待补黄底 / 不适用灰 */
+.bid-mx-badge {
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.bid-mx-badge[data-status="NOT_RESPONDED"] {
+  color: #fff;
+  background: var(--danger);
+}
+.bid-mx-badge[data-status="RESPONDED"] {
+  color: #fff;
+  background: var(--ok);
+}
+.bid-mx-badge[data-status="PARTIAL"] {
+  color: #fff;
+  background: var(--warn);
+}
+.bid-mx-badge[data-status="PENDING_EVIDENCE"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.bid-mx-badge[data-status="NOT_APPLICABLE"] {
+  color: var(--fg-muted);
+  background: var(--hover);
+}
+.bid-mx-ev {
+  font-size: 11.5px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-ev.ok {
+  color: var(--ok);
+}
+.bid-mx-ev.pend {
+  color: var(--warn);
+}
+.bid-mx-ev.none {
+  color: var(--fg-muted);
+}
+.bid-mx-miss {
+  color: var(--warn);
+  font-size: 10.5px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+.bid-mx-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bid-mx-link:hover {
+  opacity: 0.8;
+}
+.bid-mx-marks {
+  white-space: nowrap;
+}
+.bid-mx-star {
+  color: var(--warn);
+  font-weight: 700;
+}
+.bid-mx-block {
+  color: #fff;
+  background: var(--danger);
+  font-size: 10.5px;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.bid-mx-detail td {
+  background: var(--hover);
+  cursor: default;
+}
+.bid-mx-d-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 22px;
+  padding: 4px 2px;
+}
+.bid-mx-d-k {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-bottom: 3px;
+}
+.bid-mx-d-v {
+  font-size: 12px;
+  color: var(--fg);
+}
+.bid-mx-ev-line {
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-ev-line.dim {
+  color: var(--fg-muted);
+}
+.bid-mx-ev-line.pend {
+  color: var(--warn);
+}
+.bid-mx-ev-tier {
+  color: var(--fg-muted);
+  font-size: 10.5px;
+}
+.bid-mx-pager {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.bid-mx-page-info {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ============ #313 批 C：自评面板（.bid-qual-*）============ */
 .bid-qual {
   display: flex;
@@ -3299,10 +3562,14 @@ html[data-chrome="native"][data-maximized="1"] #app {
   color: var(--danger);
 }
 
+
 /* 响应式（issue #313 验收 6：1440 / 1920 / 2560）——窄窗收树宽，宽窗详情限宽可读 */
 @media (max-width: 1360px) {
   .bid-tree {
     width: 300px;
+  }
+  .bid-mx-req {
+    max-width: 320px;
   }
 }
 @media (max-width: 1150px) {
@@ -3314,6 +3581,13 @@ html[data-chrome="native"][data-maximized="1"] #app {
   .bid-bar {
     display: none;
   }
+  .bid-mx-req {
+    max-width: 240px;
+  }
+  .bid-mx-sum {
+    display: none;
+  }
+
   /* 批 C：窄窗评分项行收起「覆盖」列，保估分/档位可读 */
   .bid-qual-item-head,
   .bid-qual-item > summary {
@@ -3323,12 +3597,18 @@ html[data-chrome="native"][data-maximized="1"] #app {
   .bid-qual-item > summary > span:last-child {
     display: none;
   }
+
 }
 @media (min-width: 1920px) {
   .bid-detail-md {
     max-width: 1000px;
   }
+  .bid-mx-req {
+    max-width: 560px;
+  }
+
   .bid-qual {
     max-width: 1100px;
   }
+
 }

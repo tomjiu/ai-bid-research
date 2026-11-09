@@ -131,6 +131,56 @@ Agent 纪律：
 用户补料 → register（新 EV）→ bind（只绑受影响 REQ）→ 矩阵复blocking=0。
 不要整单重跑（恢复协议：缺料只补受影响行）。
 
+## 业绩材料库（#315——跨项目业绩资产，四工具）
+
+> 业绩是投标人的**长期资产**（评标常占 10-20 分），不是单项目的输入。
+> 库文件在项目工作区**之外**：`BID_PERF_LIB` 环境变量 → 用户级默认位
+> （Unix `$HOME/.mang/performance-library.json` / Windows
+> `%APPDATA%\mang\performance-library.json`）→ 内存态（本会话可用、
+> 不落盘，响应面 `library_persisted:false` 如实报告）。原子写 +
+> `schema_version` 门 + 损坏拒载不重建。契约详见 bid-mcp-contract.md
+> §25-A~D。
+
+### 何时用（主流程挂点）
+
+| 时机 | 动作 | 工具 |
+|---|---|---|
+| **任何时刻**（建项目前也可——四工具无项目路由/低门） | 把历史合同/验收报告登记入库（语义四元组 `name+client+amount_wan+completed_on` 幂等去重；`owner_name` 一次登记全程生效——证据 `subject_name` 默认源） | `register_performance` |
+| P4 盘点时 | 按标签/关键词/金额/日期查库，看可复用面 | `list_performance` |
+| REQ 抽取后 | 四因子匹配推荐（见下），**推荐排序、人工裁决**——分数是排序依据不是正确率 | `recommend_performance` |
+| P5 起草业绩章节时（窗口 MATRIX_READY+） | 一键写入业绩表 + 逐条描述段到目标叶章节 | `write_performance_section` |
+
+### 与本页证据纪律的衔接（关键——不是旁路）
+
+- `write_performance_section` **走的就是本页 EV- 纪律**：材料文件名与已导入
+  TF 命中 → 自动 `register_evidence`（kind=performance；主体名链：
+  条目级 `subject_name` > 库主 `owner_name` > 工作区 bidder-profile.json
+  的 `company_name`）→ 自动 `bind_evidence` 到业绩类 REQ（陈述含
+  业绩/类似项目）→ 矩阵重算。产出的业绩章每条带 `[EV-*]` 引用——
+  **无引用即 P6 拦截（E_CITATION_GHOST）**，库路径不豁免。
+- **诚实面**：材料未导入/无主体名 → `materials_pending` 逐条列明（正文照
+  写、证据不伪造——导入材料后重跑自动补登记，域层查重天然幂等）；
+  可用业绩证据 < 3（MIN_PERFORMANCE_COUNT）→ readiness 门拦写入并把
+  材料指引带全。
+- **有效期口径一致**：业绩合同无 `valid_until` → 不参与有效期裁决（同
+  本页「有效期核对法」第 4 条），但**近三年**仍是 `recommend_performance`
+  的独立打分因子（完成日距评标基准日 <=3 年满分）——两码事不要混。
+
+### 推荐语义（读结果时对用户怎么说）
+
+四因子确定性加权：标签重叠 40% / 金额规模 30% / 近三年 20% / 客户类型 10%；
+**缺信号因子弃权重归一**（`available:false` 不参与分母——「不知道预算」
+不惩罚业绩）。同分按 perf_id 字典序（确定性——同输入恒同序）。向用户
+呈现时逐条给 `reasons`（逐因子人读依据），并保留裁决权：选哪几条由
+用户定（`top_k` 只控返回条数）。
+
+### 幂等与重跑
+
+`register_performance` 四元组命中既有条目回显 id 不重复登记；
+`write_performance_section` 幂等键 `perf-section:<section_id>`（同批
+重跑 no-op）。**补材料后重跑**是正常操作路径（materials_pending 清零），
+不会产生重复段或重复证据。
+
 ## search_evidence 双通道（已接线——#145 朴素实现）
 
 - 模式三选：`hybrid`（缺省，语义+精确合并去重——双中 `match_type=both`，

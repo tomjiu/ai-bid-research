@@ -147,7 +147,7 @@ fn setup_extracted(t: &Tender) -> Option<(BidService, String, String)> {
 
 /// 验收 1+2+3：全量 REQ provenance + 全量块反查 + overlay 口径。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn block_bidi_acceptance_all_tenders() {
     let tenders = load_tenders();
     assert!(tenders.len() >= 9, "真件清单至少 9 件在位（batch1 五件 + batch2）：{tenders:?}",);
@@ -310,7 +310,7 @@ fn block_bidi_acceptance_all_tenders() {
 /// danqing 交叉锚：五题★ REQ（params.star=true）provenance 页号必在
 /// p18/p19（参数性质列/商务表——#285① 侦察口径，块级定位真值检验）。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn danqing_star_reqs_land_on_declared_pages() {
     let Some(t) = load_tenders().into_iter().find(|t| t.id == "danqing-reservoir-230001") else {
         eprintln!("【SKIP】danqing 真件不在位");

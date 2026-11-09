@@ -204,7 +204,7 @@ fn danqing() -> Option<Tender> {
 
 /// 每份文件的 star_total 与 manifest star_count 一致（±2）；分区不漏不重。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn manifest_star_count_reconciliation() {
     if skip_if_no_layout_engine("star_285_manifest_reconciliation") {
         return;
@@ -275,7 +275,7 @@ const BUSINESS_LABELS: [&str; 5] = ["服务期限", "服务地点", "验收要�
 /// danqing 引擎路径：五题★全捕获（#266 语义表 + params.star）、样板句排除、
 /// 漏标 6 = p18 参数性质列×4 + p48 偏离表模板×2（诚实报告——检测面不修饰）。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn danqing_engine_path_five_business_captured() {
     if skip_if_no_layout_engine("star_285_danqing_engine_path") {
         return;
@@ -378,7 +378,7 @@ fn danqing_engine_path_five_business_captured() {
 /// MARKED_REQUIREMENT_WITHOUT_SUBMITTED 告警承载（Agent 仍被提醒
 /// 补交提炼后的关键点，REQ-A 承接后替代）。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn danqing_blackbox_one_of_five_reports_missing_four() {
     if skip_if_no_layout_engine("star_285_danqing_blackbox") {
         return;
@@ -550,7 +550,7 @@ fn danqing_blackbox_one_of_five_reports_missing_four() {
 
 /// 兜底路环境（无 poppler）下 load_tenders/路径门自身可运行（CI 编译面）。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn tender_loader_finds_corpus() {
     let tenders = load_tenders();
     let ids: Vec<&str> = tenders.iter().map(|t| t.id.as_str()).collect();

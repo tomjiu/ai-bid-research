@@ -1,4 +1,4 @@
-"""LLM 客户端封装模块。
+"""LLM 客户端封装模块（非生产链路——仅供研究，见 docs/PYTHON-BOUNDARY.md）。
 
 基于 OpenAI 兼容接口（DeepSeek）的异步 LLM 调用封装，
 提供并发控制、速率限制、指数退避重试与 JSON 解析能力。
