@@ -168,7 +168,8 @@ cargo run -p mang-app
 | `assign_revision` / `advance_revision` / `complete_revision` | 矩阵就绪后 | RT 认领/推进/关单（BLOCKER finding 派生；**全部关单才放行导出**） |
 | `batch_task` / `advance_task` | 矩阵就绪后 | 分工批量派工 / 单件推进（人的进度轴） |
 | `reopen_section` | 起草后 | ACCEPTED 章节重开（→ REVISING + dirty，重过验收链） |
-| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
+| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
+
 **状态机**（越级调用会被拒——`E_STATE`）：
 
 ```
@@ -283,7 +284,57 @@ BID_LLM_MODEL      覆盖 model
 
 ---
 
-## 八、常见问题
+## 八、Python 研究工具链（招标情报研究，#601）
+
+> 与主链路（标书生成）**完全独立**的研究面：从公告源到竞争态势报告。
+> 非生产链路——边界见 `docs/PYTHON-BOUNDARY.md`（选项 A 定性）。
+
+### 8.1 一条命令全链（离线演示）
+
+```bash
+python3 main.py pipeline \
+  --announcements fixtures/announcements/structured \   # 结构化源（JSON/JSONL）
+  --raw-texts fixtures/announcements/raw \              # 公告原文（.txt）
+  --db /tmp/demo.db --output-dir /tmp/demo-reports --html
+```
+
+四个阶段自动串联（增量水位——重跑零重复）：
+
+```
+collect   结构化源装载→规范化→去重→入库（bid_id 直判/URL 归一/指纹）
+extract   原文装载→规则/LLM 抽取→入库；失败件保持 pending 可重试
+analyze   五维统计：金额分位/区域分布/月度趋势/关键词频次/竞争密度
+report    离线确定性 Markdown 报告（可选 HTML）——无 LLM 参与结论
+```
+
+演练模式（零副作用）：加 `--dry-run`——各阶段只打印「会做什么」。
+
+### 8.2 单阶段使用
+
+```bash
+python3 main.py collect --source ann/ --dry-run    # 采集（含去重报告）
+python3 main.py extract --source raw/ --mode rule  # 抽取（--mode api 走 LLM）
+python3 main.py analyze --db /tmp/demo.db --keyword 智慧城市 --days 90
+python3 main.py report --keyword 智慧城市 --days 30 --html   # LLM 叙述版
+```
+
+### 8.3 抽取质量评估
+
+```bash
+python3 main.py eval                          # 规则基线在 gold 语料上的字段命中率
+python3 main.py eval --mode api               # LLM 模式（需 DEEPSEEK_API_KEY）
+```
+
+gold 标注在 `fixtures/announcements/gold-extraction.json`——语料变更时
+同步更新（契约测试守护）。
+
+### 8.4 LLM 配置
+
+与主链路共用密钥面（见五、LLM 配置）：`DEEPSEEK_API_KEY`（或
+`OPENAI_API_KEY`）；`extract`/`pipeline` 默认 `--mode rule` 离线基线，
+不配密钥也能全链跑通。
+
+## 九、常见问题
 
 **Q：跑 `cargo test` 有的测试显示 SKIP？**
 环境缺依赖（soffice/pdftotext/真件）——SKIP 横幅会写明缺什么。缺件不是

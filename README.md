@@ -86,8 +86,22 @@ bidcore/crates/
   mang-app       桌面壳（注入 MCP 用的独立 workspace）
   mang-snap      快照
 
-src/ + main.py   Python 研究工具链（llm 调用封装 / 报告生成 / SQLite 存储）
+src/ + main.py   Python 研究工具链（#601 研究管道：collect 采集→extract 抽取
+                 →analyze 五维统计→pipeline 编排→eval 质量评估；
+                 llm 调用封装 / 报告生成 / SQLite 存储）
                  ——独立研究工具、非生产链路，边界见 #563（docs/PYTHON-BOUNDARY.md）
+```
+
+### Python 研究管道（#601）
+
+```bash
+# 合成语料双源全链演示（离线，无 LLM/网络）
+python3 main.py pipeline \
+  --announcements fixtures/announcements/structured \
+  --raw-texts fixtures/announcements/raw --db /tmp/demo.db
+
+# 抽取质量评估（gold 标注字段命中率）
+python3 main.py eval   # 规则基线；--mode api 走 LLM（需 DEEPSEEK_API_KEY）
 ```
 
 ## 真实语料
@@ -167,7 +181,7 @@ cargo test --workspace              # 全量
 cargo test -p bid-domain            # 领域层
 cargo test -p bid-tools             # 工具层 + 真实语料
 
-# Python 研究工具链（src/ + tests/，45 用例——独立于 Rust 链；
+# Python 研究工具链（src/ + tests/，336 用例——独立于 Rust 链；
 # 非生产链路，边界见 #563（docs/PYTHON-BOUNDARY.md））
 python3 -m pip install -r requirements.txt
 python3 -m pytest

@@ -31,6 +31,11 @@
 | `src/llm/client.py`（LLM 调用封装） | `bid-tools` 的 LLM 面 | **各自独立，互不调用** | Python 封装只服务研究脚本；生产 LLM 调用一律走 Rust bid-tools |
 | `src/report/generator.py`（Markdown/HTML 报告） | `export_bid_document`（DOCX/PDF） | **Rust export** | Python 报告是研究快照（Markdown/HTML），非投标交付物；正式投标文件导出只在 Rust 侧 |
 | `src/llm/prompts.py`（提示词模板） | bid-tools 的提示词（如有） | **各自独立** | 研究提示词与生产提示词分开演进，不共享 |
+| `src/collect/`（采集面，#601-A） | `import_tender_files`（P1 导入） | **各自独立** | 研究采集只吃本地 JSON/JSONL 源（离线），不做生产级爬虫；去重/规范化语义与 P1 链路无对齐义务 |
+| `src/extract/`（抽取面，#601-B） | `extract_requirements`（P2 抽取） | **各自独立** | 研究抽取（规则基线/LLM）产研究缓存；正式条款抽取/★扫描/语义表只在 Rust 侧（分记不折抵） |
+| `src/analyze/`（分析面，#601-C） | 无对应 | — | 五维统计为纯研究结论（口径在 docstring 声明，可由原始数据复算）；无生产语义 |
+| `src/pipeline/`（管道面，#601-D） | P0-P8 链路 | **各自独立** | 研究管道四阶段（collect→extract→analyze→report）是研究工作区编排，不是 P0-P8 状态机；无门禁/审核语义 |
+| `src/extract/eval.py`（评估面，#601-E） | 评测链（research/） | **各自独立** | gold 字段命中率只评 Python 研究抽取器（rule/api 模式），与 Rust 评测链（GT 红线/召回门）分轨 |
 
 **判定规则**：任何"投标生产"语义的数据与产物 → Rust 侧是真源；
 Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
@@ -50,7 +55,7 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
   （ID/分类/★条款/矩阵状态）**无映射关系**，禁止拿它做合规判定；
 - **反序列化兜底**：损坏数据在 `BidDatabase._row_to_dict` 中回退为空列表。
 
-## 4. raw 公告暂存面（#601 批次 B）
+## 4. raw 公告暂存面与管道留档（#601 批次 B/D）
 
 `raw_announcements` 表是抽取面的**失败降级暂存**（研究工作区内）：
 
@@ -60,6 +65,16 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
 · content_sha 唯一索引：同文重复导入幂等（研究面防重复占位）
 · 生命周期：extracted 的记录不再处理；pending 的可反复重试
   （attempts 计数可见）；不属于任何生产状态机
+```
+
+`pipeline_runs` 表是研究管道的**运行留档**（批次 D）：
+
+```
+· 每次正式运行记一行：started_at/finished_at/ok/stages_json
+  （各阶段统计）/report_path——研究面可回溯「哪次跑了什么」
+· dry-run 不留档（零副作用语义）
+· 管道阶段失败不中断（analyze/report 只依赖库内数据）——
+  这与 P0-P8 门禁语义完全不同，勿混淆
 ```
 
 ## 5. CI 隔离
