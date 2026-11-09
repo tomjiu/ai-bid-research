@@ -1,11 +1,15 @@
-//! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`）。
+//! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`；
+//! 批 B：`bid.matrix`）。
 //!
-//! 架构（原认领计划 2026-11-07T02:34Z 的批 A 切片，issue #313）：
+//! 架构（原认领计划 2026-11-07T02:34Z 的批次切片，issue #313）：
 //!   * [`state`]  —— 经 `bid_mcp::dispatch_with` 走真实工具面
 //!     （`get_bid_project_state`），外加项目元信息与快速统计
 //!     （DomainStore 只读直算）；
 //!   * [`outline`] —— DomainStore 直读章节树（MCP 工具面无此只读视图——
-//!     认领计划明示的直读面）。
+//!     认领计划明示的直读面）；
+//!   * [`matrix`] —— 经 `bid_mcp::dispatch_with` 走真实工具面
+//!     （`get_compliance_matrix`，#313 批 B），壳内循工具的 cursor 分页
+//!     聚合全量后一次返回（行形状原样透传）。
 //!
 //! 服务缓存（`Ctx.bid`，进程内单份）：按「工作区根 + db.json 指纹
 //! （mtime+size）」绑定——切换工作区（workspace.open）或外部进程
@@ -13,8 +17,8 @@
 //! **无 db.json → 干净的 `not_found`**：不经 `BidService::open`（它会在
 //! 任意目录里凭空创建 `.mang/approval.key`——查看状态不应留副作用）。
 //!
-//! 后续批次（不在本文件）：bid.matrix（批 B）/ bid.quality、bid.score
-//! （批 C）/ bid.coverage（批 D）——同样经 dispatch_with 走真实工具面。
+//! 后续批次（不在本文件）：bid.quality、bid.score（批 C）/ bid.coverage
+//! （批 D）——同样经 dispatch_with 走真实工具面。
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -311,6 +315,147 @@ pub fn outline(
     }))
 }
 
+/// `bid.matrix` —— 合规矩阵全量（只读，#313 批 B）。
+///
+/// 主体经 `bid_mcp::dispatch_with(get_compliance_matrix)` 走真实工具面
+/// （与 bid-mcp-stdio 同一套裁决代码——方案 A 直链）。工具面按 S-4 游标
+/// 分页（limit ≤1000、游标绑过滤器指纹与数据版本 #406/C-14）——本壳是
+/// 同进程调用方，循 `next_cursor` 把全量页聚合后**一次返回**，行形状
+/// 原样透传不二次加工；UI 面的 blocking 筛选 / 状态与类别筛选 / 分页 /
+/// 导出都在全量行上做，徽章计数与表格才同一真源。聚合护栏 200 页
+/// （200k 行——真实量级 12k；超限响亮拒绝，不静默截断）。
+///
+/// `summary.by_status` 五态计数、`blocking` / `mandatory` / `substantive` /
+/// `evidence_missing` 计数在聚合行上现算；`star_summary`（★实质性条款
+/// 统计）与 `warnings` 取工具面输出原样。无 db.json → 干净 `not_found`，
+/// 服务缓存语义同 [`state`] / [`outline`]。
+pub fn matrix(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    // 项目元信息先取（owned）——后面的工具循环要 &mut svc
+    let (project_id, project_name, project_status) = {
+        let p = svc.store().project().map_err(map_domain_err)?;
+        (p.id.clone(), p.name.clone(), p.status.as_str().to_string())
+    };
+
+    const PAGE_LIMIT: u64 = 1000; // 工具面契约上限（cursor.rs LIMIT_MAX）
+    const PAGE_GUARD: u32 = 200; // 聚合护栏：200 × 1000 行
+    let mut rows: Vec<Value> = Vec::new();
+    let mut total = 0u64;
+    let mut star_summary = Value::Null;
+    let mut warnings: Vec<Value> = Vec::new();
+    let mut project_version = 0u64;
+    let mut pages = 0u32;
+    let mut cursor: Option<String> = None;
+    loop {
+        let mut args = json!({ "project_id": project_id, "limit": PAGE_LIMIT });
+        if let Some(c) = cursor.as_deref() {
+            args["cursor"] = json!(c);
+        }
+        let reply = bid_mcp::dispatch_with(
+            svc,
+            bid_mcp::ToolCall {
+                tool: "get_compliance_matrix".to_string(),
+                args,
+            },
+        );
+        let out = match reply {
+            bid_mcp::ToolReply::Ok(out) => out.result,
+            bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+        };
+        pages += 1;
+        if let Some(v) = out.get("rows").and_then(|r| r.as_array()) {
+            rows.extend(v.iter().cloned());
+        }
+        // 末页为准（无过滤时各页同值）；条件赋值——不用哑初值据位
+        if let Some(t) = out.get("total").and_then(|t| t.as_u64()) {
+            total = t;
+        }
+        if let Some(s) = out.get("star_summary") {
+            if !s.is_null() {
+                star_summary = s.clone();
+            }
+        }
+        if let Some(w) = out.get("warnings").and_then(|w| w.as_array()) {
+            warnings = w.clone();
+        }
+        if let Some(v) = out.get("project_version").and_then(|v| v.as_u64()) {
+            project_version = v;
+        }
+        match out.get("next_cursor").and_then(|c| c.as_str()) {
+            Some(nc) if !nc.is_empty() => cursor = Some(nc.to_string()),
+            _ => break,
+        }
+        if pages >= PAGE_GUARD {
+            return Err(IpcError::io(format!(
+                "合规矩阵聚合超过护栏（{PAGE_GUARD} 页 × {PAGE_LIMIT} 行）——\
+                 拒绝静默截断，请上报数据规模"
+            )));
+        }
+    }
+
+    // 统计摘要：五态恒在（0 兜底——UI 徽章不赌键在场）；blocking/mandatory/
+    // substantive/evidence_missing 与行字段同一判定面（工具面输出，不另写
+    // 一套字面量）。
+    let mut status_counts: HashMap<&str, u64> = HashMap::new();
+    let (mut blocking, mut mandatory, mut substantive, mut evidence_missing) =
+        (0u64, 0u64, 0u64, 0u64);
+    for r in &rows {
+        let st = r.get("status").and_then(|s| s.as_str()).unwrap_or("");
+        *status_counts.entry(st).or_insert(0) += 1;
+        if r.get("blocking").and_then(|b| b.as_bool()) == Some(true) {
+            blocking += 1;
+        }
+        if r.get("requirement")
+            .and_then(|q| q.get("mandatory"))
+            .and_then(|b| b.as_bool())
+            == Some(true)
+        {
+            mandatory += 1;
+        }
+        if r.get("substantive").and_then(|b| b.as_bool()) == Some(true) {
+            substantive += 1;
+        }
+        if r.get("evidence_missing").and_then(|b| b.as_bool()) == Some(true) {
+            evidence_missing += 1;
+        }
+    }
+    let mut by_status = serde_json::Map::new();
+    for st in bid_domain::matrix::ResponseStatus::ALL {
+        by_status.insert(
+            st.as_str().to_string(),
+            json!(status_counts.get(st.as_str()).copied().unwrap_or(0)),
+        );
+    }
+
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": {
+            "id": project_id,
+            "name": project_name,
+            "status": project_status,
+        },
+        "rows": rows,
+        "total": total,
+        "summary": {
+            "by_status": Value::Object(by_status),
+            "blocking": blocking,
+            "mandatory": mandatory,
+            "substantive": substantive,
+            "evidence_missing": evidence_missing,
+        },
+        "star_summary": star_summary,
+        "warnings": warnings,
+        "project_version": project_version,
+        "fetched_pages": pages,
+    }))
+}
+
 /// 锁毒化不复位（与 ipc.rs `Ctx::ws` 同口径）。
 fn lock(cache: &Mutex<Option<CachedService>>) -> MutexGuard<'_, Option<CachedService>> {
     cache.lock().unwrap_or_else(|e| e.into_inner())
@@ -450,7 +595,7 @@ mod tests {
     fn state_and_outline_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
-        for cmd in ["bid.state", "bid.outline"] {
+        for cmd in ["bid.state", "bid.outline", "bid.matrix"] {
             let frame = call(&ctx, cmd);
             assert_eq!(frame["ok"], json!(false), "{cmd} 无 db.json 应干净 not_found：{frame}");
             assert_eq!(err_code_of(&frame), "not_found");
@@ -552,5 +697,99 @@ mod tests {
         assert_eq!(s2["project"]["name"], "另一个项目");
         let _ = std::fs::remove_dir_all(dir_a);
         let _ = std::fs::remove_dir_all(dir_b);
+    }
+
+    /// #313 批 B：真实项目的矩阵读取与统计口径。
+    ///
+    /// 种子面（seed_project）：REQ-0001（技术参数）归属叶 SEC-T02 已写正文
+    /// → RESPONDED（#241 正文实写路径），但 excerpt 含「提供」→ 证据要求面
+    /// 词面命中且无在绑 → evidence_missing=true——正文响应与证据缺口同真，
+    /// 正是 #241「文本事实与合规事实分账」的正交体现；REQ-0002（资格条件
+    /// →必选）叶 SEC-T03 未写 → NOT_RESPONDED + blocking（类别面证据要求）。
+    #[test]
+    fn matrix_reads_real_project() {
+        let (dir, ws) = tmp_ws("mx");
+        seed_project(&dir);
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+        let frame = call(&ctx, "bid.matrix");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let m = ok_of(&frame).clone();
+        assert_eq!(m["present"], json!(true));
+        assert_eq!(m["project"]["name"], "演示水厂项目");
+        let rows = m["rows"].as_array().expect("rows 恒为数组");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(m["total"], 2);
+        // 行形状原样透传（工具面 CMP 序 + 行字段）
+        let r1 = &rows[0];
+        assert_eq!(r1["requirement"]["id"], "REQ-0001");
+        assert_eq!(r1["status"], "RESPONDED", "叶已写正文 → RESPONDED（#241）：{r1}");
+        assert_eq!(r1["draft_section_id"], "SEC-T02");
+        assert_eq!(r1["blocking"], json!(false));
+        assert!(
+            r1["requirement"]["statement"].as_str().unwrap_or("").contains("2000 路"),
+            "条款摘录来自锚点 excerpt：{r1}"
+        );
+        // #241 正交标记：正文已响应（文本事实）但 excerpt 含「提供」→ 证据
+        // 要求面词面命中且无在绑 → 证据缺口（合规事实）——两列各自可查
+        assert_eq!(r1["evidence_required"], json!(true), "「须提供」命中证据要求词面：{r1}");
+        assert_eq!(r1["evidence_missing"], json!(true), "已响应但缺证据——#241 分账同真：{r1}");
+        let r2 = &rows[1];
+        assert_eq!(r2["requirement"]["id"], "REQ-0002");
+        assert_eq!(r2["status"], "NOT_RESPONDED");
+        assert_eq!(r2["requirement"]["mandatory"], json!(true), "资格条件 → 必选：{r2}");
+        assert_eq!(r2["blocking"], json!(true), "必选未响应 → 阻断：{r2}");
+        assert_eq!(r2["evidence_required"], json!(true), "资格条件 → 证据要求面（类别面）：{r2}");
+        assert_eq!(r2["evidence_missing"], json!(true), "要求证据且无在绑 → 缺口：{r2}");
+        // 统计摘要与行字段同一判定面
+        assert_eq!(m["summary"]["by_status"]["RESPONDED"], 1);
+        assert_eq!(m["summary"]["by_status"]["NOT_RESPONDED"], 1);
+        assert_eq!(m["summary"]["by_status"]["PARTIAL"], 0);
+        assert_eq!(m["summary"]["blocking"], 1);
+        assert_eq!(m["summary"]["mandatory"], 1);
+        assert_eq!(m["summary"]["evidence_missing"], 2, "两条各由词面/类别面命中");
+        // ★实质性统计口原样透传（无 ★ 标记 → total=0、responded_share=null 非 0/0 假象）
+        assert_eq!(m["star_summary"]["total"], 0);
+        assert_eq!(m["star_summary"]["responded_share"], Value::Null);
+        assert_eq!(m["fetched_pages"], 1);
+        assert!(m["warnings"].as_array().map(|w| w.is_empty()).unwrap_or(false), "非空条款集无警告");
+        assert!(m["project_version"].as_u64().unwrap_or(0) >= 1);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #313 批 B：工具面 S-4 游标分页的壳内聚合——1005 条跨两页
+    /// （limit=1000 是工具面契约上限），fetched_pages/行数/统计都要对账。
+    /// 矩阵不依赖大纲（只读工具任何阶段可调——无大纲时全部 NOT_RESPONDED）。
+    #[test]
+    fn matrix_aggregates_tool_pagination() {
+        let (dir, ws) = tmp_ws("mxpage");
+        let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+        svc.create_project("分页矩阵项目", "PRJ-PG", "明标", "ext-313-pg").unwrap();
+        svc.store_mut()
+            .advance_project_status(bid_domain::ProjectStatus::FilesImported)
+            .unwrap();
+        let cats = ["技术参数", "资格条件", "商务要求"];
+        let reqs: Vec<Requirement> = (1..=1005)
+            .map(|i| req(&format!("REQ-P{i:04}"), cats[i % 3], &format!("分页种子条款 {i} 号要求")))
+            .collect();
+        svc.store_mut().set_requirements(reqs).unwrap();
+        svc.checkpoint().unwrap();
+        drop(svc);
+
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+        let frame = call(&ctx, "bid.matrix");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let m = ok_of(&frame).clone();
+        let rows = m["rows"].as_array().expect("rows 恒为数组");
+        assert_eq!(rows.len(), 1005, "跨页聚合不得丢行：fetched_pages={}", m["fetched_pages"]);
+        assert_eq!(m["fetched_pages"], 2, "1005 条 × limit 1000 → 恰两页");
+        assert_eq!(m["total"], 1005);
+        assert_eq!(m["summary"]["by_status"]["NOT_RESPONDED"], 1005);
+        // 资格条件占 1/3（i%3==1）→ 335 条必选全部未响应 → 全阻断
+        assert_eq!(m["summary"]["mandatory"], 335);
+        assert_eq!(m["summary"]["blocking"], 335);
+        // 行序 = 条款集位置序（CMP-0001..N 派生的确定性稳定序——分页安全前提）
+        assert_eq!(rows[0]["requirement"]["id"], "REQ-P0001");
+        assert_eq!(rows[1004]["requirement"]["id"], "REQ-P1005");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
