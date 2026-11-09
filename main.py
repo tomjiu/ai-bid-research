@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ai-bid-research —— AI 驱动的招投标研究工具（命令行入口）。
 
+非生产链路——仅供研究，与 Rust bid 链路的边界见 docs/PYTHON-BOUNDARY.md。
+
 用法示例::
 
     # 导入项目清单到 SQLite（单个对象或对象数组）

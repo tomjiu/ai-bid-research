@@ -1,9 +1,14 @@
 # ai-bid-research —— 运行时与测试依赖
 # Python 3.10+
+#
+# 钉版纪律（#561 同款——fixtures-requirements.txt 口径）：
+# CI 面依赖一律 == 精确钉版，防上游新版本漂移把 CI 打红（与代码无关的红）。
+# 升级走显式提 PR 改本文件 + 全量测试，不走隐式 >= 浮动。
 
 # --- 运行时 ---
-openai>=1.30.0          # AsyncOpenAI 客户端（DeepSeek 兼容接口）
+openai==3.46.0           # AsyncOpenAI 客户端（DeepSeek 兼容接口）——45 测试实测绿组合
 
 # --- 测试 ---
-pytest>=7.4.0
-pytest-asyncio>=0.23.0
+# pytest-asyncio 已摘除：本仓无顶层 async def test_（异步路径统一 asyncio.run
+# 驱动于同步测试内），该依赖是幻影面，徒增上游 breaking change 风险。
+pytest==9.0.2
