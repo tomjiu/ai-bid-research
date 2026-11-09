@@ -1,4 +1,4 @@
-"""本地源读取器（JSON / JSONL 三形态，#601 批次 A）。
+"""本地源读取器（JSON / JSONL / CSV 三形态，#601 批次 A；CSV 为 R31 扩展）。
 
 设计说明
 --------
@@ -6,7 +6,11 @@
 
 - ``.json`` 文件：JSON 数组（每元素一条公告）或单 JSON 对象；
 - ``.jsonl`` 文件：每行一个 JSON 对象（行式流式形态，空行容忍）；
-- 目录源：收集全部 ``*.json`` / ``*.jsonl``，按文件名排序（确定性——
+- ``.csv`` 文件（R31）：首行表头（规范名或中文别名均可，
+  ``AnnouncementRecord.from_raw`` 统一归一），每数据行一条公告
+  （行级失败粒度；UTF-8 含 BOM 容忍；**单元格内换行不支持**——
+  含换行源请先清洗或改用 JSONL）；
+- 目录源：收集全部 ``*.json`` / ``*.jsonl`` / ``*.csv``，按文件名排序（确定性——
   同一批文件两次运行产出顺序一致，研究可复现）。
 
 失败语义（对照 AGENTS「不静默吞错」纪律）：
@@ -19,6 +23,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,7 +32,7 @@ from typing import Any, Dict, List, Optional, Union
 from src.collect.records import AnnouncementRecord
 
 #: 目录源收集的扩展名（小写比较）。
-_SOURCE_SUFFIXES = (".json", ".jsonl")
+_SOURCE_SUFFIXES = (".json", ".jsonl", ".csv")
 
 
 class SourceError(ValueError):
@@ -73,8 +78,8 @@ def resolve_source_files(source: Union[str, Path]) -> List[Path]:
         排序后的文件路径列表（目录源按文件名排序保证确定性）。
 
     Raises:
-        SourceError: 路径不存在，或目录内无 ``.json``/``.jsonl`` 文件，
-            或文件扩展名不支持。
+        SourceError: 路径不存在，或目录内无 ``.json``/``.jsonl``/``.csv``
+            文件，或文件扩展名不支持。
     """
     path = Path(source)
     if not path.exists():
@@ -84,7 +89,7 @@ def resolve_source_files(source: Union[str, Path]) -> List[Path]:
             p for p in path.iterdir() if p.suffix.lower() in _SOURCE_SUFFIXES
         )
         if not files:
-            raise SourceError(f"目录内无 .json/.jsonl 源文件: {path}")
+            raise SourceError(f"目录内无 .json/.jsonl/.csv 源文件: {path}")
         return files
     if path.suffix.lower() not in _SOURCE_SUFFIXES:
         raise SourceError(
@@ -155,6 +160,65 @@ def _read_jsonl_items(path: Path) -> tuple:
     return items, line_errors
 
 
+def _read_csv_rows(path: Path) -> tuple:
+    """读取 CSV 载荷（行级粒度：坏行不殃及好行，#601 R31）。
+
+    约定：
+
+    - 首行为表头（字段名支持规范名与中文别名，``from_raw`` 统一归一）；
+    - 空白单元格置 ``None``（「缺失」与「显式留空」同口径）；
+    - 列数与表头不齐的行登记行级失败；
+    - 编码 UTF-8（BOM 容忍 ``utf-8-sig``）；
+    - **单元格内换行不支持**（研究面约定：导出源先清洗，或改用 JSONL）。
+
+    Returns:
+        ``(items, row_errors)`` 二元组（与 :func:`_read_jsonl_items` 同形）：
+        行号从 2 起（1 为表头行）。
+
+    Raises:
+        ValueError: 文件为空 / 无表头 / 零数据行 / 解码失败
+            （文件级失败语义同 JSONL「零非空行」——大概率是截断/损坏）。
+    """
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"CSV 解码失败（须 UTF-8）: {exc}") from exc
+    lines = text.splitlines()
+    if not lines or not lines[0].strip():
+        raise ValueError("CSV 文件为空（无表头行）")
+    try:
+        header = next(csv.reader([lines[0]]))
+    except csv.Error as exc:
+        raise ValueError(f"CSV 表头语法错误: {exc}") from exc
+    header = [cell.strip() for cell in header]
+    if not any(header):
+        raise ValueError("CSV 表头行为空")
+    data_lines = lines[1:]
+    if not any(line.strip() for line in data_lines):
+        raise ValueError("CSV 文件为空（零数据行）")
+    items: List[tuple] = []
+    row_errors: List[tuple] = []
+    for lineno, line in enumerate(data_lines, start=2):
+        if not line.strip():
+            continue
+        try:
+            row = next(csv.reader([line]))
+        except csv.Error as exc:
+            row_errors.append((lineno, f"CSV 语法错误: {exc}"))
+            continue
+        if len(row) != len(header):
+            row_errors.append(
+                (lineno, f"列数不齐（表头 {len(header)} 列，该行 {len(row)} 列）")
+            )
+            continue
+        payload: Dict[str, Any] = {}
+        for key, cell in zip(header, row):
+            cell = cell.strip()
+            payload[key] = cell if cell else None
+        items.append((lineno, payload))
+    return items, row_errors
+
+
 # ----------------------------------------------------------------------
 # 装载入口
 # ----------------------------------------------------------------------
@@ -168,7 +232,7 @@ def load_records(
     """从本地源装载公告记录（规范化入口：raw → AnnouncementRecord）。
 
     Args:
-        source: ``.json`` / ``.jsonl`` 文件或包含它们的目录。
+        source: ``.json`` / ``.jsonl`` / ``.csv`` 文件或包含它们的目录。
         skip_invalid: ``True``（默认）时坏文件/坏记录登记进
             :attr:`LoadResult.failures` 后继续；``False`` 时第一条
             失败即抛对应异常（严格模式）。
@@ -194,9 +258,17 @@ def load_records(
     result.files_read = len(files)
 
     for path in files:
-        if path.suffix.lower() == ".jsonl":
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            row_reader = _read_csv_rows
+        elif suffix == ".jsonl":
+            row_reader = _read_jsonl_items
+        else:
+            row_reader = None
+
+        if row_reader is not None:
             try:
-                items, line_errors = _read_jsonl_items(path)
+                items, line_errors = row_reader(path)
             except ValueError as exc:
                 # 文件级失败（空文件/不可读）——坏文件不殃及后续文件
                 if skip_invalid:

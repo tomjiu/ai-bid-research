@@ -2,7 +2,7 @@
 
 > **定性：选项 A——独立研究工具（非生产链路）。**
 > 本文件是 Python 侧模块与 Rust bid 链路职责边界的**唯一真源**。
-> 创建于 #563；最后更新 2026-11-09（#601 研究管道四包收录）。
+> 创建于 #563；最后更新 2026-11-10（#601 迭代二段 R31：采集面 CSV 源扩展）。
 
 ---
 
@@ -39,7 +39,7 @@
 
 | Python 模块 | 职责 | 边界说明 |
 |---|---|---|
-| `src/collect/`（采集面） | 本地源（JSON/JSONL）装载→规范化→三级去重 | 默认离线本地文件源，**不内置生产级网络爬虫**；`AnnouncementRecord` 是管道唯一规范化入口 |
+| `src/collect/`（采集面） | 本地源（JSON/JSONL/CSV）装载→规范化→三级去重 | 默认离线本地文件源，**不内置生产级网络爬虫**；`AnnouncementRecord` 是管道唯一规范化入口；CSV 源表头别名自动归一（R31） |
 | `src/extract/`（抽取面） | 公告原文→LLM 结构化抽取→schema 校验→合并入库；失败进 `pending_announcements` 降级面可重试 | 抽取走研究提示词（`PromptTemplates.bid_extraction`）；「LLM 补全不覆盖」——源字段强证据，模型只填缺 |
 | `src/analyze/`（分析面） | 预算分位/区域/趋势/关键词频次/竞争密度 | 全部**描述性统计与启发式估算**（密度分层/HHI），报告明示「估算」口径，不冒充事实 |
 | `src/pipeline/`（编排面） | collect→extract→analyze→report 四阶段串联 + `pipeline_runs` 运行台账 + 增量水位 | 研究管道一条命令；台账为审计面（研究可复现），水位只服务增量文件读取 |
@@ -70,6 +70,7 @@ python main.py pipeline --source announcements/ --db data/bids.db --incremental 
 
 # 分阶段单命令
 python main.py collect  --source announcements/ --dry-run     # 演练（不写库）
+python main.py collect  --source exports.csv                # CSV 源（表头别名自动归一）
 python main.py extract  --source announcements/              # LLM 抽取（失败进 pending）
 python main.py extract  --retry                               # 重试 pending 面（需 API key）
 python main.py analyze  --keyword 智慧城市 --days 90 --html   # 离线纯数据报告
