@@ -12,6 +12,13 @@ from src.extract.extractor import (
     merge_fields,
     resolve_raw_text,
 )
+from src.extract.store import (
+    BatchStoreResult,
+    StoreOutcome,
+    apply_extraction,
+    apply_extraction_batch,
+    apply_extraction_from_raw,
+)
 from src.extract.validator import (
     REQUIRED_FIELDS,
     RECOMMENDED_FIELDS,
@@ -30,4 +37,9 @@ __all__ = [
     "RECOMMENDED_FIELDS",
     "ValidationResult",
     "validate_fields",
+    "BatchStoreResult",
+    "StoreOutcome",
+    "apply_extraction",
+    "apply_extraction_batch",
+    "apply_extraction_from_raw",
 ]
