@@ -2,7 +2,7 @@
 
 > **定性：选项 A——独立研究工具（非生产链路）。**
 > 本文件是 Python 侧模块与 Rust bid 链路职责边界的**唯一真源**。
-> 创建于 #563；最后更新 2026-11-08。
+> 创建于 #563；最后更新 2026-11-09（#601 研究管道四包收录）。
 
 ---
 
@@ -16,6 +16,9 @@
 · 无状态机、无版本管理、无审核门（对比 Rust P0-P8 链路）
 · SQLite 为本地研究工作区文件，不是服务、不入库（.gitignore 钉死）
 · CI 独立（python-tests.yml 只跑 pytest，不接入 bid 的 4 项检查）
+· 研究管道（#601）：collect/extract/analyze/pipeline 四包同属研究面——
+  采集默认本地文件源（离线可测），LLM 抽取失败降级 pending 不阻塞，
+  分析产物是启发式估算，全部不回流生产链路
 ```
 
 **若未来要转成生产链路辅助工具（选项 B）**，必须先修订本文件并满足：
@@ -31,6 +34,15 @@
 | `src/llm/client.py`（LLM 调用封装） | `bid-tools` 的 LLM 面 | **各自独立，互不调用** | Python 封装只服务研究脚本；生产 LLM 调用一律走 Rust bid-tools |
 | `src/report/generator.py`（Markdown/HTML 报告） | `export_bid_document`（DOCX/PDF） | **Rust export** | Python 报告是研究快照（Markdown/HTML），非投标交付物；正式投标文件导出只在 Rust 侧 |
 | `src/llm/prompts.py`（提示词模板） | bid-tools 的提示词（如有） | **各自独立** | 研究提示词与生产提示词分开演进，不共享 |
+
+**研究管道模块（#601 新增，同样是非生产研究面）**：
+
+| Python 模块 | 职责 | 边界说明 |
+|---|---|---|
+| `src/collect/`（采集面） | 本地源（JSON/JSONL）装载→规范化→三级去重 | 默认离线本地文件源，**不内置生产级网络爬虫**；`AnnouncementRecord` 是管道唯一规范化入口 |
+| `src/extract/`（抽取面） | 公告原文→LLM 结构化抽取→schema 校验→合并入库；失败进 `pending_announcements` 降级面可重试 | 抽取走研究提示词（`PromptTemplates.bid_extraction`）；「LLM 补全不覆盖」——源字段强证据，模型只填缺 |
+| `src/analyze/`（分析面） | 预算分位/区域/趋势/关键词频次/竞争密度 | 全部**描述性统计与启发式估算**（密度分层/HHI），报告明示「估算」口径，不冒充事实 |
+| `src/pipeline/`（编排面） | collect→extract→analyze→report 四阶段串联 + `pipeline_runs` 运行台账 + 增量水位 | 研究管道一条命令；台账为审计面（研究可复现），水位只服务增量文件读取 |
 
 **判定规则**：任何"投标生产"语义的数据与产物 → Rust 侧是真源；
 Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
