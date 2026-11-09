@@ -9,6 +9,11 @@
     python main.py collect --source announcements/ --dry-run
     python main.py collect --source announcements/ --db data/bids.db
 
+    # 公告原文抽取（.txt 文件/目录 → raw 暂存 → 规则/LLM 抽取 → 入库）
+    python main.py extract --source raw-announcements/ --mode rule
+    python main.py extract --source notices/ --mode api --dry-run
+    python main.py extract --mode api --limit 20   # 只重试库内 pending
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -33,12 +38,20 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
+from src.extract import (
+    RuleExtractor,
+    load_raw_texts,
+    run_extraction,
+)
+from src.extract.runner import resolve_raw_files
+from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
 from src.report.generator import ReportGenerator
 from src.storage.database import BidDatabase
@@ -137,6 +150,47 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
+    )
+
+    # extract 子命令（#601 批次 B：抽取面）
+    extract = sub.add_parser(
+        "extract",
+        help="公告原文抽取（.txt → raw 暂存 → 规则/LLM → 入库）",
+    )
+    extract.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help=(
+            "公告原文源：.txt 文件或目录（缺省时只处理库内 pending，"
+            "适用于失败件重试）"
+        ),
+    )
+    extract.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"目标数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    extract.add_argument(
+        "--mode",
+        choices=("rule", "api"),
+        default="rule",
+        help=(
+            "抽取引擎：rule 离线正则基线（默认，无网络依赖）；"
+            "api 走 LLM（需 DEEPSEEK_API_KEY/OPENAI_API_KEY）"
+        ),
+    )
+    extract.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="最多处理条数（缺省全部 pending）",
+    )
+    extract.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="演练模式：装载+抽取+打印报告，但不写库不改状态",
     )
 
     # db 子命令
@@ -295,6 +349,100 @@ def run_collect(args: argparse.Namespace) -> int:
     return 0
 
 
+async def run_extract(args: argparse.Namespace) -> int:
+    """执行 extract 子命令：原文装载 → 抽取 → 入库/降级。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常含失败件降级——它们保持 pending 等重试；
+        2 源不可读 / api 模式缺密钥）。
+    """
+    if args.mode == "api" and not _has_api_key():
+        print(
+            "错误：api 模式需要 DEEPSEEK_API_KEY 或 OPENAI_API_KEY 环境变量",
+            file=sys.stderr,
+        )
+        return 2
+
+    with BidDatabase(args.db) as db:
+        if args.source is not None:
+            try:
+                resolve_raw_files(args.source)
+            except SourceError as exc:
+                print(f"错误：{exc}", file=sys.stderr)
+                return 2
+            load_stats = load_raw_texts(args.source, db)
+            print(
+                f"原文装载：读取 {load_stats.files_read} 个文件，"
+                f"新入 {load_stats.saved} 条，"
+                f"重复跳过 {load_stats.duplicates} 条"
+            )
+            for failure in load_stats.failures:
+                print(f"  ✗ {failure['origin']}: {failure['error']}")
+
+        if args.mode == "api":
+            extractor = _build_llm_extractor()
+            if extractor is None:
+                print(
+                    "错误：api 模式需要 DEEPSEEK_API_KEY 或 OPENAI_API_KEY",
+                    file=sys.stderr,
+                )
+                return 2
+        else:
+            extractor = RuleExtractor()
+
+        def _print_outcome(item: dict, outcome) -> None:
+            if outcome.ok:
+                print(
+                    f"  ✓ {item['source']} → {outcome.record.bid_id}"
+                    f"（{len(outcome.payload_fields)} 字段）"
+                )
+            else:
+                print(f"  ✗ {item['source']}: {outcome.error}")
+
+        stats = await run_extraction(
+            db,
+            extractor,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            on_outcome=_print_outcome,
+        )
+
+        mode_label = "规则基线" if stats.mode == "rule" else "LLM"
+        print(
+            f"抽取完成（{mode_label}）：处理 {stats.processed} 条，"
+            f"成功 {stats.extracted} 条，失败 {stats.failed} 条"
+            f"（失败件保持 pending 可重试）"
+        )
+        raw_stats = db.raw_stats()
+        print(
+            f"raw 暂存面：共 {raw_stats['total']} 条，"
+            f"待抽取 {raw_stats['pending']} 条，"
+            f"已抽取 {raw_stats['extracted']} 条"
+        )
+        if args.dry_run:
+            print("演练模式：未写库（--dry-run）")
+    return 0
+
+
+def _has_api_key() -> bool:
+    """判断环境是否配了任一 LLM 密钥（api 模式门）。"""
+    return bool(
+        os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
+    )
+
+
+def _build_llm_extractor():
+    """构建 LLM 抽取引擎（密钥缺失时返回 None）。"""
+    if not _has_api_key():
+        return None
+    from src.extract import LLMExtractor
+
+    return LLMExtractor(LLMClient())
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -389,6 +537,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return asyncio.run(run_report(args))
     if args.command == "collect":
         return run_collect(args)
+    if args.command == "extract":
+        return asyncio.run(run_extract(args))
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":

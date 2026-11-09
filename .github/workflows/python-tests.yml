@@ -43,9 +43,9 @@ jobs:
       - name: 运行 pytest
         run: python -m pytest tests/ -v
 
-      - name: CLI 冒烟（离线全链——help/templates/collect/db import→stats→query）
-        # 与 PR 描述的本地冒烟口径一致：四个子命令组真跑一遍。
-        # db/collect 链路用 $RUNNER_TEMP 隔离（不碰仓库工作区、零残留）。
+      - name: CLI 冒烟（离线全链——help/templates/collect/extract/db）
+        # 与 PR 描述的本地冒烟口径一致：五个子命令组真跑一遍。
+        # db/collect/extract 链路用 $RUNNER_TEMP 隔离（不碰仓库工作区、零残留）。
         run: |
           set -e
           python main.py --help > /dev/null
@@ -59,10 +59,19 @@ jobs:
           python main.py collect --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/collect.db" | grep -q "已入库 2 条"
           python main.py db --query "ci-collect" --db "$RUNNER_TEMP/collect.db" | grep -q "COL-001"
           python main.py collect --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/collect.db" --dry-run | grep -q "演练模式"
+          # extract 链路（#601 批次 B）：原文装载→规则抽取→入库→重试幂等
+          mkdir -p "$RUNNER_TEMP/raw"
+          printf '某某市政务云平台采购项目招标公告\n招标编号：EXT-2026-001\n预算金额：800万元\n投标截止时间：2026年12月20日10时\n资格要求：具备 ISO9001 认证；近三年类似业绩不少于 2 项。\n2026年11月8日\n' \
+            > "$RUNNER_TEMP/raw/n1.txt"
+          printf '普通文本，没有任何招标结构。\n' \
+            > "$RUNNER_TEMP/raw/bad.txt"
+          python main.py extract --source "$RUNNER_TEMP/raw" --db "$RUNNER_TEMP/extract.db" | grep -q "成功 1 条，失败 1 条"
+          python main.py db --query "EXT-2026-001" --db "$RUNNER_TEMP/extract.db" | grep -q "EXT-2026-001"
+          python main.py extract --db "$RUNNER_TEMP/extract.db" | grep -q "处理 1 条"  # 只重试 pending 坏件
           # db 链路
           printf '[{"bid_id":"SMOKE-001","project_name":"ci-smoke","source_url":"https://example.com/1","budget_wan":1.5,"deadline":"2026-12-31","requirements":["资质A"]}]' \
             > "$RUNNER_TEMP/smoke-import.json"
           python main.py db --import "$RUNNER_TEMP/smoke-import.json" --db "$RUNNER_TEMP/smoke.db" | grep -q "已导入 1 条"
           python main.py db --stats --db "$RUNNER_TEMP/smoke.db" | grep -q "共 1 条项目"
           python main.py db --query "ci-smoke" --db "$RUNNER_TEMP/smoke.db" | grep -q "SMOKE-001"
-          echo "CLI 冒烟：help / templates / collect / db import→stats→query 全过"
+          echo "CLI 冒烟：help / templates / collect / extract / db 全过"

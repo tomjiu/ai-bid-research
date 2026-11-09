@@ -50,7 +50,19 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
   （ID/分类/★条款/矩阵状态）**无映射关系**，禁止拿它做合规判定；
 - **反序列化兜底**：损坏数据在 `BidDatabase._row_to_dict` 中回退为空列表。
 
-## 4. CI 隔离
+## 4. raw 公告暂存面（#601 批次 B）
+
+`raw_announcements` 表是抽取面的**失败降级暂存**（研究工作区内）：
+
+```
+· 用途：公告原文（.txt）装载 → LLM/规则抽取 → 成功进 bids 表 +
+  标 extracted；失败保持 pending + error 留档（重试不丢原文）
+· content_sha 唯一索引：同文重复导入幂等（研究面防重复占位）
+· 生命周期：extracted 的记录不再处理；pending 的可反复重试
+  （attempts 计数可见）；不属于任何生产状态机
+```
+
+## 5. CI 隔离
 
 ```
 .github/workflows/python-tests.yml
