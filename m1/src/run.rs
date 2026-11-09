@@ -164,7 +164,21 @@ pub fn run(cfg: &RunCfg) -> Result<i32, String> {
     for (i, want) in ["ok", "ok", "ocr_required", "ok"].iter().enumerate() {
         let got = st.files.get(i).map(|f| f.parse_status.clone()).unwrap_or_default();
         let ok = &got == want;
-        st.note(2, &format!("files[{}].parse_status", i), if ok { "pass" } else { "fail" }, format!("got {}", got));
+        // #562：失败 detail 附文件名 + parse 失败原因链（reports 与 files 同序 push）
+        // ——旧版只报 "got failed"，无法区分 pdftotext 退出码 / 空文本层 /
+        // OCR 面，#561 门禁红时定位只能猜（可观测性面收口）。
+        let detail = if ok {
+            format!("got {}", got)
+        } else {
+            let name = st.files.get(i).map(|f| f.name.clone()).unwrap_or_default();
+            let kind = st.reports.get(i).map(|r| r.kind.clone()).unwrap_or_default();
+            let blocks = st.reports.get(i).map(|r| r.blocks).unwrap_or(0);
+            let causes = st.reports.get(i).map(|r| r.failures.join("; ")).unwrap_or_default();
+            format!("got {}（{} kind={} blocks={} causes: {}）",
+                    got, name, kind, blocks,
+                    if causes.is_empty() { "(无 failure 记录——空文本层/零块路径)".to_string() } else { causes })
+        };
+        st.note(2, &format!("files[{}].parse_status", i), if ok { "pass" } else { "fail" }, detail);
         if !ok { exit_code = 1; }
     }
     let ge100 = chunks_main.len() >= 100;
@@ -312,7 +326,10 @@ pub fn run(cfg: &RunCfg) -> Result<i32, String> {
              st.files.iter().filter(|f| f.parse_status == "failed").count());
     for n in &st.notes {
         if n["status"] == "fail" {
-            println!("[m1][STEP-FAIL] {}", serde_json::to_string(n).unwrap_or_default());
+            // #562：行首 ✗ 对齐 run_tests.py fail_detail 的抽取口径（只取 ✗
+            // 开头的行）——旧版 [m1] 前缀使全部 STEP-FAIL 行被吞只剩末行，
+            // CI 失败时丢失其余失败项与原因（可观测性面收口）。
+            println!("✗ [m1][STEP-FAIL] {}", serde_json::to_string(n).unwrap_or_default());
         }
     }
     Ok(exit_code)
