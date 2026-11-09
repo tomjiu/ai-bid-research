@@ -840,23 +840,77 @@ def t_bidcore_cargo():
             f"清理 cargo target 或扩容后重跑；磁盘满时编译失败是假红，FG-15）",
         )
         return
-    # #571 前置缓解（PR#583）：预算参数化 + 超时不再裸崩整链。
+    # #571 收口（任务 1+2）：预算参数化 + 超时诊断性 FAIL + **进程树整组清理**。
     #   · T19_TIMEOUT_S 环境变量可调（默认 900 不变——本地行为零变化）；
-    #   · TimeoutExpired 捕获后转**诊断性 FAIL**（保留超时值/已耗时/已有
-    #     输出尾部），主链汇总与退出码语义保持（#571 任务 1 的最小切片，
-    #     进程树清理与冷/热缓存实测仍归 #571 本线）。
+    #   · TimeoutExpired → 诊断性 FAIL（超时值/已耗时/输出尾部 + **全量日志
+    #     转存文件**），主链汇总与退出码语义保持；
+    #   · 进程树清理：start_new_session=True 独立进程组 → 超时先 SIGTERM 整组
+    #     （5s 宽限）→ SIGKILL 整组 → 组存活核验（os.killpg(pgid, 0)）。
+    #     旧 subprocess.run(timeout=) 只杀直接子（cargo），rustc/测试二进制
+    #     孙进程存活 → 继续占 runner + 持有 cargo 构建锁（下轮 cargo 阻塞在
+    #     锁上——#571 任务 2 登记的遗留形态）。
     _t19_timeout = int(os.environ.get("T19_TIMEOUT_S", "900"))
+    import time as _time
+    _t0 = _time.monotonic()
+    _proc = _sp.Popen([cargo, "test", "--workspace"], cwd=REPO / "bidcore",
+                      stdout=_sp.PIPE, stderr=_sp.PIPE, text=True,
+                      start_new_session=True)  # 独立会话/进程组——超时可整树清理
     try:
-        _p = _sp.run([cargo, "test", "--workspace"], capture_output=True, text=True,
-                     cwd=REPO / "bidcore", timeout=_t19_timeout)
-    except _sp.TimeoutExpired as _te:
-        _tail = ((_te.stdout or "") + (_te.stderr or ""))[-400:]
+        _so, _se = _proc.communicate(timeout=_t19_timeout)
+    except _sp.TimeoutExpired:
+        _elapsed = _time.monotonic() - _t0
+        _pgid = _proc.pid  # start_new_session：子进程即组长，pgid == pid
+        # 清理梯：SIGTERM 整组（rustc 优雅收尾释放锁）→ 宽限 → SIGKILL 整组
+        import signal as _signal
+        for _sig, _grace in ((_signal.SIGTERM, 5.0), (_signal.SIGKILL, 5.0)):
+            try:
+                os.killpg(_pgid, _sig)
+            except ProcessLookupError:
+                break  # 组已消失
+            try:
+                _proc.wait(timeout=_grace)
+                break
+            except _sp.TimeoutExpired:
+                continue
+        # 组存活核验（#571 任务 2 的可验证清理）：killpg(pgid, 0) 探测——
+        # ProcessLookupError = 组内已无任何存活成员。SIGKILL 后内核回收需
+        # 短暂窗口（孙进程被 reparent 到 init 后 reaped）——探测带 3×1s
+        # 沉降重试，避免把清理窗口竞态误报成逃逸（本地实测：15s 超时杀完
+        # 立即探测报存活，1s 后复查组已消失）。
+        _tree_note = None
+        for _ in range(3):
+            try:
+                os.killpg(_pgid, 0)
+            except ProcessLookupError:
+                _tree_note = f"进程组 {_pgid} 已整组终止（killpg 探测无存活成员）"
+                break
+            except PermissionError:
+                _tree_note = f"进程组 {_pgid} 探测无权限（非本 uid 成员——无法断言）"
+                break
+            _time.sleep(1.0)
+        if _tree_note is None:
+            _tree_note = (f"⚠ 进程组 {_pgid} 仍有存活成员（SIGKILL 后 3s 未消——"
+                          f"自行 setsid 逃逸面，见转存日志）")
+        # 全量输出转存（#571 任务 1：编译/测试证据不丢失）+ 大尾部进 FAIL detail。
+        # 二次 communicate 带 30s 保护：若有逃逸进程（自行 setsid）仍持有管道
+        # fd，无超时的 communicate 会永久阻塞——超时即放弃残余并注明。
+        try:
+            _so, _se = _proc.communicate(timeout=30)
+            _full = (_so or "") + (_se or "")
+        except _sp.TimeoutExpired:
+            _full = ""
+            _tree_note += "；输出管道未关闭（逃逸进程持有 fd），残余输出放弃"
+        import tempfile as _tf
+        _log = Path(_tf.gettempdir()) / f"t19-timeout-{int(_elapsed)}s-{_proc.pid}.log"
+        _log.write_text(_full, encoding="utf-8", errors="replace")
         check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
               False,
-              f"TIMEOUT：cargo test --workspace 超 {_t19_timeout}s 未完（冷缓存编译面超预算——"
-              f"链上证据 run 42492183787；调 T19_TIMEOUT_S 或清缓存重跑。输出尾部：{_tail!r}")
+              f"TIMEOUT：cargo test --workspace 超 {_t19_timeout}s 未完（实际已跑 {_elapsed:.0f}s——"
+              f"冷缓存编译面超预算，链上证据 run 42492183787；调 T19_TIMEOUT_S 或清缓存重跑。"
+              f"{_tree_note}。全量输出已转存 {_log}（尾部 2000 字符）：{_full[-2000:]!r}")
         return
-    out = _p.stdout + _p.stderr
+    out = (_so or "") + (_se or "")
+    _rc = _proc.returncode
     # 汇总行口径：各 crate 的 "test result: ok. N passed" 汇总 + 零 failed
     import re as _re
     passed = sum(int(m) for m in _re.findall(r"test result: \w+\. (\d+) passed", out))
@@ -869,7 +923,7 @@ def t_bidcore_cargo():
         "EMFILE", "Too many open files",
     ]
     env_hits = [s for s in env_signatures if s in out]
-    all_green = _p.returncode == 0 and failed == 0
+    all_green = _rc == 0 and failed == 0
     if all_green:
         check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
               True, f"passed={passed}")
@@ -883,7 +937,7 @@ def t_bidcore_cargo():
         return
     check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
           False,
-          f"passed={passed} failed={failed} rc={_p.returncode} " + out[-300:])
+          f"passed={passed} failed={failed} rc={_rc} " + out[-300:])
 
 
 def t_engine_diff():
