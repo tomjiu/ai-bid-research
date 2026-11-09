@@ -84,17 +84,65 @@ pub fn import_file(path: &Path, file_name: &str, order_start: u32) -> ImportOutc
 fn parse_pdf(path: &Path, file_name: &str, order_start: u32)
     -> (Vec<Block>, String, Vec<String>) {
     let mut failures = Vec::new();
-    // 通道 1：文本层（poppler pdftotext）
-    let out = Command::new("pdftotext")
-        .arg("-layout").arg("-enc").arg("UTF-8")
-        .arg(path).arg("-")
-        .env("LC_ALL", "C.UTF-8")
-        .output();
-    let text = match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-        Ok(o) => { failures.push(format!("pdftotext exit {}", o.status)); String::new() }
-        Err(e) => { failures.push(format!("pdftotext spawn: {}", e)); String::new() }
-    };
+    // 通道 1：文本层（poppler pdftotext）——三通道梯（#562 CI 实证收口）：
+    //   a) stdout + LC_ALL=C.UTF-8 + -layout（原主通道，确定性优先）
+    //   b) 临时文件出文 + 继承环境 + -layout（躲「管道/locale-stdout」面：
+    //      ubuntu-26.04 runner 实测 B1-设备清单.pdf 报 failed 而 Debian 13
+    //      同件三通道全通——失败面未见退出码，先用通道分离把可自愈面自愈）
+    //   c) stdout + 继承环境 + 无 -layout（原始序兜底）
+    // 判定：任一通道 exit 0 且文本 ≥20 字符即采用（首中即停——同一输入
+    // 选道确定）；全通道未命中 → 把全部尝试结果记入 failures 后走 OCR
+    // 通道（扫描件语义不变：真无文本层的 PDF 三通道都空，OCR 照常接管；
+    // 中选通道的前置失败不记——parse_status 以「最终是否拿到文本」为准，
+    // 回退中选不算失败）。
+    let mut text: Option<String> = None;
+    let mut attempt_errors: Vec<String> = Vec::new();
+    for (mode, use_layout, to_file, pin_locale) in [
+        ("stdout+lc_all+layout", true, false, true),
+        ("file+env+layout", true, true, false),
+        ("stdout+env+raw", false, false, false),
+    ] {
+        let mut cmd = Command::new("pdftotext");
+        if use_layout {
+            cmd.arg("-layout");
+        }
+        cmd.arg("-enc").arg("UTF-8").arg(path);
+        let tmp_out = if to_file {
+            let t = std::env::temp_dir().join(format!(
+                "m1-pdftotext-{}-{}.txt", std::process::id(), order_start));
+            cmd.arg(&t);
+            Some(t)
+        } else {
+            cmd.arg("-");
+            None
+        };
+        if pin_locale {
+            cmd.env("LC_ALL", "C.UTF-8");
+        }
+        let out = cmd.output();
+        let got: Result<String, String> = match out {
+            Ok(o) if o.status.success() => Ok(match &tmp_out {
+                Some(t) => std::fs::read_to_string(t).unwrap_or_default(),
+                None => String::from_utf8_lossy(&o.stdout).to_string(),
+            }),
+            Ok(o) => Err(format!("pdftotext({mode}) exit {}", o.status)),
+            Err(e) => Err(format!("pdftotext({mode}) spawn: {}", e)),
+        };
+        if let Some(t) = &tmp_out {
+            let _ = std::fs::remove_file(t); // 临时出文清理（best-effort）
+        }
+        match got {
+            Ok(g) if g.trim().chars().count() >= 20 => {
+                text = Some(g);
+                attempt_errors.clear(); // 回退中选：前置失败不记（见上方判定注释）
+                break;
+            }
+            Ok(_) => {} // exit 0 但空文本（扫描件常态）——不记错，续试下一通道
+            Err(e) => attempt_errors.push(e),
+        }
+    }
+    failures.extend(attempt_errors);
+    let text = text.unwrap_or_default();
     let tlen = text.trim().chars().count();
     if tlen >= 20 {
         // 文本层有效 → 逐行成块（页以 \f 分界）
