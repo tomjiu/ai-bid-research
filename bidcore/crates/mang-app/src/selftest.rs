@@ -5,6 +5,7 @@
 //!       / history.list / unknown_cmd / bad_json
 //!       / mcp.status / llm.status+save 往返（#76）/ fspec.status（#76）
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
+//!       / bid.quality+bid.score（#313 批 C：早态 E_STATE→state 码 / MATRIX_READY 后真实读取）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
 //! 输出形如 `PASS  <name>：<detail>` / `FAIL  <name>：<detail>`，最后一行汇总 + 退出码。
 
@@ -448,6 +449,13 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         resp["ok"] == json!(false) && err_code(&resp) == "not_found",
         format!("{}", err_code(&resp)),
     );
+    // #313 批 B：矩阵同样干净拒绝（不落副作用）
+    let resp = call(&ctx, json!({"id":"t-bid-m0","cmd":"bid.matrix"}));
+    r.check(
+        "bid.matrix(无db.json)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
     // 种一个真实项目（bid-tools 服务面——与 MCP 写路径同源）
     seed_bid_project(&root);
     let resp = call(&ctx, json!({"id":"t-bid-s1","cmd":"bid.state"}));
@@ -471,6 +479,23 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && bo["nodes"][1]["chapter_file"] == json!("chapters/SEC-S2.json")
             && bo["stats"]["sections"] == json!(2),
         format!("nodes={}", bo["nodes"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // #313 批 B：真实项目的矩阵面（种子面：1 条技术参数，无大纲响应 →
+    // NOT_RESPONDED 非阻断；行形状/统计摘要/★统计口在场）
+    let resp = call(&ctx, json!({"id":"t-bid-m1","cmd":"bid.matrix"}));
+    let bm = result(&resp);
+    r.check(
+        "bid.matrix(真实项目)",
+        resp["ok"] == json!(true)
+            && bm["present"] == json!(true)
+            && bm["rows"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+            && bm["rows"][0]["requirement"]["id"] == json!("REQ-0001")
+            && bm["rows"][0]["status"] == json!("NOT_RESPONDED")
+            && bm["summary"]["by_status"]["NOT_RESPONDED"] == json!(1)
+            && bm["summary"]["blocking"] == json!(0)
+            && bm["star_summary"]["total"] == json!(0)
+            && bm["fetched_pages"] == json!(1),
+        format!("rows={} status={}", bm["rows"].as_array().map(|a| a.len()).unwrap_or(0), bm["rows"][0]["status"]),
     );
     // db.json 被外部进程改写（bid-mcp-stdio / Agent）→ 服务缓存按指纹重开
     {
@@ -498,6 +523,74 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         "bid.state(db变更重开)",
         resp["ok"] == json!(true) && result(&resp)["quick_stats"]["requirements"] == json!(2),
         format!("reqs={}", result(&resp)["quick_stats"]["requirements"]),
+    );
+    // #313 批 B：db.json 变更后矩阵缓存同样重开——新 REQ-0002（资格条件）
+    // 是必选未响应 → 阻断计数 = 1（旧缓存会只看到 1 条 REQ）
+    let resp = call(&ctx, json!({"id":"t-bid-m2","cmd":"bid.matrix"}));
+    let bm2 = result(&resp);
+    r.check(
+        "bid.matrix(db变更重开)",
+        resp["ok"] == json!(true)
+            && bm2["rows"].as_array().map(|a| a.len() == 2).unwrap_or(false)
+            && bm2["summary"]["blocking"] == json!(1)
+            && bm2["rows"].as_array()
+                .map(|a| a.iter().any(|row| row["requirement"]["id"] == json!("REQ-0002")
+                    && row["blocking"] == json!(true)))
+                .unwrap_or(false),
+        format!("rows={} blocking={}", bm2["rows"].as_array().map(|a| a.len()).unwrap_or(0), bm2["summary"]["blocking"]),
+    );
+
+    // ---- #313 批 C：自评数据面（bid.quality / bid.score）
+    // 早态（REQUIREMENTS_EXTRACTED，矩阵未建）→ 工具面 E_STATE 透传为
+    // 壳侧 `state` 码（UI 据此分支「尚未开放」引导卡，不是故障）
+    let resp = call(&ctx, json!({"id":"t-bid-q0","cmd":"bid.quality"}));
+    r.check(
+        "bid.quality(早态拒绝)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-sc0","cmd":"bid.score"}));
+    r.check(
+        "bid.score(早态拒绝)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    // 服务层重建大纲+矩阵（与 MCP 工具同源面）→ MATRIX_READY 后两命令真读
+    {
+        let mut svc = bid_tools::service::BidService::open(&root).unwrap();
+        svc.prepare_outline_and_matrix(bid_domain::outline::OutlineSpec {
+            target_total_chars: 400,
+            max_reqs_per_leaf: 2,
+        })
+        .unwrap();
+    }
+    let resp = call(&ctx, json!({"id":"t-bid-q1","cmd":"bid.quality"}));
+    let bq = result(&resp);
+    r.check(
+        "bid.quality(矩阵就绪)",
+        resp["ok"] == json!(true)
+            && bq["present"] == json!(true)
+            && bq["quality"]["summary"]["total"].as_u64().unwrap_or(0) >= 1
+            && bq["quality"]["submission_readiness"].is_object(),
+        format!(
+            "sections={} drafted={}",
+            bq["quality"]["summary"]["total"],
+            bq["quality"]["summary"]["drafted"]
+        ),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-sc1","cmd":"bid.score"}));
+    let bsc = result(&resp);
+    r.check(
+        "bid.score(矩阵就绪)",
+        resp["ok"] == json!(true)
+            && bsc["score"]["diagnostic_only"] == json!(true)
+            && bsc["score"]["price"].is_null()
+            && bsc["score"]["by_item"].is_array(),
+        format!(
+            "total={} target={}",
+            bsc["score"]["total"],
+            bsc["score"]["target"]
+        ),
     );
 
     // ---- #194：工作区切换（workspace.open / workspace.current）

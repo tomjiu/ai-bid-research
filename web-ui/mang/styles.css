@@ -3006,6 +3006,10 @@ html[data-chrome="native"][data-maximized="1"] #app {
 .bid-bar-fill[data-state="ok"] {
   background: var(--ok);
 }
+/* 批 C：评分卡中档（得半以上——不足 ok 未到 low 的琥珀色过渡态） */
+.bid-bar-fill[data-state="mid"] {
+  background: var(--warn);
+}
 .bid-bar-fill[data-state="pending"] {
   background: color-mix(in srgb, var(--fg-soft) 55%, transparent);
 }
@@ -3102,10 +3106,470 @@ html[data-chrome="native"][data-maximized="1"] #app {
   margin: 0 auto;
 }
 
+/* ---- #313 批 B：合规矩阵面板（.bid-mx-*）——表格 + 筛选 chips + 分页 + 展开详情 ---- */
+.bid-mx {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.bid-mx .view-state {
+  margin: 40px auto;
+}
+.bid-mx-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px 8px;
+}
+.bid-mx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.bid-mx-chip {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-chip:hover {
+  border-color: var(--fg-muted);
+  color: var(--fg);
+}
+.bid-mx-chip[data-on="true"] {
+  background: var(--active);
+  border-color: transparent;
+  color: var(--fg);
+  font-weight: 600;
+}
+.bid-mx-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bid-mx-select {
+  height: 24px;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 4px;
+}
+.bid-mx-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bid-mx-sum {
+  flex: none;
+  padding: 0 16px 8px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+.bid-mx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.bid-mx-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 600;
+  color: var(--fg-muted);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.bid-mx-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bid-mx-row {
+  cursor: pointer;
+}
+.bid-mx-row:hover {
+  background: var(--hover);
+}
+.bid-mx-row.expanded {
+  background: var(--active);
+}
+.bid-mx-row.is-blocking .bid-mx-req-id {
+  color: var(--danger);
+}
+.bid-mx-req {
+  max-width: 420px;
+}
+.bid-mx-req-id {
+  display: block;
+  font-size: 11px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-req-st {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg);
+}
+.bid-mx-cat {
+  white-space: nowrap;
+  color: var(--fg);
+}
+.bid-mx-mand {
+  color: var(--warn);
+  font-size: 10.5px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+/* 五态徽章（T-2 + #245）——未响应红 / 已响应绿 / 部分黄 / 待补黄底 / 不适用灰 */
+.bid-mx-badge {
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.bid-mx-badge[data-status="NOT_RESPONDED"] {
+  color: #fff;
+  background: var(--danger);
+}
+.bid-mx-badge[data-status="RESPONDED"] {
+  color: #fff;
+  background: var(--ok);
+}
+.bid-mx-badge[data-status="PARTIAL"] {
+  color: #fff;
+  background: var(--warn);
+}
+.bid-mx-badge[data-status="PENDING_EVIDENCE"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.bid-mx-badge[data-status="NOT_APPLICABLE"] {
+  color: var(--fg-muted);
+  background: var(--hover);
+}
+.bid-mx-ev {
+  font-size: 11.5px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-ev.ok {
+  color: var(--ok);
+}
+.bid-mx-ev.pend {
+  color: var(--warn);
+}
+.bid-mx-ev.none {
+  color: var(--fg-muted);
+}
+.bid-mx-miss {
+  color: var(--warn);
+  font-size: 10.5px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+.bid-mx-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bid-mx-link:hover {
+  opacity: 0.8;
+}
+.bid-mx-marks {
+  white-space: nowrap;
+}
+.bid-mx-star {
+  color: var(--warn);
+  font-weight: 700;
+}
+.bid-mx-block {
+  color: #fff;
+  background: var(--danger);
+  font-size: 10.5px;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.bid-mx-detail td {
+  background: var(--hover);
+  cursor: default;
+}
+.bid-mx-d-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 22px;
+  padding: 4px 2px;
+}
+.bid-mx-d-k {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-bottom: 3px;
+}
+.bid-mx-d-v {
+  font-size: 12px;
+  color: var(--fg);
+}
+.bid-mx-ev-line {
+  font-variant-numeric: tabular-nums;
+}
+.bid-mx-ev-line.dim {
+  color: var(--fg-muted);
+}
+.bid-mx-ev-line.pend {
+  color: var(--warn);
+}
+.bid-mx-ev-tier {
+  color: var(--fg-muted);
+  font-size: 10.5px;
+}
+.bid-mx-pager {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.bid-mx-page-info {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============ #313 批 C：自评面板（.bid-qual-*）============ */
+.bid-qual {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 22px 26px;
+  max-width: 980px;
+}
+.bid-qual-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bid-qual-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
+  cursor: help;
+}
+.bid-qual-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.bid-qual-hint {
+  margin: 10px auto 0;
+  max-width: 520px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--fg-muted);
+}
+/* 评分卡（四格：技术/商务/价格/总分） */
+.bid-qual-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.bid-qual-score {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg-muted) 3%, transparent);
+}
+.bid-qual-score[data-has="false"] .bid-qual-score-v {
+  color: var(--fg-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.bid-qual-score-v {
+  font-size: 20px;
+  font-weight: 650;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.bid-qual-score-k {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.bid-qual-score .bid-bar {
+  height: 3px;
+}
+/* BLOCKER / 缺口清单（<details> 原生展开） */
+.bid-qual-list {
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  border-radius: 7px;
+  margin: 6px 0;
+  overflow: hidden;
+}
+.bid-qual-list summary {
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  cursor: pointer;
+  user-select: none;
+}
+.bid-qual-list summary:hover {
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+}
+.bid-qual-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 11px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-top: 1px solid var(--border-soft);
+  color: var(--fg);
+}
+.bid-qual-row[data-hit="false"] {
+  color: var(--fg-muted);
+}
+.bid-qual-cp {
+  flex: none;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: var(--fg-muted);
+}
+.bid-qual-row[data-hit="false"] .bid-qual-cp {
+  color: var(--warn);
+}
+.bid-qual-sec {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  padding: 8px 11px 2px;
+}
+.bid-qual-sec-id {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+/* 评分项明细（行网格：名称/满分/估分/档位/覆盖；<details> 展开） */
+.bid-qual-items {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.bid-qual-item {
+  display: block;
+  border-top: 1px solid var(--border-soft);
+}
+.bid-qual-item:first-child {
+  border-top: none;
+}
+.bid-qual-item-head,
+.bid-qual-item > summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 52px 52px 96px 52px;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.bid-qual-item-head {
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--fg-muted) 4%, transparent);
+}
+.bid-qual-item > summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--fg);
+}
+.bid-qual-item > summary:hover {
+  background: var(--hover);
+}
+.bid-qual-item-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.bid-qual-item-crit {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bid-qual-tier {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  background: color-mix(in srgb, var(--fg-soft) 18%, transparent);
+  text-align: center;
+}
+.bid-qual-item-body {
+  padding: 2px 0 8px;
+  background: color-mix(in srgb, var(--fg-muted) 3%, transparent);
+}
+.bid-qual-warn {
+  color: var(--warn);
+}
+.bid-qual-warn svg {
+  vertical-align: -2px;
+}
+.bid-card[data-kind="blockers"] .bid-card-title svg {
+  color: var(--danger);
+}
+
+
 /* 响应式（issue #313 验收 6：1440 / 1920 / 2560）——窄窗收树宽，宽窗详情限宽可读 */
 @media (max-width: 1360px) {
   .bid-tree {
     width: 300px;
+  }
+  .bid-mx-req {
+    max-width: 320px;
   }
 }
 @media (max-width: 1150px) {
@@ -3117,9 +3581,34 @@ html[data-chrome="native"][data-maximized="1"] #app {
   .bid-bar {
     display: none;
   }
+  .bid-mx-req {
+    max-width: 240px;
+  }
+  .bid-mx-sum {
+    display: none;
+  }
+
+  /* 批 C：窄窗评分项行收起「覆盖」列，保估分/档位可读 */
+  .bid-qual-item-head,
+  .bid-qual-item > summary {
+    grid-template-columns: minmax(140px, 1fr) 46px 46px 84px;
+  }
+  .bid-qual-item-head span:last-child,
+  .bid-qual-item > summary > span:last-child {
+    display: none;
+  }
+
 }
 @media (min-width: 1920px) {
   .bid-detail-md {
     max-width: 1000px;
   }
+  .bid-mx-req {
+    max-width: 560px;
+  }
+
+  .bid-qual {
+    max-width: 1100px;
+  }
+
 }
