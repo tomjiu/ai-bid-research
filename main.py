@@ -14,6 +14,10 @@
     python main.py extract --source notices/ --mode api --dry-run
     python main.py extract --mode api --limit 20   # 只重试库内 pending
 
+    # 数据分析（五维统计 → 离线 Markdown 报告，可选 HTML）
+    python main.py analyze --db data/bids.db
+    python main.py analyze --db data/bids.db --keyword 智慧城市 --days 90 --html
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -43,6 +47,12 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
+from src.analyze import (
+    compute_stats,
+    format_stats_markdown,
+    load_dataset,
+    save_analysis_report,
+)
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.extract import (
@@ -191,6 +201,50 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="演练模式：装载+抽取+打印报告，但不写库不改状态",
+    )
+
+    # analyze 子命令（#601 批次 C：分析面）
+    analyze = sub.add_parser(
+        "analyze",
+        help="五维统计分析（金额/区域/趋势/关键词/竞争）→ 离线 Markdown 报告",
+    )
+    analyze.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"数据源数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    analyze.add_argument(
+        "--keyword",
+        default=None,
+        help="项目名/编号过滤（可选）",
+    )
+    analyze.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="只统计近 N 天发布的记录（可选）",
+    )
+    analyze.add_argument(
+        "--region",
+        default=None,
+        help="地区子串过滤（可选，如 杭州）",
+    )
+    analyze.add_argument(
+        "--title",
+        default="招标数据分析报告",
+        help="报告标题",
+    )
+    analyze.add_argument(
+        "--html",
+        action="store_true",
+        help="同时导出 HTML 版本",
+    )
+    analyze.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/reports"),
+        help=f"报告输出目录（默认 output/reports）",
     )
 
     # db 子命令
@@ -443,6 +497,60 @@ def _build_llm_extractor():
     return LLMExtractor(LLMClient())
 
 
+def run_analyze(args: argparse.Namespace) -> int:
+    """执行 analyze 子命令：数据集 → 五维统计 → 离线 Markdown 报告。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 数据库不存在/空数据集）。
+    """
+    db_path: Path = args.db
+    if not db_path.exists():
+        print(f"错误：数据库不存在: {db_path}", file=sys.stderr)
+        return 2
+
+    from src.report.generator import ReportGenerator
+
+    with BidDatabase(db_path) as db:
+        ds = load_dataset(
+            db, keyword=args.keyword, days=args.days, region=args.region
+        )
+        if ds.total == 0:
+            print(
+                "错误：过滤后数据集为空——无样本可统计"
+                "（检查 --keyword/--days/--region 或先导入数据）",
+                file=sys.stderr,
+            )
+            return 2
+        stats = compute_stats(ds)
+
+    filters = []
+    if args.keyword:
+        filters.append(f"关键词「{args.keyword}」")
+    if args.days:
+        filters.append(f"近 {args.days} 天")
+    if args.region:
+        filters.append(f"地区含「{args.region}」")
+    filter_note = f"，过滤条件：{' + '.join(filters)}" if filters else ""
+    print(
+        f"数据集：{ds.total} 条项目（其中已定标 {ds.awarded} 条）{filter_note}"
+    )
+
+    markdown = format_stats_markdown(stats, title=args.title)
+    generator = ReportGenerator(
+        output_dir=args.output_dir, llm_client=None
+    )
+    result = save_analysis_report(
+        generator, markdown, prefix="analysis", html=args.html
+    )
+    print(f"分析报告已生成: {result['markdown']}")
+    if result["html"]:
+        print(f"HTML 已导出: {result['html']}")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -533,16 +641,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    if args.command == "report":
-        return asyncio.run(run_report(args))
-    if args.command == "collect":
-        return run_collect(args)
-    if args.command == "extract":
-        return asyncio.run(run_extract(args))
-    if args.command == "db":
-        return run_db(args)
-    if args.command == "templates":
-        return run_templates()
+    try:
+        if args.command == "report":
+            return asyncio.run(run_report(args))
+        if args.command == "collect":
+            return run_collect(args)
+        if args.command == "extract":
+            return asyncio.run(run_extract(args))
+        if args.command == "analyze":
+            return run_analyze(args)
+        if args.command == "db":
+            return run_db(args)
+        if args.command == "templates":
+            return run_templates()
+    except BrokenPipeError:
+        # 管道下游提前关闭（grep -q / head）——输出已送达，正常退出
+        try:
+            sys.stdout.close()
+        except BrokenPipeError:
+            pass
+        return 0
     parser.print_help()
     return 1
 
