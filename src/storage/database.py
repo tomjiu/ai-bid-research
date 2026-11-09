@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from datetime import datetime, timedelta
@@ -32,6 +33,23 @@ CREATE TABLE IF NOT EXISTS bids (
 );
 CREATE INDEX IF NOT EXISTS idx_bids_publish_date ON bids(publish_date);
 CREATE INDEX IF NOT EXISTS idx_bids_bid_id ON bids(bid_id);
+
+-- raw 公告暂存面（#601 批次 B）：LLM 不可用/JSON 损坏时原文不丢，
+-- pending 标记等待重试——失败降级不阻塞管道。
+CREATE TABLE IF NOT EXISTS raw_announcements (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source     TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    content_sha TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'pending',
+    error      TEXT,
+    bid_id     TEXT,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_raw_status ON raw_announcements(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_content_sha ON raw_announcements(content_sha);
 """
 
 # 允许写入 bids 表的业务字段（requirements 以 JSON 文本存储）
@@ -229,6 +247,122 @@ class BidDatabase:
         )
         awarded = int(cursor.fetchone()[0])
         return {"total": total, "awarded": awarded}
+
+    # ------------------------------------------------------------------
+    # raw 公告暂存面（#601 批次 B）
+    # ------------------------------------------------------------------
+
+    def save_raw(
+        self, source: str, content: str, *, content_sha: Optional[str] = None
+    ) -> int:
+        """存入一条公告原文（按内容指纹幂等——同文重复导入不重复占位）。
+
+        Args:
+            source: 来源标识（通常是文件名或 ``file.txt``）。
+            content: 公告原文全文。
+            content_sha: 内容 sha256 指纹；缺省时现算。
+
+        Returns:
+            新记录 id；内容已存在时返回既有记录 id（幂等）。
+        """
+        sha = content_sha or hashlib.sha256(
+            content.encode("utf-8")
+        ).hexdigest()
+        existing = self._conn.execute(
+            "SELECT id FROM raw_announcements WHERE content_sha = ?", (sha,)
+        ).fetchone()
+        if existing:
+            return int(existing["id"])
+        cursor = self._conn.execute(
+            "INSERT INTO raw_announcements (source, content, content_sha)"
+            " VALUES (?, ?, ?)",
+            (source, content, sha),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def has_raw_content(self, content: str) -> bool:
+        """判断公告原文是否已在暂存面（内容指纹比对）。
+
+        Args:
+            content: 公告原文全文。
+
+        Returns:
+            已存在返回 ``True``。
+        """
+        sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        row = self._conn.execute(
+            "SELECT 1 FROM raw_announcements WHERE content_sha = ?", (sha,)
+        ).fetchone()
+        return row is not None
+
+    def pending_raws(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """取出待抽取的公告原文（含重试：状态仍为 pending 的失败件）。
+
+        Args:
+            limit: 最多返回条数；``None`` 表示全部。
+
+        Returns:
+            按 id 升序的记录列表（含 ``id`` / ``source`` / ``content``
+            / ``attempts``）。
+        """
+        query = (
+            "SELECT id, source, content, attempts FROM raw_announcements"
+            " WHERE status = 'pending' ORDER BY id ASC"
+        )
+        params: List[Any] = []
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        cursor = self._conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def mark_raw_extracted(self, raw_id: int, bid_id: str) -> None:
+        """标记公告原文抽取成功。
+
+        Args:
+            raw_id: raw_announcements 记录 id。
+            bid_id: 抽取得到的招标编号（关联 bids 表）。
+        """
+        self._conn.execute(
+            "UPDATE raw_announcements SET status = 'extracted', bid_id = ?,"
+            " error = NULL, attempts = attempts + 1,"
+            " updated_at = datetime('now', 'localtime') WHERE id = ?",
+            (bid_id, raw_id),
+        )
+        self._conn.commit()
+
+    def mark_raw_failed(self, raw_id: int, error: str) -> None:
+        """标记公告原文抽取失败（状态保持 pending——留待重试）。
+
+        Args:
+            raw_id: raw_announcements 记录 id。
+            error: 失败原因（逐字保留供人工排查）。
+        """
+        self._conn.execute(
+            "UPDATE raw_announcements SET status = 'pending', error = ?,"
+            " attempts = attempts + 1,"
+            " updated_at = datetime('now', 'localtime') WHERE id = ?",
+            (error, raw_id),
+        )
+        self._conn.commit()
+
+    def raw_stats(self) -> Dict[str, int]:
+        """raw 暂存面状态统计。
+
+        Returns:
+            含 ``total`` / ``pending`` / ``extracted`` 的计数字典。
+        """
+        cursor = self._conn.execute(
+            "SELECT status, COUNT(*) AS n FROM raw_announcements"
+            " GROUP BY status"
+        )
+        counts = {row["status"]: int(row["n"]) for row in cursor.fetchall()}
+        return {
+            "total": sum(counts.values()),
+            "pending": counts.get("pending", 0),
+            "extracted": counts.get("extracted", 0),
+        }
 
     # ------------------------------------------------------------------
     # 生命周期
