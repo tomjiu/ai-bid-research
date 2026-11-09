@@ -335,3 +335,21 @@ class TestReportGenerator:
         )
         content = path.read_text(encoding="utf-8")
         assert "数据来源：通用行业知识（未接入本地数据库）" in content
+
+
+class TestSaveReportCollision:
+    """同秒多次保存不互相覆盖（管道连续两轮运行的场景）。"""
+
+    def test_same_second_saves_do_not_overwrite(
+        self, generator: ReportGenerator
+    ) -> None:
+        first = generator._save_report("# 第一份", "collide")
+        second = generator._save_report("# 第二份", "collide")
+        assert first != second
+        assert first.read_text(encoding="utf-8") == "# 第一份"
+        assert second.read_text(encoding="utf-8") == "# 第二份"
+        # 第二份带序号后缀（同秒时）
+        if first.stem.endswith(
+            tuple(f"_{i}" for i in range(1, 10))
+        ) is False and second.stem.split("_")[-1].isdigit():
+            pass  # 同秒 → second 有 _N 后缀；跨秒 → 均无后缀，两者皆合法

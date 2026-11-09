@@ -256,16 +256,24 @@ class ReportGenerator:
     def _save_report(self, content: str, prefix: str) -> Path:
         """将报告内容保存为时间戳命名的 Markdown 文件。
 
+        同秒内多次保存（如连续两轮管道运行）时自动追加
+        ``_1``/``_2`` 序号防覆盖。
+
         Args:
             content: 报告 Markdown 文本。
             prefix: 文件名前缀（非法字符会被替换为下划线）。
 
         Returns:
-            保存的文件路径，形如 ``<prefix>_<YYYYMMDD_HHMMSS>.md``。
+            保存的文件路径，形如 ``<prefix>_<YYYYMMDD_HHMMSS>.md``
+            （冲突时 ``<prefix>_<YYYYMMDD_HHMMSS>_N.md``）。
         """
         safe_prefix = _UNSAFE_FILENAME_RE.sub("_", prefix).strip("_") or "report"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self.output_dir / f"{safe_prefix}_{timestamp}.md"
+        seq = 1
+        while path.exists():
+            path = self.output_dir / f"{safe_prefix}_{timestamp}_{seq}.md"
+            seq += 1
         path.write_text(content, encoding="utf-8")
         logger.info("报告已保存: %s", path)
         return path

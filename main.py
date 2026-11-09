@@ -18,6 +18,10 @@
     python main.py analyze --db data/bids.db
     python main.py analyze --db data/bids.db --keyword 智慧城市 --days 90 --html
 
+    # 研究管道：采集→抽取→分析→报告一条命令
+    python main.py pipeline --announcements ann/ --raw-texts raw/ --db data/bids.db
+    python main.py pipeline --announcements ann/ --dry-run   # 全链预演零副作用
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -63,6 +67,7 @@ from src.extract import (
 from src.extract.runner import resolve_raw_files
 from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
+from src.pipeline.runner import Pipeline
 from src.report.generator import ReportGenerator
 from src.storage.database import BidDatabase
 
@@ -245,6 +250,67 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("output/reports"),
         help=f"报告输出目录（默认 output/reports）",
+    )
+
+    # pipeline 子命令（#601 批次 D：管道整合）
+    pipeline = sub.add_parser(
+        "pipeline",
+        help="研究管道：采集→抽取→分析→报告一条命令",
+    )
+    pipeline.add_argument(
+        "--announcements",
+        type=Path,
+        default=None,
+        help="结构化公告源：.json/.jsonl 文件或目录（collect 阶段）",
+    )
+    pipeline.add_argument(
+        "--raw-texts",
+        type=Path,
+        default=None,
+        help="公告原文源：.txt 文件或目录（extract 阶段）",
+    )
+    pipeline.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"研究工作区数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    pipeline.add_argument(
+        "--keyword",
+        default=None,
+        help="analyze 数据集过滤：项目名/编号关键词",
+    )
+    pipeline.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="analyze 数据集过滤：只统计近 N 天发布",
+    )
+    pipeline.add_argument(
+        "--region",
+        default=None,
+        help="analyze 数据集过滤：地区子串",
+    )
+    pipeline.add_argument(
+        "--title",
+        default="招标数据分析报告",
+        help="报告标题",
+    )
+    pipeline.add_argument(
+        "--html",
+        action="store_true",
+        help="报告同时导出 HTML",
+    )
+    pipeline.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/reports"),
+        help="报告输出目录（默认 output/reports）",
+    )
+    pipeline.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="全链预演：各阶段只统计将做什么，零副作用",
     )
 
     # db 子命令
@@ -551,6 +617,71 @@ def run_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_pipeline(args: argparse.Namespace) -> int:
+    """执行 pipeline 子命令：四阶段研究管道。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 全部阶段成功；1 存在失败阶段；2 数据库不存在）。
+    """
+    db_path: Path = args.db
+    if not db_path.exists() and not (
+        args.announcements or args.raw_texts or args.dry_run
+    ):
+        # 无源输入且库不存在——不可能产出任何数据
+        print(
+            f"错误：数据库不存在且未指定任何源: {db_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    with BidDatabase(db_path) as db:
+        pipeline = Pipeline(db, output_dir=args.output_dir)
+        run = pipeline.run(
+            announcements=args.announcements,
+            raw_texts=args.raw_texts,
+            keyword=args.keyword,
+            days=args.days,
+            region=args.region,
+            title=args.title,
+            html=args.html,
+            dry_run=args.dry_run,
+        )
+
+    print(run.format_summary())
+    for stage in run.stages:
+        summary = stage.summary
+        if stage.name == "collect":
+            print(
+                f"    collect：读取 {summary.get('files_read', 0)} 文件，"
+                f"新增 {summary.get('new', 0)}，"
+                f"更新 {summary.get('update', 0)}，"
+                f"重复跳过 {summary.get('skip_duplicate', 0)}"
+            )
+        elif stage.name == "extract":
+            print(
+                f"    extract：读取 {summary.get('files_read', 0)} 文件，"
+                f"新入 {summary.get('saved', 0)}，"
+                f"处理 {summary.get('processed', 0)}，"
+                f"成功 {summary.get('extracted', 0)}，"
+                f"失败 {summary.get('failed', 0)}（保持 pending 可重试）"
+            )
+        elif stage.name == "analyze":
+            if stage.ok:
+                print(
+                    f"    analyze：数据集 {summary.get('total', 0)} 条"
+                    f"（已定标 {summary.get('awarded', 0)}）"
+                )
+        elif stage.name == "report":
+            if stage.ok and summary.get("markdown"):
+                print(f"    report：{summary['markdown']}")
+                if summary.get("html"):
+                    print(f"    report HTML：{summary['html']}")
+    return 0 if run.all_ok else 1
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -650,6 +781,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return asyncio.run(run_extract(args))
         if args.command == "analyze":
             return run_analyze(args)
+        if args.command == "pipeline":
+            return run_pipeline(args)
         if args.command == "db":
             return run_db(args)
         if args.command == "templates":
