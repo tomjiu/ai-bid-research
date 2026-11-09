@@ -182,8 +182,11 @@ class ReportGenerator:
         if self.db is not None:
             bid_rows = self.db.query_bids(keyword=keyword, days=days)  # type: ignore[union-attr]
             data_source = f"本地数据库 {len(bid_rows)} 条项目记录"
+            # #601 批次 F：LLM 叙述以计算统计为锚（防模型数字幻觉）——
+            # 先给已算好的事实块，再给清单；叙述不得与事实块冲突。
+            bid_list = self._grounding_block(keyword, days) or ""
             if bid_rows:
-                bid_list = "\n".join(
+                bid_list += "\n" + "\n".join(
                     f"- {row.get('publish_date') or '日期未知'} | "
                     f"{row.get('project_name')}（编号 {row.get('bid_id')}，"
                     f"预算 {row.get('budget') if row.get('budget') is not None else '未知'}，"
@@ -218,6 +221,50 @@ class ReportGenerator:
             f"{content}\n"
         )
         return self._save_report(report, prefix=f"competition_{keyword}")
+
+    def _grounding_block(self, keyword: str, days: int) -> str:
+        """构造 LLM 叙述的统计锚定块（#601 批次 F）。
+
+        用批次 C 的分析面（预算分位/密度/定标率）产出「已计算事实」，
+        叙述面声明这些数字为权威——模型只需解读，不需要自算
+        （自算正是数字幻觉的来源）。
+
+        Args:
+            keyword: 检索关键词。
+            days: 时间窗口。
+
+        Returns:
+            统计事实文本块；数据库无记录时为空串。
+        """
+        from src.analyze import build_analysis_payload, load_dataset
+
+        assert self.db is not None  # 调用方已判
+        dataset = load_dataset(self.db, keyword=keyword, days=days)
+        if dataset.is_empty:
+            return ""
+        payload = build_analysis_payload(dataset, keyword=keyword, days=days)
+        budget = payload["budget"]
+        density = payload["density"]
+
+        def _num(value):
+            return f"{value:,.1f}" if isinstance(value, (int, float)) else "——"
+
+        lines = [
+            "【已计算统计事实——以下数字为权威，叙述不得与之冲突】",
+            f"- 样本：{payload['record_count']} 条记录"
+            f"（数据完整度 {round((payload['complete_rate'] or 0) * 100, 1)}%）",
+            f"- 预算（万元）：中位 {_num(budget['median'])}，"
+            f"均值 {_num(budget['mean'])}，"
+            f"P25/P75 = {_num(budget['p25'])}/{_num(budget['p75'])}",
+            f"- 发布密度：{density['monthly_rate'] and round(density['monthly_rate'], 1)} 条/月"
+            f"（层级 {density['density_level']}）",
+            f"- 定标率：{density['award_rate'] and round(density['award_rate'] * 100, 1)}%",
+        ]
+        top_regions = list(payload["region"].items())[:3]
+        if top_regions:
+            region_txt = "、".join(f"{name} {count} 条" for name, count in top_regions)
+            lines.append(f"- 区域 Top3：{region_txt}")
+        return "\n".join(lines)
 
     def generate_analysis_report(
         self, analysis_payload: Dict[str, Any]
