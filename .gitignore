@@ -51,5 +51,10 @@ artifacts/real-corpus-e2e/latest/*/08_*
 .pytest_cache/
 output/
 
-# #565 渲染字体项目内放置位（SarasaMonoSC，OFL——不入库，CI/本地可放置；探测见 fixture_spec.resolve_render_font）
+# #563 Python 研究侧数据目录（SQLite 本地工作区，不入库）
+# 注意：data/fonts/ 是 #565 的渲染字体放置位（fixture_spec.resolve_render_font
+# 会在此查找 SarasaMonoSC）——data/ 整体忽略不影响该约定（字体本就不入库），
+# 但保留显式一行为后续想单独放行留口。
+data/
+!data/fonts/
 data/fonts/
