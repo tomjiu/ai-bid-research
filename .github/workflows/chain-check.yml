@@ -1,0 +1,239 @@
+name: chain-check
+
+# R-20（#561 v3）：run_tests.py 主链（T0-T19）CI 门——「主链红点零门禁信号」
+# （FG-04/FG-05）的落地收口。
+#
+# 版本史：
+#   · v1（PR#562）/ v2（PR#583）：被 #574 集成时移除——当时暴露 3 个既有欠账
+#     （T6 字体字节 / T11 环境面 / T19 超时裸崩）；
+#   · v3（本版，2026-11-09）：三欠账在 main 侧已收口后重建——
+#     - T6：根因 = CI 装错字体（ci-deps-v1 旧资产 v1.0.29 ≠ 冻结基线 v1.0.36，
+#       #570 结论）→ 本 workflow 钉版 v1.0.36 + sha256 逐字节校验；
+#     - T11：三通道梯 + 可观测性已随本 PR 入 main（m1/src/import.rs）；
+#     - T19：超时诊断 + T19_TIMEOUT_S 参数化已入 main（8c213c50 吸收），
+#       本 workflow 给足预算（T19_TIMEOUT_S=2400 + job 100min）。
+#
+# 覆盖面（T0-T19）：夹具完整性/埋点读回/判分器自测/确定性重生成/V1-V3
+# 验证/m1 并行线/M1.7 真实链/engine_diff/GT-25 评测/bidcore 全量测试。
+#
+# 与 linux-check.yml 的 T19/测试面重叠属已知——收敛路径（Lead 可后续裁定）：
+# linux-check 的 cargo test 步替换为 run_tests 调用或反之。本 workflow 不预合并。
+#
+# 纪律对齐：
+#   · 退出码直通——python3 直跑，不包 tee 不吞码（0 全绿 / 1 失败即红）；
+#   · mdcore deploy key 同款条件布置（T19 的 bidcore 构建需要）；
+#   · cache 镜像 #308 拆分（restore 前置 + save 后置显式步骤，双 target 面）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 3
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  # T19 预算（run_tests.py 侧参数化，默认 900）：冷缓存首跑编译面 40min+
+  # （run 42476501539 实证 900s 裸超时）——CI 侧给 2400s。
+  T19_TIMEOUT_S: "2400"
+
+jobs:
+  chain:
+    name: 主链 run_tests.py（T0-T19）
+    runs-on: ubuntu-latest
+    timeout-minutes: 100  # T19 2400s + 装件 + m1 构建 + T7 LO 渲染，60min 装不下
+    env:
+      # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
+      MD_CORE_DEPLOY_KEY: ${{ secrets.MD_CORE_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure mdcore read access (deploy key)
+        # T19（bidcore cargo test --workspace）需要 mdcore git 依赖——同款
+        # 只读 deploy key 布置；无 secret 时跳过（真门禁是 T19 的 cargo fetch）。
+        if: env.MD_CORE_DEPLOY_KEY != ''
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$MD_CORE_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git config --global url."git@github.com:mmqz/mdcore.git".insteadOf "https://github.com/mmqz/mdcore"
+          ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -T git@github.com 2>/dev/null || true
+          echo "ssh probe done（连通性以 T19 cargo fetch 为准）"
+
+      - name: Install external toolchain (poppler + tesseract + LibreOffice + 7z)
+        # T0b 外部解析引擎四件：pdftotext/pdftoppm（poppler）、tesseract、
+        # soffice（T7 V1 导出保真段的 LO headless 渲染）。p7zip-full 为
+        # Sarasa 字体上游兜底源的解包件。装后自检版本进日志（基线跨平台
+        # 核对的证据面）。
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            poppler-utils tesseract-ocr tesseract-ocr-chi-sim libreoffice p7zip-full
+          pdftotext -v
+          pdftoppm -v
+          tesseract --version | head -1
+          soffice --version
+          tesseract --list-langs 2>/dev/null | grep chi_sim
+
+      - name: Install gtk/webkit dev (T19 mang-app 构建件)
+        # T19 跑 cargo test --workspace（含 mang-app）——tao/wry Linux 后端
+        # 需要 gtk+-3.0 / webkit2gtk-4.1 dev 包。
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+          pkg-config --exists gtk+-3.0 || { echo "::error::gtk+-3.0 dev 缺失"; exit 1; }
+          pkg-config --exists webkit2gtk-4.1 || { echo "::error::webkit2gtk-4.1 dev 缺失"; exit 1; }
+
+      - name: Restore chi_sim cache (~/.tessdata)
+        # #567 教训：tessdata_fast raw CDN 曾持续 504（2026-11-08 实测），
+        # 直连无缓存无重试会随机红 T0c/T4c-OCR。三源梯：缓存 → mdcore
+        # 自建镜像（ci-deps-v1，字节钉版 sha256）→ 上游 tessdata_fast。
+        id: cache-tessdata
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          path: ~/.tessdata/chi_sim.traineddata
+          key: chain-tessdata-chi-sim-a5fcb6f0
+
+      - name: Install chi_sim to ~/.tessdata (解跳 T0c/T4c-OCR)
+        # 脚本侧（run_tests.py T0c/T4c）的探测口径是 ~/.tessdata/（与
+        # bid-parse env_preflight::tessdata_dir 同口径：TESSDATA_PREFIX 优先，
+        # 否则用户主目录）。系统级 tesseract-ocr-chi-sim 不在该口径上。
+        # mdcore 镜像字节 = tessdata_fast chi_sim（sha256 a5fcb6f0…，钉版
+        # 校验——供应链面：语言数据被换 = OCR 判定漂移）。
+        if: steps.cache-tessdata.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.tessdata
+          if curl -fsSL --retry 3 --retry-delay 5 -o ~/.tessdata/chi_sim.traineddata \
+              "https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/chi_sim.traineddata" \
+              && echo "a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730  ~/.tessdata/chi_sim.traineddata" | sha256sum -c -; then
+            echo "chi_sim 就位（mdcore 镜像，sha256 钉版校验通过）"
+          else
+            echo "::warning::mdcore 镜像未达——回退上游 tessdata_fast（无官方 sha 清单，可加载性即验）"
+            curl -fsSL --retry 3 --retry-delay 5 -o ~/.tessdata/chi_sim.traineddata \
+              "https://github.com/tesseract-ocr/tessdata_fast/raw/main/chi_sim.traineddata"
+          fi
+          ls -la ~/.tessdata/
+          # 可加载性断言（镜像/上游两态都过这道）
+          tesseract --list-langs 2>&1 | grep -q chi_sim || {
+            echo "::error::~/.tessdata/chi_sim.traineddata 不可加载"; exit 1; }
+          echo "chi_sim 就位——T0c/T4c-OCR 解跳"
+
+      - name: Save chi_sim cache
+        if: always() && steps.cache-tessdata.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          path: ~/.tessdata/chi_sim.traineddata
+          key: chain-tessdata-chi-sim-a5fcb6f0
+
+      - name: Install Python pinned six + numpy (fixtures-requirements 口径)
+        # T0a 钉版六包（版本漂移 = 确定性回归隐患源，T6/T13 依赖）。
+        # numpy（#565）：T4c-OCR 像素层分析（fitz pixmap → numpy）——非确定性面，
+        # 缺件时 run_tests.py T0a-numpy 登记并 SKIP T4c-OCR（这里真装让它真跑）。
+        run: |
+          python3 -m pip install --quiet \
+            python-docx==1.2.0 reportlab==4.4.9 openpyxl==3.1.5 \
+            Pillow==11.3.0 pdfplumber==0.11.9 pymupdf==1.26.7 numpy==2.1.3
+
+      - name: Restore SarasaMonoSC font cache
+        # 25MB 字体每跑重下太浪费——缓存键内嵌 sha256（换版即失效）。
+        id: cache-sarasa
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          path: /tmp/chain-fonts/SarasaMonoSC-Regular.ttf
+          key: chain-sarasa-mono-sc-v1.0.36-d604b02e
+
+      - name: Install SarasaMonoSC font (v1.0.36 hinted —— T0d/T6/T7 钉版字体)
+        # #570 根因对策：夹具生成冻结基线的字体字节 = v1.0.36 hinted
+        # （sha256 d604b02e…）。旧 ci-deps-v1 的 SarasaMonoSC-Regular.ttf 资产
+        # 是 v1.0.29（507add5a…）——CI 装错版本正是 T6 三件 SHA 漂移的唯一
+        # 根因（run 42472257021）。本步骤三重保证：
+        #   · 双源：mdcore ci-deps-v1 版本化资产（SarasaMonoSC-Regular-v1.0.36.ttf，
+        #     2026-11-09 上传，字节 = d604b02e…）→ 上游 be5invis v1.0.36 7z 兜底；
+        #   · sha256 逐字节校验（供应链 + 确定性双面：字体被换 = T6 必红）；
+        #   · PIL 可加载性自检（半截文件直接拒）。
+        if: steps.cache-sarasa.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/chain-fonts
+          if curl -fsSL --retry 3 --retry-delay 5 -o /tmp/chain-fonts/SarasaMonoSC-Regular.ttf \
+              "https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/SarasaMonoSC-Regular-v1.0.36.ttf" \
+              && echo "d604b02e7fa3c2d21cdf0cc122656b6f843fe8e520d8934bed44760854577473  /tmp/chain-fonts/SarasaMonoSC-Regular.ttf" | sha256sum -c -; then
+            echo "SarasaMonoSC v1.0.36 就位（mdcore 镜像，sha256 钉版校验通过）"
+          else
+            echo "::warning::mdcore 镜像未达——回退上游 be5invis v1.0.36（同 sha256 校验）"
+            curl -fsSL --retry 3 --retry-delay 5 -o /tmp/sarasa-mono-sc.7z \
+              "https://github.com/be5invis/Sarasa-Gothic/releases/download/v1.0.36/SarasaMonoSC-TTF-1.0.36.7z"
+            7z e -y -o/tmp/sarasa-ext /tmp/sarasa-mono-sc.7z SarasaMonoSC-Regular.ttf >/dev/null
+            mv /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf /tmp/chain-fonts/SarasaMonoSC-Regular.ttf
+            echo "d604b02e7fa3c2d21cdf0cc122656b6f843fe8e520d8934bed44760854577473  /tmp/chain-fonts/SarasaMonoSC-Regular.ttf" \
+              | sha256sum -c - || { echo "::error::SarasaMonoSC-Regular.ttf sha256 不符（v1.0.36 hinted 基线 d604b02e…）"; exit 1; }
+          fi
+
+      - name: Place font + loadability self-check
+        # 落位钉版探测路径 /usr/share/fonts/truetype/chinese/（fixture_spec
+        # resolve_render_font 三级探测的第三级；BID_RENDER_FONT / data/fonts
+        # 留作本地覆盖面，不动）。
+        run: |
+          sudo mkdir -p /usr/share/fonts/truetype/chinese
+          sudo cp /tmp/chain-fonts/SarasaMonoSC-Regular.ttf /usr/share/fonts/truetype/chinese/
+          ls -la /usr/share/fonts/truetype/chinese/
+          python3 -c "from PIL import ImageFont; f=ImageFont.truetype('/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf', 20); print('SarasaMonoSC v1.0.36 可加载——T0d/T6/T7 解跳')"
+
+      - name: Save SarasaMonoSC font cache
+        if: always() && steps.cache-sarasa.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          path: /tmp/chain-fonts/SarasaMonoSC-Regular.ttf
+          key: chain-sarasa-mono-sc-v1.0.36-d604b02e
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cargo cache (#308 拆分——bidcore 与 m1 双 target 面)
+        id: cache-cargo
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            bidcore/target/
+            m1/target/
+          key: Chain-cargo-${{ hashFiles('bidcore/Cargo.lock', 'm1/Cargo.lock') }}
+          restore-keys: |
+            Chain-cargo-
+
+      - name: run_tests.py 主链直跑（T0-T19，退出码即门禁）
+        # 不包 tee、不经管道——python3 的退出码直接决定步骤红绿（0 全绿 /
+        # 1 存在失败）。环境缺件按 issue #9 机制 SKIP（横幅 + 汇总行单列），
+        # 不计失败；SKIP 数异常增多时看日志定位装件缺口。
+        run: python3 scripts/run_tests.py
+
+      - name: Save cargo cache (#308 收尾——save 独立后置)
+        if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            bidcore/target/
+            m1/target/
+          key: Chain-cargo-${{ hashFiles('bidcore/Cargo.lock', 'm1/Cargo.lock') }}
