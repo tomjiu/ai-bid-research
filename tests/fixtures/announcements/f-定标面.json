@@ -1,0 +1,47 @@
+[
+  {
+    "bid_id": "FX-07",
+    "project_name": "智慧水务运维服务",
+    "region": "浙江省 杭州市",
+    "budget": 127.0,
+    "publish_date": "2026-09-05",
+    "purchaser": "某水务集团",
+    "winner": "甲水务科技公司"
+  },
+  {
+    "bid_id": "FX-08",
+    "project_name": "智慧水务运维服务",
+    "region": "浙江省 杭州市",
+    "budget": 128.0,
+    "publish_date": "2026-09-20",
+    "purchaser": "某水务集团",
+    "winner": "甲水务科技公司"
+  },
+  {
+    "bid_id": "FX-09",
+    "project_name": "智慧水务运维服务",
+    "region": "浙江省 杭州市",
+    "budget": 129.0,
+    "publish_date": "2026-10-08",
+    "purchaser": "某水务集团",
+    "winner": "甲水务科技公司"
+  },
+  {
+    "bid_id": "FX-10",
+    "project_name": "智慧水务运维服务",
+    "region": "浙江省 杭州市",
+    "budget": 130.0,
+    "publish_date": "2026-10-22",
+    "purchaser": "某水务集团",
+    "winner": "甲水务科技公司"
+  },
+  {
+    "bid_id": "FX-11",
+    "project_name": "智慧水务运维服务",
+    "region": "浙江省 杭州市",
+    "budget": 131.0,
+    "publish_date": "2026-11-03",
+    "purchaser": "某水务集团",
+    "winner": "甲水务科技公司"
+  }
+]

@@ -5,6 +5,20 @@
 
 用法示例::
 
+    # 从本地源采集公告（JSON/JSONL 文件或目录）→ 规范化 → 去重 → 入库
+    python main.py collect --source announcements/ --dry-run
+    python main.py collect --source announcements/ --db data/bids.db
+
+    # 结构化抽取：公告原文 → LLM → 合并入库（失败自动登记 pending 可重试）
+    python main.py extract --source announcements/ --db data/bids.db
+    python main.py extract --retry --db data/bids.db    # 重试此前失败的公告
+
+    # 领域数据分析（离线纯数据报告：预算/区域/趋势/关键词/密度）
+    python main.py analyze --db data/bids.db --keyword 智慧城市 --days 90 --html
+
+    # 研究管道全链：采集→抽取→分析→报告一条命令（增量模式只读新文件）
+    python main.py pipeline --source announcements/ --db data/bids.db --incremental --html
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -31,8 +45,10 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
+from src.collect import dedupe_records, load_records
+from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
 from src.report.generator import ReportGenerator
 from src.storage.database import BidDatabase
@@ -102,6 +118,171 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # collect 子命令（#601 批次 A：采集面）
+    collect = sub.add_parser(
+        "collect",
+        help="从本地源采集公告（JSON/JSONL）→ 规范化 → 去重 → 入库",
+    )
+    collect.add_argument(
+        "--source",
+        type=Path,
+        required=True,
+        help=(
+            "公告源路径：.json/.jsonl 文件，或包含它们的目录"
+            "（目录源按文件名排序装载）"
+        ),
+    )
+    collect.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"目标数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    collect.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="演练模式：装载+去重+打印报告，但不写库",
+    )
+    collect.add_argument(
+        "--strict",
+        action="store_true",
+        help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
+    )
+
+    # extract 子命令（#601 批次 B：抽取面）
+    extract = sub.add_parser(
+        "extract",
+        help="公告结构化抽取：原文 → LLM → 合并入库（失败进 pending 待重试）",
+    )
+    extract.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help=(
+            "公告源路径（.json/.jsonl 文件或目录）：装载→去重→抽取→入库；"
+            "不指定时须 --retry"
+        ),
+    )
+    extract.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"目标数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    extract.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="离线模式：不调 LLM，结构化源直通入库（无 API key 时自动降级）",
+    )
+    extract.add_argument(
+        "--retry",
+        action="store_true",
+        help="重试 pending 面的待处理公告（需 API key；不处理新源）",
+    )
+    extract.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="重试条数上限（--retry 模式）",
+    )
+    extract.add_argument(
+        "--strict",
+        action="store_true",
+        help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
+    )
+
+    # analyze 子命令（#601 批次 C：分析面）
+    analyze = sub.add_parser(
+        "analyze",
+        help="领域数据分析：预算/区域/趋势/关键词/密度 → 纯数据报告（离线）",
+    )
+    analyze.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"研究工作区数据库（默认 {DEFAULT_DB_PATH}）",
+    )
+    analyze.add_argument(
+        "--keyword",
+        default=None,
+        help="领域关键词过滤（与 db --query 同口径；缺省 = 全量）",
+    )
+    analyze.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="时间窗口（天；缺省 = 不限）",
+    )
+    analyze.add_argument(
+        "--html",
+        action="store_true",
+        help="报告落盘后同时导出 HTML",
+    )
+    analyze.add_argument(
+        "--compare",
+        default=None,
+        help="领域对照模式：逗号分隔 ≥2 个关键词（如 --compare 智慧城市,政务云）",
+    )
+    analyze.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/reports"),
+        help="报告输出目录（默认 output/reports）",
+    )
+
+    # pipeline 子命令（#601 批次 D：全链编排）
+    pipeline = sub.add_parser(
+        "pipeline",
+        help=(
+            "研究管道全链：采集→抽取→分析→报告一条命令"
+            "（每阶段状态可见，失败降级不静默）"
+        ),
+    )
+    pipeline.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="公告源路径；缺省时只分析既有库（跳过采集/抽取）",
+    )
+    pipeline.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"研究工作区数据库（默认 {DEFAULT_DB_PATH}）",
+    )
+    pipeline.add_argument(
+        "--keyword",
+        default=None,
+        help="分析/报告关键词口径",
+    )
+    pipeline.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="分析/报告时间窗口（天）",
+    )
+    pipeline.add_argument(
+        "--incremental",
+        action="store_true",
+        help="增量模式：只读上次成功运行后的新文件（水位见 pipeline_runs）",
+    )
+    pipeline.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="离线模式：跳过 LLM 抽取阶段",
+    )
+    pipeline.add_argument(
+        "--html",
+        action="store_true",
+        help="报告落盘后同时导出 HTML",
+    )
+    pipeline.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/reports"),
+        help="报告输出目录（默认 output/reports）",
+    )
+
     # db 子命令
     db = sub.add_parser(
         "db", help="招标信息数据库管理（导入/统计）"
@@ -127,6 +308,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     db.add_argument(
         "--days", type=int, default=None, help="查询回溯天数（配合 --query）"
+    )
+    db.add_argument(
+        "--pending",
+        action="store_true",
+        help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
+    )
+    db.add_argument(
+        "--pending-stats",
+        action="store_true",
+        help="pending 面统计（按状态/原因分组）",
     )
 
     # templates 子命令
@@ -220,6 +411,326 @@ async def run_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_collect(args: argparse.Namespace) -> int:
+    """执行 collect 子命令：装载 → 去重 → 入库。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 源不可读/严格模式下遇到坏数据）。
+    """
+    try:
+        loaded = load_records(args.source, skip_invalid=not args.strict)
+    except (SourceError, ValueError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+    deduped = dedupe_records(loaded.records)
+
+    print(f"源装载：读取 {loaded.files_read} 个文件，"
+          f"成功 {len(loaded.records)} 条，失败 {len(loaded.failures)} 条")
+    for failure in loaded.failures:
+        print(f"  ✗ {failure['origin']}: {failure['error']}")
+    print(f"去重：去除 {deduped.removed} 条重复"
+          f"（bid_id {deduped.by_bid_id} / 链接 {deduped.by_source_url}"
+          f" / 指纹 {deduped.by_fingerprint}），"
+          f"待入库 {len(deduped.unique)} 条")
+    for dup in deduped.duplicates:
+        print(f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件（{dup['reason']}）")
+
+    if args.dry_run:
+        print("演练模式：未写库（--dry-run）")
+        return 0
+
+    with BidDatabase(args.db) as db:
+        saved = db.import_bids([r.to_bid_row() for r in deduped.unique])
+    print(f"已入库 {saved} 条 → {args.db}")
+    return 0
+
+
+def _build_llm_client_or_none() -> Optional[Any]:
+    """构造 LLM 客户端；无环境 key 时返回 None（降级为离线直通）。
+
+    Returns:
+        LLM 客户端；或 None（未检测到 DEEPSEEK_API_KEY/OPENAI_API_KEY）。
+    """
+    import os
+
+    from src.llm.client import LLMClient
+
+    if not (os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        print(
+            "警告：未检测到 DEEPSEEK_API_KEY/OPENAI_API_KEY——"
+            "降级为离线直通模式（等价 --no-llm）"
+        )
+        return None
+    return LLMClient()
+
+
+def run_extract(args: argparse.Namespace) -> int:
+    """执行 extract 子命令：装载→去重→抽取→合并入库（失败进 pending）。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 源不可读/--retry 无 key）。
+    """
+    from src.extract import (
+        REASON_LLM_ERROR,
+        REASON_REJECTED,
+        STATUS_REJECTED,
+        AnnouncementExtractor,
+        park_record_failure,
+    )
+
+    # --retry 模式：重试 pending 面（需真实 API key）
+    if args.retry:
+        client = _build_llm_client_or_none()
+        if client is None:
+            print("错误：--retry 需要真实 LLM（设 DEEPSEEK_API_KEY）", file=sys.stderr)
+            return 2
+        report = asyncio.run(
+            _retry_with_client(args.db, client, args.limit)
+        )
+        print(
+            f"重试完成：尝试 {report.attempted} 条，"
+            f"resolved {report.resolved} 条，"
+            f"仍待处理 {report.still_pending} 条，"
+            f"载荷损坏 {report.skipped_rebuild} 条"
+        )
+        for detail in report.details:
+            print(f"  · {detail['fingerprint']}: {detail['result']}")
+        return 0
+
+    # 抽取模式：装载→去重→抽取→入库
+    if args.source is None:
+        print("错误：需要 --source 或 --retry", file=sys.stderr)
+        return 2
+    try:
+        loaded = load_records(args.source, skip_invalid=not args.strict)
+    except (SourceError, ValueError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+    deduped = dedupe_records(loaded.records)
+    print(f"源装载：读取 {loaded.files_read} 个文件，"
+          f"成功 {len(loaded.records)} 条，失败 {len(loaded.failures)} 条；"
+          f"去重后待抽取 {len(deduped.unique)} 条")
+
+    client = None if args.no_llm else _build_llm_client_or_none()
+    extractor = AnnouncementExtractor(client)
+    batch = asyncio.run(extractor.extract_batch(deduped.unique))
+
+    llm_count = sum(1 for o in batch.outcomes if o.used_llm)
+    print(f"抽取完成：LLM {llm_count} 条 / 直通 "
+          f"{len(batch.outcomes) - llm_count} 条 / 失败 {len(batch.failures)} 条")
+
+    record_map = {r.bid_id: r for r in deduped.unique}
+    parked = 0
+    with BidDatabase(args.db) as db:
+        # 逐条按 bid_id 映射入库（抽取失败的记录不在 outcomes 里，
+        # 不能与源记录按位置配对——失败面走下方 pending 登记）
+        from src.extract import (
+            STATUS_STORED,
+            BatchStoreResult,
+            apply_extraction,
+        )
+
+        store_result = BatchStoreResult()
+        for outcome in batch.outcomes:
+            record = record_map.get(outcome.bid_id)
+            if record is None:
+                continue
+            store_result.outcomes.append(
+                apply_extraction(db, outcome, record.to_bid_row())
+            )
+        stored_count = sum(
+            1 for o in store_result.outcomes if o.status == STATUS_STORED
+        )
+        rejected_count = len(store_result.outcomes) - stored_count
+        # LLM 失败 → pending（原文随载荷保留，可 --retry）
+        for failure in batch.failures:
+            record = record_map.get(failure["bid_id"])
+            if record is not None:
+                park_record_failure(
+                    db,
+                    record,
+                    REASON_LLM_ERROR,
+                    raw_text=(
+                        record.extras.get("content")
+                        or record.extras.get("公告原文")
+                    ),
+                    error=failure["error"],
+                )
+                parked += 1
+        # 校验拒收 → pending（防御面：不静默丢）
+        for outcome in store_result.outcomes:
+            if outcome.status == STATUS_REJECTED and outcome.bid_id:
+                record = record_map.get(outcome.bid_id)
+                if record is not None:
+                    park_record_failure(
+                        db,
+                        record,
+                        REASON_REJECTED,
+                        raw_text=(
+                            record.extras.get("content")
+                            or record.extras.get("公告原文")
+                        ),
+                        error="缺必填字段: " + ",".join(outcome.missing_required),
+                        hit_rate=outcome.hit_rate,
+                    )
+                    parked += 1
+        pending = db.pending_stats()
+
+    print(f"入库：成功 {stored_count} 条 / 拒收 "
+          f"{rejected_count} 条；本次登记 pending {parked} 条")
+    print(f"pending 面：待处理 {pending['pending']} 条"
+          f"（按原因：{pending['by_reason'] or '无'}）")
+    return 0
+
+
+async def _retry_with_client(db_path, client, limit):
+    """重试 pending 面并在结束时关闭客户端。"""
+    from src.extract import AnnouncementExtractor, retry_pending
+
+    try:
+        with BidDatabase(db_path) as db:
+            return retry_pending(db, AnnouncementExtractor(client), limit=limit)
+    finally:
+        await client.close()
+
+
+def run_analyze(args: argparse.Namespace) -> int:
+    """执行 analyze 子命令：数据集 → 分析面 → 纯数据报告。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常——空数据集也 0，报告会如实说明缺口）。
+    """
+    from src.analyze import (
+        build_analysis_payload,
+        build_comparison_payload,
+        load_dataset,
+    )
+
+    if args.compare:
+        keywords = [k for k in args.compare.split(",") if k.strip()]
+        try:
+            comparison = build_comparison_payload(
+                args.db, keywords, days=args.days
+            )
+        except ValueError as exc:
+            print(f"错误：{exc}", file=sys.stderr)
+            return 2
+        generator = ReportGenerator(output_dir=args.output_dir)
+        report_path = generator.generate_comparison_report(comparison)
+        print(f"对照报告已生成: {report_path}")
+        if args.html:
+            print(f"HTML 已导出: {generator.export_html(report_path)}")
+        return 0
+
+    dataset = load_dataset(
+        args.db, keyword=args.keyword, days=args.days
+    )
+    payload = build_analysis_payload(
+        dataset, keyword=args.keyword, days=args.days
+    )
+
+    scope = f"「{args.keyword}」" if args.keyword else "全量"
+    print(f"分析数据集：{scope} {len(dataset)} 条记录"
+          f"（完整度 {payload['complete_rate'] and round(payload['complete_rate'] * 100, 1) or 0}%）")
+    if not dataset.is_empty:
+        budget = payload["budget"]
+        density = payload["density"]
+        print(f"预算：中位 {budget['median'] and round(budget['median'], 1)} 万元，"
+              f"均值 {budget['mean'] and round(budget['mean'], 1)} 万元"
+              f"（有效 {budget['count']} 条）")
+        print(f"密度：{density['density_level']}"
+              f"（{density['monthly_rate'] and round(density['monthly_rate'], 1)} 条/月，"
+              f"定标率 {density['award_rate'] and round(density['award_rate'] * 100, 1) or 0}%）")
+
+    generator = ReportGenerator(output_dir=args.output_dir)
+    report_path = generator.generate_analysis_report(payload)
+    print(f"报告已生成: {report_path}")
+    if args.html:
+        html_path = generator.export_html(report_path)
+        print(f"HTML 已导出: {html_path}")
+    return 0
+
+
+def run_pipeline(args: argparse.Namespace) -> int:
+    """执行 pipeline 子命令：全链编排 + 阶段报告。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 源不可读——起步硬错）。
+    """
+    from src.extract import AnnouncementExtractor
+    from src.pipeline import ResearchPipeline
+
+    extractor = None
+    if args.source is not None and not args.no_llm:
+        client = _build_llm_client_or_none()
+        if client is not None:
+            extractor = AnnouncementExtractor(client)
+
+    pipeline = ResearchPipeline(
+        args.db, extractor=extractor, output_dir=args.output_dir
+    )
+    try:
+        result = pipeline.run(
+            args.source,
+            keyword=args.keyword,
+            days=args.days,
+            html=args.html,
+            incremental=args.incremental,
+        )
+    except SourceError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+    for stage in result.stages:
+        detail = stage.detail
+        if stage.status == "skipped":
+            # 任何阶段的跳过都有 reason（不静默——空转也要说清楚为什么）
+            line = f"跳过：{detail.get('reason', '（无原因记录）')}"
+        elif stage.name == "collect":
+            line = (
+                f"读取 {detail['files_read']} 文件，装载 {detail['loaded']} 条"
+                f"（新 {detail['new']} / 更新 {detail['updated']}），"
+                f"去重 {detail['deduped']}，失败 {len(stage.failures)}"
+            )
+        elif stage.name == "extract":
+            line = (
+                f"抽取 {detail['extracted']} 条"
+                f"（入库 {detail['stored']} / LLM 失败 {detail['llm_failures']}"
+                f" → pending {detail['parked']}）"
+            )
+        elif stage.name == "analyze":
+            rate = detail.get("complete_rate")
+            rate_txt = f"，完整度 {round(rate * 100, 1)}%" if rate else ""
+            line = f"{detail['records']} 条记录{rate_txt}"
+        else:  # report
+            line = f"报告 → {detail['path']}"
+        print(f"[{stage.name}] {stage.status}: {line}")
+        for failure in stage.failures:
+            print(f"  ✗ {failure['origin']}: {failure['error']}")
+
+    if result.report_path is not None:
+        print(f"\n报告已生成: {result.report_path}")
+        if args.html and result.payload and result.payload.get("_html_path"):
+            print(f"HTML 已导出: {result.payload['_html_path']}")
+    if result.run_id is not None:
+        print(f"运行已登记：run #{result.run_id}（pipeline_runs 台账）")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -264,12 +775,47 @@ def run_db(args: argparse.Namespace) -> int:
                     f"中标人：{row['winner'] or '未开标'}）"
                 )
 
-        if args.stats or (args.import_file is None and not args.query):
-            stats = db.stats()
+        if args.pending:
+            rows = db.list_pending(limit=50)
+            print(f"pending 面待处理 {len(rows)} 条（最近 50 条）：")
+            for row in rows:
+                print(
+                    f"  [{row['reason']}] {row['bid_id'] or '（缺编号）'}"
+                    f" · 指纹 {row['fingerprint']}"
+                    f" · 原文 {'有' if row.get('raw_text') else '无'}"
+                    f" · {row.get('error') or '原因见 reason'}"
+                )
+
+        if args.pending_stats:
+            pending = db.pending_stats()
             print(
+                f"pending 统计：共 {pending['total']} 条"
+                f"（待处理 {pending['pending']} / "
+                f"已解决 {pending['resolved']} / 跳过 {pending['skipped']}）"
+            )
+            if pending["by_reason"]:
+                for reason, count in pending["by_reason"].items():
+                    print(f"  · {reason}: {count}")
+
+        if args.stats or (
+            args.import_file is None
+            and not args.query
+            and not args.pending
+            and not args.pending_stats
+        ):
+            stats = db.stats()
+            runs = db.pipeline_runs_list(limit=1)
+            line = (
                 f"数据库统计：共 {stats['total']} 条项目，"
                 f"其中 {stats['awarded']} 条已定中标人"
             )
+            if runs:
+                run = runs[0]
+                line += (
+                    f"｜最近管道运行 #{run['id']}（{run['status']}，"
+                    f"{run['started_at']}）"
+                )
+            print(line)
     return 0
 
 
@@ -312,6 +858,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "report":
         return asyncio.run(run_report(args))
+    if args.command == "collect":
+        return run_collect(args)
+    if args.command == "extract":
+        return run_extract(args)
+    if args.command == "analyze":
+        return run_analyze(args)
+    if args.command == "pipeline":
+        return run_pipeline(args)
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":

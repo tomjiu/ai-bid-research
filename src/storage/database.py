@@ -32,6 +32,38 @@ CREATE TABLE IF NOT EXISTS bids (
 );
 CREATE INDEX IF NOT EXISTS idx_bids_publish_date ON bids(publish_date);
 CREATE INDEX IF NOT EXISTS idx_bids_bid_id ON bids(bid_id);
+
+-- #601 批次 B：抽取失败/拒收公告的降级面（研究工作区，非生产）。
+-- 同件公告（指纹一致）只登记一次；重试成功后置 resolved。
+CREATE TABLE IF NOT EXISTS pending_announcements (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint  TEXT UNIQUE NOT NULL,
+    bid_id       TEXT,
+    raw_text     TEXT,
+    payload      TEXT,
+    reason       TEXT NOT NULL,
+    error        TEXT,
+    hit_rate     REAL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_announcements(status);
+
+-- #601 批次 D：研究管道运行台账（审计面——报告基于哪次运行的数据可追溯）
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at   TEXT NOT NULL,
+    finished_at  TEXT,
+    source       TEXT,
+    keyword      TEXT,
+    days         INTEGER,
+    watermark    REAL,
+    stages       TEXT,
+    report_path  TEXT,
+    status       TEXT NOT NULL DEFAULT 'running'
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started ON pipeline_runs(started_at DESC);
 """
 
 # 允许写入 bids 表的业务字段（requirements 以 JSON 文本存储）
@@ -229,6 +261,263 @@ class BidDatabase:
         )
         awarded = int(cursor.fetchone()[0])
         return {"total": total, "awarded": awarded}
+
+    # ------------------------------------------------------------------
+    # 降级面：pending_announcements（#601 批次 B）
+    # ------------------------------------------------------------------
+
+    def save_pending(
+        self,
+        fingerprint: str,
+        reason: str,
+        *,
+        bid_id: Optional[str] = None,
+        raw_text: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        hit_rate: Optional[float] = None,
+        status: str = "pending",
+    ) -> int:
+        """保存或更新一条待处理公告（按 fingerprint 幂等 upsert）。
+
+        Args:
+            fingerprint: 公告指纹（同件唯一键；原文流用原文 hash）。
+            reason: 登记原因（``llm_error`` / ``rejected`` / ``no_text``）。
+            bid_id: 招标编号（缺编号场景为 ``None``）。
+            raw_text: 公告原文（重试面需要）。
+            payload: 可重放的完整载荷（to_bid_row + extras + content）。
+            error: 失败详情（人读）。
+            hit_rate: 登记时的字段命中率快照。
+            status: ``pending`` / ``resolved`` / ``skipped``。
+
+        Returns:
+            受影响行数（1 成功）。
+        """
+        if not fingerprint or not str(fingerprint).strip():
+            raise KeyError("待处理公告缺少指纹（fingerprint）")
+        cursor = self._conn.execute(
+            """
+            INSERT INTO pending_announcements
+                (fingerprint, bid_id, raw_text, payload, reason, error,
+                 hit_rate, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(fingerprint) DO UPDATE SET
+                bid_id = excluded.bid_id,
+                raw_text = excluded.raw_text,
+                payload = excluded.payload,
+                reason = excluded.reason,
+                error = excluded.error,
+                hit_rate = excluded.hit_rate,
+                status = excluded.status,
+                updated_at = datetime('now', 'localtime')
+            """,
+            (
+                str(fingerprint),
+                bid_id,
+                raw_text,
+                json.dumps(payload, ensure_ascii=False)
+                if payload is not None
+                else None,
+                reason,
+                error,
+                hit_rate,
+                status,
+            ),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def list_pending(
+        self, status: str = "pending", limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """列出待处理公告（status 过滤）。
+
+        Args:
+            status: 状态过滤（默认 ``pending``）。
+
+        Returns:
+            记录字典列表（payload 已反序列化）。
+        """
+        cursor = self._conn.execute(
+            """
+            SELECT * FROM pending_announcements
+            WHERE status = ? ORDER BY created_at, id LIMIT ?
+            """,
+            (status, limit),
+        )
+        rows = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            if item.get("payload"):
+                try:
+                    item["payload"] = json.loads(item["payload"])
+                except (json.JSONDecodeError, TypeError):
+                    item["payload"] = None  # 损坏载荷不炸查询（#563 兕底口径）
+            rows.append(item)
+        return rows
+
+    def update_pending_status(
+        self, fingerprint: str, status: str, *, error: Optional[str] = None
+    ) -> int:
+        """更新待处理公告状态（重试成功 resolved / 人工 skipped）。
+
+        Args:
+            fingerprint: 公告指纹。
+            status: 新状态（``resolved`` / ``skipped`` / ``pending``）。
+            error: 可选——覆盖错误详情（重试仍失败时更新）。
+
+        Returns:
+            受影响行数（0 = 指纹不存在）。
+        """
+        cursor = self._conn.execute(
+            """
+            UPDATE pending_announcements
+            SET status = ?, error = COALESCE(?, error),
+                updated_at = datetime('now', 'localtime')
+            WHERE fingerprint = ?
+            """,
+            (status, error, str(fingerprint)),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def pending_stats(self) -> Dict[str, Any]:
+        """待处理公告统计（按 status 分组 + reason 分布）。
+
+        Returns:
+            ``{"total", "pending", "resolved", "skipped", "by_reason"}``。
+        """
+        cursor = self._conn.execute(
+            """
+            SELECT status, COUNT(*) AS c FROM pending_announcements
+            GROUP BY status
+            """
+        )
+        counts = {row["status"]: int(row["c"]) for row in cursor.fetchall()}
+        cursor = self._conn.execute(
+            """
+            SELECT reason, COUNT(*) AS c FROM pending_announcements
+            WHERE status = 'pending' GROUP BY reason
+            """
+        )
+        by_reason = {row["reason"]: int(row["c"]) for row in cursor.fetchall()}
+        return {
+            "total": sum(counts.values()),
+            "pending": counts.get("pending", 0),
+            "resolved": counts.get("resolved", 0),
+            "skipped": counts.get("skipped", 0),
+            "by_reason": by_reason,
+        }
+
+    def pipeline_runs_save(
+        self,
+        started_at: str,
+        *,
+        source: Optional[str] = None,
+        keyword: Optional[str] = None,
+        days: Optional[int] = None,
+        watermark: Optional[float] = None,
+    ) -> int:
+        """登记一次管道运行（running 态）——返回运行 ID。
+
+        Args:
+            started_at: 开始时刻（人读 ISO 字符串）。
+            source: 本次源路径。
+            keyword: 分析关键词。
+            days: 时间窗口。
+            watermark: 增量水位（epoch 浮点秒——亚秒精度，
+                与文件 mtime 同口径比较；人读时刻是秒级，
+                直接比对会有同秒竞态）。
+
+        Returns:
+            新运行行的 id（供 finish 用）。
+        """
+        cursor = self._conn.execute(
+            """
+            INSERT INTO pipeline_runs
+                (started_at, source, keyword, days, watermark, status)
+            VALUES (?, ?, ?, ?, ?, 'running')
+            """,
+            (started_at, str(source) if source else None, keyword, days,
+             watermark),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def pipeline_runs_finish(
+        self,
+        run_id: int,
+        *,
+        stages: Optional[List[Dict[str, Any]]] = None,
+        report_path: Optional[str] = None,
+        status: str = "done",
+    ) -> int:
+        """收口一次运行（stages JSON + 报告路径 + 状态）。
+
+        Args:
+            run_id: :meth:`pipeline_runs_save` 返回的运行 ID。
+            stages: 各阶段结果（name/status/detail 序列化面）。
+            report_path: 报告文件路径。
+            status: ``done`` / ``failed``。
+
+        Returns:
+            受影响行数。
+        """
+        cursor = self._conn.execute(
+            """
+            UPDATE pipeline_runs
+            SET finished_at = datetime('now', 'localtime'),
+                stages = ?, report_path = ?, status = ?
+            WHERE id = ?
+            """,
+            (
+                json.dumps(stages, ensure_ascii=False, default=str)
+                if stages is not None
+                else None,
+                report_path,
+                status,
+                run_id,
+            ),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def pipeline_runs_list(
+        self, *, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """列出最近 N 次运行（新在前，stages 已反序列化）。"""
+        cursor = self._conn.execute(
+            "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            if item.get("stages"):
+                try:
+                    item["stages"] = json.loads(item["stages"])
+                except (json.JSONDecodeError, TypeError):
+                    item["stages"] = None  # 损坏兜底（#563 口径）
+            rows.append(item)
+        return rows
+
+    def pipeline_runs_last(self, *, status: str = "done") -> Optional[Dict[str, Any]]:
+        """最近一次指定状态的运行（增量水位的时序基础）。"""
+        cursor = self._conn.execute(
+            "SELECT * FROM pipeline_runs WHERE status = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (status,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        if item.get("stages"):
+            try:
+                item["stages"] = json.loads(item["stages"])
+            except (json.JSONDecodeError, TypeError):
+                item["stages"] = None
+        return item
 
     # ------------------------------------------------------------------
     # 生命周期

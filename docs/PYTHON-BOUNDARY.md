@@ -2,7 +2,7 @@
 
 > **定性：选项 A——独立研究工具（非生产链路）。**
 > 本文件是 Python 侧模块与 Rust bid 链路职责边界的**唯一真源**。
-> 创建于 #563；最后更新 2026-11-08。
+> 创建于 #563；最后更新 2026-11-09（#601 研究管道四包收录）。
 
 ---
 
@@ -16,6 +16,9 @@
 · 无状态机、无版本管理、无审核门（对比 Rust P0-P8 链路）
 · SQLite 为本地研究工作区文件，不是服务、不入库（.gitignore 钉死）
 · CI 独立（python-tests.yml 只跑 pytest，不接入 bid 的 4 项检查）
+· 研究管道（#601）：collect/extract/analyze/pipeline 四包同属研究面——
+  采集默认本地文件源（离线可测），LLM 抽取失败降级 pending 不阻塞，
+  分析产物是启发式估算，全部不回流生产链路
 ```
 
 **若未来要转成生产链路辅助工具（选项 B）**，必须先修订本文件并满足：
@@ -31,6 +34,15 @@
 | `src/llm/client.py`（LLM 调用封装） | `bid-tools` 的 LLM 面 | **各自独立，互不调用** | Python 封装只服务研究脚本；生产 LLM 调用一律走 Rust bid-tools |
 | `src/report/generator.py`（Markdown/HTML 报告） | `export_bid_document`（DOCX/PDF） | **Rust export** | Python 报告是研究快照（Markdown/HTML），非投标交付物；正式投标文件导出只在 Rust 侧 |
 | `src/llm/prompts.py`（提示词模板） | bid-tools 的提示词（如有） | **各自独立** | 研究提示词与生产提示词分开演进，不共享 |
+
+**研究管道模块（#601 新增，同样是非生产研究面）**：
+
+| Python 模块 | 职责 | 边界说明 |
+|---|---|---|
+| `src/collect/`（采集面） | 本地源（JSON/JSONL）装载→规范化→三级去重 | 默认离线本地文件源，**不内置生产级网络爬虫**；`AnnouncementRecord` 是管道唯一规范化入口 |
+| `src/extract/`（抽取面） | 公告原文→LLM 结构化抽取→schema 校验→合并入库；失败进 `pending_announcements` 降级面可重试 | 抽取走研究提示词（`PromptTemplates.bid_extraction`）；「LLM 补全不覆盖」——源字段强证据，模型只填缺 |
+| `src/analyze/`（分析面） | 预算分位/区域/趋势/关键词频次/竞争密度 | 全部**描述性统计与启发式估算**（密度分层/HHI），报告明示「估算」口径，不冒充事实 |
+| `src/pipeline/`（编排面） | collect→extract→analyze→report 四阶段串联 + `pipeline_runs` 运行台账 + 增量水位 | 研究管道一条命令；台账为审计面（研究可复现），水位只服务增量文件读取 |
 
 **判定规则**：任何"投标生产"语义的数据与产物 → Rust 侧是真源；
 Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
@@ -50,7 +62,32 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
   （ID/分类/★条款/矩阵状态）**无映射关系**，禁止拿它做合规判定；
 - **反序列化兜底**：损坏数据在 `BidDatabase._row_to_dict` 中回退为空列表。
 
-## 4. CI 隔离
+## 4. 研究管道使用面（#601）
+
+```bash
+# 全链：公告源 → 采集 → LLM 抽取 → 分析 → 报告（一条命令）
+python main.py pipeline --source announcements/ --db data/bids.db --incremental --html
+
+# 分阶段单命令
+python main.py collect  --source announcements/ --dry-run     # 演练（不写库）
+python main.py extract  --source announcements/              # LLM 抽取（失败进 pending）
+python main.py extract  --retry                               # 重试 pending 面（需 API key）
+python main.py analyze  --keyword 智慧城市 --days 90 --html   # 离线纯数据报告
+python main.py analyze  --compare 智慧城市,政务云 --html     # 多领域指标对照报告
+```
+
+- **离线可测**：无 `DEEPSEEK_API_KEY`/`OPENAI_API_KEY` 或 `--no-llm`
+  时抽取阶段自动降级直通（警告一次，不静默）；
+- **失败降级**：LLM 失败/校验拒收的公告进 `pending_announcements`
+  表（可重放载荷），`extract --retry` 换模型/提示词后重跑；
+- **增量水位**：`pipeline --incremental` 只读上次成功运行后的
+  新文件（`pipeline_runs.watermark`，亚秒精度）；
+- **审计台账**：每次管道运行（含失败）自动登记 `pipeline_runs`
+  （stages 明细 + 报告路径），研究可复现「报告基于哪次运行」；
+- **fixture 全链**：`tests/fixtures/announcements/`（合成脱敏）+
+  `tests/test_e2e_pipeline.py` 覆盖全部特性面，`pytest` 离线可跑。
+
+## 5. CI 隔离
 
 ```
 .github/workflows/python-tests.yml
@@ -64,7 +101,7 @@ Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
 - 该 workflow 同样挂 concurrency 组（#568 全仓纪律），
   `cancel-in-progress: true`（检查类，可安全取消）。
 
-## 5. .gitignore 钉死项
+## 6. .gitignore 钉死项
 
 ```
 output/            # Python 报告输出目录（研究快照，可再生）
