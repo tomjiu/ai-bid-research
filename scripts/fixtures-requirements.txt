@@ -11,5 +11,7 @@ pymupdf==1.26.7
 # Rust 工具链：rustup stable（实测 1.99.1；edition 2021）
 # 外部解析引擎适配器（组件版本矩阵钉住点，test-plan §5.2）：
 #   poppler-utils：pdftotext（PDF 文本层）/ pdftoppm（扫描页渲染）  # Debian trixie 实测
+#   poppler-data：Adobe-GB1 等 CJK CMap——必须与 poppler-utils 同装（它在 Suggests 里，
+#     --no-install-recommends 不带入；缺失时 CID 字体 PDF 提取为空，run 42578288979 实证）
 #   tesseract-ocr 5 + chi_sim（OCR 分档；语言数据 ~/.tessdata/chi_sim.traineddata，tessdata_fast）
 # 判分与测试入口：cd bidcore && cargo test --workspace
