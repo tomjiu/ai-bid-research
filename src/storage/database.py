@@ -234,6 +234,29 @@ class BidDatabase:
         cursor = self._conn.execute("SELECT COUNT(*) FROM bids" + where, params)
         return int(cursor.fetchone()[0])
 
+    def iter_all(self, chunk_size: int = 500):
+        """全表迭代（#601 批次 C：分析面数据集加载 / 去重水位）。
+
+        Args:
+            chunk_size: 分批拉取的行数（游标按 id 升序推进，
+                内存占用与全表规模解耦）。
+
+        Yields:
+            每行反序列化后的业务字典（``requirements`` 已还原为列表）。
+        """
+        last_id = 0
+        while True:
+            cursor = self._conn.execute(
+                "SELECT * FROM bids WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (last_id, chunk_size),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                return
+            for row in rows:
+                last_id = row["id"]
+                yield self._row_to_dict(row)
+
     def stats(self) -> Dict[str, Any]:
         """返回数据库统计概览。
 
