@@ -97,8 +97,8 @@ check(
   "切工作区后标书面板显示旧项目"
 );
 check(
-  "占位面板不造数据（批 C/D 禁用态标注 #313；批 B 已接线）",
-  /title="批 C 接线（#313）"/.test(app) && /title="批 D 接线（#313）"/.test(app) && !/title="批 B 接线（#313）"/.test(app),
+  "占位面板不造数据（批 C 禁用态标注 #313；批 B/D 已接线）",
+  /title="批 C 接线（#313）"/.test(app) && !/title="批 B 接线（#313）"/.test(app) && !/title="批 D 接线（#313）"/.test(app),
   "未接线面板被启用或假数据"
 );
 
@@ -154,10 +154,67 @@ check(
   "切工作区后矩阵面板留旧项目数据"
 );
 
+// ---------- app.js：#313 批 D 覆盖报告面板 ----------
+check(
+  "工作台「覆盖报告」页签已接线（data-bid-panel=coverage）",
+  /data-bid-panel="coverage"[^>]*>覆盖报告</.test(app),
+  "覆盖报告页签仍是禁用占位或被改名"
+);
+check(
+  "数据面调用 bid.coverage（真实 IPC）",
+  /ipc\("bid\.coverage", \{\}, 6e4\)/.test(app),
+  "bid.coverage IPC 调用被改名/超时口径被改"
+);
+check(
+  "演示桥补 bid.coverage stub（与真实响应同形）",
+  /case "bid\.coverage":/.test(app) && /DEMO_BID\.coverage/.test(app),
+  "浏览器预览模式下覆盖报告面板无数据"
+);
+check(
+  "覆盖报告有可视化（issue 验收 5：饼图/柱图——conic 三色环 + 分账条）",
+  /conic-gradient\(var\(--ok\)/.test(app) && /bid-cov-bar/.test(app),
+  "三态可视化缺失"
+);
+check(
+  "三态分账键（#244：已判定/已排除/未判定——A+B+C=total）",
+  /judged_blocks/.test(app) && /excluded_blocks/.test(app) && /unjudged_blocks/.test(app),
+  "三态分账面缺失"
+);
+check(
+  "★条款覆盖 N/M（#285：真值★已捕获/真值★）",
+  /star_truth/.test(app) && /star_captured/.test(app) && /star_missing/.test(app),
+  "★条款覆盖面缺失"
+);
+check(
+  "DRAFT 态分支「覆盖报告尚未开放」引导卡（壳侧 state 码——非错误横幅）",
+  /覆盖报告尚未开放/.test(app) && /cv\.code === "state"/.test(app),
+  "早态项目显示为故障而非引导"
+);
+check(
+  "逐文件覆盖表（行展开看 by_verdict 分账 + 未判定区间明细 + ★引导）",
+  /判定分账（by_verdict）/.test(app) && /未判定区间（C 态——块号含两端）/.test(app) && /★漏标引导（#285）/.test(app),
+  "行展开明细缺失"
+);
+check(
+  "建纲门 next 提示（工具面 next 原样——单一真源）",
+  /bid-cov-next/.test(app),
+  "下一步引导缺失"
+);
+check(
+  "工作区切换/项目面失效重置覆盖面（批 A/B/D 同一重置面）",
+  /coverage: \{ status: "idle", data: null, error: "", code: "" \}/.test(app),
+  "切工作区后覆盖报告留旧项目数据"
+);
+
 // ---------- styles.css：面板样式 + 响应式 ----------
-for (const sel of [".bid-wb ", ".bid-tree ", ".bid-node ", ".bid-detail ", ".bid-badge", ".bid-bar-fill", ".bid-mx-table", ".bid-mx-chip", ".bid-mx-badge", ".bid-mx-pager", ".bid-mx-detail td"]) {
+for (const sel of [".bid-wb ", ".bid-tree ", ".bid-node ", ".bid-detail ", ".bid-badge", ".bid-bar-fill", ".bid-mx-table", ".bid-mx-chip", ".bid-mx-badge", ".bid-mx-pager", ".bid-mx-detail td", ".bid-cov-donut", ".bid-cov-table", ".bid-cov-badge", ".bid-cov-next", ".bid-cov-detail td"]) {
   check(`styles.css 定义 ${sel.trim()}`, css.includes(sel.trim() + " {") || css.includes(sel.trim() + ","), "选择器缺失");
 }
+check(
+  "覆盖未判定态=红（--danger）",
+  /\.bid-cov-badge\[data-state="un"\]\s*\{[\s\S]{0,80}var\(--danger\)/.test(css),
+  "未判定红徽章样式缺失"
+);
 check(
   "进度条不足=红（--danger）",
   /\.bid-bar-fill\[data-state="low"\]\s*\{[\s\S]{0,120}var\(--danger\)/.test(css),
@@ -191,6 +248,21 @@ check(
   "矩阵被绕开工具面另造一套"
 );
 check(
+  "bid.coverage 经 bid_mcp::dispatch_with 走 get_coverage_report 真实工具面（批 D）",
+  bidRs.includes("get_coverage_report") && bidRs.includes("pub fn coverage("),
+  "覆盖报告被绕开工具面另造一套"
+);
+check(
+  "★条款覆盖循 get_star_coverage 逐文件聚合（#285——不复制判定逻辑）",
+  bidRs.includes("get_star_coverage"),
+  "★面被另造一套"
+);
+check(
+  "工具面 E_STATE 透传壳侧 state 码（批 C/D 契约 §3.3）",
+  /ToolError::EState \{ what \} => IpcError::new\("state", what\)/.test(bidRs),
+  "早态项目错误码被吞成 io"
+);
+check(
   "矩阵壳内聚合循 next_cursor（工具面 S-4 分页契约不被绕过）",
   /next_cursor"\)\.and_then\(\|c\| c\.as_str\(\)\)/.test(bidRs) && /PAGE_LIMIT: u64 = 1000/.test(bidRs),
   "聚合循环被改或一次拉超限"
@@ -201,16 +273,21 @@ check(
   "空工作区拒绝语义被改"
 );
 check(
-  "ipc.rs 分发 bid.state / bid.outline / bid.matrix",
-  /"bid\.state" => crate::bid::state\(/.test(ipcRs) && /"bid\.outline" => crate::bid::outline\(/.test(ipcRs) && /"bid\.matrix" => crate::bid::matrix\(/.test(ipcRs),
+  "ipc.rs 分发 bid.state / bid.outline / bid.matrix / bid.coverage",
+  /"bid\.state" => crate::bid::state\(/.test(ipcRs) && /"bid\.outline" => crate::bid::outline\(/.test(ipcRs) && /"bid\.matrix" => crate::bid::matrix\(/.test(ipcRs) && /"bid\.coverage" => crate::bid::coverage\(/.test(ipcRs),
   "命令没接进 IPC 分发"
 );
 
 // ---------- 契约：IPC-CONTRACT.md 登记 ----------
 check(
-  "契约文档登记 bid.state / bid.outline / bid.matrix",
-  contract.includes("### bid.state") && contract.includes("### bid.outline") && contract.includes("### bid.matrix"),
+  "契约文档登记 bid.state / bid.outline / bid.matrix / bid.coverage",
+  contract.includes("### bid.state") && contract.includes("### bid.outline") && contract.includes("### bid.matrix") && contract.includes("### bid.coverage"),
   "改了代码没同步契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "契约 §3.3 登记 state 错误码（E_STATE 透传——批 C/D）",
+  /\| `state` \|/.test(contract),
+  "早态项目错误码未入错误码表"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);

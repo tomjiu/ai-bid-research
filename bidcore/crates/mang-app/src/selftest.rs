@@ -5,6 +5,8 @@
 //!       / history.list / unknown_cmd / bad_json
 //!       / mcp.status / llm.status+save 往返（#76）/ fspec.status（#76）
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
+//!       / bid.matrix（#313 批 B：无 db.json not_found / 真实项目 / db.json 变更重开）
+//!       / bid.coverage（#313 批 D：未导入件诚实口径 total_blocks=0 + next 引导）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
 //! 输出形如 `PASS  <name>：<detail>` / `FAIL  <name>：<detail>`，最后一行汇总 + 退出码。
 
@@ -537,6 +539,24 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
                     && row["blocking"] == json!(true)))
                 .unwrap_or(false),
         format!("rows={} blocking={}", bm2["rows"].as_array().map(|a| a.len()).unwrap_or(0), bm2["summary"]["blocking"]),
+    );
+    // #313 批 D：覆盖报告面（同一种子项目——未导入文件的工具面诚实口径：
+    // total_blocks=0 + next 引导导入，不是错误）；三态分账 / ★聚合恒零
+    let resp = call(&ctx, json!({"id":"t-bid-c1","cmd":"bid.coverage"}));
+    let bc = result(&resp);
+    r.check(
+        "bid.coverage(未导入件)",
+        resp["ok"] == json!(true)
+            && bc["present"] == json!(true)
+            && bc["project"]["name"] == json!("selftest 项目")
+            && bc["coverage"]["total_blocks"] == json!(0)
+            && bc["coverage"]["files"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && bc["coverage"]["next"].as_str().map(|s| s.contains("import_tender_files")).unwrap_or(false)
+            && bc["summary"]["judged_blocks"] == json!(0)
+            && bc["summary"]["excluded_blocks"] == json!(0)
+            && bc["summary"]["unjudged_blocks"] == json!(0)
+            && bc["star"]["total"]["star_truth"] == json!(0),
+        format!("total={} next={}", bc["coverage"]["total_blocks"], bc["coverage"]["next"]),
     );
 
     // ---- #194：工作区切换（workspace.open / workspace.current）

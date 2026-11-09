@@ -337,6 +337,42 @@
         warnings: [],
         project_version: 12,
         fetched_pages: 1
+      },
+      // #313 批 D：覆盖报告演示数据（与真实 bid.coverage 响应同形——coverage =
+      // get_coverage_report 工具输出原样透传；summary = 壳侧三态分账；star =
+      // 逐文件 get_star_coverage 聚合。数字取 issue #313 面板规格例：
+      // 已判定 1,120 / 未判定 80 / 已排除 40、★条款覆盖 45/48）
+      coverage: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+        coverage: {
+          project_id: "PRJ-0001",
+          complete: false,
+          total_blocks: 1240,
+          covered_blocks: 1160,
+          uncovered_range_count: 2,
+          unjudged_blocks: 80,
+          files: [
+            { file_id: "TF-0001", total_blocks: 1240, covered_blocks: 1160, complete: false, uncovered_ranges: [[210, 254], [892, 917]], uncovered_range_count: 2, excluded_blocks: 40, unjudged_blocks: 80, by_verdict: { requirement: 1080, review_table: 40, noise: 40 } }
+          ],
+          next: "有未判定块——submit_block_marks 补标（已开始标记的文件必须标满才能建纲，#244；未标记过的文件走正则兜底不受限）"
+        },
+        summary: {
+          total_blocks: 1240,
+          judged_blocks: 1120,
+          excluded_blocks: 40,
+          unjudged_blocks: 80,
+          uncovered_range_count: 2,
+          complete: false,
+          by_verdict: { requirement: 1080, review_table: 40, noise: 40 }
+        },
+        star: {
+          files: [
+            { file_id: "TF-0001", file_name: "A-招标文件.docx", star_total: 50, declarations: 2, star_truth: 48, star_captured: 45, star_missing: 3, next: "有★漏标——用 missing[].block_idx 定位后 submit_block_marks 补标（substantive=true），重跑 extract_requirements 生效" }
+          ],
+          total: { star_total: 50, declarations: 2, star_truth: 48, star_captured: 45, star_missing: 3 }
+        }
       }
     };
     return {
@@ -355,6 +391,8 @@
               return respond(m.id, DEMO_BID.outline);
             case "bid.matrix":
               return respond(m.id, DEMO_BID.matrix);
+            case "bid.coverage":
+              return respond(m.id, DEMO_BID.coverage);
             case "fs.tree":
               return respond(m.id, tree);
             case "fs.read": {
@@ -467,12 +505,15 @@
     git: { status: "idle", available: false, branch: "", items: [], log: [], error: "" },
     // 版本快照（issue #42 阶段 7）：{ status, file, entries, error }
     snapshots: { status: "idle", file: "", entries: [], error: "" },
-    // #313 批 A/B：标书数据面（bid.state / bid.outline / bid.matrix 拉取缓存）
-    // + 大纲树折叠态 + 矩阵筛选/分页/展开态（mx——面板本地 UI 态，随数据面重置）
+    // #313 批 A/B/D：标书数据面（bid.state / bid.outline / bid.matrix / bid.coverage 拉取缓存）
+    // + 大纲树折叠态 + 矩阵筛选/分页/展开态（mx）+ 覆盖报告展开态（cov）
+    // ——面板本地 UI 态，随数据面重置
     bid: {
       status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
       matrix: { status: "idle", data: null, error: "" },
-      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" }
+      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+      coverage: { status: "idle", data: null, error: "", code: "" },
+      cov: { expandedFile: "" }
     },
     bidCollapsed: /* @__PURE__ */ new Set()
   };
@@ -966,6 +1007,7 @@
         else if (act === "open-folder") ui.openFolderDialog();
         else if (act === "workbench") ui.openBidWorkbench();
         else if (act === "workbench-mx") ui.openBidWorkbench("matrix");
+        else if (act === "workbench-cov") ui.openBidWorkbench("coverage");
       });
     });
   }
@@ -1023,7 +1065,7 @@
       + '<button class="bid-entry" data-bid-act="workbench"><span class="bid-entry-icon">' + ICON.outline + '</span><span class="bid-entry-main"><span class="bid-entry-name">大纲树</span><span class="bid-entry-sub">章节层级 · 字数进度 · 状态标记</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-mx"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">合规矩阵</span><span class="bid-entry-sub">REQ × 响应状态 × 证据</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + bidDisabledEntry("自评", "BLOCKER / WARNING / 评分", "批 C")
-      + bidDisabledEntry("覆盖报告", "已判定 / 未判定 / ★条款", "批 D")
+      + '<button class="bid-entry" data-bid-act="workbench-cov"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">覆盖报告</span><span class="bid-entry-sub">已判定 / 未判定 / ★条款</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + "</div></div>";
     bindBidViewActions(body);
   }
@@ -1038,7 +1080,7 @@
       + '<span class="bid-wb-project" id="bid-wb-project"></span>'
       + '<span class="bid-wb-status" id="bid-wb-status"></span>'
       + '<span class="bid-wb-spacer"></span>'
-      + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix">刷新</button>'
+      + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix / bid.coverage">刷新</button>'
       + "</header>"
       + '<div class="bid-wb-body">'
       + '<aside class="bid-tree" id="bid-tree" role="tree" aria-label="标书大纲树"></aside>'
@@ -1047,7 +1089,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="detail">章节详情</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="matrix">合规矩阵</button>'
       + '<button class="bid-tab" role="tab" disabled title="批 C 接线（#313）">自评</button>'
-      + '<button class="bid-tab" role="tab" disabled title="批 D 接线（#313）">覆盖报告</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1055,7 +1097,7 @@
     wrap.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-bid-act]");
       if (btn && btn.dataset.bidAct === "refresh") ui.loadBid(true);
-      // #313 批 B：右侧页签切换（章节详情 / 合规矩阵——C/D 仍禁用占位）
+      // #313 批 B/D：右侧页签切换（章节详情 / 合规矩阵 / 覆盖报告——自评仍禁用占位）
       const tabBtn = e.target.closest('.bid-tab[data-bid-panel]');
       if (tabBtn && !tabBtn.disabled) {
         const t = bidWorkbenchTab();
@@ -1302,13 +1344,17 @@
       else btn.classList.remove("active");
     });
   }
-  /** 右侧面板分发：matrix → 矩阵；否则章节详情（选中节点） */
+  /** 右侧面板分发：matrix → 矩阵；coverage → 覆盖报告；否则章节详情（选中节点） */
   function renderBidActivePanel(host) {
     renderBidTabsState(host);
     const panel = host.querySelector("#bid-panel");
     if (!panel) return;
     if (bidPanelOf() === "matrix") {
       renderBidMatrixPanel(host, panel);
+      return;
+    }
+    if (bidPanelOf() === "coverage") {
+      renderBidCoveragePanel(host, panel);
       return;
     }
     const nodes = bidOutlineNodes();
@@ -1558,6 +1604,192 @@
       .catch((err) => ui.toast("error", "导出失败：" + ((err && err.message) || err)));
   }
   // ============ #313 批 B 矩阵面板 END ============
+
+  // ============ #313 批 D：覆盖报告面板（bid.coverage → 三态分账 + ★条款覆盖 + 逐文件表） ============
+  // 数据来源：壳侧 bid.coverage（经 bid_mcp::dispatch_with 走 get_coverage_report
+  // 真实工具面，工具输出原样透传 + 壳侧三态分账 summary + 逐文件 get_star_coverage
+  // 聚合 #285）。三态口径（#244——每块必居其一）：已判定（A：requirement /
+  // review_table）/ 已排除（B：noise / rule，理由可追溯）/ 未判定（C：压根
+  // 没标记——建纲门阻断面）。★条款覆盖 = 真值★已捕获 / 真值★（一条不响应
+  // 即响应无效——面板规格「★条款覆盖 N/M」）。
+  var BID_COV_VERDICT_ZH = {
+    requirement: "条款",
+    review_table: "审查表",
+    noise: "噪音",
+    rule: "规则"
+  };
+  function bidCovVerdictZh(v) {
+    return BID_COV_VERDICT_ZH[v] || v;
+  }
+  function bidCovPct(n, total) {
+    if (!total) return 0;
+    return Math.round((n / total) * 1000) / 10;
+  }
+  /** 覆盖报告面板主体（工作台右面板的 coverage 页签） */
+  function renderBidCoveragePanel(host, panel) {
+    const cv = state.bid.coverage;
+    // 覆盖面不选中大纲树节点（与矩阵面同款——避免左树残留详情高亮）
+    host.querySelectorAll("#bid-tree .bid-node").forEach((row) => {
+      row.dataset.selected = "false";
+    });
+    if (cv.status === "idle") ui.loadBidCoverage();
+    if (cv.status === "idle" || cv.status === "loading") {
+      panel.innerHTML = '<div class="bid-cov"><div class="view-state"><div class="view-spinner"></div><div>正在读取覆盖报告…</div></div></div>';
+      return;
+    }
+    if (cv.status === "error" && cv.code === "state") {
+      // 工具面 E_STATE 透传（壳侧 state 码，契约 §3.3）——早态项目引导卡
+      // 而非错误横幅（批 C 自评面同款纪律：单一真源在 code，不在文案）
+      panel.innerHTML =
+        '<div class="bid-cov"><div class="view-state"><div class="view-state-title">覆盖报告尚未开放</div>'
+        + "<div>当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，MCP 管线 import_tender_files 之后自动可用</div>"
+        + '<div><button class="btn" data-cov-retry>重新检查</button></div></div></div>';
+      const retry = panel.querySelector("[data-cov-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
+      return;
+    }
+    if (cv.status === "error" || !cv.data) {
+      panel.innerHTML =
+        '<div class="bid-cov"><div class="view-state" data-kind="error"><div class="view-state-title">覆盖报告读取失败</div><div>'
+        + esc(cv.error || "无数据")
+        + '</div><div><button class="btn" data-cov-retry>重试</button></div></div></div>';
+      const retry = panel.querySelector("[data-cov-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
+      return;
+    }
+    const d = cv.data;
+    const s = d.summary || {};
+    const cov = d.coverage || {};
+    const star = d.star || {};
+    const st = star.total || {};
+    const files = (cov.files || []).slice();
+    const starByName = {};
+    (star.files || []).forEach((sf) => {
+      starByName[sf.file_id] = sf;
+    });
+    const total = Number(s.total_blocks || 0);
+    const judged = Number(s.judged_blocks || 0);
+    const excluded = Number(s.excluded_blocks || 0);
+    const unjudged = Number(s.unjudged_blocks || 0);
+    const share = total ? Math.round(((judged + excluded) / total) * 1000) / 10 : 0;
+    const truth = Number(st.star_truth || 0);
+    const capt = Number(st.star_captured || 0);
+    const miss = Number(st.star_missing || 0);
+
+    // ---- 总览卡：三色环（conic-gradient 饼图，零依赖）+ 图例计数 + 分账条
+    const pJ = total ? (judged / total) * 100 : 0;
+    const pE = total ? (excluded / total) * 100 : 0;
+    const donut =
+      "conic-gradient(var(--ok) 0 " + pJ + "%, var(--fg-soft) " + pJ + "% " + (pJ + pE) +
+      "%, var(--danger) " + (pJ + pE) + "% 100%)";
+    let html =
+      '<div class="bid-cov">'
+      + '<div class="bid-cov-cards">'
+      + '<div class="bid-cov-card">'
+      + '<div class="bid-cov-card-title">块覆盖（#244 三态分账）</div>'
+      + '<div class="bid-cov-donut-row">'
+      + '<div class="bid-cov-donut"' + (total ? ' style="background:' + donut + '"' : "") + '><span class="bid-cov-donut-v">' + share + '%</span><span class="bid-cov-donut-k">已处置</span></div>'
+      + '<div class="bid-cov-legend">'
+      + '<div class="bid-cov-lg"><span class="bid-cov-dot ok"></span>已判定 <b>' + fmtChars(judged) + "</b><span>" + (total ? bidCovPct(judged, total) : 0) + "%</span></div>"
+      + '<div class="bid-cov-lg"><span class="bid-cov-dot ex"></span>已排除 <b>' + fmtChars(excluded) + "</b><span>" + (total ? bidCovPct(excluded, total) : 0) + "%</span></div>"
+      + '<div class="bid-cov-lg"><span class="bid-cov-dot un"></span>未判定 <b>' + fmtChars(unjudged) + "</b><span>" + (total ? bidCovPct(unjudged, total) : 0) + "%</span></div>"
+      + '<div class="bid-cov-lg total">共 ' + fmtChars(total) + " 块 · 未判定区间 " + fmtChars(Number(s.uncovered_range_count || 0)) + " 段</div>"
+      + "</div></div>"
+      + '<div class="bid-cov-bar"><span class="ok" style="width:' + pJ + '%"></span><span class="ex" style="width:' + pE + '%"></span><span class="un" style="width:' + (total ? 100 - pJ - pE : 0) + '%"></span></div>'
+      + "</div>"
+      // ---- ★条款覆盖卡（#285：真值★已捕获/真值★——「一条不响应即响应无效」）
+      + '<div class="bid-cov-card">'
+      + '<div class="bid-cov-card-title">★条款覆盖（#285 漏标检测）</div>'
+      + (truth > 0
+        ? '<div class="bid-cov-star-row"><span class="bid-cov-star-big">' + fmtChars(capt) + '<i>/' + fmtChars(truth) + "</i></span>"
+          + '<div class="bid-cov-star-meta">'
+          + '<div class="bid-cov-lg"><span class="bid-cov-dot ok"></span>已捕获 <b>' + fmtChars(capt) + "</b></div>"
+          + (miss > 0 ? '<div class="bid-cov-lg"><span class="bid-cov-dot un"></span>漏标 <b>' + fmtChars(miss) + "</b>（补标后重跑抽取生效）</div>" : '<div class="bid-cov-lg"><span class="bid-cov-dot ok"></span>无漏标</div>')
+          + '<div class="bid-cov-lg total">样板句★ ' + fmtChars(Number(st.declarations || 0)) + " 处（声明不计条款）</div>"
+          + "</div></div>"
+        : '<div class="view-state"><div class="view-state-title">无★实质性条款</div><div>招标文件字面无真值★——无漏标检测面</div></div>')
+      + "</div>"
+      + "</div>";
+
+    // ---- 逐文件覆盖表（行展开：by_verdict 分账 + 未判定区间明细 + ★引导）
+    if (!files.length) {
+      html +=
+        '<div class="view-state"><div class="view-state-title">尚无已导入文件</div><div>'
+        + esc(cov.next || "MCP 管线 import_tender_files 之后，这里显示逐文件块覆盖")
+        + "</div></div>";
+    } else {
+      const f = state.bid.cov;
+      html +=
+        '<div class="bid-cov-files"><div class="bid-cov-files-title">逐文件覆盖</div>'
+        + '<div class="bid-cov-table-wrap"><table class="bid-cov-table"><thead><tr><th>文件</th><th>块数</th><th>已判定</th><th>已排除</th><th>未判定</th><th>★捕获/真值</th><th>状态</th></tr></thead><tbody>';
+      for (const fl of files) {
+        const fid = fl.file_id || "";
+        const sf = starByName[fid] || {};
+        const fname = sf.file_name || fid;
+        const ft = Number(fl.total_blocks || 0);
+        const fc = Number(fl.covered_blocks || 0);
+        const fe = Number(fl.excluded_blocks || 0);
+        const fu = Number(fl.unjudged_blocks || 0);
+        const fj = fc - fe;
+        const expanded = f.expandedFile === fid;
+        const ranges = fl.uncovered_ranges || [];
+        const rangeCount = Number(fl.uncovered_range_count || ranges.length || 0);
+        const bv = fl.by_verdict || {};
+        html +=
+          '<tr class="bid-cov-row' + (fu > 0 ? " has-unjudged" : "") + (expanded ? " expanded" : "") + '" data-cov-file="' + esc(fid) + '">'
+          + '<td class="bid-cov-fname" title="' + esc(fname) + '">' + esc(fname) + "</td>"
+          + "<td>" + fmtChars(ft) + "</td>"
+          + '<td><span class="ok">' + fmtChars(fj) + "</span></td>"
+          + '<td><span class="ex">' + fmtChars(fe) + "</span></td>"
+          + '<td><span class="' + (fu > 0 ? "un" : "ok") + '">' + fmtChars(fu) + "</span></td>"
+          + "<td>" + (Number(sf.star_truth || 0) > 0 ? fmtChars(Number(sf.star_captured || 0)) + "/" + fmtChars(Number(sf.star_truth || 0)) : "—") + "</td>"
+          + "<td>" + (ft === 0
+            ? '<span class="bid-cov-badge" data-state="empty">无块</span>'
+            : fl.complete
+              ? '<span class="bid-cov-badge" data-state="ok">全覆盖</span>'
+              : fu > 0
+                ? '<span class="bid-cov-badge" data-state="un">有未判定</span>'
+                : '<span class="bid-cov-badge" data-state="ok">已判完</span>') + "</td></tr>";
+        if (expanded) {
+          let detail =
+            '<tr class="bid-cov-detail"><td colspan="7"><div class="bid-cov-d-grid">'
+            + '<div class="bid-cov-d-block"><div class="bid-cov-d-k">判定分账（by_verdict）</div><div class="bid-cov-d-v">'
+            + (Object.keys(bv).length
+              ? Object.keys(bv).map((k) => '<span class="bid-cov-chip">' + esc(bidCovVerdictZh(k)) + " " + fmtChars(bv[k]) + "</span>").join("")
+              : '<span class="dim">无标记——零标记文件走正则兜底（#219 既有路径）</span>')
+            + "</div></div>"
+            + '<div class="bid-cov-d-block"><div class="bid-cov-d-k">未判定区间（C 态——块号含两端）</div><div class="bid-cov-d-v">'
+            + (rangeCount
+              ? ranges.map((r) => '<span class="bid-cov-chip un">块 ' + fmtChars(r[0]) + "–" + fmtChars(r[1]) + "（" + fmtChars(Number(r[1]) - Number(r[0]) + 1) + " 块）</span>").join("")
+                + (rangeCount > ranges.length ? '<span class="dim">…共 ' + fmtChars(rangeCount) + " 段，只显示前 " + ranges.length + " 段</span>" : "")
+              : '<span class="dim">无——本文件无 C 态块</span>')
+            + "</div></div>"
+            + '<div class="bid-cov-d-block"><div class="bid-cov-d-k">★漏标引导（#285）</div><div class="bid-cov-d-v">'
+            + (sf.next ? esc(sf.next) : "—") + "</div></div>"
+            + "</div></td></tr>";
+          html += detail;
+        }
+      }
+      html += "</tbody></table></div></div>";
+    }
+
+    // ---- 建纲门提示（工具面 next 原样——单一真源）
+    if (cov.next) {
+      html += '<div class="bid-cov-next"' + (total > 0 && !cov.complete ? ' data-state="warn"' : ' data-state="ok"') + "><span>下一步</span>" + esc(cov.next) + "</div>";
+    }
+    html += "</div>";
+    panel.innerHTML = html;
+
+    // ---- 交互接线（重渲染后重挂——与批 A/B 同款就地绑定纪律）
+    panel.querySelectorAll(".bid-cov-row").forEach((tr) =>
+      tr.addEventListener("click", () => {
+        const id = tr.dataset.covFile;
+        state.bid.cov.expandedFile = state.bid.cov.expandedFile === id ? "" : id;
+        renderBidCoveragePanel(host, panel);
+      })
+    );
+  }
+  // ============ #313 批 D 覆盖报告面板 END ============
 
   // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 ============
   /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
@@ -3270,11 +3502,13 @@
       state.selectedRel = "";
       state.git = { status: "idle", available: false, branch: "", items: [], log: [], error: "" };
       state.snapshots = { status: "idle", file: "", entries: [], error: "" };
-      // #313 批 A/B：标书数据面随根失效（壳侧服务缓存也会按 db.json 指纹重开）
+      // #313 批 A/B/D：标书数据面随根失效（壳侧服务缓存也会按 db.json 指纹重开）
       state.bid = {
         status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
         matrix: { status: "idle", data: null, error: "" },
-        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" }
+        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+        coverage: { status: "idle", data: null, error: "", code: "" },
+        cov: { expandedFile: "" }
       };
       state.bidCollapsed = new Set();
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
@@ -3313,6 +3547,9 @@
       // #313 批 B：矩阵面已被看过（ready/error）→ 刷新时一并重拉，保持两数据面同源
       const mxTouched = state.bid.matrix.status === "ready" || state.bid.matrix.status === "error";
       if (mxTouched) ui.loadBidMatrix(true);
+      // #313 批 D：覆盖面同理（ready/error → 一并重拉，三数据面同源）
+      const covTouched = state.bid.coverage.status === "ready" || state.bid.coverage.status === "error";
+      if (covTouched) ui.loadBidCoverage(true);
       const settled = await Promise.allSettled([
         ipc("bid.state", {}, 15e3),
         ipc("bid.outline", {}, 15e3)
@@ -3329,6 +3566,9 @@
         // 项目面已失（切工作区/项目被移）——矩阵缓存一并失效，不留旧项目数据
         state.bid.matrix = { status: "idle", data: null, error: "" };
         state.bid.mx = { status: "", cat: "", blockingOnly: false, page: 1, pageSize: state.bid.mx.pageSize || 50, expandedId: "" };
+        // 覆盖缓存一并失效（批 D——不留旧项目数据）
+        state.bid.coverage = { status: "idle", data: null, error: "", code: "" };
+        state.bid.cov = { expandedFile: "" };
       }
       state.bid.outline = ol.status === "fulfilled" ? ol.value : null;
       state.bid.status = "ready";
@@ -3359,8 +3599,35 @@
       }
       renderBidWorkbenchIfOpen();
     },
-    /** #313 批 A/B：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
-     *  panel（"detail" | "matrix"）——面板直开（侧栏面板入口用） */
+    /** #313 批 D：拉取覆盖报告（bid.coverage——工具面 get_coverage_report
+     *  + 逐文件 get_star_coverage 聚合；工具面 E_STATE 透传为壳侧 state 码，
+     *  面板按 code 分支出「尚未开放」引导卡） */
+    async loadBidCoverage(force) {
+      if (!state.bridge) return;
+      if (state.bid.coverage.status === "loading" && !force) return;
+      state.bid.coverage.status = "loading";
+      state.bid.coverage.error = "";
+      state.bid.coverage.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.coverage", {}, 6e4);
+        if (r && r.present) {
+          state.bid.coverage.data = r;
+        } else {
+          state.bid.coverage.data = null;
+          state.bid.coverage.error = "当前工作区无覆盖数据";
+        }
+        state.bid.coverage.status = "ready";
+      } catch (err) {
+        state.bid.coverage.data = null;
+        state.bid.coverage.status = "error";
+        state.bid.coverage.code = (err && err.code) || "";
+        state.bid.coverage.error = err && (err.message || err.code) || "bid.coverage 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #313 批 A/B/D：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
+     *  panel（"detail" | "matrix" | "coverage"）——面板直开（侧栏面板入口用） */
     async openBidWorkbench(panel) {
       const existing = bidWorkbenchTab();
       if (existing) {

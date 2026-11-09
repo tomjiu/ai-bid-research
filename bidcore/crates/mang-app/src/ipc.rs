@@ -448,12 +448,16 @@ impl Ctx {
 
             // ── #313 批 A：标书数据面（bid.rs——state 经 bid_mcp 真实工具面，
             //    outline 直读 DomainStore）；批 B：matrix 经 bid_mcp 真实工具面
-            //    （get_compliance_matrix，壳内聚合分页）──────────────
+            //    （get_compliance_matrix，壳内聚合分页）；批 D：coverage 经
+            //    bid_mcp 真实工具面（get_coverage_report + 逐文件
+            //    get_star_coverage 聚合）──────────────────────────
             "bid.state" => crate::bid::state(&ws, &self.bid, &a),
 
             "bid.outline" => crate::bid::outline(&ws, &self.bid, &a),
 
             "bid.matrix" => crate::bid::matrix(&ws, &self.bid, &a),
+
+            "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
