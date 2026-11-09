@@ -7,6 +7,7 @@
 from src.analyze.dataset import AnalysisDataset, load_dataset
 from src.analyze.density import competition_density
 from src.analyze.keywords import common_bigrams, keyword_frequency
+from src.analyze.report_data import build_analysis_payload, render_analysis_markdown
 from src.analyze.stats import (
     budget_summary,
     date_range,
@@ -24,4 +25,6 @@ __all__ = [
     "keyword_frequency",
     "common_bigrams",
     "competition_density",
+    "build_analysis_payload",
+    "render_analysis_markdown",
 ]

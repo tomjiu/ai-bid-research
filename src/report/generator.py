@@ -219,6 +219,27 @@ class ReportGenerator:
         )
         return self._save_report(report, prefix=f"competition_{keyword}")
 
+    def generate_analysis_report(
+        self, analysis_payload: Dict[str, Any]
+    ) -> Path:
+        """保存纯数据分析报告（#601 批次 C——离线、不走 LLM）。
+
+        与 :meth:`generate_competition_report`（LLM 叙述报告）互补：
+        本方法只渲染已组装的分析 payload，可离线复现。
+
+        Args:
+            analysis_payload: ``build_analysis_payload`` 产物。
+
+        Returns:
+            已保存的 Markdown 报告文件路径。
+        """
+        from src.analyze.report_data import render_analysis_markdown
+
+        keyword = analysis_payload.get("keyword")
+        content = render_analysis_markdown(analysis_payload)
+        prefix = f"analysis_{keyword}" if keyword else "analysis_all"
+        return self._save_report(content, prefix=prefix)
+
     # ------------------------------------------------------------------
     # 导出与保存
     # ------------------------------------------------------------------
