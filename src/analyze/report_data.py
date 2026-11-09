@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
 from src.analyze.buyers import buyer_profiles
-from src.analyze.density import competition_density
+from src.analyze.density import competition_density, concentration_trend
 from src.analyze.quality import field_quality
 from src.analyze.keywords import (
     common_bigrams,
@@ -61,6 +61,7 @@ def build_analysis_payload(
         "buyer_profiles": buyer_profiles(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
+        "concentration_trend": concentration_trend(dataset),
     }
 
 
@@ -298,6 +299,31 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             _render_table(headers, rows),
             "",
             "注：无发布日期的记录不参与本节；首次出现为该词首个命中月份——**新兴领域信号，供人工复核**。",
+            "",
+        ]
+
+    concentration = payload.get("concentration_trend") or {}
+    months = concentration.get("months") or []
+    # 趋势面需 ≥2 个时间点才有对照意义（单月无演化可看，六节已覆盖全局密度）
+    if len(months) >= 2:
+        rows = [
+            [
+                slot["month"],
+                str(slot["projects"]),
+                str(slot["purchasers"]),
+                str(round(slot["hhi"], 0)) if slot["hhi"] is not None else "——",
+                _fmt_pct(slot["award_rate"]),
+            ]
+            for slot in months
+        ]
+        sections += [
+            "## 十一、集中度月度趋势（估算）",
+            "",
+            _render_table(
+                ["月份", "项目数", "采购人数", "HHI(0-10000)", "定标率"], rows
+            ),
+            "",
+            "注：HHI 按当月采购人分布估算（口径同六节）；无发布日期记录不参与；单月数据无趋势对照不展示本节。",
             "",
         ]
 

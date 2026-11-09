@@ -6,7 +6,7 @@
 
 from src.analyze.dataset import AnalysisDataset, load_dataset
 from src.analyze.buyers import buyer_profiles
-from src.analyze.density import competition_density
+from src.analyze.density import competition_density, concentration_trend
 from src.analyze.keywords import (
     common_bigrams,
     keyword_frequency,
