@@ -12,6 +12,13 @@ from src.extract.engine import (
     extract_record,
     extract_record_async,
 )
+from src.extract.runner import (
+    ExtractRunStats,
+    RawLoadStats,
+    load_raw_texts,
+    resolve_raw_files,
+    run_extraction,
+)
 from src.extract.schema import ExtractionSchemaError, validate_extraction
 
 __all__ = [
@@ -22,4 +29,9 @@ __all__ = [
     "RuleExtractor",
     "extract_record",
     "extract_record_async",
+    "ExtractRunStats",
+    "RawLoadStats",
+    "load_raw_texts",
+    "resolve_raw_files",
+    "run_extraction",
 ]
