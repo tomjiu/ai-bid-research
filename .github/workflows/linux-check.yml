@@ -103,6 +103,20 @@ jobs:
           ls -la ~/.tessdata/
           test -f ~/.tessdata/chi_sim.traineddata && echo "chi_sim 已对齐到 ~/.tessdata"
 
+      - name: Install Python fixture deps (reportlab + Pillow)
+        # service_import.rs 的 ocr_blank_scan_surfaces_per_file_warning 等测试用
+        # python3 + reportlab 现场合成空白扫描件 PDF（合成夹具生成器）。缺件时
+        # gen.status.success() 断言直接红（不是 SKIP）——本步骤补齐。
+        # Pillow 供 reportlab 的 ImageReader（部分夹具生成路径需要）。
+        # Ubuntu 24.04 的 python3 是 PEP 668 外部管理环境——两种装法：
+        # --break-system-packages（直接进系统 site-packages，与下方 SDK e2e 的
+        #   `pip install pytest` 可能冲突）或 --user（用户级，优先被 import）。
+        # 用 --user：与现有步骤互不干扰，且 PEP 668 下不报 externally-managed。
+        run: |
+          python3 -m pip install --quiet --user --break-system-packages reportlab Pillow || \
+            python3 -m pip install --quiet --break-system-packages reportlab Pillow
+          python3 -c "import reportlab, PIL; print('reportlab', reportlab.Version, 'PIL ok')"
+
       - name: Verify Poppler CJK mapping (B1 text-layer fixture)
         # --no-install-recommends omits poppler-data: pdftotext can return 0
         # with empty text for Adobe-GB1. Verify real text before the m1 chain.
