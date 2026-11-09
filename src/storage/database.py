@@ -32,6 +32,23 @@ CREATE TABLE IF NOT EXISTS bids (
 );
 CREATE INDEX IF NOT EXISTS idx_bids_publish_date ON bids(publish_date);
 CREATE INDEX IF NOT EXISTS idx_bids_bid_id ON bids(bid_id);
+
+-- #601 批次 B：抽取失败/拒收公告的降级面（研究工作区，非生产）。
+-- 同件公告（指纹一致）只登记一次；重试成功后置 resolved。
+CREATE TABLE IF NOT EXISTS pending_announcements (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint  TEXT UNIQUE NOT NULL,
+    bid_id       TEXT,
+    raw_text     TEXT,
+    payload      TEXT,
+    reason       TEXT NOT NULL,
+    error        TEXT,
+    hit_rate     REAL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_announcements(status);
 """
 
 # 允许写入 bids 表的业务字段（requirements 以 JSON 文本存储）
@@ -229,6 +246,153 @@ class BidDatabase:
         )
         awarded = int(cursor.fetchone()[0])
         return {"total": total, "awarded": awarded}
+
+    # ------------------------------------------------------------------
+    # 降级面：pending_announcements（#601 批次 B）
+    # ------------------------------------------------------------------
+
+    def save_pending(
+        self,
+        fingerprint: str,
+        reason: str,
+        *,
+        bid_id: Optional[str] = None,
+        raw_text: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        hit_rate: Optional[float] = None,
+        status: str = "pending",
+    ) -> int:
+        """保存或更新一条待处理公告（按 fingerprint 幂等 upsert）。
+
+        Args:
+            fingerprint: 公告指纹（同件唯一键；原文流用原文 hash）。
+            reason: 登记原因（``llm_error`` / ``rejected`` / ``no_text``）。
+            bid_id: 招标编号（缺编号场景为 ``None``）。
+            raw_text: 公告原文（重试面需要）。
+            payload: 可重放的完整载荷（to_bid_row + extras + content）。
+            error: 失败详情（人读）。
+            hit_rate: 登记时的字段命中率快照。
+            status: ``pending`` / ``resolved`` / ``skipped``。
+
+        Returns:
+            受影响行数（1 成功）。
+        """
+        if not fingerprint or not str(fingerprint).strip():
+            raise KeyError("待处理公告缺少指纹（fingerprint）")
+        cursor = self._conn.execute(
+            """
+            INSERT INTO pending_announcements
+                (fingerprint, bid_id, raw_text, payload, reason, error,
+                 hit_rate, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(fingerprint) DO UPDATE SET
+                bid_id = excluded.bid_id,
+                raw_text = excluded.raw_text,
+                payload = excluded.payload,
+                reason = excluded.reason,
+                error = excluded.error,
+                hit_rate = excluded.hit_rate,
+                status = excluded.status,
+                updated_at = datetime('now', 'localtime')
+            """,
+            (
+                str(fingerprint),
+                bid_id,
+                raw_text,
+                json.dumps(payload, ensure_ascii=False)
+                if payload is not None
+                else None,
+                reason,
+                error,
+                hit_rate,
+                status,
+            ),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def list_pending(
+        self, status: str = "pending", limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """列出待处理公告（status 过滤）。
+
+        Args:
+            status: 状态过滤（默认 ``pending``）。
+
+        Returns:
+            记录字典列表（payload 已反序列化）。
+        """
+        cursor = self._conn.execute(
+            """
+            SELECT * FROM pending_announcements
+            WHERE status = ? ORDER BY created_at, id LIMIT ?
+            """,
+            (status, limit),
+        )
+        rows = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            if item.get("payload"):
+                try:
+                    item["payload"] = json.loads(item["payload"])
+                except (json.JSONDecodeError, TypeError):
+                    item["payload"] = None  # 损坏载荷不炸查询（#563 兕底口径）
+            rows.append(item)
+        return rows
+
+    def update_pending_status(
+        self, fingerprint: str, status: str, *, error: Optional[str] = None
+    ) -> int:
+        """更新待处理公告状态（重试成功 resolved / 人工 skipped）。
+
+        Args:
+            fingerprint: 公告指纹。
+            status: 新状态（``resolved`` / ``skipped`` / ``pending``）。
+            error: 可选——覆盖错误详情（重试仍失败时更新）。
+
+        Returns:
+            受影响行数（0 = 指纹不存在）。
+        """
+        cursor = self._conn.execute(
+            """
+            UPDATE pending_announcements
+            SET status = ?, error = COALESCE(?, error),
+                updated_at = datetime('now', 'localtime')
+            WHERE fingerprint = ?
+            """,
+            (status, error, str(fingerprint)),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def pending_stats(self) -> Dict[str, Any]:
+        """待处理公告统计（按 status 分组 + reason 分布）。
+
+        Returns:
+            ``{"total", "pending", "resolved", "skipped", "by_reason"}``。
+        """
+        cursor = self._conn.execute(
+            """
+            SELECT status, COUNT(*) AS c FROM pending_announcements
+            GROUP BY status
+            """
+        )
+        counts = {row["status"]: int(row["c"]) for row in cursor.fetchall()}
+        cursor = self._conn.execute(
+            """
+            SELECT reason, COUNT(*) AS c FROM pending_announcements
+            WHERE status = 'pending' GROUP BY reason
+            """
+        )
+        by_reason = {row["reason"]: int(row["c"]) for row in cursor.fetchall()}
+        return {
+            "total": sum(counts.values()),
+            "pending": counts.get("pending", 0),
+            "resolved": counts.get("resolved", 0),
+            "skipped": counts.get("skipped", 0),
+            "by_reason": by_reason,
+        }
 
     # ------------------------------------------------------------------
     # 生命周期

@@ -12,6 +12,19 @@ from src.extract.extractor import (
     merge_fields,
     resolve_raw_text,
 )
+from src.extract.pending import (
+    REASON_LLM_ERROR,
+    REASON_REJECTED,
+    STATUS_PENDING,
+    STATUS_RESOLVED,
+    STATUS_SKIPPED,
+    RetryReport,
+    build_replay_payload,
+    park_raw_failure,
+    park_record_failure,
+    raw_text_fingerprint,
+    retry_pending,
+)
 from src.extract.store import (
     BatchStoreResult,
     StoreOutcome,
@@ -42,4 +55,15 @@ __all__ = [
     "apply_extraction",
     "apply_extraction_batch",
     "apply_extraction_from_raw",
+    "REASON_LLM_ERROR",
+    "REASON_REJECTED",
+    "STATUS_PENDING",
+    "STATUS_RESOLVED",
+    "STATUS_SKIPPED",
+    "RetryReport",
+    "build_replay_payload",
+    "park_raw_failure",
+    "park_record_failure",
+    "raw_text_fingerprint",
+    "retry_pending",
 ]
