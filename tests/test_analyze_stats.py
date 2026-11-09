@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 
 from src.analyze.dataset import BidDataset
-from src.analyze.stats import _percentile, budget_percentiles
+from src.analyze.stats import (
+    _percentile,
+    budget_percentiles,
+    monthly_trend,
+    region_distribution,
+)
 
 
 def ds_with_budgets(budgets):
@@ -99,3 +104,110 @@ class TestBudgetPercentiles:
         assert stats["min"] == 100
         assert stats["max"] == 500
         assert stats["median"] == 300
+
+
+# ----------------------------------------------------------------------
+# 区域分布（R12）
+# ----------------------------------------------------------------------
+
+
+class TestRegionDistribution:
+    def make_ds(self):
+        return BidDataset(
+            [
+                {"bid_id": "1", "project_name": "a", "region": "浙江省杭州市", "budget": 100.0, "winner": "甲"},
+                {"bid_id": "2", "project_name": "b", "region": "浙江省杭州市", "budget": 200.0},
+                {"bid_id": "3", "project_name": "c", "region": "北京市", "budget": None},
+                {"bid_id": "4", "project_name": "d", "region": None},
+                {"bid_id": "5", "project_name": "e", "region": "北京市", "budget": 50.0, "winner": "乙"},
+            ]
+        )
+
+    def test_group_counts_desc(self):
+        result = region_distribution(self.make_ds())
+        names = [r["name"] for r in result["regions"]]
+        # 杭州与北京并列 2——并列时按名称字典序
+        assert names == ["北京市", "浙江省杭州市"]
+
+    def test_budget_and_awarded_per_region(self):
+        result = region_distribution(self.make_ds())
+        by_name = {r["name"]: r for r in result["regions"]}
+        assert by_name["浙江省杭州市"]["count"] == 2
+        assert by_name["浙江省杭州市"]["budget_total"] == 300.0
+        assert by_name["浙江省杭州市"]["awarded"] == 1
+        assert by_name["北京市"]["budget_total"] == 50.0  # None 预算不计
+
+    def test_unknown_count(self):
+        result = region_distribution(self.make_ds())
+        assert result["unknown_count"] == 1
+        assert result["unique_regions"] == 2
+
+    def test_top_n_truncation(self):
+        result = region_distribution(self.make_ds(), top_n=1)
+        assert len(result["regions"]) == 1
+        assert result["unique_regions"] == 2  # 不截断唯一数
+
+    def test_empty(self):
+        result = region_distribution(BidDataset([]))
+        assert result["regions"] == []
+        assert result["unique_regions"] == 0
+        assert result["unknown_count"] == 0
+
+
+# ----------------------------------------------------------------------
+# 月度趋势（R12）
+# ----------------------------------------------------------------------
+
+
+class TestMonthlyTrend:
+    def make_ds(self):
+        return BidDataset(
+            [
+                {"bid_id": "1", "project_name": "a", "publish_date": "2026-01-05", "budget": 100.0},
+                {"bid_id": "2", "project_name": "b", "publish_date": "2026-01-20", "budget": 200.0},
+                {"bid_id": "3", "project_name": "c", "publish_date": "2026-02-10", "budget": None},
+                {"bid_id": "4", "project_name": "d", "publish_date": None},  # 无日期不进趋势
+                {"bid_id": "5", "project_name": "e", "publish_date": "2026-02-15", "budget": 300.0},
+            ]
+        )
+
+    def test_months_chronological(self):
+        result = monthly_trend(self.make_ds())
+        assert [m["month"] for m in result["months"]] == ["2026-01", "2026-02"]
+
+    def test_counts_and_budgets(self):
+        result = monthly_trend(self.make_ds())
+        by_month = {m["month"]: m for m in result["months"]}
+        assert by_month["2026-01"]["count"] == 2
+        assert by_month["2026-01"]["budget_total"] == 300.0
+        assert by_month["2026-02"]["count"] == 2
+        assert by_month["2026-02"]["budget_total"] == 300.0  # None 预算不计
+
+    def test_mom_change(self):
+        result = monthly_trend(self.make_ds())
+        # 2 月 2 个 vs 1 月 2 个 → 0.0%
+        assert result["mom_change"] == 0.0
+
+    def test_mom_change_growth(self):
+        ds = BidDataset(
+            [
+                {"bid_id": "1", "project_name": "a", "publish_date": "2026-01-01"},
+                {"bid_id": "2", "project_name": "b", "publish_date": "2026-02-01"},
+                {"bid_id": "3", "project_name": "c", "publish_date": "2026-02-02"},
+                {"bid_id": "4", "project_name": "d", "publish_date": "2026-02-03"},
+            ]
+        )
+        assert monthly_trend(ds)["mom_change"] == 200.0
+
+    def test_single_month_no_mom(self):
+        ds = BidDataset([{"bid_id": "1", "project_name": "a", "publish_date": "2026-03-01"}])
+        assert monthly_trend(ds)["mom_change"] is None
+
+    def test_with_date_count(self):
+        assert monthly_trend(self.make_ds())["with_date"] == 4
+
+    def test_empty(self):
+        result = monthly_trend(BidDataset([]))
+        assert result["months"] == []
+        assert result["mom_change"] is None
+        assert result["with_date"] == 0

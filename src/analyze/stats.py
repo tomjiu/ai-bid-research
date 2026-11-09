@@ -89,3 +89,101 @@ def budget_percentiles(ds: BidDataset) -> Dict[str, Any]:
         "p75": round(_percentile(values, 75), 2),
         "max": values[-1],
     }
+
+
+# ----------------------------------------------------------------------
+# 区域分布
+# ----------------------------------------------------------------------
+
+
+def region_distribution(
+    ds: BidDataset, *, top_n: int = 10
+) -> Dict[str, Any]:
+    """区域分布：按项目数降序的 top-N 地区。
+
+    Args:
+        ds: 分析数据集。
+        top_n: 返回前 N 个地区（默认 10）。
+
+    Returns:
+        含 ``regions``（列表，每项 ``name`` / ``count`` / ``budget_total``
+        / ``awarded``——预算合计仅计非空样本）/ ``unique_regions``
+        / ``unknown_count``（region 为空样本数）。
+    """
+    groups: Dict[str, Dict[str, Any]] = {}
+    unknown = 0
+    for record in ds.records:
+        region = record.get("region")
+        if not region:
+            unknown += 1
+            continue
+        bucket = groups.setdefault(
+            region, {"count": 0, "budget_total": 0.0, "awarded": 0}
+        )
+        bucket["count"] += 1
+        if record.get("budget") is not None:
+            bucket["budget_total"] += float(record["budget"])
+        if record.get("winner"):
+            bucket["awarded"] += 1
+
+    ranked = sorted(
+        groups.items(), key=lambda kv: (-kv[1]["count"], kv[0])
+    )[:top_n]
+    return {
+        "regions": [
+            {
+                "name": name,
+                "count": data["count"],
+                "budget_total": round(data["budget_total"], 2),
+                "awarded": data["awarded"],
+            }
+            for name, data in ranked
+        ],
+        "unique_regions": len(groups),
+        "unknown_count": unknown,
+    }
+
+
+# ----------------------------------------------------------------------
+# 月度趋势
+# ----------------------------------------------------------------------
+
+
+def monthly_trend(ds: BidDataset) -> Dict[str, Any]:
+    """月度趋势：按发布月聚合项目数与预算额（时间升序）。
+
+    Args:
+        ds: 分析数据集。
+
+    Returns:
+        含 ``months``（列表，每项 ``month`` (``YYYY-MM``) / ``count`` /
+        ``budget_total``）/ ``mom_change``（最近一月项目数环比 %；
+        不足两月为 ``None``）/ ``with_date``（有日期样本数）。
+    """
+    groups: Dict[str, Dict[str, Any]] = {}
+    for record in ds.records:
+        month = (record.get("publish_date") or "")[:7]
+        if len(month) != 7:
+            continue  # 无日期样本不进趋势（口径：趋势分母 = with_date）
+        bucket = groups.setdefault(
+            month, {"count": 0, "budget_total": 0.0}
+        )
+        bucket["count"] += 1
+        if record.get("budget") is not None:
+            bucket["budget_total"] += float(record["budget"])
+
+    ordered = sorted(groups.items())
+    months = [
+        {
+            "month": month,
+            "count": data["count"],
+            "budget_total": round(data["budget_total"], 2),
+        }
+        for month, data in ordered
+    ]
+    mom: Optional[float] = None
+    if len(months) >= 2:
+        prev, curr = months[-2]["count"], months[-1]["count"]
+        if prev > 0:
+            mom = round((curr - prev) / prev * 100, 1)
+    return {"months": months, "mom_change": mom, "with_date": ds.with_date}
