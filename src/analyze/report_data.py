@@ -14,7 +14,11 @@ from src.analyze.dataset import AnalysisDataset
 from src.analyze.buyers import buyer_profiles
 from src.analyze.density import competition_density
 from src.analyze.quality import field_quality
-from src.analyze.keywords import common_bigrams, keyword_frequency
+from src.analyze.keywords import (
+    common_bigrams,
+    keyword_frequency,
+    keyword_monthly_trend,
+)
 from src.analyze.stats import (
     budget_region_crosstab,
     budget_summary,
@@ -56,6 +60,7 @@ def build_analysis_payload(
         "field_quality": field_quality(dataset),
         "buyer_profiles": buyer_profiles(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
+        "keyword_trends": keyword_monthly_trend(dataset),
     }
 
 
@@ -272,6 +277,27 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             _render_table(headers, rows),
             "",
             "注：分桶为研究经验口径（左闭右开，末桶无上界）；「预算未知」为数据缺口如实可见。",
+            "",
+        ]
+
+    trends = payload.get("keyword_trends") or {}
+    if trends:
+        months_union = sorted(
+            {month for slot in trends.values() for month in slot["months"]}
+        )
+        headers = ["领域词", "首次出现"] + months_union + ["合计"]
+        rows = [
+            [term, str(slot["first_seen"])]
+            + [str(slot["months"].get(month, 0)) for month in months_union]
+            + [str(slot["total"])]
+            for term, slot in trends.items()
+        ]
+        sections += [
+            "## 十、术语演化（领域词月度命中趋势）",
+            "",
+            _render_table(headers, rows),
+            "",
+            "注：无发布日期的记录不参与本节；首次出现为该词首个命中月份——**新兴领域信号，供人工复核**。",
             "",
         ]
 

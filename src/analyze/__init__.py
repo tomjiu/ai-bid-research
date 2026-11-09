@@ -7,7 +7,11 @@
 from src.analyze.dataset import AnalysisDataset, load_dataset
 from src.analyze.buyers import buyer_profiles
 from src.analyze.density import competition_density
-from src.analyze.keywords import common_bigrams, keyword_frequency
+from src.analyze.keywords import (
+    common_bigrams,
+    keyword_frequency,
+    keyword_monthly_trend,
+)
 from src.analyze.compare import (
     build_comparison_payload,
     render_comparison_markdown,
