@@ -31,6 +31,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# #598 同型节（全仓检查类工作流纪律）：同 ref 新推送取消旧 run——
+# 本 workflow 单跑 17-20 分钟（冷缓存更久），调试环连推时被取代的 run
+# 纯燃烧 runner 分钟且其红绿皆为审计噪音（PR #599 评论的实测数据）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_RETRY: 3
