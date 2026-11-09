@@ -1,0 +1,99 @@
+47c87aa feat(#313): 批 A 标书数据面接线——bid.state/bid.outline + 大纲树面板 (#576)
+027d0e5 integrate: 19 个 PR 集成（拆分版）——移除 chain-check.yml，保留全部功能代码 (#574)
+cf110a5 fix(#591): MCP SDK 字段命名跨版本漂移——camelCase/snake_case/dict 三形态兼容
+31767f7 fix(#591): SDK e2e 握手诊断 + serverInfo 兼容 dict——CI 上 name 取到空字符串
+a35c4b7 fix(#556): linux-check 补装 mcp SDK——SDK e2e 9 用例里 8 个因缺件 AssertionError
+14448c3 fix(#591): guard 并发门测试容忍已占席位——LIVE_SUBPROCS 是进程级全局，硬拿 4 席必崩
+8c213c5 merge(#583): 吸收 #562 的测试基础设施修复——T19 超时诊断 / cargo 环境门 / T3a Windows 兼容
+f0f41d9 fix(#591): 根治 CI 误报——合成夹具生成器缺件（reportlab）纳入环境门，不再判红
+1de1222 feat(#591): CI 加「失败测试清单」——区分真失败与 #[should_panic] 预期 panic
+9cfc014 fix(#556): linux-check 装 reportlab + Pillow——合成夹具生成器缺件导致测试红
+5b51619 perf(#591): CI 分层——6 个重型验收测试转 #[ignore]，缓存 registry/target 拆 key
+40d35b1 fix(#556): linux-check 把 apt 装的 chi_sim 软链到 ~/.tessdata——探测口径对齐
+ad382c7 Merge remote-tracking branch 'origin/main' into integration/green-only
+0ccb10f Merge remote-tracking branch 'origin/main' into integration/green-only
+dc1f278 Merge pull request #573 from mmqz/chore/546-fsync-single-source
+02b2fa3 Merge remote-tracking branch 'origin/main' into integration/green-only
+75efb6f Merge pull request #575 from mmqz/fix/564-retry-whole-write-sequence
+a664154 fix: 集成后 3 个红测试收口——工具面漏登 / #474x#522 语义冲突 / #379 拆门未完成
+3829d47 Merge pull request #569 from mmqz/fix/issue-568
+1969bfc Merge pull request #572 from mmqz/fix/566-contract-numbering
+6bc16a9 Merge pull request #578 from mmqz/fix/565-env-gates
+891ea1b Merge pull request #579 from mmqz/fix/577-manifest-refill
+d5952e9 fix(#564+#546): write_fsync_atomic 全序列重试 + 单一真源收敛
+dfb1377 chore(#313): 范围收口——mcp.status 断言修复归还 #543 + 清理冗余 drop
+89c9417 fix(#580): approval.key 弃裸 fs::write 改调 write_fsync_atomic——三写面一次收敛
+30e40fd chore(#546+#564): 单一真源 × 全序列重试组合——#575 之上的结构收敛预组合
+4f2b3bd fix(#577): T6 计数式补 #490 meta.json + 入仓 manifest 重灌（55→56）
+edcdff0 fix(#565): run_tests 主链环境门收口——T4c-OCR numpy 门 + T6 渲染字体跨平台解析
+ccefa07 feat(#313): 批 A 标书数据面接线——bid.state/bid.outline 两 IPC 命令 + 大纲树面板
+7330ea5 fix(#564): write_fsync_atomic 全序列重试单元 + 指数退避扩容——rename 源被抢走后旧版单独重试 rename 永不可自愈
+c87a8de ci: 拆分 #567——移除 chain-check.yml，让 18 个 PR 先合
+2504694 docs(#566): 契约章节编号三防线——修 22 重复/26 乱序/24 缺号 + tool-surface 校验门
+a978bd4 fix: manifest sha256 用 git blob 口径 + 补 3 个游离文件
+f844a8b ci(#568): CI 队列深度防线——四 workflow 加 concurrency 组
+2cc17bb fix: 主链 T0d/T3a/T4c/T6 四项环境缺件收口——CI 依赖全从本仓 release 取件
+dbe2fd0 ci: chi_sim 改从 mdcore release ci-deps-v1 取件——上游 raw CDN 持续 504
+f28b1e7 ci: chi_sim 下载加 actions/cache——raw CDN 504 时不再依赖外部下载
+f1da614 chore: 工具面计数 7 面统一为 50（rebase 后 4 个测试面残留 48）
+3bcb432 chore: tool-surface 重算派生面到 50 工具 + 修 BidderProfile::load 迁移相容
+4c397c5 ci(#561): run_tests.py 主链 CI 门——T0-T19 全链接入，退出码直通做门禁
+1215d4b fix(#467): rebase 后收口——draft_src 声明被注释行吞并（裸 CR 断行）修复，tool-surface --check 44 面全同步
+eb2dc5e fix(#467): 增第三处盲区面——search_evidence_tool.rs:218 的 names.len() 断言纳入 check+write（PR #371 实测漏改致红发现）
+abc216d fix(#467): tool-surface 派生面盲区双补——dispatch_contract 的 arr.len 断言纳入管理 + write 补 draft_tool.rs 重写面
+758515c ci(#555): 真件链 Linux CI 门——unix 编译面 + tesseract OCR 面 + mang-app Linux 后端一次覆盖
+6715180 feat: 新增 SQLite 存储层 src/storage，打通数据库→报告全链路
+a56bdfc feat: 新增 LLM 调用封装与报告生成模块（src/llm + src/report）
+75f37a8 fix(#315): rebase main@44 后全 5 面同步到 48——业绩库四工具入面
+9a886c3 feat(#315): 业绩材料库——跨项目持久化 + 四因子匹配推荐 + 一键写入业绩章
+4c87eb1 fix(#318): rebase 到 main@46 收口——TOOL_NAMES 46 + 派生面全同步 + coverage_tools 补 route_project 导入
+6cd394e fix(#347): check_scoring_coverage 补登 is_implemented 白名单——mang-app diag 动态断言回绿
+eba5626 fix(#318): 工具面 35→36 + 位串矩阵 32→36 + Anchor 字段补齐
+200866e feat(#318): 评分细则逐条响应覆盖检查——拆点/正文命中/漏点/建议扣分（check_scoring_coverage）
+bbaa9ec fix(#474): 计分面内容绑定——PreExportConfirm 摘要并入覆写/映射面，人批的计分面不可被换（A-10）
+7f2003e fix(#473): B1/B2 kind 判据活化 + xlsx 抽取回归测试——报价文件/扫描件入导入值域
+9c89789 test(#545): 吸收 #549 三个测试钉子——U+3000 全角空格分隔 / 全角数字+句点拒 / 全角字母混入拒（撞车收敛，#550 成严格超集）
+50cf28d fix(#545): as_chapter 章号区 nfkc 归一——「第２章」全角数字 DOCX 通道建章节上下文（B-11 残留面）
+a68640a feat(#522): ungated_tools 回显 + 工具面二分不变量——allowed_next_tools 缺 8 个无门工具的诚实化（C-22）
+b5e0aa1 fix(#538): is_price_item 两档化疑似告警 + tools.rs 镜像单一真源化——「投标报价合理性分析」类主观项误伤可见（A-18）
+5fd9eec fix(#542): mang-app --selftest 工具面断言动态化——钉死 13 改 TOOL_NAMES.len()，对齐 diag.rs 单测口径
+0403a96 chore(#547): 死代码/告警第三波 11 处收口——cargo check 全 target 面清零
+0ef540e fix(#551): AGENT_MANDATORY_OFFCATEGORY 警示语与 p2 教学改口径——不教域函数名 build_matrix，指明 build_outline 自动重算
+1d5b4a8 docs(#534): M_ MAJOR 修订闭环按状态分流诚实化——p6 加状态条件与「M_ 清零后才 scope=all」纪律、p7 诚实桥接段改写（C-29 残留）
+6581b8a docs(#508): BLOCKER 豁免通道三处虚指诚实化——p6 豁免话术改按类别出口表 + 契约 waived:[VF-*] 对齐恒空 + SKILL/设计文档口径同步
+926a828 docs(#513): contract.md 补 5 工具契约章节——单一真源对齐工具面 44
+9be083f docs(AGENTS): 补齐 0.0.6/0.0.7/0.0.8/0.0.10/0.0.11
+f0e3ca9 Merge pull request #558 from mmqz/fix/557-pdfium-garble-gate
+f712fca Merge pull request #371 from mmqz/feat/316-multi-package-bidding
+7c7a27a Merge pull request #548 from mmqz/fix/544-reopen-export-gate
+d36a86a Merge pull request #432 from mmqz/fix/426-matrix-filter-validation
+163e219 Merge pull request #459 from mmqz/docs/451-agents-complete
+a83aa98 Merge pull request #486 from mmqz/fix/484-save-standalone-honest
+cf176ea Merge pull request #503 from mmqz/docs/502-skill-five-tool-coverage
+ef58ae9 Merge pull request #506 from mmqz/fix/505-tool-surface-write-draft
+f01862c Merge pull request #511 from mmqz/fix/510-scope-honesty
+0de12c8 Merge pull request #530 from mmqz/docs/528-userguide-toolface-44
+0154110 Merge pull request #531 from mmqz/fix/529-parse-gate-order
+1507579 Merge pull request #537 from mmqz/fix/536-poppler-probe-timeout
+29fdf81 Merge pull request #549 from mmqz/fix/545-as-chapter-fullwidth
+07b23dd fix(#559 补): ground-truth/meta.json 入清单——rebase 新基线上 T3a 收口面抓到的 #491 同型漏登
+026b14c fix(#557): pdf 引擎通道乱码闸——pdfium 采信前过 CJK 乱码探针，Garbled 回退旧路径仲裁链
+70f5f4f fix(#559 顺带修): ENV_BLOCKED 登记幂等化——同日同缺失组合不再重复追加
+aff8113 fix(#559): T3a manifest 反巡查限定治理域 + #425 夹具入清单携带面 + #134 残留摘要迁域
+0cb9c57 fix(#316): 契约编号收口——list_packages 编 26（main 已到 24）
+a94377c fix(#316): rebase main@44 后派生面重生成 + 盲区断言 45——list_packages 入面
+d86ef47 fix(#316): 三处盲区工具数断言 37→38——dispatch_contract:107 / draft_tool:291 / search_evidence:218（#467 同族，tool-surface 不管理这些面）
+e66d562 fix(#316): rebase 后收口——TOOL_NAMES 38 + 派生面重生成 + 契约编号调整
+a23bede feat(#316): 分包识别与按包建纲——域层注册表 + REQ 归属 + 大纲/矩阵范围收敛
+bdcc473 fix(#545): as_chapter 章号区 nfkc 归一——全角数字章头与 PDF 侧跨格式同口径
+804b07b fix(#544): export_allowed 加 Revising 拦截——reopen 后重导被点名拦下
+ac4652d docs(#510): extract scope 三处虚指诚实化——p2/契约/SKILL 对齐 all-only 实现口径（C-12）
+9254de9 docs(AGENTS): ai-bid 补齐 0.0.6/7/8/10/11——合并 5 个冲突 PR
+240fa66 fix(#536): poppler probe 超时判缺件 + 错误分类变体直判——字符串协议脆弱面收口（B-24）
+e0f9e4f fix(#426): get_compliance_matrix 过滤值域校验——非法 category/status 显式拒，不静默 0 行
+8193b5b fix(#529): parse_file 门序重排 + 哈希复用——扩展名门→字节门→哈希，import 链免双读（B-23）
+c669b57 docs(#528): USER-GUIDE 工具面 13→44 对齐 + generator 补 external；HANDOFF 架构图 11→44
+8f4094b docs(#502): 五工具 Skill 教学补齐——对账四工具挂 P2 对账节 + list_tasks 挂 P7 RT 节
+8b5b4e5 fix(#505): write() 第四参数 _draft→draft——E0425×4 编译红（接线正文引用了 underscore 化参数名）
+c2e6cfa fix(#505): tool-surface --write 接线 draft 面——render_draft 从 check-only 到全回路
+b8d4b16 fix(#484): web 独立态 Ctrl+S 保存语义诚实化——窗口层级分流 + __lastSave 形态探针（D-02）
