@@ -420,6 +420,7 @@ def gen_carried_fixtures(out: Path) -> dict:
     carried = [
         "corpus-A/files/澄清修改文件-3.1.1.docx",
         "corpus-A/ground-truth/meta.json",
+
     ]
     copied = 0
     for rel in carried:
