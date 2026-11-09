@@ -280,9 +280,31 @@ jobs:
         shell: bash
         run: |
           cargo build -p bid-mcp --bin bid-mcp-stdio
-          python3 -m pip install --quiet pytest
+          # transport=mcp 用例需要官方 MCP Python SDK（HAS_MCP_SDK 门）；
+          # 缺件时 9 个用例里 8 个直接 AssertionError（不是 SKIP）——必须装。
+          # --user + --break-system-packages 同 reportlab 步骤口径（PEP 668）。
+          python3 -m pip install --quiet --user --break-system-packages pytest mcp || \
+            python3 -m pip install --quiet --break-system-packages pytest mcp
+          python3 -c "import mcp; print('mcp SDK ok')" || echo "::warning::mcp SDK 未装上——transport=mcp 用例将失败"
           cd ..
-          BID_MCP_TARGET_DIR="$PWD/bidcore/target" python3 -m pytest sdk/tests/test_mcp_e2e.py -v
+          set +e
+          BID_MCP_TARGET_DIR="$PWD/bidcore/target" python3 -m pytest sdk/tests/test_mcp_e2e.py -v 2>&1 | tee "$RUNNER_TEMP/sdk-e2e.log"
+          PYCODE=${PIPESTATUS[0]}
+          set -e
+          # 失败清单（同 cargo test 步骤口径——pytest 面也要一眼可读）
+          FAILED=$(grep -E "^FAILED " "$RUNNER_TEMP/sdk-e2e.log" | sed -E "s/^FAILED //; s/ - .*$//" | sort -u || true)
+          COUNT=$(printf "%s" "$FAILED" | grep -c . || true)
+          echo "### SDK e2e 失败清单（linux-check）" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "- 零失败 ✅" >> "$GITHUB_STEP_SUMMARY"
+            echo "== SDK e2e 失败: 0 =="
+          else
+            echo "**$COUNT 个用例失败**：" >> "$GITHUB_STEP_SUMMARY"
+            printf "%s\n" "$FAILED" | while read -r t; do [ -n "$t" ] && echo "- \`$t\`" >> "$GITHUB_STEP_SUMMARY"; done
+            echo "== SDK e2e 失败: $COUNT =="
+            printf "%s\n" "$FAILED" | while read -r t; do [ -n "$t" ] && echo "  ✗ $t"; done
+          fi
+          exit $PYCODE
 
       - name: Save cargo cache (#308 收尾——save 独立后置)
         # exact 命中（cache-hit == 'true'）时跳过——同 key 已存，重存纯浪费；
