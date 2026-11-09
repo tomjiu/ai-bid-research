@@ -5,8 +5,18 @@
 """
 
 from src.analyze.dataset import AnalysisDataset, load_dataset
+from src.analyze.stats import (
+    budget_summary,
+    date_range,
+    monthly_trend,
+    region_distribution,
+)
 
 __all__ = [
     "AnalysisDataset",
     "load_dataset",
+    "budget_summary",
+    "date_range",
+    "monthly_trend",
+    "region_distribution",
 ]
