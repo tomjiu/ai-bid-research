@@ -4,16 +4,26 @@
 一条命令从公告源到研究报告：``python main.py pipeline --announcements …``
 """
 
-from src.pipeline.stages import (
+from src.pipeline.runner import (
+    Pipeline,
+    PipelineRun,
     StageResult,
+    run_analyze_stage,
+    run_report_stage,
+)
+from src.pipeline.stages import (
     classify_against_db,
     run_collect_stage,
     run_extract_stage,
 )
 
 __all__ = [
+    "Pipeline",
+    "PipelineRun",
     "StageResult",
     "classify_against_db",
     "run_collect_stage",
     "run_extract_stage",
+    "run_analyze_stage",
+    "run_report_stage",
 ]
