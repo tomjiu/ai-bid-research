@@ -30,6 +30,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# #598：全仓检查类工作流同型节（windows-check / web-ui-tests /
+# python-tests / rev-sync 均有）——同 ref 新推送安全取消旧 run。
+# #584 重型 main 面上线后合并列车不再产生 N 个并发 ~1h run
+#（被取代 commit 的红绿结果皆为审计噪音；PR 阶段快速退出不受影响）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_RETRY: 3
