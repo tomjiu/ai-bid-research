@@ -3612,3 +3612,279 @@ html[data-chrome="native"][data-maximized="1"] #app {
   }
 
 }
+
+/* ============ #603 批 A：审核门面板（bid-gt）============ */
+.btn-danger {
+  color: #fff;
+  background: #cf222e;
+  border-color: #cf222e;
+}
+.btn-danger:hover {
+  background: #a40e26;
+  border-color: #a40e26;
+}
+.bid-gt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 22px 26px;
+  max-width: 980px;
+}
+.bid-gt-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bid-gt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.bid-gt-badge[data-state="ok"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 32%, transparent);
+}
+.bid-gt-badge[data-state="warn"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
+}
+.bid-gt-badge svg {
+  width: 12px;
+  height: 12px;
+}
+.bid-gt-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.bid-gt-msg {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  line-height: 1.6;
+}
+.bid-gt-msg.ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.bid-gt-msg.err {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+/* 追认清单 */
+.bid-gt-ratify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.bid-gt-ratify-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 22%, transparent);
+}
+.bid-gt-ratify-gate {
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.bid-gt-ratify-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 门台账行 */
+.bid-gt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.bid-gt-row:last-of-type {
+  border-bottom: none;
+}
+.bid-gt-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bid-gt-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.bid-gt-dot[data-state="ok"] {
+  background: var(--ok);
+}
+.bid-gt-dot[data-state="warn"] {
+  background: var(--warn);
+}
+.bid-gt-dot[data-state="pending"] {
+  background: #9ca3af;
+}
+.bid-gt-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.bid-gt-state {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.bid-gt-state[data-state="ok"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.bid-gt-state[data-state="warn"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+}
+.bid-gt-state[data-state="pending"] {
+  color: var(--fg-muted);
+  background: color-mix(in srgb, #9ca3af 14%, transparent);
+}
+.bid-gt-row-note {
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding-left: 17px;
+}
+.bid-gt-row-pass {
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding-left: 17px;
+}
+.bid-gt-method {
+  padding: 0 6px;
+  border-radius: 4px;
+}
+.bid-gt-method[data-m="human_receipt"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.bid-gt-method[data-m="agent_declared"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+}
+.bid-gt-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 17px;
+}
+.bid-gt-batchc {
+  font-size: 11px;
+  color: var(--fg-muted);
+  border: 1px dashed color-mix(in srgb, var(--fg-muted) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: help;
+}
+/* 过门/拒审内联表单 */
+.bid-gt-form {
+  margin: 6px 0 2px 17px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  background: color-mix(in srgb, var(--warn) 6%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bid-gt-form-title {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bid-gt-form-title svg {
+  width: 13px;
+  height: 13px;
+}
+.bid-gt-form-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+.bid-gt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.bid-gt-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #d1d5db);
+  background: var(--bg, #fff);
+  color: inherit;
+}
+.bid-gt-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  outline-offset: -1px;
+}
+.bid-gt-form-actions {
+  display: flex;
+  gap: 8px;
+}
+/* 裁决历史 */
+.bid-gt-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.bid-gt-rev {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.bid-gt-rev:nth-child(odd) {
+  background: color-mix(in srgb, #9ca3af 7%, transparent);
+}
+.bid-gt-rev-decision {
+  font-weight: 600;
+}
+.bid-gt-rev[data-decision="REJECTED"] .bid-gt-rev-decision {
+  color: #cf222e;
+}
+.bid-gt-rev[data-decision="APPROVED"] .bid-gt-rev-decision {
+  color: var(--ok);
+}
+@media (max-width: 1440px) {
+  .bid-gt {
+    max-width: 100%;
+  }
+  .bid-gt-ratify-meta {
+    display: none;
+  }
+}
+@media (min-width: 1920px) {
+  .bid-gt {
+    max-width: 1100px;
+  }
+}

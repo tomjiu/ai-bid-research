@@ -466,6 +466,13 @@ impl Ctx {
 
             "bid.score" => crate::bid::score(&ws, &self.bid, &a),
 
+            // ── #603 批 A：治理面（bid.rs——gates 为 DomainStore 直读台账；
+            //    gate_pass 为写面首发：宿主签发 receipt（#182）后经
+            //    bid_mcp 真实工具面 record_review_gate 落账）──────────
+            "bid.gates" => crate::bid::gates(&ws, &self.bid, &a),
+
+            "bid.gate_pass" => crate::bid::gate_pass(&ws, &self.bid, &a),
+
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),

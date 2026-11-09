@@ -6,6 +6,7 @@
 //!       / mcp.status / llm.status+save 往返（#76）/ fspec.status（#76）
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
 //!       / bid.quality+bid.score（#313 批 C：早态 E_STATE→state 码 / MATRIX_READY 后真实读取）
+//!       / bid.gates+bid.gate_pass（#603 批 A：五门台账 / 人工过门宿主签发 receipt / 门序跳跃拒 / 非法门早拒）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
 //! 输出形如 `PASS  <name>：<detail>` / `FAIL  <name>：<detail>`，最后一行汇总 + 退出码。
 
@@ -591,6 +592,60 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             bsc["score"]["total"],
             bsc["score"]["target"]
         ),
+    );
+
+    // ---- #603 批 A：治理面（bid.gates / bid.gate_pass）
+    // 读面：五门台账 + 空账本警告位（此时三门全未过）
+    let resp = call(&ctx, json!({"id":"t-bid-g0","cmd":"bid.gates"}));
+    let bg = result(&resp);
+    r.check(
+        "bid.gates(五门台账)",
+        resp["ok"] == json!(true)
+            && bg["present"] == json!(true)
+            && bg["gates"].as_array().map(|a| a.len() == 5).unwrap_or(false)
+            && bg["gates"][0]["gate"] == json!("matrix_approval")
+            && bg["gates"][0]["approved"] == json!(false)
+            && bg["human_review_complete"] == json!(true)
+            && bg["reviews"].as_array().map(|a| a.is_empty()).unwrap_or(false),
+        format!("gates={}", bg["gates"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // 写面：门序跳跃 → 域层 E_STATE 透传为壳侧 state 码
+    let resp = call(&ctx, json!({"id":"t-bid-gp0","cmd":"bid.gate_pass","gate":"pre_export_confirm","decision":"APPROVED"}));
+    r.check(
+        "bid.gate_pass(门序跳跃拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    // 写面：宿主签发 receipt（#182）→ matrix 门过（human_receipt 路径）
+    let resp = call(&ctx, json!({"id":"t-bid-gp1","cmd":"bid.gate_pass","gate":"matrix_approval","decision":"APPROVED","actor_id":"selftest-reviewer"}));
+    let bgp = result(&resp);
+    r.check(
+        "bid.gate_pass(人工过门)",
+        resp["ok"] == json!(true)
+            && bgp["gate_pass"]["receipt"]["actor"]["actor_type"] == json!("human")
+            && bgp["gate_pass"]["receipt"]["method"] == json!("human_receipt")
+            && bgp["gate_pass"]["receipt"]["human_confirmed"] == json!(true)
+            && bgp["gate_pass"]["receipt"]["finding_ids"].as_array()
+                .map(|a| a.is_empty()).unwrap_or(false),
+        format!("actor={:?}", bgp["gate_pass"]["receipt"]["actor"]),
+    );
+    // 读面对账：matrix 门已过 + latest_pass 审计在场
+    let resp = call(&ctx, json!({"id":"t-bid-g1","cmd":"bid.gates"}));
+    let bg2 = result(&resp);
+    r.check(
+        "bid.gates(过门后对账)",
+        resp["ok"] == json!(true)
+            && bg2["gates"][0]["approved"] == json!(true)
+            && bg2["gates"][0]["latest_pass"]["actor"] == json!("selftest-reviewer")
+            && bg2["reviews"].as_array().map(|a| a.len() == 1).unwrap_or(false),
+        format!("reviews={}", bg2["reviews"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // 写面：非法门名 → 壳侧入参早拒（不进工具面）
+    let resp = call(&ctx, json!({"id":"t-bid-gp2","cmd":"bid.gate_pass","gate":"no_addendum_confirmed","decision":"APPROVED"}));
+    r.check(
+        "bid.gate_pass(非法门早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
     );
 
     // ---- #194：工作区切换（workspace.open / workspace.current）
