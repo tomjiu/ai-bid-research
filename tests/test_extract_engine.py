@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from src.extract.engine import (
     ExtractionOutcome,
     LLMExtractor,
@@ -19,7 +17,6 @@ from src.extract.engine import (
     extract_record,
     extract_record_async,
 )
-from src.extract.schema import ExtractionSchemaError
 from src.llm.client import LLMError
 
 #: 典型政采公告样例（规则基线的目标形态）。

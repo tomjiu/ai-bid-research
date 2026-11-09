@@ -34,10 +34,11 @@ class TestEvalCLI:
         code = cli.main(
             ["eval", "--gold", str(GOLD), "--texts", str(texts)]
         )
-        # 只有 1/3 语料在场：hlj 命中、zj-cloud 缺文本、noise 缺文本
-        # （预期失败但语料缺失 → verdict 不一致 → 命中率低于阈值 → 退出 1）
+        # 只有 1/3 语料在场：hlj 命中；zj-cloud 缺文本（未命中标注字段）；
+        # noise 缺文本（预期失败但无法评估 → verdict 不一致）
         out = capsys.readouterr().out
         assert "抽取质量评估" in out
+        assert code in (0, 1)  # 缺件评估的退出码依命中率而定
 
     def test_missing_gold_exit_2(self, tmp_path, capsys):
         code = cli.main(["eval", "--gold", str(tmp_path / "nope.json")])

@@ -254,7 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=Path("output/reports"),
-        help=f"报告输出目录（默认 output/reports）",
+        help="报告输出目录（默认 output/reports）",
     )
 
     # pipeline 子命令（#601 批次 D：管道整合）
