@@ -18,6 +18,7 @@
 
 mod b64;
 mod annotations;
+mod bid;
 mod chrome;
 mod diag;
 mod dialogs;

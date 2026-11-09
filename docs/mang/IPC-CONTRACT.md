@@ -337,6 +337,51 @@ const full = await (await fetch(url)).json();  // 与内联时那个帧完全一
 // 缺失：{ "present": false, "path": …, "hint": … }；坏 JSON：{ "present": true, "invalid": true, "error": "…" }
 ```
 
+### bid.state —— 标书项目状态 / 门审 / 快速统计（只读；#313 批 A）
+读当前工作区 `db.json` 的真实项目态。主体经 `bid_mcp::dispatch_with(get_bid_project_state)`
+走真实工具面（与 bid-mcp-stdio 同源裁决，方案 A 直链），工具输出原样放 `state` 键。
+**无 db.json → `not_found`（干净拒绝，不在工作区落任何副作用）**；db.json 损坏 → `bad_json`。
+```jsonc
+→ { "present": true,
+    "workspace": "D:\\项目A", "db": "D:\\项目A\\db.json",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "code": "", "mode": "明标",
+                  "status": "DRAFTING" },
+    "state": { …get_bid_project_state 工具输出原样（status / allowed_next_tools /
+               terminal / dirty_sections / pending_rewrite_directives / content_binding /
+               agent_waivers / human_review_complete）… },
+    "quick_stats": {
+      "requirements": 1120, "evidence": 13, "evidence_bindings": 46,
+      "sections": 26, "sections_leaf": 20, "sections_drafted": 12,
+      "sections_accepted": 3, "sections_failed": 1, "sections_dirty": 2,
+      "target_total_chars": 150000, "actual_total_chars": 81200,
+      "pages_estimate": 97 } }   // 页数 = ceil(实际字数 / 844)——域层 CHARS_PER_PAGE
+```
+
+### bid.outline —— 标书章节树（只读；#313 批 A）
+DomainStore 直读章节树（MCP 工具面无此视图）。节点按 `order` 升序；
+`actual_chars`：叶 = 正文字符数、结构节点 = 后代叶之和（与 target_chars
+「父 = 子配额和」同口径）；`chapter_file`（相对工作区、`/` 分隔）仅在
+`chapters/{id}.json` 真实存在时给出——UI 用它 `fs.read` 跳转章节详情。
+无 db.json / 无项目 → `not_found`；有项目无大纲 → `nodes: []`（不是错误）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "nodes": [
+      { "id": "SEC-0001", "parent_id": null, "title": "第一章 技术方案", "level": 1,
+        "order": 1, "status": "DRAFTING", "dirty": false, "target_chars": 15000,
+        "actual_chars": 12000, "req_count": 8, "is_leaf": false, "has_content": false,
+        "content_attempt": 0, "chapter_file": null },
+      { "id": "SEC-0002", "parent_id": "SEC-0001", "title": "1.1 技术参数", "level": 2,
+        "order": 2, "status": "DRAFTED", "dirty": true, "target_chars": 6000,
+        "actual_chars": 5000, "req_count": 5, "is_leaf": true, "has_content": true,
+        "content_attempt": 2, "chapter_file": "chapters/SEC-0002.json" } ],
+    "stats": { …同 bid.state.quick_stats 的章节面字段（不含 requirements/evidence）… } }
+```
+
+> 服务缓存（壳内）：按「工作区根 + db.json 指纹（mtime+size）」绑定——
+> `workspace.open` 切根或外部进程（bid-mcp-stdio / Agent）改写 db.json 后，
+> 下一条 bid.* 命令自动重开，无需重启。
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
@@ -516,7 +561,7 @@ mang-app.exe [DIR] [选项]
 bidcore\target\release\mang-app.exe --selftest
 ```
 
-无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
+无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
 
 窗口内 IPC 冒烟（真实 WebView2，走 CDP）：
 ```

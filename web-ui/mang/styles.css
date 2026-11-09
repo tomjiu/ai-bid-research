@@ -2620,3 +2620,506 @@ html[data-chrome="native"][data-maximized="1"] #app {
   color: var(--text-muted, #6a737d);
   border-top: 1px dashed var(--border, #d0d7de);
 }
+
+/* ---------------------------------------------------------------------------
+   #313 批 A：标书数据面（侧栏「标书」视图 + 标书工作台伪标签页）
+   数据源 bid.state / bid.outline（docs/mang/IPC-CONTRACT.md §6）；
+   合规矩阵/自评/覆盖报告 = 批 B/C/D，占位禁用态不造数据。
+   ------------------------------------------------------------------------ */
+
+/* —— 状态徽章（章节状态 × 项目状态共用） —— */
+.bid-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+  background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
+}
+.bid-badge[data-status="OUTLINING"],
+.bid-badge[data-status="DRAFTING"],
+.bid-badge[data-status="FILES_IMPORTED"],
+.bid-badge[data-status="VALIDATING"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.bid-badge[data-status="FAILED"],
+.bid-badge[data-status="REQUIREMENTS_EXTRACTED"] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 11%, transparent);
+}
+.bid-badge[data-status="DRAFTED"],
+.bid-badge[data-status="MATRIX_READY"],
+.bid-badge[data-status="EVIDENCE_BOUND"] {
+  color: #0969da;
+  background: color-mix(in srgb, #0969da 12%, transparent);
+}
+.bid-badge[data-status="REVISING"],
+.bid-badge[data-status="REVIEWING"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+}
+.bid-badge[data-status="ACCEPTED"],
+.bid-badge[data-status="READY_TO_EXPORT"],
+.bid-badge[data-status="EXPORTED"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 13%, transparent);
+}
+.bid-badge[data-status="DRAFT"],
+.bid-badge[data-status="PENDING"] {
+  color: var(--fg-soft);
+  background: color-mix(in srgb, var(--fg-soft) 14%, transparent);
+}
+
+/* —— 侧栏「标书」视图 —— */
+.bid-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+.bid-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-editor);
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.bid-card[data-kind="empty"] {
+  background: transparent;
+}
+.bid-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.bid-card-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  word-break: break-all;
+}
+.bid-proj-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bid-proj-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.bid-gates {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bid-gate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.bid-gate-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--fg-soft);
+}
+.bid-gate[data-state="ok"] .bid-gate-dot {
+  background: var(--ok);
+}
+.bid-gate[data-state="warn"] .bid-gate-dot {
+  background: var(--warn);
+}
+.bid-gate[data-state="pending"] .bid-gate-dot {
+  background: var(--fg-soft);
+}
+.bid-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.bid-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: 5px 7px;
+  background: color-mix(in srgb, var(--fg-muted) 4%, transparent);
+}
+.bid-stat-v {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.bid-stat-k {
+  font-size: 10.5px;
+  color: var(--fg-muted);
+}
+.bid-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bid-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg);
+}
+.bid-entry:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--border-soft);
+}
+.bid-entry:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.bid-entry-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: inline-flex;
+  color: var(--fg-muted);
+}
+.bid-entry-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.bid-entry-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.bid-entry-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+.bid-entry-sub {
+  font-size: 10.5px;
+  color: var(--fg-muted);
+}
+.bid-entry-state {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--fg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1px 7px;
+}
+.bid-entry-state.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+/* —— 标书工作台（编辑区伪标签页） —— */
+.bid-wb {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-editor);
+}
+.bid-wb-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.bid-wb-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.bid-wb-title svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.bid-wb-project {
+  font-size: 12px;
+  color: var(--fg-muted);
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bid-wb-status {
+  display: inline-flex;
+}
+.bid-wb-spacer {
+  flex: 1;
+}
+.bid-wb-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* 左列：大纲树 */
+.bid-tree {
+  flex: none;
+  width: 360px;
+  min-width: 240px;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.bid-tree-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bid-tree-meta {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+.bid-tree-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 12px;
+}
+.bid-tree .view-state {
+  margin: 30px 14px;
+}
+.bid-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  padding-right: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.bid-node:hover {
+  background: var(--hover);
+}
+.bid-node:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.bid-node[data-selected="true"] {
+  background: var(--selected);
+}
+.bid-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  display: inline-flex;
+  color: var(--fg-muted);
+  transition: transform 0.1s ease;
+}
+.bid-caret svg {
+  width: 100%;
+  height: 100%;
+}
+.bid-node-label {
+  flex: 1;
+  min-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.bid-dirty {
+  flex: none;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 8px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-weight: 600;
+}
+.bid-node-chars {
+  flex: none;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bid-bar {
+  flex: none;
+  width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.bid-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--fg-soft);
+}
+.bid-bar-fill[data-state="low"] {
+  background: var(--danger);
+}
+.bid-bar-fill[data-state="ok"] {
+  background: var(--ok);
+}
+.bid-bar-fill[data-state="pending"] {
+  background: color-mix(in srgb, var(--fg-soft) 55%, transparent);
+}
+
+/* 右侧：页签 + 章节详情（批 A）；矩阵/自评/覆盖 = 批 B/C/D 占位 */
+.bid-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.bid-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.bid-tab {
+  height: 24px;
+  padding: 0 11px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.bid-tab:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--fg);
+}
+.bid-tab[aria-selected="true"] {
+  background: var(--active);
+  color: var(--fg);
+  font-weight: 600;
+}
+.bid-tab:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.bid-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.bid-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.bid-detail-head {
+  flex: none;
+  padding: 14px 22px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: color-mix(in srgb, var(--fg-muted) 3%, transparent);
+}
+.bid-detail-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bid-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bid-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+.bid-detail-body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 22px 26px;
+}
+.bid-detail-body .view-state {
+  margin: 40px auto;
+}
+.bid-detail-md {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+/* 响应式（issue #313 验收 6：1440 / 1920 / 2560）——窄窗收树宽，宽窗详情限宽可读 */
+@media (max-width: 1360px) {
+  .bid-tree {
+    width: 300px;
+  }
+}
+@media (max-width: 1150px) {
+  .bid-tree {
+    width: 250px;
+    min-width: 200px;
+  }
+  .bid-node-chars,
+  .bid-bar {
+    display: none;
+  }
+}
+@media (min-width: 1920px) {
+  .bid-detail-md {
+    max-width: 1000px;
+  }
+}
