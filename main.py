@@ -13,6 +13,9 @@
     python main.py extract --source announcements/ --db data/bids.db
     python main.py extract --retry --db data/bids.db    # 重试此前失败的公告
 
+    # 领域数据分析（离线纯数据报告：预算/区域/趋势/关键词/密度）
+    python main.py analyze --db data/bids.db --keyword 智慧城市 --days 90 --html
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -183,6 +186,40 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
+    )
+
+    # analyze 子命令（#601 批次 C：分析面）
+    analyze = sub.add_parser(
+        "analyze",
+        help="领域数据分析：预算/区域/趋势/关键词/密度 → 纯数据报告（离线）",
+    )
+    analyze.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"研究工作区数据库（默认 {DEFAULT_DB_PATH}）",
+    )
+    analyze.add_argument(
+        "--keyword",
+        default=None,
+        help="领域关键词过滤（与 db --query 同口径；缺省 = 全量）",
+    )
+    analyze.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="时间窗口（天；缺省 = 不限）",
+    )
+    analyze.add_argument(
+        "--html",
+        action="store_true",
+        help="报告落盘后同时导出 HTML",
+    )
+    analyze.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/reports"),
+        help="报告输出目录（默认 output/reports）",
     )
 
     # db 子命令
@@ -494,6 +531,46 @@ async def _retry_with_client(db_path, client, limit):
         await client.close()
 
 
+def run_analyze(args: argparse.Namespace) -> int:
+    """执行 analyze 子命令：数据集 → 分析面 → 纯数据报告。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常——空数据集也 0，报告会如实说明缺口）。
+    """
+    from src.analyze import build_analysis_payload, load_dataset
+
+    dataset = load_dataset(
+        args.db, keyword=args.keyword, days=args.days
+    )
+    payload = build_analysis_payload(
+        dataset, keyword=args.keyword, days=args.days
+    )
+
+    scope = f"「{args.keyword}」" if args.keyword else "全量"
+    print(f"分析数据集：{scope} {len(dataset)} 条记录"
+          f"（完整度 {payload['complete_rate'] and round(payload['complete_rate'] * 100, 1) or 0}%）")
+    if not dataset.is_empty:
+        budget = payload["budget"]
+        density = payload["density"]
+        print(f"预算：中位 {budget['median'] and round(budget['median'], 1)} 万元，"
+              f"均值 {budget['mean'] and round(budget['mean'], 1)} 万元"
+              f"（有效 {budget['count']} 条）")
+        print(f"密度：{density['density_level']}"
+              f"（{density['monthly_rate'] and round(density['monthly_rate'], 1)} 条/月，"
+              f"定标率 {density['award_rate'] and round(density['award_rate'] * 100, 1) or 0}%）")
+
+    generator = ReportGenerator(output_dir=args.output_dir)
+    report_path = generator.generate_analysis_report(payload)
+    print(f"报告已生成: {report_path}")
+    if args.html:
+        html_path = generator.export_html(report_path)
+        print(f"HTML 已导出: {html_path}")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -590,6 +667,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return run_collect(args)
     if args.command == "extract":
         return run_extract(args)
+    if args.command == "analyze":
+        return run_analyze(args)
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":
