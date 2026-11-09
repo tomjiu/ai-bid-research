@@ -73,6 +73,7 @@ python main.py collect  --source announcements/ --dry-run     # 演练（不写�
 python main.py extract  --source announcements/              # LLM 抽取（失败进 pending）
 python main.py extract  --retry                               # 重试 pending 面（需 API key）
 python main.py analyze  --keyword 智慧城市 --days 90 --html   # 离线纯数据报告
+python main.py analyze  --compare 智慧城市,政务云 --html     # 多领域指标对照报告
 ```
 
 - **离线可测**：无 `DEEPSEEK_API_KEY`/`OPENAI_API_KEY` 或 `--no-llm`
