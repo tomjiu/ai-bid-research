@@ -106,6 +106,7 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `outside_workspace` | 解析后不在工作区内（`../` 穿越、盘符外绝对路径） | 安全拦截 |
 | `too_large` | 超过该命令的体积上限 | 50MB 的 pdf 用 `fs.read` |
 | `io` | 其它系统 IO 失败 | 磁盘满、权限 |
+| `state` | 工具面 E_STATE 透传：当前项目状态不允许该操作（#313 批 C/D）——UI 应分支「尚未开放」引导卡而非错误横幅 | DRAFT 态项目调 `bid.coverage`（未导入文件） |
 
 ---
 
@@ -526,6 +527,42 @@ record_review(matrix_approval)」）；Rejected 无 BLOCKER / 非法门名 / rec
 过期漂移 → **`bad_args`**（E_UNPROCESSABLE 原文）。
 
 
+### bid.coverage —— 覆盖报告 + ★条款覆盖（只读；#313 批 D）
+主体经 `bid_mcp::dispatch_with(get_coverage_report)` 走真实工具面（与
+bid-mcp-stdio 同源裁决，方案 A 直链），工具输出原样放 `coverage` 键（字段见
+契约 §19：complete / total_blocks / covered_blocks / uncovered_range_count /
+unjudged_blocks / files[]（含逐文件 uncovered_ranges——每文件至多 50 段）/
+next——建纲门引导）。壳侧 `summary` 在工具输出上现算**三态分账**（#244——
+每块必居其一）：`judged_blocks`（A 已判定 = covered − Σ excluded；
+covered 是 A+B 合计）、`excluded_blocks`（B 已排除 = Σ files[].excluded_blocks）、
+`unjudged_blocks`（C 未判定，原样）——三者和恒等于 total_blocks；
+`by_verdict` 逐文件聚合（requirement / review_table / noise / rule）。
+★条款覆盖循 `get_star_coverage`（#285 逐文件只读面）对 `coverage.files[]`
+聚合进 `star`——**只取计数**（star_truth / star_captured / star_missing /
+declarations；口径恒等式 truth = captured + missing），逐块明细走 bid-mcp
+工具面不进本响应。无 db.json → `not_found`；DRAFT 态（未导入文件）工具面
+E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "coverage": { …get_coverage_report 工具输出原样（complete/total_blocks/
+                  covered_blocks/uncovered_range_count/unjudged_blocks/
+                  files[]{file_id,total_blocks,covered_blocks,complete,
+                  uncovered_ranges[](≤50 段),uncovered_range_count,
+                  excluded_blocks,unjudged_blocks,by_verdict}/next… },
+    "summary": { "total_blocks": 1240, "judged_blocks": 1120,        // A：已判定为要求
+                 "excluded_blocks": 40,                              // B：noise/rule 排除
+                 "unjudged_blocks": 80,                              // C：没标记——建纲门阻断
+                 "uncovered_range_count": 2, "complete": false,
+                 "by_verdict": { "requirement": 1080, "review_table": 40, "noise": 40 } },
+    "star": { "files": [ { "file_id": "TF-0001", "file_name": "A-招标文件.docx",
+                            "star_total": 50, "declarations": 2,    // 样板句★（声明不计条款）
+                            "star_truth": 48, "star_captured": 45, "star_missing": 3,
+                            "next": "有★漏标——…" } ],
+              "total": { "star_total": 50, "declarations": 2,
+                         "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
+```
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
@@ -705,7 +742,7 @@ mang-app.exe [DIR] [选项]
 bidcore\target\release\mang-app.exe --selftest
 ```
 
-无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
+无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ bid.coverage（#313 批 D：无 db.json→not_found / 未导入件诚实口径 total_blocks=0+next 引导）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
 
 窗口内 IPC 冒烟（真实 WebView2，走 CDP）：
 ```

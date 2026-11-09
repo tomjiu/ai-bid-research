@@ -1,5 +1,5 @@
-//! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`；批 B：
-//! `bid.matrix`；批 C：`bid.quality` / `bid.score`）。
+//! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`；
+//! 批 B：`bid.matrix`；批 C：`bid.quality` / `bid.score`；批 D：`bid.coverage`）。
 //!
 //! 架构（原认领计划 2026-11-07T02:34Z 的批次切片，issue #313）：
 //!   * [`state`]  —— 经 `bid_mcp::dispatch_with` 走真实工具面
@@ -15,6 +15,10 @@
 //!     `quality` / `score` 键；工具面 `E_STATE`（项目未到 MatrixReady+ /
 //!     无章节树）透传为壳侧 `state` 错误码——UI 按码分支成「尚未开放」
 //!     引导卡而非故障横幅。
+//!   * [`coverage`] —— 经 `bid_mcp::dispatch_with` 走真实工具面
+//!     （`get_coverage_report`，#313 批 D），外加壳侧三态分账汇总与
+//!     ★条款覆盖逐文件聚合（`get_star_coverage`，#285）。
+
 //!
 //! 服务缓存（`Ctx.bid`，进程内单份）：按「工作区根 + db.json 指纹
 //! （mtime+size）」绑定——切换工作区（workspace.open）或外部进程
@@ -22,8 +26,8 @@
 //! **无 db.json → 干净的 `not_found`**：不经 `BidService::open`（它会在
 //! 任意目录里凭空创建 `.mang/approval.key`——查看状态不应留副作用）。
 //!
-//! 后续批次（不在本文件）：bid.coverage（批 D）——同样经 dispatch_with
-//! 走真实工具面。
+//! 批 C（bid.quality / bid.score / 自评面板）与批 D（bid.coverage / 覆盖报告
+//! 面板）均已交付，同样经 dispatch_with 走真实工具面。
 //!
 //! 批 C 范围纪律：`bid.score` 不透传价格推演入参（bid_price / method
 //! 等）——报价试算走既有 `score_price` 工具；未报价时 `score.price`
@@ -59,13 +63,14 @@ fn map_store_err(e: bid_tools::store_io::StoreIoError) -> IpcError {
 }
 
 /// ToolError（bid-mcp 工具面）→ IpcError（E_NOTFOUND → not_found 是「无项目」
-/// 主路径；E_STATE → `state` 是「项目未到工具状态窗」主路径——#313 批 C
-/// 起 UI 需要区分「尚未开放」与「故障」）。
+/// 主路径；E_STATE → `state` 是「项目未到工具状态窗」主路径——#313 批 C/D
+/// 起 UI 需要区分「尚未开放」与「故障」，壳不复制状态窗，code 即单一真源）。
 fn map_tool_err(e: bid_mcp::ToolError) -> IpcError {
     match e {
         bid_mcp::ToolError::ENotFound { what } => IpcError::not_found(what),
         bid_mcp::ToolError::EState { what } => IpcError::state(what),
         bid_mcp::ToolError::EUnprocessable { what } => IpcError::bad_args(what),
+        bid_mcp::ToolError::EState { what } => IpcError::new("state", what),
         other => IpcError::io(format!("工具面应答失败：{other}")),
     }
 }
@@ -781,6 +786,158 @@ fn project_meta(
         }),
     ))
 }
+/// `bid.coverage` —— 覆盖报告（只读，#313 批 D）。
+///
+/// 主体经 `bid_mcp::dispatch_with(get_coverage_report)` 走真实工具面
+/// （与 bid-mcp-stdio 同源裁决——方案 A 直链），工具输出原样放 `coverage`
+/// 键。壳侧 `summary` 在工具输出上现算**三态分账**（#244 口径——每个块
+/// 必居其一）：
+///   * `judged_blocks`（A 已判定）= covered_blocks − Σ files[].excluded_blocks
+///     （工具面 `covered_blocks` 是 A+B 合计——域层 CoverageReport 语义，
+///     见 bid-domain/src/coverage.rs；排除数只在逐文件层，壳侧聚合）；
+///   * `excluded_blocks`（B 已排除）= Σ files[].excluded_blocks；
+///   * `unjudged_blocks`（C 未判定）= 工具面顶层计数原样。
+/// `by_verdict` 同样逐文件聚合（requirement / review_table / noise / rule …
+/// ——BTreeMap 键序稳定，断言可依赖）。
+///
+/// ★条款覆盖（面板规格「★条款覆盖 N/M」）：循 `get_star_coverage`
+/// （#285 逐文件只读面）对 `coverage.files[]` 逐件调用后聚合
+/// star_truth / star_captured / star_missing——口径三级恒等式
+/// star_total = declarations + star_truth = declarations + captured + missing
+/// （工具面契约）。**逐块明细不进本响应**（captured/missing 各 ≤100 条/
+/// 文件，全量回显会吃爆 IPC——明细走 bid-mcp 工具面，面板只显计数与
+/// next 引导）。
+///
+/// 无 db.json → 干净 `not_found`；DRAFT 态（未导入文件）工具面 E_STATE
+/// 透传为壳侧 `state` 错误码（契约 §3.3——UI 分支出「尚未开放」卡而非
+/// 错误横幅）。服务缓存语义同 [`state`] / [`outline`] / [`matrix`]。
+pub fn coverage(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    // 项目元信息先取（owned）——后面的工具循环要 &mut svc
+    let (project_id, project_name, project_status) = {
+        let p = svc.store().project().map_err(map_domain_err)?;
+        (p.id.clone(), p.name.clone(), p.status.as_str().to_string())
+    };
+
+    // 主体：get_coverage_report（真实工具面，方案 A 直链）
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "get_coverage_report".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let cov = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+
+    // 三态分账 + by_verdict 聚合（在工具输出上现算——单一真源，
+    // 与批 B summary 同款纪律：不另写一套判定字面量）
+    let files = cov
+        .get("files")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut excluded_total = 0u64;
+    let mut by_verdict: std::collections::BTreeMap<String, u64> =
+        std::collections::BTreeMap::new();
+    for f in &files {
+        excluded_total += f
+            .get("excluded_blocks")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if let Some(bv) = f.get("by_verdict").and_then(|v| v.as_object()) {
+            for (k, v) in bv {
+                *by_verdict.entry(k.clone()).or_insert(0) += v.as_u64().unwrap_or(0);
+            }
+        }
+    }
+    let covered_total = cov.get("covered_blocks").and_then(|v| v.as_u64()).unwrap_or(0);
+    // A 态 = covered − excluded（covered 是 A+B 合计）；饱和减防御脏数据
+    let judged_total = covered_total.saturating_sub(excluded_total);
+    let by_verdict_obj: serde_json::Map<String, Value> = by_verdict
+        .into_iter()
+        .map(|(k, v)| (k, json!(v)))
+        .collect();
+
+    // ★条款覆盖：逐文件 get_star_coverage 聚合（#285 只读面——只取计数，
+    // 逐块明细留在 bid-mcp 工具面，响应不膨胀）
+    let mut star_files: Vec<Value> = Vec::with_capacity(files.len());
+    let (mut s_total, mut s_decl, mut s_truth, mut s_capt, mut s_miss) =
+        (0u64, 0u64, 0u64, 0u64, 0u64);
+    for f in &files {
+        let fid = match f.get("file_id").and_then(|v| v.as_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+        let reply = bid_mcp::dispatch_with(
+            svc,
+            bid_mcp::ToolCall {
+                tool: "get_star_coverage".to_string(),
+                args: json!({ "project_id": project_id, "file_id": fid }),
+            },
+        );
+        let out = match reply {
+            bid_mcp::ToolReply::Ok(out) => out.result,
+            bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+        };
+        let cnt = |k: &str| out.get(k).and_then(|v| v.as_u64()).unwrap_or(0);
+        s_total += cnt("star_total");
+        s_decl += cnt("declarations");
+        s_truth += cnt("star_truth");
+        s_capt += cnt("star_captured");
+        s_miss += cnt("star_missing");
+        star_files.push(json!({
+            "file_id": fid,
+            "file_name": out.get("file_name").cloned().unwrap_or(Value::Null),
+            "star_total": cnt("star_total"),
+            "declarations": cnt("declarations"),
+            "star_truth": cnt("star_truth"),
+            "star_captured": cnt("star_captured"),
+            "star_missing": cnt("star_missing"),
+            "next": out.get("next").cloned().unwrap_or(Value::Null),
+        }));
+    }
+
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": {
+            "id": project_id,
+            "name": project_name,
+            "status": project_status,
+        },
+        "coverage": cov,
+        "summary": {
+            "total_blocks": cov.get("total_blocks").cloned().unwrap_or(json!(0)),
+            "judged_blocks": judged_total,
+            "excluded_blocks": excluded_total,
+            "unjudged_blocks": cov.get("unjudged_blocks").cloned().unwrap_or(json!(0)),
+            "uncovered_range_count": cov
+                .get("uncovered_range_count")
+                .cloned()
+                .unwrap_or(json!(0)),
+            "complete": cov.get("complete").cloned().unwrap_or(Value::Null),
+            "by_verdict": Value::Object(by_verdict_obj),
+        },
+        "star": {
+            "files": star_files,
+            "total": {
+                "star_total": s_total,
+                "declarations": s_decl,
+                "star_truth": s_truth,
+                "star_captured": s_capt,
+                "star_missing": s_miss,
+            },
+        },
+    }))
+}
 
 
 /// 锁毒化不复位（与 ipc.rs `Ctx::ws` 同口径）。
@@ -922,7 +1079,7 @@ mod tests {
     fn state_and_outline_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
-        for cmd in ["bid.state", "bid.outline", "bid.matrix"] {
+        for cmd in ["bid.state", "bid.outline", "bid.matrix", "bid.coverage"] {
             let frame = call(&ctx, cmd);
             assert_eq!(frame["ok"], json!(false), "{cmd} 无 db.json 应干净 not_found：{frame}");
             assert_eq!(err_code_of(&frame), "not_found");
@@ -1422,6 +1579,144 @@ mod tests {
         assert_eq!(reviews[0]["decision"], "REJECTED");
         assert!(reviews[0]["actor"]["actor_id"].is_string(), "#182 可信身份回显在场");
         assert!(reviews.iter().any(|r| r["decision"] == "APPROVED" && r["gate"] == "matrix_approval"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #313 批 D：DRAFT 态（建项未导入）——工具面 E_STATE 透传为壳侧
+    /// `state` 码（契约 §3.3——UI 分支出「尚未开放」卡而非错误横幅）。
+    #[test]
+    fn coverage_state_gate_before_import() {
+        let (dir, _ws) = tmp_ws("covdraft");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("未导入项目", "PRJ-CD", "明标", "ext-313-cd")
+                .unwrap();
+            svc.checkpoint().unwrap();
+        }
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.coverage");
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(
+            err_code_of(&frame), "state",
+            "DRAFT 态应透传工具面 E_STATE 为壳侧 state 码：{frame}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #313 批 D：真件链（corpus-A 主文件导入 + 部分标记）——三态分账 /
+    /// by_verdict 聚合 / ★聚合恒等式 / 跨实例持久化恢复。fixture 缺位
+    /// 时跳过（与 bid-mcp coverage_tools.rs 同款守卫——CI 真件跑全量）。
+    #[test]
+    fn coverage_reads_real_imported_file() {
+        // #600 CI 修复：CARGO_MANIFEST_DIR 拼 ../../../fixtures 得到的路径**字面**
+        // 含 `..`——而 import_tender_files 的逃逸防护会拒绝含父级逃逸的路径
+        // （E_UNPROCESSABLE）。canonicalize 把 `..` 解析成绝对规范路径后
+        // 再交给工具面（文件系统层面同一个位置，但字面不再有 `..`）。
+        let fixtures = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../fixtures/corpus-A/files")
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("fixtures 目录不存在或不可解析：{e}"));
+        let main = fixtures.join("A-招标文件.docx");
+        if !main.is_file() {
+            eprintln!("SKIP：fixture 缺位（{}）——真件面留给 CI", main.display());
+            return;
+        }
+        let (dir, _ws) = tmp_ws("covreal");
+        // 种子：真实导入（与 MCP 写路径同源——工具面 import_tender_files
+        // + submit_block_marks），再用独立实例走公开 IPC 面
+        let file_id;
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir)
+                .unwrap()
+                .with_fs_root(&fixtures);
+            let (pid, _) = svc
+                .create_project("覆盖测试项目", "PRJ-CV", "明标", "ext-313-cv")
+                .unwrap();
+            let import = bid_mcp::dispatch_with(
+                &mut svc,
+                bid_mcp::ToolCall {
+                    tool: "import_tender_files".to_string(),
+                    args: json!({ "project_id": pid, "files": [{
+                        "upload_ref": main.to_string_lossy(),
+                        "filename": "A-招标文件.docx",
+                        "kind": "招标文件"
+                    }] }),
+                },
+            );
+            let out = match import {
+                bid_mcp::ToolReply::Ok(out) => out.result,
+                bid_mcp::ToolReply::Err { error, .. } => panic!("导入失败：{error}"),
+            };
+            file_id = out["file_ids"][0]
+                .as_str()
+                .expect("file_ids[0] 恒在")
+                .to_string();
+            // 部分标记：0-9 noise（B 态）/ 10-19 requirement（A 态）
+            // ——三态分账有非零 A/B 态可断言（0 标记时 covered=0 不可分辨）
+            let marks = bid_mcp::dispatch_with(
+                &mut svc,
+                bid_mcp::ToolCall {
+                    tool: "submit_block_marks".to_string(),
+                    args: json!({ "project_id": pid, "file_id": file_id,
+                        "marks": [
+                            { "from": 0, "to": 9, "verdict": "noise",
+                              "reason": "测试种子：页眉目录噪音" },
+                            { "from": 10, "to": 19, "verdict": "requirement",
+                              "reason": "测试种子：技术参数段" }
+                        ] }),
+                },
+            );
+            match marks {
+                bid_mcp::ToolReply::Ok(_) => {}
+                bid_mcp::ToolReply::Err { error, .. } => panic!("标记失败：{error}"),
+            }
+            svc.checkpoint().unwrap();
+        }
+        // 公开 IPC 面（ctx 服务实例与种子实例独立——跨实例持久化恢复面）
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.coverage");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let c = ok_of(&frame).clone();
+        assert_eq!(c["present"], json!(true));
+        assert_eq!(c["project"]["name"], "覆盖测试项目");
+        // 工具输出原样透传（主体面）
+        let cov = &c["coverage"];
+        let total = cov["total_blocks"].as_u64().expect("total_blocks 恒在");
+        assert!(total > 0, "真件链应有块（corpus-A 主文件 182 块量级）");
+        let files = cov["files"].as_array().expect("files 恒为数组");
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0]["file_id"], json!(file_id));
+        // 三态分账（#244）：A 判定 + B 排除 + C 未判定 = total（探针实测口径）
+        let s = &c["summary"];
+        let (a, b, cc) = (
+            s["judged_blocks"].as_u64().expect("judged_blocks 恒在"),
+            s["excluded_blocks"].as_u64().expect("excluded_blocks 恒在"),
+            s["unjudged_blocks"].as_u64().expect("unjudged_blocks 恒在"),
+        );
+        assert_eq!((a, b), (10, 10), "种子标记 10 noise + 10 requirement：{s}");
+        assert_eq!(a + b + cc, total, "三态分账不漏不重：{s}（total={total}）");
+        assert_eq!(s["total_blocks"], json!(total));
+        assert_eq!(s["complete"], json!(false));
+        assert!(cc > 0, "只标了 20 块——C 态应非零");
+        // by_verdict 聚合（BTreeMap 键序——断言可依赖）
+        assert_eq!(s["by_verdict"]["noise"], json!(10));
+        assert_eq!(s["by_verdict"]["requirement"], json!(10));
+        // ★面：corpus-A 主文件无真值★ → 全零；恒等式仍成立（不赌具体件）
+        let st = &c["star"];
+        let sf = st["files"].as_array().expect("star.files 恒为数组");
+        assert_eq!(sf.len(), 1);
+        assert_eq!(sf[0]["file_name"], "A-招标文件.docx");
+        let t = &st["total"];
+        assert_eq!(
+            t["star_truth"].as_u64().unwrap(),
+            t["star_captured"].as_u64().unwrap() + t["star_missing"].as_u64().unwrap(),
+            "★口径恒等式：truth = captured + missing"
+        );
+        assert_eq!(
+            t["star_total"].as_u64().unwrap(),
+            t["declarations"].as_u64().unwrap() + t["star_truth"].as_u64().unwrap(),
+            "★口径恒等式：total = declarations + truth"
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 
