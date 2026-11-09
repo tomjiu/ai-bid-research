@@ -152,7 +152,7 @@ fn assert_one_buildable(tag: &str, path: &PathBuf) {
 /// batch1：5 份黑龙江政采统一导出 PDF——同一套标满/建纲逻辑在跨题目上的
 /// 稳定性（验收 6：新门不卡死正常流程）。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn batch1_full_marks_all_buildable() {
     // 环境门（AGENTS.md 三之二）：CI（Windows）无 poppler → PDF 抽取链
     // 降级 → E_PARTIAL 必红；本机 Linux（poppler 在位）真跑。
@@ -174,7 +174,7 @@ fn batch1_full_marks_all_buildable() {
 /// batch2：6 份跨平台形态（.doc / .docx / 询价 PDF）——数字编号、无
 /// 「第X章」的结构也必须走通同一条覆盖闭环。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn batch2_full_marks_all_buildable() {
     // 环境门（同 batch1）：4 份 PDF 需要 poppler，缺则整体 SKIP。
     if skip_if_env_missing("coverage_gate_batch2", POPPLER_TEXT_TOOLS) {
@@ -210,7 +210,7 @@ fn batch2_full_marks_all_buildable() {
 /// Lead 指定变体（询价件——issue 背景：数字编号，无「第X章」，块结构
 /// 可能完全不同）：故意漏标尾部几个块 → 建纲被拦 + 清单带块内容。
 #[test]
-#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过；main 阶段由 windows-check 与 linux-check 双面 --include-ignored 全跑（#584）。本地手动：cargo test -- --ignored"]
 fn inquiry_partial_marks_blocked_with_detail() {
     let dir = batch(2).join("hlj-inquiry");
     let Some(pdf) = std::fs::read_dir(&dir)
