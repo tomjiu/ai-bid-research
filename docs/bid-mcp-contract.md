@@ -1439,7 +1439,7 @@ out: { detected, items:[{ id:"PKG-01", label:"第1包", kind:"包"|"标段", num
 > 响应面 `library_persisted:false` 如实报告）。原子写（tmp+rename）+
 > schema_version 门 + 损坏拒载不重建（对齐 store_io 纪律）。
 
-### 23-A. register_performance（登记 · 无项目路由）
+### 25-A. register_performance（登记 · 无项目路由）
 ```
 in : { entries?:[{
          name*, client*, amount_wan*(万元 >= 0), completed_on*(YYYY-MM-DD),
@@ -1454,7 +1454,7 @@ out: { added:[PERF-xxxx], added_count, deduplicated:[PERF-xxxx],
 窗口: 无项目路由（建项目前可维护库——先有资产再投标）。
 ```
 
-### 23-B. list_performance（只读 · 无项目路由）
+### 25-B. list_performance（只读 · 无项目路由）
 ```
 in : { filters?:{ category?(标签子串), keyword?(name/client 包含),
                   min_amount_wan?, max_amount_wan?, since?(完成日期下界 ISO) },
@@ -1465,7 +1465,7 @@ out: { entries:[{ perf_id, name, client, amount_wan, completed_on,
        library_path, library_persisted }
 ```
 
-### 23-C. recommend_performance（匹配推荐 · 只读）
+### 25-C. recommend_performance（匹配推荐 · 只读）
 ```
 in : { project_id*,
        budget_wan?(项目预算万元——仓内无预算结构面，显式入参不猜；缺省该因子弃权),
@@ -1491,7 +1491,7 @@ out: { recommendations:[{ perf_id, name, score(0..=1),
 窗口: REQUIREMENTS_EXTRACTED+（信号来自 REQ 面）。
 ```
 
-### 23-D. write_performance_section（一键写入 · 写）
+### 25-D. write_performance_section（一键写入 · 写）
 ```
 in : { project_id*, section_id*(目标叶章节 SEC-xxxx),
        perf_ids*(PERF-* 清单 >= 1),
