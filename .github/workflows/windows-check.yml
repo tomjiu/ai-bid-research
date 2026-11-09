@@ -255,6 +255,44 @@ jobs:
       # （bid-parse FULL_PDF_CHAIN = pdftotext/pdftoppm/pdfinfo/tesseract +
       # chi_sim.traineddata）实测环境；③ 两个方向都可能显式红：
       # 缺件却无横幅 = SKIP 机制静默失效；工具齐备却出横幅 = 横幅误报。
+      # 排查教训（#591）：`panicked at ...` 行在两种情况下都打印——
+      #   · #[should_panic] 测试**通过**时（libtest 打 panic 消息但 test ok）
+      #   · 真实失败时
+      # 人眼扫日志先看到 panicked 会误判（实测排查被带偏 3 次）。
+      # 本步骤只认 `test <name> ... FAILED` 与 `test result: FAILED`，
+      # 输出纯失败清单到 step summary + 注解，让「哪里红了」一眼可读。
+      - name: 失败测试清单（一眼可读——区分真失败与 #[should_panic] 预期 panic）
+        if: always()
+        working-directory: bidcore
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\test-output.log"
+          if (-not (Test-Path $log)) {
+            Write-Host "::warning::测试日志缺失（$log）——跳过失败清单汇总"
+            exit 0
+          }
+          $lines = Get-Content $log
+          $failed = @($lines | Where-Object { $_ -match "^test .+ \.\.\. FAILED" } |
+            ForEach-Object { ($_ -replace "^test ", "") -replace " \.\.\. FAILED$", "" } |
+            Sort-Object -Unique)
+          $summaries = @($lines | Where-Object { $_ -match "^test result: FAILED" })
+          "### 失败测试清单（windows-check）" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($failed.Count -eq 0) {
+            "- 零失败 ✅（日志里的 panicked 行均来自 #[should_panic] 预期 panic）" |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "== 失败测试: 0 =="
+          } else {
+            "**$($failed.Count) 个测试失败**：" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            foreach ($t in $failed) { "- ``$t``" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            foreach ($s in $summaries) { $s | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+            "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "== 失败测试: $($failed.Count) =="
+            foreach ($t in $failed) { Write-Host "  ✗ $t" }
+            Write-Host "::error::$($failed.Count) 个测试失败（清单见上 / step summary）"
+          }
+
       - name: Verify SKIP banner emitted (日志回放 + 双向断言)
         working-directory: bidcore
         shell: pwsh

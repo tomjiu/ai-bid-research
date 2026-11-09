@@ -187,6 +187,44 @@ jobs:
           cargo test --workspace --no-fail-fast -- --nocapture 2>&1 |
             tee "$RUNNER_TEMP/test-output.log"
 
+      - name: 失败测试清单（一眼可读——区分真失败与 #[should_panic] 预期 panic）
+        # 排查教训：`panicked at ...` 行在两种情况下都会打印——
+        #   · #[should_panic] 测试**通过**时（libtest 打印 panic 消息但 test ok）
+        #   · 真实失败时
+        # 人眼扫日志先看到 panicked 会误判（实测排查被带偏 3 次）。
+        # 本步骤只认 `^test .* FAILED$` 与 `test result: FAILED`，
+        # 输出一份纯失败清单，并注解到 PR 页面。
+        if: always()
+        working-directory: bidcore
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/test-output.log"
+          if [ ! -f "$LOG" ]; then
+            echo "::warning::测试日志缺失（$LOG）——跳过失败清单汇总"
+            exit 0
+          fi
+          # 真失败：libtest 的 `test <name> ... FAILED` 行（should_panic 通过时是 `... ok`）
+          FAILED=$(grep -E "^test .+ \.\.\. FAILED" "$LOG" | sed -E "s/^test //; s/ \.\.\. FAILED$//" | sort -u || true)
+          # 汇总行（每个测试二进制一行，FAILED 的才计入）
+          SUMMARIES=$(grep -E "^test result: FAILED" "$LOG" || true)
+          COUNT=$(printf "%s" "$FAILED" | grep -c . || true)
+          echo "### 失败测试清单（linux-check）" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "零失败 ✅（日志里的 panicked 行均来自 #[should_panic] 预期 panic）" >> "$GITHUB_STEP_SUMMARY"
+            echo "== 失败测试: 0 =="
+          else
+            echo "**$COUNT 个测试失败**：" >> "$GITHUB_STEP_SUMMARY"
+            printf "%s\n" "$FAILED" | while read -r t; do
+              [ -n "$t" ] && echo "- \`$t\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "```" >> "$GITHUB_STEP_SUMMARY"
+            printf "%s\n" "$SUMMARIES" >> "$GITHUB_STEP_SUMMARY"
+            echo "```" >> "$GITHUB_STEP_SUMMARY"
+            echo "== 失败测试: $COUNT =="
+            printf "%s\n" "$FAILED" | while read -r t; do [ -n "$t" ] && echo "  ✗ $t"; done
+            echo "::error::$COUNT 个测试失败（清单见上 / step summary）"
+          fi
       - name: Verify SKIP banner absent (日志回放 + 双向断言)
         # FG-03 修复形态镜像（方向相反）：本 job 三工具 + chi_sim 全装 →
         # 「工具在位却出横幅 = 横幅误报」是唯一红面。探针测试
