@@ -858,31 +858,45 @@ async def _case_initialize_and_tools(rec: Recorder) -> None:
         }
         caps = getattr(info, "capabilities", None)
         caps_dict = caps.model_dump() if caps is not None else {}
-        # #591 诊断：serverInfo 取不到时打印 info 的真实形态（CI 与本地 SDK
-        # 版本可能不同——本地 1.28.1 字段名为 serverInfo，CI Python 3.14 面
-        # 装的版本未核实；空值时一次看清是 None / dict / 改名）。
-        si = getattr(info, "serverInfo", None)
+        # #591：MCP SDK 字段命名跨版本漂移——
+        #   mcp 1.x（本地 1.28.1）用 camelCase：serverInfo / protocolVersion
+        #   CI 装的更新版用 snake_case：server_info / protocol_version
+        # CI 实测 dump：{'protocol_version': '2025-11-25', 'server_info': {'name': 'bid-mcp'}}
+        # 两者都要支持（LineJsonClient 的 server_info 还是 dict——三形态兼容）。
+        def _field(obj, camel, snake, default=None):
+            """按 camelCase → snake_case → dict 三形态取字段。"""
+            if obj is None:
+                return default
+            for key in (camel, snake):
+                v = getattr(obj, key, None)
+                if v is not None:
+                    return v
+            if isinstance(obj, dict):
+                for key in (camel, snake):
+                    if key in obj:
+                        return obj[key]
+            return default
+
+        si = _field(info, "serverInfo", "server_info")
+        server_name = _field(si, "name", "name", "") or ""
+        server_ver = _field(si, "version", "version", "?") or "?"
+        proto = _field(info, "protocolVersion", "protocol_version")
         if si is None:
-            print(f"[diag] info type={type(info).__name__} fields={list(getattr(info, 'model_fields', {}) or {})}")
+            # 兜底诊断：两套命名都取不到时打印真实形态（下一轮能直接定位）
             try:
                 print(f"[diag] info dump={info.model_dump()}")
             except Exception as e:
                 print(f"[diag] model_dump failed: {e!r}  raw={info!r}")
-        server_name = ""
-        server_ver = "?"
-        if si is not None:
-            server_name = getattr(si, "name", None) or (si.get("name", "") if isinstance(si, dict) else "")
-            server_ver = getattr(si, "version", None) or (si.get("version", "?") if isinstance(si, dict) else "?")
         checks = [
             ("握手: initialize 成功且 serverInfo.name == 'bid-mcp'", server_name == "bid-mcp"),
-            ("握手: protocolVersion 已协商", bool(getattr(info, "protocolVersion", None))),
+            ("握手: protocolVersion 已协商", bool(proto)),
             ("握手: capabilities.tools 在场", "tools" in caps_dict),
             (f"握手: tools/list ≥ 20（实际 {len(names)}）", len(names) >= 20),
             ("握手: 关键工具全在场（P0-P8 主链 12 个）", key_tools.issubset(set(names))),
         ]
         rec.stage("MCP 握手 + 工具清单", None, {},
                   {"serverInfo": {"name": server_name, "version": server_ver},
-                   "protocolVersion": getattr(info, "protocolVersion", None),
+                   "protocolVersion": proto,
                    "n_tools": len(names), "tool_names": sorted(names)},
                   checks)
         require(checks)
