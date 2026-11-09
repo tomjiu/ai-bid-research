@@ -9,6 +9,10 @@
     python main.py collect --source announcements/ --dry-run
     python main.py collect --source announcements/ --db data/bids.db
 
+    # 结构化抽取：公告原文 → LLM → 合并入库（失败自动登记 pending 可重试）
+    python main.py extract --source announcements/ --db data/bids.db
+    python main.py extract --retry --db data/bids.db    # 重试此前失败的公告
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -35,7 +39,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
@@ -134,6 +138,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="演练模式：装载+去重+打印报告，但不写库",
     )
     collect.add_argument(
+        "--strict",
+        action="store_true",
+        help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
+    )
+
+    # extract 子命令（#601 批次 B：抽取面）
+    extract = sub.add_parser(
+        "extract",
+        help="公告结构化抽取：原文 → LLM → 合并入库（失败进 pending 待重试）",
+    )
+    extract.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help=(
+            "公告源路径（.json/.jsonl 文件或目录）：装载→去重→抽取→入库；"
+            "不指定时须 --retry"
+        ),
+    )
+    extract.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"目标数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    extract.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="离线模式：不调 LLM，结构化源直通入库（无 API key 时自动降级）",
+    )
+    extract.add_argument(
+        "--retry",
+        action="store_true",
+        help="重试 pending 面的待处理公告（需 API key；不处理新源）",
+    )
+    extract.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="重试条数上限（--retry 模式）",
+    )
+    extract.add_argument(
         "--strict",
         action="store_true",
         help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
@@ -295,6 +341,159 @@ def run_collect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_llm_client_or_none() -> Optional[Any]:
+    """构造 LLM 客户端；无环境 key 时返回 None（降级为离线直通）。
+
+    Returns:
+        LLM 客户端；或 None（未检测到 DEEPSEEK_API_KEY/OPENAI_API_KEY）。
+    """
+    import os
+
+    from src.llm.client import LLMClient
+
+    if not (os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        print(
+            "警告：未检测到 DEEPSEEK_API_KEY/OPENAI_API_KEY——"
+            "降级为离线直通模式（等价 --no-llm）"
+        )
+        return None
+    return LLMClient()
+
+
+def run_extract(args: argparse.Namespace) -> int:
+    """执行 extract 子命令：装载→去重→抽取→合并入库（失败进 pending）。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 源不可读/--retry 无 key）。
+    """
+    from src.extract import (
+        REASON_LLM_ERROR,
+        REASON_REJECTED,
+        STATUS_REJECTED,
+        AnnouncementExtractor,
+        park_record_failure,
+    )
+
+    # --retry 模式：重试 pending 面（需真实 API key）
+    if args.retry:
+        client = _build_llm_client_or_none()
+        if client is None:
+            print("错误：--retry 需要真实 LLM（设 DEEPSEEK_API_KEY）", file=sys.stderr)
+            return 2
+        report = asyncio.run(
+            _retry_with_client(args.db, client, args.limit)
+        )
+        print(
+            f"重试完成：尝试 {report.attempted} 条，"
+            f"resolved {report.resolved} 条，"
+            f"仍待处理 {report.still_pending} 条，"
+            f"载荷损坏 {report.skipped_rebuild} 条"
+        )
+        for detail in report.details:
+            print(f"  · {detail['fingerprint']}: {detail['result']}")
+        return 0
+
+    # 抽取模式：装载→去重→抽取→入库
+    if args.source is None:
+        print("错误：需要 --source 或 --retry", file=sys.stderr)
+        return 2
+    try:
+        loaded = load_records(args.source, skip_invalid=not args.strict)
+    except (SourceError, ValueError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+    deduped = dedupe_records(loaded.records)
+    print(f"源装载：读取 {loaded.files_read} 个文件，"
+          f"成功 {len(loaded.records)} 条，失败 {len(loaded.failures)} 条；"
+          f"去重后待抽取 {len(deduped.unique)} 条")
+
+    client = None if args.no_llm else _build_llm_client_or_none()
+    extractor = AnnouncementExtractor(client)
+    batch = asyncio.run(extractor.extract_batch(deduped.unique))
+
+    llm_count = sum(1 for o in batch.outcomes if o.used_llm)
+    print(f"抽取完成：LLM {llm_count} 条 / 直通 "
+          f"{len(batch.outcomes) - llm_count} 条 / 失败 {len(batch.failures)} 条")
+
+    record_map = {r.bid_id: r for r in deduped.unique}
+    parked = 0
+    with BidDatabase(args.db) as db:
+        # 逐条按 bid_id 映射入库（抽取失败的记录不在 outcomes 里，
+        # 不能与源记录按位置配对——失败面走下方 pending 登记）
+        from src.extract import (
+            STATUS_STORED,
+            BatchStoreResult,
+            apply_extraction,
+        )
+
+        store_result = BatchStoreResult()
+        for outcome in batch.outcomes:
+            record = record_map.get(outcome.bid_id)
+            if record is None:
+                continue
+            store_result.outcomes.append(
+                apply_extraction(db, outcome, record.to_bid_row())
+            )
+        stored_count = sum(
+            1 for o in store_result.outcomes if o.status == STATUS_STORED
+        )
+        rejected_count = len(store_result.outcomes) - stored_count
+        # LLM 失败 → pending（原文随载荷保留，可 --retry）
+        for failure in batch.failures:
+            record = record_map.get(failure["bid_id"])
+            if record is not None:
+                park_record_failure(
+                    db,
+                    record,
+                    REASON_LLM_ERROR,
+                    raw_text=(
+                        record.extras.get("content")
+                        or record.extras.get("公告原文")
+                    ),
+                    error=failure["error"],
+                )
+                parked += 1
+        # 校验拒收 → pending（防御面：不静默丢）
+        for outcome in store_result.outcomes:
+            if outcome.status == STATUS_REJECTED and outcome.bid_id:
+                record = record_map.get(outcome.bid_id)
+                if record is not None:
+                    park_record_failure(
+                        db,
+                        record,
+                        REASON_REJECTED,
+                        raw_text=(
+                            record.extras.get("content")
+                            or record.extras.get("公告原文")
+                        ),
+                        error="缺必填字段: " + ",".join(outcome.missing_required),
+                        hit_rate=outcome.hit_rate,
+                    )
+                    parked += 1
+        pending = db.pending_stats()
+
+    print(f"入库：成功 {stored_count} 条 / 拒收 "
+          f"{rejected_count} 条；本次登记 pending {parked} 条")
+    print(f"pending 面：待处理 {pending['pending']} 条"
+          f"（按原因：{pending['by_reason'] or '无'}）")
+    return 0
+
+
+async def _retry_with_client(db_path, client, limit):
+    """重试 pending 面并在结束时关闭客户端。"""
+    from src.extract import AnnouncementExtractor, retry_pending
+
+    try:
+        with BidDatabase(db_path) as db:
+            return retry_pending(db, AnnouncementExtractor(client), limit=limit)
+    finally:
+        await client.close()
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -389,6 +588,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return asyncio.run(run_report(args))
     if args.command == "collect":
         return run_collect(args)
+    if args.command == "extract":
+        return run_extract(args)
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":

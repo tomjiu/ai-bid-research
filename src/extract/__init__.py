@@ -26,6 +26,8 @@ from src.extract.pending import (
     retry_pending,
 )
 from src.extract.store import (
+    STATUS_REJECTED,
+    STATUS_STORED,
     BatchStoreResult,
     StoreOutcome,
     apply_extraction,
@@ -52,6 +54,8 @@ __all__ = [
     "validate_fields",
     "BatchStoreResult",
     "StoreOutcome",
+    "STATUS_REJECTED",
+    "STATUS_STORED",
     "apply_extraction",
     "apply_extraction_batch",
     "apply_extraction_from_raw",

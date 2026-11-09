@@ -59,6 +59,14 @@ jobs:
           python main.py collect --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/collect.db" | grep -q "已入库 2 条"
           python main.py db --query "ci-collect" --db "$RUNNER_TEMP/collect.db" | grep -q "COL-001"
           python main.py collect --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/collect.db" --dry-run | grep -q "演练模式"
+          # extract 链路（#601 批次 B）：--no-llm 离线直通（CI 无 API key 面）
+          python main.py extract --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/extract.db" --no-llm | grep -q "入库：成功 2 条"
+          # --retry 无 API key → 必须明确拒绝（不静默假装重试）
+          if python main.py extract --retry --db "$RUNNER_TEMP/extract.db" 2>&1 | grep -q "需要真实 LLM"; then
+            echo "retry 无 key 正确拒绝 ✓"
+          else
+            echo "::error::extract --retry 无 key 未正确拒绝"; exit 1
+          fi
           # db 链路
           printf '[{"bid_id":"SMOKE-001","project_name":"ci-smoke","source_url":"https://example.com/1","budget_wan":1.5,"deadline":"2026-12-31","requirements":["资质A"]}]' \
             > "$RUNNER_TEMP/smoke-import.json"
