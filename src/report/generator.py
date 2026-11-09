@@ -266,6 +266,24 @@ class ReportGenerator:
             lines.append(f"- 区域 Top3：{region_txt}")
         return "\n".join(lines)
 
+    def generate_comparison_report(
+        self, comparison_payload: Dict[str, Any]
+    ) -> Path:
+        """保存领域对照报告（#601 批次 F——离线，不走 LLM）。
+
+        Args:
+            comparison_payload: ``build_comparison_payload`` 产物。
+
+        Returns:
+            已保存的 Markdown 报告文件路径。
+        """
+        from src.analyze.compare import render_comparison_markdown
+
+        keywords = comparison_payload.get("keywords") or ["对照"]
+        content = render_comparison_markdown(comparison_payload)
+        prefix = "compare_" + "_vs_".join(keywords)
+        return self._save_report(content, prefix=prefix)
+
     def generate_analysis_report(
         self, analysis_payload: Dict[str, Any]
     ) -> Path:

@@ -219,6 +219,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="报告落盘后同时导出 HTML",
     )
     analyze.add_argument(
+        "--compare",
+        default=None,
+        help="领域对照模式：逗号分隔 ≥2 个关键词（如 --compare 智慧城市,政务云）",
+    )
+    analyze.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output/reports"),
@@ -606,7 +611,27 @@ def run_analyze(args: argparse.Namespace) -> int:
     Returns:
         进程退出码（0 正常——空数据集也 0，报告会如实说明缺口）。
     """
-    from src.analyze import build_analysis_payload, load_dataset
+    from src.analyze import (
+        build_analysis_payload,
+        build_comparison_payload,
+        load_dataset,
+    )
+
+    if args.compare:
+        keywords = [k for k in args.compare.split(",") if k.strip()]
+        try:
+            comparison = build_comparison_payload(
+                args.db, keywords, days=args.days
+            )
+        except ValueError as exc:
+            print(f"错误：{exc}", file=sys.stderr)
+            return 2
+        generator = ReportGenerator(output_dir=args.output_dir)
+        report_path = generator.generate_comparison_report(comparison)
+        print(f"对照报告已生成: {report_path}")
+        if args.html:
+            print(f"HTML 已导出: {generator.export_html(report_path)}")
+        return 0
 
     dataset = load_dataset(
         args.db, keyword=args.keyword, days=args.days
