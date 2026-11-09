@@ -382,6 +382,44 @@ DomainStore 直读章节树（MCP 工具面无此视图）。节点按 `order` �
 > `workspace.open` 切根或外部进程（bid-mcp-stdio / Agent）改写 db.json 后，
 > 下一条 bid.* 命令自动重开，无需重启。
 
+### bid.matrix —— 合规矩阵全量（只读；#313 批 B）
+经 `bid_mcp::dispatch_with(get_compliance_matrix)` 走真实工具面（与
+bid-mcp-stdio 同源裁决，方案 A 直链）。工具面按 S-4 游标分页（limit ≤1000、
+游标绑过滤器指纹与数据版本）——壳内循 `next_cursor` 聚合**全量行**后一次
+返回（聚合护栏 200 页；行形状 = 工具输出原样透传，见契约 §4
+`get_compliance_matrix` 的 rows 元素），UI 面的 blocking/状态/类别筛选、
+分页、导出都在全量行上做（计数与表格同一真源）。无 db.json → `not_found`。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "rows": [
+      { "cmp_id": "CMP-0001",
+        "requirement": { "id": "REQ-0001", "clause_no": "3.2.1", "category": "技术参数",
+                         "category_key": "tech_param", "statement": "投标人须提供…",
+                         "mandatory": false,
+                         "source_anchor": { "file": "A-招标文件.docx", "kind": "para",
+                                            "locator": "第三章 3.2/REQ-0001", "excerpt": "…" },
+                         "params": { } },
+        "status": "NOT_RESPONDED",            // RESPONDED|NOT_RESPONDED|PARTIAL|NOT_APPLICABLE|PENDING_EVIDENCE
+        "evidence": [ { "ev_id": "EV-0001", "title": "…", "status": "ACTIVE",
+                        "valid_until": "2027-06-30", "verification_tier": "SELF_TEST" } ],
+        "pending_evidence_ids": [ ],          // #245 占位/待核验证据（待补可追踪）
+        "evidence_required": false,           // #241 证据要求面（类别 ∪ 原文要求词）
+        "evidence_missing": false,            // #241 证据缺口（正交于 status）
+        "substantive": false,                 // #276 ★实质性条款识别列
+        "gap": null, "response_policy": "default",
+        "draft_section_id": "SEC-0002",       // 响应章节（大纲树 requirement_ids 反查，最深层优先）
+        "blocking": true } ],                 // 必选未响应/待补 → 阻断导出（R-03/R-04 + #245）
+    "total": 1120,
+    "summary": { "by_status": { "NOT_RESPONDED": 80, "RESPONDED": 1000, "PARTIAL": 12,
+                                "NOT_APPLICABLE": 8, "PENDING_EVIDENCE": 20 }, // 五态恒在（0 兜底）
+                 "blocking": 21, "mandatory": 30, "substantive": 48, "evidence_missing": 40 },
+    "star_summary": { …工具面原样（total/responded/partial/not_responded/
+                      not_applicable/responded_share/note——#276 ★统计口）… },
+    "warnings": [ ],                          // 如 EMPTY_MATRIX: 条款集为空
+    "project_version": 12, "fetched_pages": 2 }
+```
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
@@ -561,7 +599,7 @@ mang-app.exe [DIR] [选项]
 bidcore\target\release\mang-app.exe --selftest
 ```
 
-无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
+无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
 
 窗口内 IPC 冒烟（真实 WebView2，走 CDP）：
 ```

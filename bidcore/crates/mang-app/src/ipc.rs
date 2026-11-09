@@ -297,8 +297,8 @@ pub fn purge_pending() {
 pub struct Ctx {
     pub workspace: RwLock<Workspace>,
     pub ui_dir: PathBuf,
-    /// #313 批 A：标书服务缓存（bid.state / bid.outline 共用）——按工作区根
-    /// + db.json 指纹绑定，切工作区/外部改写后自动重开（见 bid.rs）。
+    /// #313 批 A/B：标书服务缓存（bid.state / bid.outline / bid.matrix 共用）
+    /// ——按工作区根 + db.json 指纹绑定，切工作区/外部改写后自动重开（见 bid.rs）。
     pub bid: std::sync::Mutex<Option<crate::bid::CachedService>>,
 }
 
@@ -447,10 +447,13 @@ impl Ctx {
             "fspec.status" => crate::diag::fspec_status(&ws),
 
             // ── #313 批 A：标书数据面（bid.rs——state 经 bid_mcp 真实工具面，
-            //    outline 直读 DomainStore）─────────────────────────
+            //    outline 直读 DomainStore）；批 B：matrix 经 bid_mcp 真实工具面
+            //    （get_compliance_matrix，壳内聚合分页）──────────────
             "bid.state" => crate::bid::state(&ws, &self.bid, &a),
 
             "bid.outline" => crate::bid::outline(&ws, &self.bid, &a),
+
+            "bid.matrix" => crate::bid::matrix(&ws, &self.bid, &a),
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
