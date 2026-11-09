@@ -250,7 +250,7 @@ def keyword_frequency(
 def competition_density(ds: BidDataset, *, top_n: int = 10) -> Dict[str, Any]:
     """竞争密度：赢家集中度视角。
 
-    分母口径：CR\* 与 HHI 以 ``awarded``（已定中标人样本）为分母；
+    分母口径：CR1/CR3 与 HHI 以 ``awarded``（已定中标人样本）为分母；
     无已定标样本时集中度各值为 ``None``（不伪造 0）。
 
     Args:
