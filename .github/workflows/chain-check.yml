@@ -47,6 +47,10 @@ jobs:
     env:
       # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
       MD_CORE_DEPLOY_KEY: ${{ secrets.MD_CORE_DEPLOY_KEY }}
+      # #593：gh release download 需要 token（mdcore 是私有仓——用 deploy key
+      # 无法走 API，故需一个能读 release 的 token；GITHUB_TOKEN 对同 owner 的
+      # 私有仓跨仓访问不足，回退到 public API（ci-deps-v1 是 public release）。
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -190,19 +194,48 @@ jobs:
         if: steps.cache-sarasa.outputs.cache-hit != 'true'
         run: |
           mkdir -p /tmp/chain-fonts
-          if curl -fsSL --retry 3 --retry-delay 5 -o /tmp/chain-fonts/SarasaMonoSC-Regular.ttf \
-              "https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/SarasaMonoSC-Regular-v1.0.36.ttf" \
-              && echo "d604b02e7fa3c2d21cdf0cc122656b6f843fe8e520d8934bed44760854577473  /tmp/chain-fonts/SarasaMonoSC-Regular.ttf" | sha256sum -c -; then
-            echo "SarasaMonoSC v1.0.36 就位（mdcore 镜像，sha256 钉版校验通过）"
-          else
-            echo "::warning::mdcore 镜像未达——回退上游 be5invis v1.0.36（同 sha256 校验）"
-            curl -fsSL --retry 3 --retry-delay 5 -o /tmp/sarasa-mono-sc.7z \
+          FONT=/tmp/chain-fonts/SarasaMonoSC-Regular.ttf
+          SHA=d604b02e7fa3c2d21cdf0cc122656b6f843fe8e520d8934bed44760854577473
+          ASSET=SarasaMonoSC-Regular-v1.0.36.ttf
+          ok=0
+          # 三源梯 + 更宽的退避窗口（#593：run 42581634831 实测两个源同时 504，
+          # --retry 3 --retry-delay 5 只覆盖 12 秒太窄）：
+          #   ① curl mdcore release（首选，字节 = 冻结基线）
+          #   ② gh release download 走 API（绕过 release CDN 的 504 面）
+          #   ③ 上游 be5invis v1.0.36 7z
+          for attempt in 1 2 3; do
+            echo "--- 源① curl 尝试 $attempt ---"
+            if curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors \
+                -o "$FONT" \
+                "https://github.com/mmqz/mdcore/releases/download/ci-deps-v1/$ASSET" \
+              && echo "$SHA  $FONT" | sha256sum -c -; then ok=1; break; fi
+            sleep $((attempt * 10))
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::warning::源① curl 未达——源② gh release download（API 面）"
+            for attempt in 1 2; do
+              rm -f "$FONT"
+              if gh release download ci-deps-v1 --repo mmqz/mdcore --pattern "$ASSET" \
+                   --dir /tmp/chain-fonts --clobber \
+                && mv "/tmp/chain-fonts/$ASSET" "$FONT" \
+                && echo "$SHA  $FONT" | sha256sum -c -; then ok=1; break; fi
+              sleep $((attempt * 15))
+            done
+          fi
+          if [ "$ok" -ne 1 ]; then
+            echo "::warning::源② 未达——源③ 上游 be5invis v1.0.36 7z"
+            curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors \
+              -o /tmp/sarasa-mono-sc.7z \
               "https://github.com/be5invis/Sarasa-Gothic/releases/download/v1.0.36/SarasaMonoSC-TTF-1.0.36.7z"
             7z e -y -o/tmp/sarasa-ext /tmp/sarasa-mono-sc.7z SarasaMonoSC-Regular.ttf >/dev/null
-            mv /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf /tmp/chain-fonts/SarasaMonoSC-Regular.ttf
-            echo "d604b02e7fa3c2d21cdf0cc122656b6f843fe8e520d8934bed44760854577473  /tmp/chain-fonts/SarasaMonoSC-Regular.ttf" \
-              | sha256sum -c - || { echo "::error::SarasaMonoSC-Regular.ttf sha256 不符（v1.0.36 hinted 基线 d604b02e…）"; exit 1; }
+            mv /tmp/sarasa-ext/SarasaMonoSC-Regular.ttf "$FONT"
+            echo "$SHA  $FONT" | sha256sum -c - && ok=1
           fi
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::SarasaMonoSC-Regular.ttf 三源全失败（期望 sha256 $SHA）"
+            exit 1
+          fi
+          echo "SarasaMonoSC v1.0.36 就位（sha256 钉版校验通过）"
 
       - name: Place font + loadability self-check
         # 落位钉版探测路径 /usr/share/fonts/truetype/chinese/（fixture_spec
