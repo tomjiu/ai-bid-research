@@ -18,6 +18,10 @@ curl -sL -o ~/.tessdata/chi_sim.traineddata \
 
 # LibreOffice headless（V1 导出保真验证用）
 sudo apt install libreoffice-writer
+
+# Python 研究工具链依赖（src/llm·report·storage + tests/，见 #563（docs/PYTHON-BOUNDARY.md）
+# ——独立研究工具、非生产链路；仅需 Python 3.10+，与 Rust 链无相互依赖）
+python3 -m pip install -r requirements.txt
 ```
 
 ## Windows（原生）
@@ -53,6 +57,10 @@ cd bidcore && cargo test --workspace
 
 # Python 侧（全链路门禁：T0 环境预检 → T17）
 python3 scripts/run_tests.py
+
+# Python 研究工具链单元测试（src/ + tests/，45 用例——与上面 Rust 门禁链相互独立；
+# 非生产链路，边界见 #563（docs/PYTHON-BOUNDARY.md））
+python3 -m pytest
 ```
 
 两侧对「环境缺件」的行为一致：**SKIP（显式登记）而非 FAIL**。

@@ -85,6 +85,9 @@ bidcore/crates/
   bid-grade      评分/自评
   mang-app       桌面壳（注入 MCP 用的独立 workspace）
   mang-snap      快照
+
+src/ + main.py   Python 研究工具链（llm 调用封装 / 报告生成 / SQLite 存储）
+                 ——独立研究工具、非生产链路，边界见 #563（docs/PYTHON-BOUNDARY.md）
 ```
 
 ## 真实语料
@@ -162,6 +165,11 @@ cd bidcore
 cargo test --workspace              # 全量
 cargo test -p bid-domain            # 领域层
 cargo test -p bid-tools             # 工具层 + 真实语料
+
+# Python 研究工具链（src/ + tests/，45 用例——独立于 Rust 链；
+# 非生产链路，边界见 #563（docs/PYTHON-BOUNDARY.md））
+python3 -m pip install -r requirements.txt
+python3 -m pytest
 ```
 
 ### 环境门（重要）
