@@ -1,0 +1,1033 @@
+//! 传输面数据形状（MCP 附近的 serde 契约）。
+//!
+//! 形状刻意贴 MCP 的 `tools/call` 语义（`{tool, args}` 入，`{ok, data|error}` 出——
+//! 契约 §0 通用响应包装），但**不与任何传输实现绑定**——stdio 与未来
+//! HTTP / wasm 共用同一组类型。
+
+use serde_json::{json, Value};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::error::ToolError;
+
+/// 一次工具调用请求。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub tool: String,
+    #[serde(default)]
+    pub args: Value,
+}
+
+/// 工具返回体（成功）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolOutcome {
+    pub tool: String,
+    pub result: Value,
+}
+
+/// 工具返回体（成功或失败二选一）。
+///
+/// 线格式（契约 §0 通用响应包装，B-1 起对齐）：
+/// `{"ok":true, "tool":.., "data":..}` / `{"ok":false, "tool":.., "error":{code,..}}`。
+/// 手写 serde：`ok` 必须是**布尔**（serde 内部标签只能出字符串——M0 期的
+/// `#[serde(tag="ok")]` 会发出 `"ok":"true"`，与契约及 dispatch_json 兜底
+/// 路径的布尔口径不一致，B-1 修正）；成功载荷键名对齐契约的 `data`。
+#[derive(Debug, Clone)]
+pub enum ToolReply {
+    Ok(ToolOutcome),
+    Err { tool: String, error: ToolError },
+}
+
+impl ToolReply {
+    #[must_use]
+    pub fn ok(tool: &str, result: Value) -> Self {
+        Self::Ok(ToolOutcome {
+            tool: tool.to_string(),
+            result,
+        })
+    }
+
+    #[must_use]
+    pub fn error(tool: &str, error: ToolError) -> Self {
+        Self::Err {
+            tool: tool.to_string(),
+            error,
+        }
+    }
+}
+
+impl Serialize for ToolReply {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(3))?;
+        match self {
+            Self::Ok(out) => {
+                map.serialize_entry("ok", &true)?;
+                map.serialize_entry("tool", &out.tool)?;
+                map.serialize_entry("data", &out.result)?;
+            }
+            Self::Err { tool, error } => {
+                map.serialize_entry("ok", &false)?;
+                map.serialize_entry("tool", tool)?;
+                map.serialize_entry("error", error)?;
+            }
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ToolReply {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Raw {
+            ok: bool,
+            tool: String,
+            data: Option<Value>,
+            error: Option<ToolError>,
+        }
+        let raw = Raw::deserialize(deserializer)?;
+        match (raw.ok, raw.data, raw.error) {
+            (true, Some(result), _) => Ok(Self::Ok(ToolOutcome {
+                tool: raw.tool,
+                result,
+            })),
+            (true, None, _) => Err(serde::de::Error::custom("ok=true 但缺 data")),
+            (false, _, Some(error)) => Ok(Self::Err {
+                tool: raw.tool,
+                error,
+            }),
+            (false, _, None) => Err(serde::de::Error::custom("ok=false 但缺 error")),
+        }
+    }
+}
+
+/// `tools/list` 应答体的静态描述。
+///
+/// #137（MCP 协议层）起每条补 `inputSchema`（合法 JSON Schema——官方
+/// SDK 的 Tool 模型必填位），参数面**以 tools.rs 实现为准**逐位核对
+/// （required = `req_str` 强制位；optional = `opt_*` 位；enum/值域
+/// 照抄实现里的显式拒绝清单——schema 与实现的漂移由
+/// tests/mcp_protocol.rs 的 `required ⊆ properties` 一致性断言兜底）。
+#[must_use]
+pub fn tools_schema() -> Value {
+    let entries: Vec<Value> = crate::TOOL_NAMES
+        .iter()
+        .map(|name| {
+            serde_json::json!({
+                "name": name,
+                "description": describe(name),
+                "inputSchema": input_schema(name),
+                "implemented": is_implemented(name),
+            })
+        })
+        .collect();
+    serde_json::json!({ "tools": entries })
+}
+
+// ------------------------------------------------ 工具参数名提取（#279 信封诊断）
+//
+// dispatch_json 的信封结构诊断需要「某工具的已知参数名」——单一真源就是
+// 本模块 inputSchema 的 properties 键（schema 与实现的漂移由
+// tests/mcp_protocol.rs 的一致性断言兜底）。不另立字段清单表（两处真源必漂移）。
+
+/// 指定工具的入参字段名清单（未知工具 → 空——不猜测，交由分发层报 E_NOTFOUND）。
+#[must_use]
+pub fn tool_arg_fields(tool: &str) -> Vec<String> {
+    input_schema(tool)
+        .get("properties")
+        .and_then(Value::as_object)
+        .map(|props| props.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+/// 全部工具入参字段名的并集（解析失败路径用——调用方连 tool 字段都没给，
+/// 只能按全工具并集猜「这些顶层字段像工具参数」）。OnceLock 缓存：全量
+/// schema 只构建一次。
+#[must_use]
+pub fn all_tool_arg_fields() -> Vec<String> {
+    static ALL: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| {
+        let mut seen: Vec<String> = Vec::new();
+        for name in crate::TOOL_NAMES {
+            for f in tool_arg_fields(name) {
+                if !seen.contains(&f) {
+                    seen.push(f);
+                }
+            }
+        }
+        seen
+    })
+    .clone()
+}
+
+/// 各工具入参的 JSON Schema（`type/properties/required/enum/minimum/maximum/
+/// items/minItems` 键面——draft-07 广谱子集，不依赖 2020-12 专有键）。
+#[must_use]
+fn input_schema(name: &str) -> Value {
+    // 高频参数的公共形状（match 各臂互斥——按值 move 各占一条执行路径，合法）
+    let pid = json!({"type": "string", "description": "项目 ID（建项目时的 project_id）"});
+    let pv = json!({
+        "oneOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "string", "const": "latest"}
+        ],
+        "description": "乐观并发版本号：上次响应的 project_version 原样回传（强一致，过期 E_CONFLICT）；或 \"latest\" 显式声明无并发（#279）；缺省跳过检查"
+    });
+    match name {
+        "create_bid_project" => json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "项目名"},
+                "bid_deadline": {"type": "string", "description": "投标截止日（YYYY-MM-DD；已过 → 警告不阻断）"},
+                "mode": {"type": "string", "enum": ["明标", "暗标"]},
+                "external_key": {"type": "string", "description": "外部幂等键（同 key 重放返回已有 project_id）"},
+                "tender_notice_ref": {"type": "string", "description": "招标公告编号（可选）"}
+            },
+            "required": ["name", "bid_deadline", "mode", "external_key"]
+        }),
+        "import_tender_files" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "files": {
+                    "type": "array", "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "upload_ref": {"type": "string", "description": "文件路径（引擎可读位）"},
+                            "filename": {"type": "string"},
+                            "kind": {"type": "string", "enum": ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"], "description": "缺省归「附件」"},
+                            "expected_pages": {"type": "integer", "description": "页数对账期望值（可选）"}
+                        },
+                        "required": ["upload_ref", "filename"]
+                    }
+                },
+                "project_version": pv
+            },
+            "required": ["project_id", "files"]
+        }),
+        "extract_requirements" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "scope": {"type": "string", "enum": ["all"], "description": "文件子集过滤属 M2 扩展（当前仅 all）"},
+                "options": {"type": "object", "description": "granularity 保留位（未实现，传入被忽略）"},
+                "project_version": pv
+            },
+            "required": ["project_id"]
+        }),
+        // ---- #219 全块覆盖三工具 ----
+        "get_document_chunks" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "file_id": {"type": "string", "description": "文件 ID（import_tender_files 回执 per_file[].file_id）"},
+                "from": {"type": "integer", "description": "起始块 idx（缺省 0）"},
+                "size": {"type": "integer", "description": "窗口大小 1..=200（缺省 50）——一次取全量会吃爆上下文"}
+            },
+            "required": ["project_id", "file_id"]
+        }),
+        "submit_block_marks" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "file_id": {"type": "string"},
+                "marks": {
+                    "type": "array",
+                    "description": "区间标记：每块必须恰好被一个区间覆盖；区间不得重叠",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "from": {"type": "integer", "description": "起始块 idx（含）"},
+                            "to": {"type": "integer", "description": "结束块 idx（含）"},
+                            "verdict": {"type": "string", "enum": ["requirement", "noise", "rule", "review_table"],
+                                        "description": "requirement=需响应；noise=无关；rule=招标人规则说明（我方遵守但不写响应）；review_table=审查表"},
+                            "reason": {"type": "string", "description": "判断理由（可审计）"}
+                        },
+                        "required": ["from", "to", "verdict"]
+                    }
+                },
+                "requirements": {
+                    "type": "array",
+                    "description": "从 requirement 区间提取的关键点（block_idx 必须落在 requirement 区间内）",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "block_idx": {"type": "integer"},
+                            "statement": {"type": "string", "description": "关键点陈述（不得为空）"},
+                            "category": {"type": "string", "enum": ["资格条件", "否决项", "评分项", "技术参数", "商务要求", "格式要求", "其他"],
+                                         "description": "分类由 Agent 判断（引擎只校验枚举）"},
+                            "mandatory": {"type": "boolean", "description": "漏响应会废标 → true"},
+                            "substantive": {"type": "boolean", "description": "★实质性条款（#276）→ true：招标文件★号标记或「打★号条款为实质性条款」声明覆盖的条款，一条不响应即响应无效。语义正交于 mandatory（必选性）：★未必必选、必选未必★——两类标记都按原文声明，不要互相推断"}
+                        },
+                        "required": ["block_idx", "statement"]
+                    }
+                },
+                "project_version": pv
+            },
+            "required": ["project_id", "file_id", "marks"]
+        }),
+        "get_coverage_report" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid
+            },
+            "required": ["project_id"]
+        }),
+        // ---- #285 ① ★漏标检测 ----
+        "get_star_coverage" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "file_id": {"type": "string", "description": "文件 ID（import_tender_files 回执 per_file[].file_id）"}
+            },
+            "required": ["project_id", "file_id"]
+        }),
+        // ---- #285 ② 块级双向索引三工具 ----
+        "get_requirement_provenance" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "req_id": {"type": "string", "description": "REQ id（extract_requirements 回执 / get_compliance_matrix 的 req_id）"}
+            },
+            "required": ["project_id", "req_id"]
+        }),
+        "get_block_requirements" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "file_id": {"type": "string", "description": "文件 ID（import_tender_files 回执 per_file[].file_id）"},
+                "block_idx": {"type": "integer", "minimum": 0, "description": "0 基块序（get_document_chunks 的 chunks[].block_idx）"}
+            },
+            "required": ["project_id", "file_id", "block_idx"]
+        }),
+        "get_annotation_overlay" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "file_id": {"type": "string", "description": "文件 ID"},
+                "page": {"type": "integer", "minimum": 1, "description": "可选——只取该页块（PDF 面；省略 = 全文件）"}
+            },
+            "required": ["project_id", "file_id"]
+        }),
+        // ---- #318 评分细则逐条响应覆盖检查 ----
+        "check_scoring_coverage" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid
+            },
+            "required": ["project_id"]
+        }),
+        "get_compliance_matrix" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string", "description": "契约键（qualification|veto|scoring|tech_param|commercial|format|other）或中文类别名"},
+                        "status": {"type": "string", "enum": ["NOT_RESPONDED", "RESPONDED", "PARTIAL", "NOT_APPLICABLE"]}
+                    }
+                },
+                "cursor": {"type": "string", "description": "opaque 游标（上次响应的 next_cursor；与 filters 绑定）"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "缺省 100；越界显式拒"},
+                "page": {"type": "integer", "minimum": 1, "description": "兼容旧调用（映射 offset=(page-1)*limit；cursor 优先）"}
+            },
+            "required": ["project_id"]
+        }),
+        "list_evidence" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "enum": ["qualification", "performance", "personnel", "certificate", "product_doc", "solution_module", "contract"], "description": "或对应中文展示名"},
+                        "status": {"type": "string", "enum": ["ACTIVE", "EXPIRING", "EXPIRED", "SUPERSEDED"]}
+                    }
+                },
+                "cursor": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 1000}
+            },
+            "required": ["project_id"]
+        }),
+        "list_tasks" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "owner": {"type": "string", "description": "执行人精确匹配"},
+                        "status": {"type": "string", "enum": ["ASSIGNED", "IN_PROGRESS", "DONE"]}
+                    }
+                },
+                "cursor": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 1000}
+            },
+            "required": ["project_id"]
+        }),
+        "search_evidence" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "query": {"type": "string"},
+                "mode": {"type": "string", "enum": ["hybrid", "semantic", "exact"]},
+                "exact": {"type": "object", "properties": {"field": {"type": "string", "enum": ["model", "amount", "date", "clause_no", "cert"]}, "value": {}}},
+                "filters": {"type": "object"},
+                "top_k": {"type": "integer", "minimum": 1},
+                "threshold": {"type": "number"}
+            },
+            "required": ["project_id", "query"]
+        }),
+        "draft_response_section" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "section_id": {"type": "string", "description": "目标章节（SEC-*——建纲后起草）"},
+                "instructions": {"type": "string", "description": "起草指令（进幂等键）"},
+                "source_requirements": {"type": "array", "items": {"type": "string"}, "description": "REQ-* 清单（缺省 = 章节绑定集）"},
+                "evidence_ids": {"type": "array", "items": {"type": "string"}, "description": "EV-* 清单（缺省 = 矩阵绑定集）"},
+                "generator": {"type": "string", "enum": ["auto", "mock", "real", "external"], "description": "auto=有 key 走真实 LLM 无 key 降级 mock；external 需配 content"},
+                "content": {"type": "string", "description": "外部手稿全文（在场即 external 语义，与 generator=mock/real 互斥）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "section_id"]
+        }),
+        "append_section_segment" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "section_id": {"type": "string", "description": "目标叶章节（SEC-xxxx）"},
+                "content": {"type": "string", "description": "段正文（本批新增内容——非章节全文；引用语法与整稿一致 [REQ-*]/[EV-*]）"},
+                "idem_key": {"type": "string", "description": "幂等键（缺省 = 内容指纹——同段同内容重提自动 no-op；网络重试场景可显式指定）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "section_id", "content"]
+        }),
+        "rewrite_section_segment" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "segment_id": {"type": "string", "description": "目标段（SEG-xxxx——list_section_segments 回显）"},
+                "content": {"type": "string", "description": "段正文（重写后的该段全文）"},
+                "expected_version": {"type": "integer", "minimum": 1, "description": "CAS 对照（段当前 version——list 回显；不匹配 E_CONFLICT；缺省跳过检查）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "segment_id", "content"]
+        }),
+        "list_section_segments" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "section_id": {"type": "string", "description": "目标叶章节（SEC-xxxx）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "section_id"]
+        }),
+        "register_addendum_changes" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "changes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "补遗变更清单（逐条：改了什么条款、旧文本、新要求）",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "req_id": {"type": "string", "description": "目标条款 REQ-xxxx（value_changed/requirement_removed 必填；requirement_added 缺省由引擎签发新 id）"},
+                            "change_type": {"type": "string", "enum": ["value_changed", "requirement_added", "requirement_removed"]},
+                            "old_text": {"type": "string", "description": "旧要求片段（受影响段定位线索——段含此文本即入影响面）"},
+                            "new_requirement": {"type": "string", "description": "新要求全文（value_changed/requirement_added 必填）"},
+                            "category": {"type": "string", "enum": ["资格条件", "否决项", "评分项", "技术参数", "商务要求", "格式要求", "其他"], "description": "requirement_added 必填（类别驱动矩阵 blocking 派生）"},
+                            "clause_no": {"type": "string", "description": "requirement_added 可选：条款号"},
+                            "section_id": {"type": "string", "description": "requirement_added 可选：归属叶章节 SEC-xxxx（缺省=零章节影响，只进条款集与矩阵）"},
+                            "source_file_id": {"type": "string", "description": "关联补遗件 TF-xxxx（可溯源）"}
+                        },
+                        "required": ["change_type"]
+                    }
+                },
+                "project_version": pv
+            },
+            "required": ["project_id", "changes"]
+        }),
+        "rewrite_section_partial" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "directive_id": {"type": "string", "description": "目标指令 RD-xxxx（register 回显 / get_bid_project_state 发现）"},
+                "rewrites": {
+                    "type": "array",
+                    "description": "段重写清单（必须⊆指令影响面；空表=确认无需改写直接处置）",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "segment_id": {"type": "string", "description": "目标段 SEG-xxxx"},
+                            "content": {"type": "string", "description": "该段重写后全文"},
+                            "expected_version": {"type": "integer", "minimum": 1, "description": "CAS 对照（不匹配 E_CONFLICT；缺省跳过）"}
+                        },
+                        "required": ["segment_id", "content"]
+                    }
+                },
+                "dry_run": {"type": "boolean", "description": "纯预览（将修改 X 段 Y 段不动，零落笔）——建议先预览后真跑", "default": false},
+                "dismiss": {"type": "boolean", "description": "人工裁定不适用（与 rewrites 互斥；Dismissed 同样参与清 DIRTY 判定）", "default": false},
+                "project_version": pv
+            },
+            "required": ["project_id", "directive_id"]
+        }),
+        "validate_bid_document" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "scope": {"type": "string", "enum": ["all", "sections"]},
+                "section_ids": {"type": "array", "items": {"type": "string"}, "description": "scope=sections 时必填"},
+                "rules_profile": {"type": "string", "enum": ["standard", "dark_bid"]},
+                "project_version": pv
+            },
+            "required": ["project_id"]
+        }),
+        "export_bid_document" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "format": {"type": "string", "enum": ["docx", "pdf"]},
+                "output_path": {"type": "string", "description": "工作区相对路径（不得绝对路径/含 ..）"},
+                "profile": {
+                    "type": "object",
+                    "properties": {
+                        "dark_bid": {"type": "boolean"},
+                        "bidder_name": {"type": "string"},
+                        "project_name": {"type": "string", "description": "招标官方项目名（#117）"},
+                        "bid_amount": {"type": "number", "description": "总报价（元）——报价明细表（#117）"},
+                        "price_breakdown": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "item": {"type": "string"},
+                                    "unit": {"type": "string"},
+                                    "quantity": {"type": "number"},
+                                    "unit_price": {"type": "number"},
+                                    "note": {"type": "string"}
+                                },
+                                "required": ["item", "unit", "quantity", "unit_price"]
+                            }
+                        },
+                        "duration_days": {"type": "integer"},
+                        "validity_days": {"type": "integer"},
+                        "deposit_amount": {"type": "number"},
+                        "legal_rep_gender": {"type": "string"}
+                    }
+                },
+                "options": {
+                    "type": "object",
+                    "properties": {
+                        "tracked_changes": {"type": "boolean", "description": "暂不支持（告警）"},
+                        "watermark": {"type": "boolean", "description": "暂不支持（告警）"}
+                    }
+                },
+                "project_version": pv
+            },
+            "required": ["project_id", "format", "output_path"]
+        }),
+        "get_bid_project_state" => json!({
+            "type": "object",
+            "properties": {
+                "project_status": {"type": "string", "description": "调试/模拟面：显式带入状态（合法值见 bid-domain ProjectStatus）；缺省 = 服务态真实状态"}
+            }
+        }),
+        "save_version" => json!({
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "绝对路径（.md/.txt/.markdown）"},
+                "message": {"type": "string", "description": "版本说明（必填非空——写明完成了什么）"}
+            },
+            "required": ["file_path", "message"]
+        }),
+        "check_bid_quality" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid
+            },
+            "required": ["project_id"]
+        }),
+        "build_outline" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "length_profile": {"type": "string", "enum": ["practical", "standard", "conservative", "maximum"], "description": format!("#287 篇幅档位：实用型 400,000≈4百4页 / 标准型 800,000≈9百4页 / 保险型 1,200,000≈1千4百22页（默认）/ 极限型 2,500,000≈2千9百63页（接近装订上限）。与 target_total_chars 三者优先：显式字数 > 档位 > 默认档 {}；拼错档位键直接拒", bid_domain::outline::DEFAULT_TARGET_TOTAL_CHARS)},
+                "target_total_chars": {"type": "integer", "minimum": 1000, "maximum": 5000000, "description": format!("直接给字数（覆盖 length_profile 档位）；缺省走档位→默认档 {}（≈1422 页）", bid_domain::outline::DEFAULT_TARGET_TOTAL_CHARS)},
+                "max_reqs_per_leaf": {"type": "integer", "minimum": 1, "maximum": 50, "description": "缺省 8"},
+                "package": {"type": "string", "description": "#316 选包建纲：投哪个包（PKG id / 原文标签 / 序号，如 PKG-02 / 第2包 / 2；先用 list_packages 查识别结果；共用条款自动进纲；投全部 = 每包各建一个项目）"},
+                "project_version": pv
+            },
+            "required": ["project_id"]
+        }),
+        // ---- #287 篇幅档位推荐（只读——P3 建纲前调，建议+理由+alternatives 交用户确认） ----
+        "recommend_length_profile" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid
+            },
+            "required": ["project_id"]
+        }),
+        // ---- #316 分包清单（只读——多标段/多包识别结果 + 归属统计 + 选包状态） ----
+        "list_packages" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid
+            },
+            "required": ["project_id"]
+        }),
+        "register_evidence" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "kind": {"type": "string", "enum": ["qualification", "performance", "personnel", "certificate", "product_doc", "solution_module", "contract"], "description": "或对应中文展示名"},
+                "title": {"type": "string"},
+                "source_file_id": {"type": "string", "description": "TF-*——已导入文件（import_tender_files 回执 per_file[].file_id）；不存在/解析失败 → 拒（#185 来源验证）"},
+                "subject_name": {"type": "string"},
+                "scope": {"type": "string"},
+                "placeholder": {"type": "boolean", "description": "#245：true = 占位/待核验登记（verification_tier=PLACEHOLDER）——可自报（诚实方向：从低不从高）；占位可绑定（矩阵 PENDING_EVIDENCE 待补）但不清除合规阻塞、不得声称资质已具备；升级 = 导入真实材料重新登记（换版）；verification_tier 参数不存在（服务端裁决，自报拒）"},
+                "valid_from": {"type": "string", "description": "ISO 日期"},
+                "valid_until": {"type": "string", "description": "ISO 日期"},
+                "locator": {
+                    "type": "object",
+                    "description": "可选——缺省为文件级锚（verification_tier=FILE_EXISTS，无正文摘录）；传入且对账通过则 CONTENT_MATCHES：正文摘录 excerpt 由服务端从解析产物逐字截取随回执/台账返回（#217）",
+                    "properties": {
+                        "kind": {"type": "string", "enum": ["docx_paragraph", "pdf_page_text"]},
+                        "paragraph_index": {"type": "integer"},
+                        "page": {"type": "integer"},
+                        "text_fingerprint": {"type": "string"}
+                    },
+                    "required": ["kind"]
+                },
+                "client": {"type": "string", "description": "业绩类：发包人（#117）"},
+                "amount_wan": {"type": "number", "description": "业绩类：合同金额（万元）"},
+                "completed_on": {"type": "string", "description": "业绩类：完成日期"},
+                "fields": {
+                    "type": "object",
+                    "description": "结构化字段（#147——search_evidence exact 通道的精确查询面：cert 查 cert_name/cert_no、amount 查 amount_wan、date 查 signed_at/finished_at）。全部可选；非法日期/负金额/年限 > 100 → E_UNPROCESSABLE",
+                    "properties": {
+                        "project_name": {"type": "string", "description": "合同/业绩：项目名称"},
+                        "client": {"type": "string", "description": "合同/业绩：发包人/建设单位"},
+                        "amount_wan": {"type": "number", "minimum": 0, "description": "合同/业绩：合同金额（万元，>= 0）"},
+                        "signed_at": {"type": "string", "description": "合同/业绩：签订日期（YYYY-MM-DD）"},
+                        "finished_at": {"type": "string", "description": "合同/业绩：完成日期（YYYY-MM-DD）"},
+                        "cert_name": {"type": "string", "description": "证书/资质：证书名称"},
+                        "cert_no": {"type": "string", "description": "证书/资质：证书编号"},
+                        "issuer": {"type": "string", "description": "证书/资质：发证机关"},
+                        "person_name": {"type": "string", "description": "人员：姓名"},
+                        "person_title": {"type": "string", "description": "人员：职称"},
+                        "years": {"type": "integer", "minimum": 0, "maximum": 100, "description": "人员：从业年限（<= 100）"}
+                    }
+                },
+                "project_version": pv
+            },
+            "required": ["project_id", "kind", "title", "source_file_id", "subject_name"]
+        }),
+        "bind_evidence" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "ev_id": {"type": "string"},
+                "requirement_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}, "description": "REQ-* 批量绑定清单"},
+                "bid_open_date": {"type": "string", "description": "开标日（YYYY-MM-DD）——证据有效性裁决基准日"},
+                "project_version": pv
+            },
+            "required": ["project_id", "ev_id", "requirement_ids", "bid_open_date"]
+        }),
+        "record_review_gate" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "gate": {"type": "string", "enum": ["matrix_approval", "outline_approval", "pre_export_confirm", "addendum_waiver"]},
+                "decision": {"type": "string", "enum": ["APPROVED", "REJECTED"]},
+                "receipt": {"type": "string", "description": "#182 宿主签发的审批回执（人类签域 v2 七段（#323 含内容绑定摘要）: v2.<actor_id>.human.<scope>.<issued_at>.<sections_digest>.<hmac>——digest 取 get_bid_project_state 的 content_binding.sections_digest）——人工确认由宿主签发 receipt 提供，Agent 不得伪造；签发后内容变更旧 receipt 拒（CONTENT_DRIFTED_RECEIPT）；#277 agent 声明过门走 agent 签域（scope 带 :agent 后缀 + actor_type=agent），须工作区 require_human_receipt=false；reviewer 参数已废除"},
+                "reason": {"type": "string", "description": "#277 agent 声明过门的理由（agent receipt 路径必填非空——「为什么可以过这个门」；human 路径可空）"},
+                "findings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "severity": {"type": "string", "enum": ["BLOCKER", "WARNING", "INFO"]},
+                            "code": {"type": "string"},
+                            "message": {"type": "string"},
+                            "section_id": {"type": "string"}
+                        },
+                        "required": ["severity", "code", "message"]
+                    }
+                },
+                "project_version": pv
+            },
+            "required": ["project_id", "gate", "decision", "receipt"]
+        }),
+        // #226 层 1：否决项死锁的人工出口。deviation 在 NOT_APPLICABLE 时必填
+        // ——schema 层不写条件必填（JSON Schema draft-07 的 if/then 会让
+        // 部分客户端解析失败），约束落在工具实现里并以清晰报错暴露。
+        // #182：receipt 验签（签域 matrix_override 四重绑定：项目/行/状态/
+        // 理由摘要）——人工出口只认真人，Agent 不得伪造、不得挪用换态偷换理由。
+        "set_matrix_override" => json!({
+            "type": "object",
+            "description": "人工覆写某条款的响应状态（#226——否决项死锁出口：把「本次招标不接受联合体」这类招标人规则说明标为 NOT_APPLICABLE，附理由；覆写后矩阵立即重算，响应回 blocking 行数与操作者审计面）",
+            "properties": {
+                "project_id": pid,
+                "requirement_id": {"type": "string", "description": "REQ-* 条款 id（须真实存在；receipt 签域绑定本行——REQ-0003 的 receipt 免不了 REQ-0004）"},
+                "status": {"type": "string", "enum": ["RESPONDED", "NOT_APPLICABLE", "NOT_RESPONDED", "PARTIAL"], "description": "目标响应状态"},
+                "deviation": {"type": "string", "description": "偏离/不适用说明——status=NOT_APPLICABLE 时必填（不可审计的豁免不算豁免）"},
+                "receipt": {"type": "string", "description": "#182 宿主签发的审批回执（签域 matrix_override:<project_id>:<requirement_id>:<status>:<理由sha256>——项目/行/状态/理由四重绑定，换任何一项都要换签）——principal/operator 参数不存在，Agent 不得伪造（把必选条款标不适用是豁免动作，只认真人）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "requirement_id", "status", "receipt"]
+        }),
+        // #243：历史异常态（VALIDATING+缺章）的受支持恢复出口。
+        // 域层三重约束（仅 VALIDATING / 仅缺章 / 理由非空白）+ 审计账——
+        // 不是任意状态写入；重复请求被状态门拒（E_STATE，非死锁态）。
+        "recover_validating_state" => json!({
+            "type": "object",
+            "description": "历史异常态恢复（#243）：项目滞留在 VALIDATING 且存在未起草叶（旧版校验误推进所致）时，回到 DRAFTING 解锁起草面。三重约束：仅 VALIDATING 态、仅缺章、理由必填；每次恢复落审计记录（何时/为何/从哪到哪/缺哪些章）。恢复后携带新 project_version——后续调用用新值",
+            "properties": {
+                "project_id": pid,
+                "reason": {"type": "string", "description": "恢复理由（必填非空白——不可审计的恢复不成恢复；如：旧版校验在缺章时误推进 VALIDATING）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "reason"]
+        }),
+        "record_addendum_waiver" => json!({
+            "type": "object",
+            "description": "招标包输入件不就绪的逐件人工确认（#184 补遗分级阻塞 + 地图 P0-1 扩面到主件/附件）：任一输入件不处 READY（FAILED/OCR_PENDING）时 draft_response_section 被拒；人工继续必须逐件确认到具体 file_id（非全局布尔）。确认即审计面（file_id/reason/at/principal + actor + #277 过门方式）；放行后起草标 RESTRICTED（受限起草，不静默当完整输入）。#379 拆门：confirm_no_addendum=true = 「本项目无补遗」的全局显式确认（NotProvided 阻塞的唯一出口——逐件 waiver 不再顺手解除它）；两种语义互斥",
+            "properties": {
+                "project_id": pid,
+                "file_id": {"type": "string", "description": "TF-* 输入件 id（须真实存在——import 响应 addendum_readiness.not_ready[].file_id 或任何不就绪件；receipt 签域绑定本件）。confirm_no_addendum=true 时不得携带"},
+                "reason": {"type": "string", "description": "确认理由（非空白——不可审计的确认不成确认；#277 agent 声明路径同构：为什么可以过这个门）"},
+                "receipt": {"type": "string", "description": "#182 宿主签发的审批回执（人类签域 addendum_waiver:<file_id>，件级绑定）——principal 参数已废除，Agent 不得伪造；#277 agent 声明走 agent 签域（addendum_waiver:<file_id>:agent + actor_type=agent），须工作区 require_human_receipt=false；#379 全局确认签域 no_addendum_confirmed"},
+                "confirm_no_addendum": {"type": "boolean", "description": "#379：true = 全局确认「本项目无补遗」（NotProvided 阻塞的人工出口；项目已有补遗件时响亮拒——那是逐件确认/修复重传的场）；缺省 false = 逐件免责（须携带 file_id）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "reason", "receipt"]
+        }),
+        "score_price" => json!({
+            "type": "object",
+            "description": "纯计算器（无项目路由/状态机）——bid_price 缺省 = 纯推荐模式",
+            "properties": {
+                "method": {"description": "benchmark|lowest|average 或完整对象形态（如 {\"BENCHMARK_PRICE\":{\"coefficient\":0.97}}）", "type": ["string", "object"]},
+                "coefficient": {"type": "number", "description": "benchmark 缺省 1.0 / average 缺省 0.95"},
+                "max_score": {"type": "number", "description": "缺省 30"},
+                "budget": {"type": "number", "description": "控制价（benchmark 必需）"},
+                "deviation": {"description": "ratio|price(需 deduct_high/deduct_low)|rate(需 deduct) 或完整对象", "type": ["string", "object"]},
+                "deduct_high": {"type": "number"},
+                "deduct_low": {"type": "number"},
+                "deduct": {"type": "number"},
+                "bid_price": {"type": "number", "description": "己方报价（在场即试算）"},
+                "others": {"type": "array", "items": {"type": "number"}, "description": "竞争报价清单"}
+            }
+        }),
+        "score_section" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "section_id": {"type": "string", "description": "须为已起草的叶章节（结构节点/未起草 → 拒）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "section_id"]
+        }),
+        "score_document" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "project_version": pv,
+                "bid_price": {"type": "number", "description": "缺省 = 不计价（price 出 null 而非 0）"},
+                "others": {"type": "array", "items": {"type": "number"}},
+                "method": {"type": ["string", "object"], "description": "价格口径（仅 bid_price 在场时消费）"},
+                "coefficient": {"type": "number"},
+                "max_score": {"type": "number"},
+                "budget": {"type": "number"},
+                "deviation": {"type": ["string", "object"]},
+                "deduct_high": {"type": "number"},
+                "deduct_low": {"type": "number"},
+                "deduct": {"type": "number"}
+            },
+            "required": ["project_id"]
+        }),
+        "list_tools" => json!({
+            "type": "object",
+            "properties": {},
+            "description": "无参数——发现面工具，任何状态可用"
+        }),
+        // #321（A-23）：RT 生命周期 + 分工 + 章节重开 + 参数应答工具族
+        "assign_revision" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "rt_id": {"type": "string", "description": "RT-xxxx（record_review_gate 回执 spawned_rt_ids 或 list 面获取）"},
+                "owner": {"type": "string", "description": "修订执行者（任意操作者——人与 AI 均可修单；AI 可修单不可过门）"}
+            },
+            "required": ["project_id", "rt_id", "owner"]
+        }),
+        "advance_revision" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "rt_id": {"type": "string"},
+                "to": {"type": "string", "enum": ["OPEN", "IN_PROGRESS", "DONE"], "description": "DONE 一律拒——关单走 complete_revision（带 resolution）"}
+            },
+            "required": ["project_id", "rt_id", "to"]
+        }),
+        "complete_revision" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "rt_id": {"type": "string"},
+                "resolution": {"type": "string", "description": "修单交代（必填非空——改了什么/怎么改的；空说明不算修完）"}
+            },
+            "required": ["project_id", "rt_id", "resolution"]
+        }),
+        "batch_task" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "targets": {"type": "array", "items": {"type": "string"}, "description": "SEC-xxxx 章节 / REQ-xxxx 条款（自然键 upsert：同 owner 重批改期，换 owner 复位 ASSIGNED）"},
+                "owner": {"type": "string"},
+                "deadline": {"type": "string", "description": "截止日 YYYY-MM-DD（可选）"}
+            },
+            "required": ["project_id", "targets", "owner"]
+        }),
+        "advance_task" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "target_id": {"type": "string"},
+                "to": {"type": "string", "enum": ["ASSIGNED", "IN_PROGRESS", "DONE"], "description": "线性链越级拒"}
+            },
+            "required": ["project_id", "target_id", "to"]
+        }),
+        "reopen_section" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "section_id": {"type": "string", "description": "SEC-xxxx（须 ACCEPTED——非终态拒）"}
+            },
+            "required": ["project_id", "section_id"]
+        }),
+        "set_param_responses" => json!({
+            "type": "object",
+            "properties": {
+                "project_id": pid,
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "requirement_id": {"type": "string"},
+                            "param_name": {"type": "string"},
+                            "required_value": {"type": "string"},
+                            "response_value": {"type": "string"},
+                            "evidence_id": {"type": "string", "description": "佐证证据（可选）"}
+                        },
+                        "required": ["requirement_id", "param_name", "required_value", "response_value"]
+                    }
+                }
+            },
+            "required": ["project_id", "rows"]
+        }),
+        // ---- #315 业绩材料库四工具 ----
+        "register_performance" => json!({
+            "type": "object",
+            "description": "业绩材料库登记（#315——跨项目资产：库文件在项目工作区之外，BID_PERF_LIB / 用户目录；无项目路由，建项目前可维护）",
+            "properties": {
+                "entries": {
+                    "type": "array", "maxItems": 200,
+                    "description": "批量登记（单批 <= 200——分批登记）；语义幂等键 = (name, client, amount_wan, completed_on) 四元组，命中既有条目回显既有 id 不重复登记；一条非法整批拒（零副作用）",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "项目名称（业绩合同标的项目）"},
+                            "client": {"type": "string", "description": "客户/发包人（甲方）"},
+                            "amount_wan": {"type": "number", "minimum": 0, "description": "合同金额（万元，>= 0）"},
+                            "completed_on": {"type": "string", "description": "完成日期（YYYY-MM-DD）"},
+                            "categories": {"type": "array", "items": {"type": "string"}, "maxItems": 20, "description": "行业/类型标签（匹配面——短标签如「医疗设备」）"},
+                            "materials": {"type": "array", "items": {"type": "string"}, "maxItems": 20, "description": "材料文件路径（合同扫描/验收单——write_performance_section 按文件名匹配已导入文件）"},
+                            "key_points": {"type": "array", "items": {"type": "string"}, "maxItems": 20, "description": "亮点（写给正文的事实点）"},
+                            "subject_name": {"type": "string", "description": "乙方主体（业绩证据 subject_name 的条目级覆盖；缺省用库主/工作区投标人档案）"}
+                        },
+                        "required": ["name", "client", "amount_wan", "completed_on"]
+                    }
+                },
+                "owner_name": {"type": "string", "description": "库主 = 投标人主体名（证据登记面的 subject_name 默认源；一次登记全程生效，可更新）"}
+            }
+        }),
+        "list_performance" => json!({
+            "type": "object",
+            "description": "业绩材料库列表（#315——只读，无项目路由）",
+            "properties": {
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string", "description": "标签子串（categories 任一含此串）"},
+                        "keyword": {"type": "string", "description": "关键词（name/client 包含）"},
+                        "min_amount_wan": {"type": "number", "description": "金额下界（万元，含）"},
+                        "max_amount_wan": {"type": "number", "description": "金额上界（万元，含）"},
+                        "since": {"type": "string", "description": "完成日期下界（YYYY-MM-DD，含）"}
+                    }
+                },
+                "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "返回上限（缺省 100；显式越界拒，不静默 clamp）"}
+            }
+        }),
+        "recommend_performance" => json!({
+            "type": "object",
+            "description": "业绩匹配推荐（#315——只读：四因子确定性打分 + 建议写入章节；缺信号因子弃权重归一，分数是排序依据不是正确率，选哪几条由用户/Agent 裁决）",
+            "properties": {
+                "project_id": pid,
+                "budget_wan": {"type": "number", "description": "项目预算（万元）——显式入参（仓内无预算结构面，不猜；缺省则金额因子弃权）"},
+                "base_date": {"type": "string", "description": "评标基准日（YYYY-MM-DD；不传用系统今日——响应面注明来源）"},
+                "client_type": {"type": "string", "enum": ["government", "soe", "private", "other"], "description": "采购人类型（不传则该因子弃权）"},
+                "focus": {"type": "string", "description": "额外侧重关键词（拼进匹配语料——用户明示的侧重点）"},
+                "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "description": "推荐条数（缺省 10）"}
+            },
+            "required": ["project_id"]
+        }),
+        "write_performance_section" => json!({
+            "type": "object",
+            "description": "一键写入业绩章节（#315——材料文件名命中已导入文件则证据自动登记（kind=业绩）+ 绑定业绩类 REQ + 矩阵重算；正文 = 业绩表（GFM）+ 逐条描述段（key_points + [EV-*] 引用）单段写入（幂等键 perf-section:<section_id>，重跑 no-op）；材料未导入 → materials_pending 诚实列明（正文照写、证据不伪造）；readiness 门（可用业绩 < 3）会拦写入并带材料指引",
+            "properties": {
+                "project_id": pid,
+                "section_id": {"type": "string", "description": "目标叶章节（SEC-xxxx——recommend_performance 的 suggested_section）"},
+                "perf_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}, "description": "PERF-* 清单（选中写入的业绩）"},
+                "bid_open_date": {"type": "string", "description": "开标日（YYYY-MM-DD——证据有效性裁决基准日；不传用系统今日）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "section_id", "perf_ids"]
+        }),
+        _ => json!({"type": "object"}),
+    }
+}
+
+/// 工具的一句话摘要（tools/list 与 #279 `list_tools` 发现面的单一真源；
+/// #279 起公开——tools.rs 的发现面工具复用，避免第二份描述漂移）。
+pub(crate) fn describe(name: &str) -> &'static str {
+    match name {
+        "create_bid_project" => "建项目（external_key 幂等）",
+        "import_tender_files" => "导入招标文件 + 完整性对账",
+        "extract_requirements" => "六类条款抽取 + 覆盖率对账；#219 二步：Agent 块标记优先——被标记块的正则产物让位（REQ-Axxxx 承接），未覆盖块正则兜底，无标记时与纯正则逐位一致",
+        "get_compliance_matrix" => "只读：响应矩阵与资格三态（S-4 游标分页）",
+        "list_evidence" => "只读：证据台账列表（kind/status 过滤 + 游标分页；行含 verification_tier——#217 四态可见）",
+        "list_tasks" => "只读：任务分工列表（owner/status 过滤 + 游标分页）",
+        "search_evidence" => "双通道证据检索（#145 朴素实现 + #217 正文摘录面：semantic 通道检索 title/scope/subject/client/excerpt——正文含词但标题不含也能命中；exact 五字段整token/数值/日期；valid_at 过期降权×0.5；M2-b 落地时换真向量库 + cursor 游标信封）",
+        "draft_response_section" => "单章起草（引用回查后写内核；输入完整性门禁——主件/补遗/附件不 READY 拒，人工确认放行走受限起草 RESTRICTED）",
+        "append_section_segment" => "追加章节分段（#254——content 是段正文非章节全文，引擎按序合稿，前段不丢；同 idem_key/同内容重提幂等 no-op；长章节分批写作的安全路径）",
+        "rewrite_section_segment" => "重写指定段（#254——局部修订不动兄弟段；expected_version CAS，过期 E_CONFLICT；定位用 list 回显的 segment_id）",
+        "list_section_segments" => "只读段账本（#254——段清单 + 合稿字数 + 剩余配额，续写前对账）",
+        "register_addendum_changes" => "补遗变更登记（#319①——起草后补遗到达：数值变更/新增/删除三类登记→DIRTY 打标+改写指令生成（影响面×段账本匹配：引用该 REQ 或含旧文本的段）+矩阵幂等重算；批量原子，任一失败零副作用）",
+        "rewrite_section_partial" => "局部改写+局部复验（#319②③——只改指令影响面内的段（rewrites⊆affected），兄弟段零改动；dry_run 预览将修改 X 段 Y 段不动；局部 validate 只跑受影响章节；全部指令处置完清 DIRTY）",
+        "list_tools" => "只读：工具清单 + 行协议契约摘要（#279 发现面——无上下文代理的握手入口；返回信封形态/错误码面/CAS 纪律；JSON-RPC 客户端用 tools/list 等价）",
+        "validate_bid_document" => "双层校验（确定性规则 + 模型复核）",
+        "export_bid_document" => "导出（含暗标模式；#117 表格接线——profile.bid_amount/price_breakdown 报价决策，六表自动注入/附表）",
+        "get_bid_project_state" => "只读：项目状态与 allowed_next_tools + ungated_tools（无状态门恒可调工具——并集=完整可调面；#522）",
+        "save_version" => "AI 主动存版本快照（mang-snap 同源）",
+        "check_bid_quality" => "只读：生成质量覆盖度检查 + 全局一致性（#423——金额/工期/术语/承诺跨章冲突，位置锚 SEC-xxxx|PR-xxxx）+ 负偏离清单（A-07）+ 报告落盘（#68 阶段 2）",
+        "build_outline" => "建纲 + 矩阵首建（G1——#80 第三批补齐；REQUIREMENTS_EXTRACTED 态；#287 篇幅档位：length_profile 四档 practical|standard|conservative|maximum 与 target_total_chars 三者优先，默认档 Conservative 1,200,000≈1422 页；响应 length 回显生效档）",
+        "recommend_length_profile" => "只读：篇幅档位推荐（#287——P3 建纲前先调：信号面细则数/★条款数/预算/采购类型/明写篇幅→推荐档+理由+alternatives；决策权在用户，Agent 只推荐；明写篇幅覆盖一切推断）",
+        "list_packages" => "只读：分包清单（#316——extract_requirements 时按三形态识别：文件名/章节结构/分包清单表格；返回每包 REQ 归属数+共用条款数+选包状态；检测到 ≥2 包时 build_outline 必须传 package 选包）",
+        "register_evidence" => "证据登记（G2——语义位查重/换版；MATRIX_READY+；#185 来源验证：source_file_id 须指向已导入文件，sha256/指纹由服务端生成；带 locator 且对账通过 → CONTENT_MATCHES + 正文摘录入账，缺省文件级锚 → FILE_EXISTS（#217 四态）；#245 占位：placeholder=true → PLACEHOLDER 占位/待核验——可绑定但不清合规阻塞（矩阵 PENDING_EVIDENCE 待补）、不得声称资质已具备，升级 = 换版重登；verification_tier 不可自报；业绩类可带 client/amount_wan/completed_on 业务面；结构化字段走可选 fields 对象）",
+        "bind_evidence" => "证据批量绑定 + 矩阵重算（G2——EXPIRED 禁绑；MATRIX_READY+）",
+        "record_review_gate" => "三门记审（G3——matrix/outline/pre_export；#182 receipt 验签——人工确认由宿主签发 receipt 提供；#277 agent 声明过门走 :agent 签域 + reason 必填，留痕 + 导出警告 + 可追认）",
+        "record_addendum_waiver" => "补遗逐件人工确认（#184——分级阻塞的免责面；#182 receipt 验签（签域绑定 file_id）；FILES_IMPORTED+；#379 起 confirm_no_addendum=true 为全局无补遗显式确认——两种语义互斥，逐件 waiver 不再顺手解除 NotProvided）",
+        "set_matrix_override" => "人工覆写条款响应状态（#226——否决项死锁出口；NOT_APPLICABLE 必带理由；覆写即重算矩阵；MATRIX_READY+）",
+        "recover_validating_state" => "历史异常态恢复（#243——VALIDATING+缺章回 DRAFTING；三重约束 + 审计账；仅 VALIDATING 态）",
+        "score_price" => "价格分试算 + 最优报价反推（#100 任务 3——纯计算器，B1 五方法只调用不改）",
+        "score_section" => "章节自评（#100 任务 3——四维规则判定；#224 多对多映射按 weight_share 摊分；unmapped_scoring_items 文档级告警）",
+        "score_document" => "整本自评（#100 任务 3——技术/商务/价格三段 + by_item 逐项（#224 多映射 estimated=逐章贡献之和、contributions 逐章明细）；#224 mappings 映射报告（章节/权重/来源/原文锚——只认生效映射，同节 inert 账本行不归因）+ unmapped_scoring_items；没报价 → price null）",
+        "get_document_chunks" => "只读：按文件取块窗口（#219 全块覆盖——block_idx + locator + text + verdict 回显；size ≤ 200 分页取）",
+        "submit_block_marks" => "提交区间标记 + requirements（#219——verdict: requirement|noise|rule|review_table；校验区间合法/不越界/不重叠/requirement 落在 requirement 区间内）",
+        "get_coverage_report" => "只读：覆盖报告（#219——哪些块没归属 + 未覆盖区间 + 各类 verdict 块数；全覆盖才允许建纲）",
+        "get_star_coverage" => "只读：★漏标检测（#285①——字面★真值（排除「打★号条款为实质性条款」样板句）vs 已抽 REQ 差集；star_total/declarations/star_truth/captured/missing 三级恒等式不漏不重；missing[] 带 page/line/block_idx/reason 补标定位面；只报不补——补标走 submit_block_marks substantive=true）",
+        "get_requirement_provenance" => "只读：REQ 溯源（#285②——REQ→原文：锚点带 block_idx/page/line，块位三级真源＝回填值→旧锚(locator,excerpt)兜底→null 诚实；resolved_via 标记腿来源）",
+        "get_block_requirements" => "只读：块反查（#285②——块→REQ：原文+verdict（无标记=null）+req_ids+marked_by；无 REQ 块照常返回）",
+        "get_annotation_overlay" => "只读：视图层 overlay 数据面（#285②——逐块 req_ids/semantic(emphasis|requirement)/status/suspected_miss；计数全量、明细≤200 截断，page 参数分页）",
+        // #321（A-23）：RT 生命周期 + 分工 + 章节重开 + 参数应答工具族
+        "assign_revision" => "RT 认领/改派（#321——拒审派生 RT 的第一个出口；owner 任意操作者：人与 AI 均可修单不可过门；DONE 终态不可改派）",
+        "advance_revision" => "RT 推进（#321——Open→InProgress 唯一可经本面的边；to=DONE 一律拒并指引 complete_revision——关单必须带 resolution）",
+        "complete_revision" => "RT 关单（#321——resolution 必填非空（改了什么要交代）；回显 open_rt_count/open_rt_ids 与导出放行提示——全部关单才可导出）",
+        "batch_task" => "分工批量派工（#321——T-6 Assignment：targets=SEC/REQ 自然键 upsert，同 owner 重批改期不改进度/换 owner 复位 ASSIGNED；查询面 list_tasks）",
+        "advance_task" => "分工单件推进（#321——ASSIGNED→IN_PROGRESS→DONE 线性链越级拒；TaskStatus 人的进度与 SectionStatus 内容的进度两轴独立）",
+        "reopen_section" => "ACCEPTED 章节重开（#321——→Revising+dirty，重导前修订面；非 ACCEPTED 拒；重开后需重过 pre_export_confirm）",
+        "set_param_responses" => "参数应答批量写入（#321——技术参数偏离表唯一录入面；偏离判定派生态 derive_deviation 单一真源，导出时自动逐行判定；幂等）",
+        "check_scoring_coverage" => "只读：评分细则逐条响应覆盖检查（#318——细则拆点（触发词+顿号枚举的字面挖掘）对映射章节正文做子串命中（纯正文——建纲标题不算，防标题派生自命中的伪覆盖）；criteria[] 逐细则 points[]{point,hit_section} 漏点即扣分面；summary 建议扣分=Σ(满分×未覆盖比)启发式；notes 明示字面口径局限（语义等价表述不识别）；只报不补——补写走 rewrite_section_segment/append_section_segment）",
+        "register_performance" => "业绩材料库登记（#315——跨项目资产：库文件在项目工作区之外（BID_PERF_LIB/用户目录），无项目路由建项目前可维护；批量 + 语义幂等（四元组命中回显既有 id）；owner_name = 投标人主体（证据 subject_name 默认源）",
+        "list_performance" => "业绩材料库列表（#315——只读：标签/关键词/金额窗/日期过滤；行含 client_type 推断；无项目路由）",
+        "recommend_performance" => "业绩匹配推荐（#315——只读：标签重叠 40%/金额规模 30%/近三年 20%/客户类型 10% 四因子确定性打分，缺信号弃权重归一；reasons 逐因子人读依据 + suggested_section 建议章节；REQUIREMENTS_EXTRACTED+）",
+        "write_performance_section" => "一键写入业绩章节（#315——证据自动登记（材料命中已导入文件）+ 绑定业绩类 REQ + 矩阵重算 + 业绩表/描述段单段写入（幂等）；材料缺口 materials_pending 诚实列明；readiness 门（<3 可用业绩）拦写入并带材料指引；MATRIX_READY+）",
+        _ => "unknown",
+    }
+}
+
+fn is_implemented(name: &str) -> bool {
+    matches!(
+        name,
+        "get_bid_project_state"
+            // save_version 早已实装（#42 阶段 10 分发臂）——此前 is_implemented
+            // 漏登致 tools/list 误报 false（#145 测试面抓出的真 bug，如实登记）
+            | "save_version"
+            | "create_bid_project"
+            | "import_tender_files"
+            | "extract_requirements"
+            | "get_compliance_matrix"
+            | "list_evidence"
+            | "list_tasks"
+            | "search_evidence"
+            | "draft_response_section"
+            | "export_bid_document"
+            | "validate_bid_document"
+            | "check_bid_quality"
+            | "build_outline"
+            | "recommend_length_profile"
+            | "list_packages"
+            | "register_evidence"
+            | "bind_evidence"
+            | "record_review_gate"
+            | "record_addendum_waiver"
+            | "set_matrix_override"
+            | "score_price"
+            | "score_section"
+            | "score_document"
+            // #219 全块覆盖三工具（coverage_tools.rs）
+            | "get_document_chunks"
+            | "submit_block_marks"
+            | "get_coverage_report"
+            // #285 ① ★漏标检测（coverage_tools.rs）
+            | "get_star_coverage"
+            // #285 ② 块级双向索引三工具（全部只读、已接线）
+            | "get_requirement_provenance"
+            | "get_block_requirements"
+            | "get_annotation_overlay"
+            // #318 评分细则逐条响应覆盖检查（只读诊断——拆点/命中/漏点/建议扣分；
+            // 漏登会让 mang-app diag 的动态断言 implemented==TOOL_NAMES 必红，
+            // 且该测试只在 Windows CI 执行，Linux 侧代理本地抓不到）
+            | "check_scoring_coverage"
+            // #243 校验状态安全与恢复
+            | "recover_validating_state"
+            // #254 章节级增量写入三工具
+            | "append_section_segment"
+            | "rewrite_section_segment"
+            | "list_section_segments"
+            // #319 补遗后增量重写两工具
+            | "register_addendum_changes"
+            | "rewrite_section_partial"
+            // #279 行协议发现面（tools.rs 纯只读臂，无状态前置）
+            | "list_tools"
+            // #321（A-23）：RT 生命周期 + 分工 + 章节重开 + 参数应答工具族
+            | "assign_revision"
+            | "advance_revision"
+            | "complete_revision"
+            | "batch_task"
+            | "advance_task"
+            | "reopen_section"
+            | "set_param_responses"
+            // #315 业绩材料库四工具（perf_tools.rs——登记/列表无项目路由，
+            // 推荐/写入走项目态路由）
+            | "register_performance"
+            | "list_performance"
+            | "recommend_performance"
+            | "write_performance_section"
+    )
+}

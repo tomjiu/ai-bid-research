@@ -1,0 +1,412 @@
+name: windows-check
+
+# 目标：把 Windows 编译面纳入 CI。
+# 由来：
+#   1. bid-parse/src/guard.rs 的 E0596 在 #[cfg(not(unix))] 分支里，
+#      因为 CI 只跑 Linux，该分支从未被编译，bug 潜伏后被合并冲掉。
+#   2. 本机复检时发现 Windows 直接 cargo check 失败。
+#
+# B3-1 增补（issue #2 §B3/§3.1）：
+#   - 条件执行（PR #15 Lead review 指定模式）：secret 未配置时步骤跳过而非失败；
+#   - bid-engine 引入 mdc-office-io git 依赖（mdcore 为私有仓）——
+#     CI 用**只读 deploy key** 拉取（issue #2 §3.1 纪律：不得把 PAT 写进仓库或 CI 日志）；
+#   - CARGO_NET_GIT_FETCH_WITH_CLI=true 让 cargo 走 git CLI（尊重 SSH 配置）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+# #568：队列深度防线——同 workflow + 同 ref 只保留最新 run（主仓
+# mmqz/mdcore#548 同款；同分支连推只跑最后一次，不同 PR/tag 互不干扰）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 3
+  # cargo git 依赖走 git CLI（尊重 ~/.ssh 与 insteadOf——deploy key 通道）
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  # #365——stale-green PR 防线（先于重型 Windows job 出结果，~30s）：
+  # PR head 落后 main ≥ 3 个提交 → 红 + rebase 指引。
+  # 事故链（2026-11-07）：#337 的 PR CI 绿于 22:02 基线（merge ref 不含
+  # #285②），#285② 22:47 进 main，11 小时后合并 → Anchor 字面量语义冲突 →
+  # main 预存红（export_tool E0063）。PR 级 CI 只验「push 时刻的合并结果」，
+  # 验不了「真正合并那一刻」的基线——本门把基线漂移过大的 PR 显式拦下
+  # （rebase 后即绿）。与 AGENTS.md 0.0.5（作者侧：加字段查所有字面量）
+  # 互为纵深：0.0.5 防「忘查字面量」，本门防「绿过时」。
+  stale-base:
+    name: PR 基线新鲜度（#365 stale-green 防线）
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: PR head 落后 main 的提交数（≥ 3 → 拒 + rebase 指引）
+        shell: bash
+        run: |
+          git fetch origin main
+          PR_HEAD="${{ github.event.pull_request.head.sha }}"
+          MB="$(git merge-base "$PR_HEAD" origin/main)"
+          # --first-parent：只数 main 侧的合并/推进（≈ 落后几个 PR）——
+          # 不数各 PR 内部的多提交（否则一个 3-commit 的 PR 合并就会把
+          # 后续 PR 误判为落后过多）
+          BEHIND="$(git rev-list --count --first-parent "$MB..origin/main")"
+          echo "PR head 落后 main：${BEHIND} 个合并/推进（阈值 3）"
+          if [ "$BEHIND" -ge 3 ]; then
+            echo "::error::PR 基线落后 main ${BEHIND} 个合并/推进——stale 基线上的 CI 绿不代表合并后绿（#365：#337 绿于旧基线、#285② 后进 main、合并即语义冲突）。先 rebase：git fetch origin main && git rebase origin/main && git push --force-with-lease，CI 重绿后再请审/合并。"
+            exit 1
+          fi
+
+  check:
+    name: windows / cargo check
+    runs-on: windows-latest
+    env:
+      # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
+      # ——PR #15 Lead review 指定的条件执行模式：无 secret 时跳过凭据布置。
+      MD_CORE_DEPLOY_KEY: ${{ secrets.MD_CORE_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure mdcore read access (deploy key)
+        # issue #2 §3.1：mdcore 私有仓凭据 = 只读 deploy key（secret MD_CORE_DEPLOY_KEY）。
+        # PAT 不入库、不入日志——key 只写 runner 的 ~/.ssh/id_ed25519。
+        # **条件执行**：无 secret 时跳过（mdcore public 窗口匿名 clone 即可）；
+        # 真门禁 = cargo check 的 fetch（fetch 失败即红），本步骤只布置凭据。
+        if: env.MD_CORE_DEPLOY_KEY != ''
+        shell: pwsh
+        run: |
+          $sshDir = "$env:USERPROFILE\.ssh"
+          New-Item -ItemType Directory -Force -Path $sshDir | Out-Null
+          # 行尾归一（secret 传输面可能引入 CRLF）+ 精确字节写入（绕开 Out-File 编码面）
+          $key = $env:MD_CORE_DEPLOY_KEY -replace "`r`n", "`n"
+          [IO.File]::WriteAllText("$sshDir\id_ed25519", $key + "`n")
+          echo "key bytes: $((Get-Item "$sshDir\id_ed25519").Length)"
+          # Windows OpenSSH 权限收紧（防 "bad permissions" 拒载）
+          icacls "$sshDir\id_ed25519" /inheritance:r /grant:r "$($env:USERNAME):R" | Out-Null
+          ssh-keyscan -t ed25519 github.com 2>$null | Out-File -FilePath "$sshDir\known_hosts" -Encoding ascii
+          # https → ssh 改道（仅 mdcore 仓——其他 git 依赖不受影响）
+          git config --global url."git@github.com:mmqz/mdcore.git".insteadOf "https://github.com/mmqz/mdcore"
+          # 凭据连通性探测（诊断面：打印退出码不判死——真门禁是 cargo check 的 fetch）
+          ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -T git@github.com 2>$null | Out-Null
+          $sshCode = $LASTEXITCODE
+          echo "ssh -T exit code: $sshCode (0/1=认证面 OK，255=见 cargo check 结果)"
+          # 退出码归一（PR #15 CI 红根因修复）：
+          # GitHub 对 `ssh -T` 不提供 shell——认证成功也返回 1。若不归一，
+          # 该 1 会成为 pwsh 步骤的最终退出码 → 步骤误判失败 → cargo check 全被跳过。
+          # 本步骤只做凭据布置 + 诊断（commit c57ce99 的设计意图即「不判死」），
+          # 真正的门禁是后续 cargo check 的 git fetch。故恒 exit 0。
+          exit 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # #295（方案 A）：CI 装 poppler——9 条 songling L1 验收门
+      # （songling_baseline.rs ×4 + songling_scoring_outline.rs ×5，含
+      # #253 配额分布核心门）此前因 Windows 无 poppler 全程 SKIP、CI 零覆盖；
+      # #266 的 quota 0.824→0.820 回归因此在 main 静默存活到 C 本机才暴露。
+      # choco 的 poppler 包封装 oschwartz10612 社区构建（pdftotext/pdfinfo/
+      # pdftoppm 全在 PATH）——与本地 Linux 同源同工具族。装完自检三工具
+      # 版本，版本号进日志（基线跨平台核对的证据面）。
+      - name: Install poppler (#295 - L1 验收门 CI 覆盖)
+        shell: pwsh
+        run: |
+          choco install poppler -y --no-progress
+          # 不赌 choco shim 布局：递归定位 pdftotext.exe 的真实目录，
+          # 写进 GITHUB_PATH（后续所有 step 生效）——shim 在与不在都对。
+          $pdftotext = (Get-ChildItem -Path 'C:\ProgramData\chocolatey' -Recurse -Filter 'pdftotext.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $pdftotext) { throw 'pdftotext.exe not found after choco install poppler' }
+          $binDir = Split-Path $pdftotext
+          echo $binDir >> $env:GITHUB_PATH
+          echo "poppler bin: $binDir"
+          # 本 step 内自检（GITHUB_PATH 对当前 step 不回灌——手动前置）
+          $env:Path = "$binDir;$env:Path"
+          pdftotext -v
+          pdfinfo -v
+          pdftoppm -v
+
+      # #308：cache 拆分——合并式 actions/cache@v4 的 save 挂在 Post 阶段
+      # （2026-11-06 两次挂死 30-40 分钟：#289/#291，cancel+rerun 才过），
+      # 且 Post 步骤不属于显式步骤面——挂死即阻塞 run 结论、污染「还在跑
+      # 还是卡死了」的判断。拆法（issue #308 推荐组合）：
+      #   restore 前置（本步骤）+ save 后置为显式步骤（见文件末尾）。
+      # continue-on-error 纪律（issue #308）：只许加在 cache/产物类步骤——
+      # cache 是「加速」不是「正确性」，失败只降速不判红；测试/编译/验证
+      # 步骤严格不许加（不假绿）。
+      # timeout-minutes 是挂死的根治面：continue-on-error 只救「失败」，
+      # 救不了「不结束」；上限把 30-40 分钟挂死钳成有界损失。
+      # restore 上限 10 分钟：下载解包大缓存（bidcore/target 全量 ~GB 级）。
+      # #308 拆分（Post save 挂死面根治）+ #591 分层（registry / target 双 key）
+      - name: Restore cargo registry cache (#591——秒级)
+        id: cache-cargo
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('bidcore/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Restore cargo target cache (#591——GB 级，省编译时间)
+        id: cache-target
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: bidcore/target/
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('bidcore/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
+      - name: cargo check
+        working-directory: bidcore
+        run: cargo check --workspace --all-targets
+
+      # FG-01（#303）：mang-app 已并入 bidcore workspace（撤掉空 [workspace] 表，
+      # 见 bidcore/Cargo.toml members）。上面的 --workspace 已覆盖它的编译面，
+      # 下方 cargo test --workspace 会实际执行它的 39 个测试——此前它有独立
+      # check 步骤但**零测试执行**（独立 target 目录还不进缓存，每轮重编 tao/wry）。
+      # 旧的「cargo check (mang-app 独立 workspace)」步骤随之删除。
+
+      # #358：工具面派生面校验——加工具后必须跑 tool-surface --write，
+      # 派生面（位串矩阵/断言数字）与 TOOL_NAMES + allowed_tools() 不同步即红。
+      # 由来：2026-11-07 单日 6 个 PR CI 红，其中 4 个是「加工具只改了一部分面」；
+      # 10 状态 × N 工具的位串矩阵手算必错，各 PR 各自改数字合并时互相冲突。
+      # 放在 cargo check 之后：编译都不过就不用算位串（先给最直接的错误）。
+      - name: tool-surface --check (工具面派生面同步)
+        working-directory: bidcore
+        shell: pwsh
+        run: |
+          cargo run -q -p bid-mcp --bin tool-surface -- --check
+          $code = $LASTEXITCODE
+          Write-Host "tool-surface exit code: $code"
+          if ($code -ne 0) {
+            Write-Host "::error::工具面派生面不同步——本地跑 cargo run -p bid-mcp --bin tool-surface -- --write 后提交"
+          }
+          exit $code
+      - name: cargo test (SKIP 机制护航，全量 workspace 含 mang-app)
+        working-directory: bidcore
+        # issue #9 SKIP 机制已落地：外部工具缺件时，PDF 全链测试
+        # （corpus_probe / kb_probe / e2e_m1）打 SKIP 横幅并提前 return，
+        # 计数 passed 而非 failed。#295 起 poppler 在位（songling 9 门真跑），
+        # 但 tesseract 仍缺件（OCR 面测试继续 SKIP——见下方 SKIP 汇总步骤）。
+        # --no-fail-fast：**不要**在第一个失败目标后停跑。
+        # 教训（2026-11-02）：默认行为是「遇第一个失败目标就停」，
+        # 于是 bid-mcp 的 score_tools 红了很久，bid-parse 的 9 个测试
+        # 二进制**从来没在 CI 里跑过**——#168 修好一个红灯后，
+        # 下一个红灯（addendum_recovery 的 CJK 乱码，见 #169）才浮现。
+        # 全量报错能一次看全，而不是每次只揭露一个（20 分钟/轮）。
+        #
+        # FG-03（#303）修复面，三点：
+        # ① 输出 tee 到 $RUNNER_TEMP\test-output.log——下方「Verify SKIP banner」
+        #    读日志回放，不再为了看横幅把全量重跑一遍（旧 Verify 步骤每轮
+        #    白烧 ~20 分钟，审计点名）。
+        # ② 显式保存 $LASTEXITCODE 并 exit——pwsh 管道的步骤退出码取自最后一个
+        #    cmdlet（Out-String/Tee-Object 恒 0），cargo test 失败也被吞——这是
+        #    FG-03 假绿的根因（审计原话：「比不做更糟」）。实测（pwsh 7.4）：
+        #    `native 2>&1 | Tee-Object` 之后 $LASTEXITCODE 仍是 native 的退出码，
+        #    显式 exit $code 才把它交还给步骤。
+        # ③ -- --nocapture——Rust 1.99 的 libtest 对「通过中的测试」同时捕获
+        #    stdout 与 stderr（实测：eprintln! 横幅在默认捕获下不可见），issue #9
+        #    设计的「输出首屏即见 SKIP 与原因」失效，横幅核验/汇总步骤永远扑空。
+        #    --nocapture 恢复横幅可见性（横幅是单行 eprintln!，写 stderr 原子，
+        #    并行测试不撕裂）。corpus_probe.rs 头注释本就以该模式运行。
+        shell: pwsh
+        run: |
+          # #591 CI 提速：分层测试（实测 windows-check 100 分钟里 cargo test 占 82.9 分钟）。
+          # 最慢的 6 个验收测试二进制合计 59 分钟（单个 6-13 分钟，真实语料全量解析）：
+          #   block_bidi_acceptance 12.7m / star_coverage_acceptance 12.2m /
+          #   structure_probe_272 11.9m / coverage_gate_corpus 8.4m /
+          #   cross_platform_structure 7.8m / real_corpus_e2e 6.0m
+          # 这 6 个文件的 15 个测试已标 #[ignore]（重型验收面，不是每次改动都需重验）：
+          #   PR 阶段   = 默认跑（libtest 自动跳过 ignore）→ 快反馈约 40 分钟；
+          #   push main = --include-ignored 全量回归 → 完整覆盖约 100 分钟。
+          # 本地手动跑重测试：cargo test -p <crate> -- --ignored
+          $skipArgs = @()
+          if ($env:GITHUB_EVENT_NAME -eq "pull_request") {
+            $skipArgs = @("--", "--nocapture")
+            Write-Host "PR 阶段：默认口径（15 个重型验收测试 #[ignore] 自动跳过）"
+          } else {
+            $skipArgs = @("--", "--nocapture", "--include-ignored")
+            Write-Host "main 阶段：--include-ignored 全量（含 15 个重型验收测试）"
+          }
+          cargo test --workspace --no-fail-fast @skipArgs 2>&1 |
+            Tee-Object -FilePath "$env:RUNNER_TEMP\test-output.log" | Out-Host
+          $code = $LASTEXITCODE
+          Write-Host "cargo test exit code: $code"
+          exit $code
+
+      # FG-03（#303）：横幅核验改「日志回放 + 环境探测双向断言」。
+      # 旧步骤两处假绿：① 退出码被 Out-String 吞（cargo 失败也绿）；
+      # ② 无横幅分支被无条件解释成「工具在位真跑」（从不实测工具在不在）——
+      # 加上 libtest 捕获问题，横幅根本进不了输出，该分支恒走。
+      # 现在：① 零测试执行（读上一步 tee 的日志）；② 按探针测试的真实环境门
+      # （bid-parse FULL_PDF_CHAIN = pdftotext/pdftoppm/pdfinfo/tesseract +
+      # chi_sim.traineddata）实测环境；③ 两个方向都可能显式红：
+      # 缺件却无横幅 = SKIP 机制静默失效；工具齐备却出横幅 = 横幅误报。
+      # 排查教训（#591）：`panicked at ...` 行在两种情况下都打印——
+      #   · #[should_panic] 测试**通过**时（libtest 打 panic 消息但 test ok）
+      #   · 真实失败时
+      # 人眼扫日志先看到 panicked 会误判（实测排查被带偏 3 次）。
+      # 本步骤只认 `test <name> ... FAILED` 与 `test result: FAILED`，
+      # 输出纯失败清单到 step summary + 注解，让「哪里红了」一眼可读。
+      - name: 失败测试清单（一眼可读——区分真失败与 #[should_panic] 预期 panic）
+        if: always()
+        working-directory: bidcore
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\test-output.log"
+          if (-not (Test-Path $log)) {
+            Write-Host "::warning::测试日志缺失（$log）——跳过失败清单汇总"
+            exit 0
+          }
+          $lines = Get-Content $log
+          $failed = @($lines | Where-Object { $_ -match "^test .+ \.\.\. FAILED" } |
+            ForEach-Object { ($_ -replace "^test ", "") -replace " \.\.\. FAILED$", "" } |
+            Sort-Object -Unique)
+          $summaries = @($lines | Where-Object { $_ -match "^test result: FAILED" })
+          "### 失败测试清单（windows-check）" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($failed.Count -eq 0) {
+            "- 零失败 ✅（日志里的 panicked 行均来自 #[should_panic] 预期 panic）" |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "== 失败测试: 0 =="
+          } else {
+            "**$($failed.Count) 个测试失败**：" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            foreach ($t in $failed) { "- ``$t``" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            foreach ($s in $summaries) { $s | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+            "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "== 失败测试: $($failed.Count) =="
+            foreach ($t in $failed) { Write-Host "  ✗ $t" }
+            Write-Host "::error::$($failed.Count) 个测试失败（清单见上 / step summary）"
+          }
+
+      - name: Verify SKIP banner emitted (日志回放 + 双向断言)
+        working-directory: bidcore
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\test-output.log"
+          if (-not (Test-Path $log)) {
+            Write-Host "::error::测试日志缺失（$log）——上一步未产出，无法核验横幅"
+            exit 1
+          }
+          $out = Get-Content $log -Raw
+          $banner = $out -match 'SKIP: probe_corpus_a_full_chain'
+
+          # 探针环境门 = bid-parse env_preflight::FULL_PDF_CHAIN（四工具 +
+          # chi_sim 语言数据）。chi_sim 探测口径与 env_preflight::tessdata_dir
+          # 一致：TESSDATA_PREFIX 优先，否则用户主目录 .tessdata。
+          $cmds = @('pdftotext','pdftoppm','pdfinfo','tesseract')
+          $missing = @($cmds | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+          $tessdata = if ($env:TESSDATA_PREFIX) { Join-Path $env:TESSDATA_PREFIX 'chi_sim.traineddata' } else { Join-Path $HOME '.tessdata\chi_sim.traineddata' }
+          if (-not (Test-Path $tessdata)) { $missing += 'chi_sim.traineddata' }
+
+          Write-Host ("环境探测: missing=[{0}] banner={1}" -f ($missing -join ', '), $banner)
+          if ($missing.Count -gt 0) {
+            if ($banner) {
+              Write-Host "PASS: 环境缺件（$($missing -join ', ')）且 SKIP 横幅在案——机制自证成立"
+            } else {
+              Write-Host "::error::环境缺件（$($missing -join ', ')）但无 SKIP 横幅——SKIP 机制静默失效（FG-03 假绿形态：全跑全绿掩盖缺件）"
+              exit 1
+            }
+
+          } else {
+            if ($banner) {
+              Write-Host "::error::环境工具齐备却出现 SKIP 横幅——横幅误报（测试没跳却报跳）"
+              exit 1
+            } else {
+              Write-Host "PASS: 工具齐备，全链真跑，无横幅（符合预期）"
+            }
+          }
+
+      # #295（方案 C）：SKIP 可见性——「CI 全绿 ≠ 稳定」的止血面。
+      # 汇总全量测试输出里的 SKIP 横幅到 job summary + workflow warning
+      # 注解：一眼看清本轮 CI 有多少门「绿着但没跑」（缺件跳过）。
+      # 本步骤不判红（缺件跳过是 #9 机制的设计行为）——但 SKIP 数 > 0 时
+      # 用 ::warning 注解把它顶到 PR 页面，不再淹没在日志中部。
+      - name: SKIP 汇总（#295 方案 C——CI 覆盖缺口可见性）
+        if: always()
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\test-output.log"
+          echo '### SKIP 汇总（#295）' >> $env:GITHUB_STEP_SUMMARY
+          if (-not (Test-Path $log)) {
+            echo '（测试日志缺失——本步骤晚于测试步骤或测试未跑）' >> $env:GITHUB_STEP_SUMMARY
+            return
+          }
+          $skips = @(Select-String -Path $log -Pattern '^SKIP: (.+)$' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
+          if ($skips.Count -eq 0) {
+            echo '零 SKIP——全部测试真实运行 ✅（#295 起 poppler 在位，songling 9 门已转真跑）' >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            echo "**$($skips.Count) 个测试被 SKIP（ENV_MISSING——CI 覆盖缺口，见下）**：" >> $env:GITHUB_STEP_SUMMARY
+            $skips | ForEach-Object { echo "- $_" >> $env:GITHUB_STEP_SUMMARY }
+            echo '' >> $env:GITHUB_STEP_SUMMARY
+            echo '缺口清单与补装指引见 issue #9 SKIP 机制（横幅即指引）；OCR 面（tesseract）缺件是当前已知缺口。' >> $env:GITHUB_STEP_SUMMARY
+            echo "::warning::CI 覆盖缺口：$($skips.Count) 个测试 SKIP（$($skips -join '、')）——CI 全绿不覆盖这些门"
+          }
+
+      - name: Detect external toolchain
+        if: always()
+        run: |
+          $tools = @('tesseract','pdftoppm','pdftotext','pdfinfo')
+          $missing = @()
+          foreach ($t in $tools) {
+            if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { $missing += $t }
+          }
+          echo '### 外部工具链探测' >> $env:GITHUB_STEP_SUMMARY
+          if ($missing.Count -eq 0) {
+            echo 'All external tools present.' >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            echo '**ENV_MISSING**: ' + ($missing -join ', ') >> $env:GITHUB_STEP_SUMMARY
+            echo '' >> $env:GITHUB_STEP_SUMMARY
+            echo '#295 起 poppler 已在 CI 安装（pdftotext/pdfinfo/pdftoppm）；仍缺件的工具见上——其门禁测试按 issue #9 SKIP 机制跳过（横幅 + 提前 return，非 FAIL），明细见 SKIP 汇总。' >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      # #308（收尾）：save 独立后置——原合并式 cache@v4 的 save 挂在 Post 阶段
+      # 挂死（#289/#291 各 30-40 分钟）且阻塞 run 结论。拆为显式步骤后：
+      # · 失败/超时只影响自己（continue-on-error + timeout-minutes）——此时
+      #   job 结论已由上方测试/验证步骤定出，save 挂了不再拖住整个 run；
+      # · exact 命中（cache-hit == 'true'）时跳过——同 key 已存，重存纯浪费；
+      # · always()：测试红了也存——编译产物与测试结论正交，下轮照常加速
+      #   （「缓存已存」不代表「测试绿」，不构成假绿面）；
+      # · save 上限 15 分钟：压缩+上传全量 target（~GB 级，windows-latest
+      #   常态数分钟）；30-40 分钟挂死被钳成有界损失。若 Lead 想更紧
+      #   （issue 草案 3 分钟）可直接调小——代价是正常大缓存 save 被杀、
+      #   缓存停更（只慢不红）。
+      # #591 CI 提速：save 分层——registry 每次存（秒级），target 只由 main 存。
+      # 实测 target/ 是 GB 级（压缩+上传 ~10 分钟），而 PR 每次都存一份「新的
+      # 差分 target」价值极低（PR 合完即废弃）。main 存的那份供所有 PR restore。
+      # 两个独立步骤而非单步条件 path：actions/cache 对空 path 项行为不可靠。
+      - name: Save cargo registry cache (#591——秒级，PR/main 都存)
+        if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('bidcore/Cargo.lock') }}
+
+      - name: Save cargo target cache (#591——GB 级，仅 push main 存)
+        if: always() && github.event_name != 'pull_request' && steps.cache-target.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 15
+        with:
+          path: bidcore/target/
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('bidcore/Cargo.lock') }}

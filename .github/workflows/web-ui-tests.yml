@@ -1,0 +1,47 @@
+name: web-ui-tests
+
+# #326（R-30/D-01）：web-ui 的 JS 面回归门。
+# 由来：
+#   修复 web-ui Markdown 预览 href 属性注入 XSS 时新增了
+#   web-ui/tests/md-link.test.mjs（零依赖 Node 测试）——但本仓原有
+#   两条 CI（windows-check / rev-sync）都不跑任何 JS 测试：
+#   测试写了却永远不在 CI 执行 = 又一处假绿（AGENTS.md §13.4）。
+#
+# 本工作流让 JS 测试真跑：
+#   · md-link 安全门：链接协议白名单正负例（从 app.js 提取真实现，防回退）
+#   · node --check：app.js 语法门（防手改引入语法错误，改动面纯文本比对无法覆盖）
+#
+# 纪律：新增 web-ui 测试一律挂进本 job，不许只写在本地。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+# #568：队列深度防线——同 workflow + 同 ref 只保留最新 run（主仓
+# mmqz/mdcore#548 同款；同分支连推只跑最后一次，不同 PR/tag 互不干扰）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  md-link-security:
+    name: web-ui tests (md link security + syntax)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax gate (node --check)
+        run: node --check web-ui/mang/app.js
+
+      - name: "Web-UI test files (run-all: *.test.mjs 全量——#445)"
+        # 零依赖门面（tests/run-all.mjs）：按文件名序跑 tests/*.test.mjs。
+        # 此前只跑 md-link 单文件——npm test 纳入的其余测试门不在 CI
+        # 执行；glob 化后合并序无关（分支上不存在的文件不跑）。
+        run: node web-ui/tests/run-all.mjs

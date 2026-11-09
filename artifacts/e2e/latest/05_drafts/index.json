@@ -1,0 +1,312 @@
+{
+  "chapters": [
+    {
+      "attempt": 1,
+      "chars": 951,
+      "citations": [
+        "REQ-0001",
+        "REQ-0003",
+        "REQ-0011",
+        "REQ-0012",
+        "REQ-0013"
+      ],
+      "section_id": "SEC-0010"
+    },
+    {
+      "attempt": 1,
+      "chars": 1006,
+      "citations": [
+        "REQ-0016",
+        "REQ-0017",
+        "REQ-0018",
+        "REQ-0027",
+        "REQ-0031",
+        "REQ-0033"
+      ],
+      "section_id": "SEC-0012"
+    },
+    {
+      "attempt": 1,
+      "chars": 616,
+      "citations": [
+        "REQ-0055",
+        "REQ-0056",
+        "REQ-0058"
+      ],
+      "section_id": "SEC-0013"
+    },
+    {
+      "attempt": 1,
+      "chars": 604,
+      "citations": [
+        "REQ-0104",
+        "REQ-0105",
+        "REQ-0106"
+      ],
+      "section_id": "SEC-0015"
+    },
+    {
+      "attempt": 1,
+      "chars": 838,
+      "citations": [
+        "REQ-0107",
+        "REQ-0109",
+        "REQ-0110",
+        "REQ-0111",
+        "REQ-0114",
+        "REQ-0115"
+      ],
+      "section_id": "SEC-0017"
+    },
+    {
+      "attempt": 1,
+      "chars": 514,
+      "citations": [
+        "REQ-0108",
+        "REQ-0113"
+      ],
+      "section_id": "SEC-0019"
+    },
+    {
+      "attempt": 1,
+      "chars": 527,
+      "citations": [
+        "REQ-0112"
+      ],
+      "section_id": "SEC-0021"
+    },
+    {
+      "attempt": 1,
+      "chars": 541,
+      "citations": [
+        "REQ-0116",
+        "REQ-0117"
+      ],
+      "section_id": "SEC-0023"
+    },
+    {
+      "attempt": 1,
+      "chars": 512,
+      "citations": [
+        "REQ-0118",
+        "REQ-0119"
+      ],
+      "section_id": "SEC-0025"
+    },
+    {
+      "attempt": 1,
+      "chars": 535,
+      "citations": [
+        "REQ-0123",
+        "REQ-0124"
+      ],
+      "section_id": "SEC-0027"
+    },
+    {
+      "attempt": 1,
+      "chars": 1167,
+      "citations": [
+        "REQ-0004",
+        "REQ-0005",
+        "REQ-0006",
+        "REQ-0007",
+        "REQ-0008",
+        "REQ-0010"
+      ],
+      "section_id": "SEC-0029"
+    },
+    {
+      "attempt": 1,
+      "chars": 721,
+      "citations": [
+        "REQ-0019",
+        "REQ-0020",
+        "REQ-0101"
+      ],
+      "section_id": "SEC-0030"
+    },
+    {
+      "attempt": 1,
+      "chars": 1152,
+      "citations": [
+        "REQ-0002",
+        "REQ-0009",
+        "REQ-0014",
+        "REQ-0015",
+        "REQ-0024",
+        "REQ-0025"
+      ],
+      "section_id": "SEC-0031"
+    },
+    {
+      "attempt": 1,
+      "chars": 1163,
+      "citations": [
+        "REQ-0028",
+        "REQ-0029",
+        "REQ-0030",
+        "REQ-0032",
+        "REQ-0034",
+        "REQ-0035"
+      ],
+      "section_id": "SEC-0032"
+    },
+    {
+      "attempt": 1,
+      "chars": 991,
+      "citations": [
+        "REQ-0036",
+        "REQ-0037",
+        "REQ-0038",
+        "REQ-0039",
+        "REQ-0040",
+        "REQ-0041"
+      ],
+      "section_id": "SEC-0033"
+    },
+    {
+      "attempt": 1,
+      "chars": 995,
+      "citations": [
+        "REQ-0042",
+        "REQ-0043",
+        "REQ-0044",
+        "REQ-0045",
+        "REQ-0046",
+        "REQ-0047"
+      ],
+      "section_id": "SEC-0034"
+    },
+    {
+      "attempt": 1,
+      "chars": 986,
+      "citations": [
+        "REQ-0048",
+        "REQ-0049",
+        "REQ-0050",
+        "REQ-0051",
+        "REQ-0052",
+        "REQ-0053"
+      ],
+      "section_id": "SEC-0035"
+    },
+    {
+      "attempt": 1,
+      "chars": 1095,
+      "citations": [
+        "REQ-0054",
+        "REQ-0057",
+        "REQ-0063",
+        "REQ-0064",
+        "REQ-0065",
+        "REQ-0066"
+      ],
+      "section_id": "SEC-0036"
+    },
+    {
+      "attempt": 1,
+      "chars": 987,
+      "citations": [
+        "REQ-0067",
+        "REQ-0068",
+        "REQ-0069",
+        "REQ-0070",
+        "REQ-0071",
+        "REQ-0072"
+      ],
+      "section_id": "SEC-0037"
+    },
+    {
+      "attempt": 1,
+      "chars": 1057,
+      "citations": [
+        "REQ-0073",
+        "REQ-0074",
+        "REQ-0075",
+        "REQ-0076",
+        "REQ-0077",
+        "REQ-0120"
+      ],
+      "section_id": "SEC-0038"
+    },
+    {
+      "attempt": 1,
+      "chars": 521,
+      "citations": [
+        "REQ-0121",
+        "REQ-0122"
+      ],
+      "section_id": "SEC-0039"
+    },
+    {
+      "attempt": 1,
+      "chars": 1058,
+      "citations": [
+        "REQ-0021",
+        "REQ-0022",
+        "REQ-0023",
+        "REQ-0026",
+        "REQ-0098",
+        "REQ-0099"
+      ],
+      "section_id": "SEC-0041"
+    },
+    {
+      "attempt": 1,
+      "chars": 583,
+      "citations": [
+        "REQ-0100",
+        "REQ-0102",
+        "REQ-0103"
+      ],
+      "section_id": "SEC-0042"
+    },
+    {
+      "attempt": 1,
+      "chars": 1222,
+      "citations": [
+        "REQ-0079",
+        "REQ-0080",
+        "REQ-0081",
+        "REQ-0082",
+        "REQ-0083",
+        "REQ-0084"
+      ],
+      "section_id": "SEC-0044"
+    },
+    {
+      "attempt": 1,
+      "chars": 1205,
+      "citations": [
+        "REQ-0085",
+        "REQ-0086",
+        "REQ-0087",
+        "REQ-0088",
+        "REQ-0089",
+        "REQ-0090"
+      ],
+      "section_id": "SEC-0045"
+    },
+    {
+      "attempt": 1,
+      "chars": 708,
+      "citations": [
+        "REQ-0091",
+        "REQ-0092",
+        "REQ-0093"
+      ],
+      "section_id": "SEC-0046"
+    },
+    {
+      "attempt": 1,
+      "chars": 732,
+      "citations": [
+        "REQ-0094",
+        "REQ-0095",
+        "REQ-0096",
+        "REQ-0097"
+      ],
+      "section_id": "SEC-0048"
+    }
+  ]
+}

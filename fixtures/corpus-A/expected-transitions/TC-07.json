@@ -1,0 +1,38 @@
+{
+  "tc_id": "TC-07",
+  "title": "幂等重放",
+  "risk": "R-06",
+  "precondition": "FILES_IMPORTED（首次导入已完成）",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "import_tender_files",
+      "args": {
+        "files": [
+          "A-招标文件.docx"
+        ],
+        "idempotency_key": "同 sha256 重放"
+      },
+      "expect": {
+        "result": "no-op 返回原 file_id"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "count",
+      "path": "idempotency.files_delta",
+      "op": "==",
+      "value": 0,
+      "note": "无重复文件记录"
+    },
+    {
+      "kind": "count",
+      "path": "idempotency.chunks_delta",
+      "op": "==",
+      "value": 0,
+      "note": "totals 不变、无重复 chunk"
+    }
+  ],
+  "engine_gaps": []
+}

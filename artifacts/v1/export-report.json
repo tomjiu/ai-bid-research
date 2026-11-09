@@ -1,0 +1,358 @@
+{
+  "docx": "artifacts/v1/技术标-导出样本.docx",
+  "structure": {
+    "bookmarks_10": true,
+    "toc_field": true,
+    "page_field_footer": true,
+    "numpages_field": true,
+    "image_part": true,
+    "page_breaks_7": true,
+    "merged_table": true,
+    "sections_2": true,
+    "header_text": true,
+    "seal_placeholder": true
+  },
+  "render": {
+    "pages": 8,
+    "cover_no_header": true,
+    "header_on_body_pages": true,
+    "footer_page_numbers": true,
+    "toc_page": true,
+    "each_section_new_page": true,
+    "image_page_present": true,
+    "image_drawn_on_tech_page": true,
+    "citation_visible": true
+  },
+  "pdf_pages": 8,
+  "lo_manual_note": "Word+WPS 人工复验为待人工步骤（test-plan §5.5）",
+  "chains": [
+    {
+      "gt_id": "GT-01",
+      "bookmark": "CIT-GT-01"
+    },
+    {
+      "gt_id": "GT-02",
+      "bookmark": "CIT-GT-02"
+    },
+    {
+      "gt_id": "GT-03",
+      "bookmark": "CIT-GT-03"
+    },
+    {
+      "gt_id": "GT-05",
+      "bookmark": "CIT-GT-05"
+    },
+    {
+      "gt_id": "GT-06",
+      "bookmark": "CIT-GT-06"
+    },
+    {
+      "gt_id": "GT-16",
+      "bookmark": "CIT-GT-16"
+    },
+    {
+      "gt_id": "GT-17",
+      "bookmark": "CIT-GT-17"
+    },
+    {
+      "gt_id": "GT-18",
+      "bookmark": "CIT-GT-18"
+    },
+    {
+      "gt_id": "GT-13",
+      "bookmark": "CIT-GT-13"
+    },
+    {
+      "gt_id": "GT-15",
+      "bookmark": "CIT-GT-15"
+    }
+  ],
+  "chain_locators": [
+    {
+      "gt_id": "GT-01",
+      "clause_no": "3.2.1",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第三章 投标人须知 > 二、投标人资格要求",
+        "excerpt": "独立承担民事责任能力的法人营业执照"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 15,
+          "text_fingerprint": "fnv64:3dd6586bfc99cf92"
+        }
+      },
+      "evidence_file": "EV-01-营业执照.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:857396a704bfb6df"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-02",
+      "clause_no": "3.2.2",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第三章 投标人须知 > 二、投标人资格要求",
+        "excerpt": "电子与智能化工程专业承包二级（含）以上资质"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 16,
+          "text_fingerprint": "fnv64:dc9d9c067ec90fc8"
+        }
+      },
+      "evidence_file": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:99e9ff58dfe1e404"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-03",
+      "clause_no": "3.2.3",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第三章 投标人须知 > 二、投标人资格要求",
+        "excerpt": "至少完成 2 个合同额 200 万元（含）以上的类似智能化工程项目业绩"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 17,
+          "text_fingerprint": "fnv64:c84857c1ec4a949c"
+        }
+      },
+      "evidence_file": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:4edd926f3c42488d"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-05",
+      "clause_no": "3.2.5",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第三章 投标人须知 > 二、投标人资格要求",
+        "excerpt": "经审计的上一年度（2025 年度）财务审计报告"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 19,
+          "text_fingerprint": "fnv64:f8a157e3bbc106d4"
+        }
+      },
+      "evidence_file": "EV-06-财务审计报告-2025年度.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:3c93228de30ea855"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-06",
+      "clause_no": "3.2.6",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第三章 投标人须知 > 二、投标人资格要求",
+        "excerpt": "未被列入失信被执行人、重大税收违法案件当事人名单"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 20,
+          "text_fingerprint": "fnv64:9f695d231e98de11"
+        }
+      },
+      "evidence_file": "EV-07-无失信记录承诺函.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:9c329b0d5afa6367"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-13",
+      "clause_no": "4.2",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第四章 评标办法",
+        "excerpt": "持有效安全生产许可证且有效期覆盖工期全程的得 2 分"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 45,
+          "text_fingerprint": "fnv64:13537006b96405e4"
+        }
+      },
+      "evidence_file": "EV-13-安全生产许可证.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:e4f4a50f4ba2f0c3"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-15",
+      "clause_no": "4.4",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "locator": "第四章 评标办法",
+        "excerpt": "项目经理具备一级注册建造师（机电工程）资格且无在建项目的加 3 分"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 47,
+          "text_fingerprint": "fnv64:0996607bd544c6dc"
+        }
+      },
+      "evidence_file": "EV-10-项目团队人员证书-网络工程师高级.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:a52283cc5e6921a2"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-16",
+      "clause_no": "5.1",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "locator": "第五章 > 5.1 参数表 1",
+        "excerpt": "GW-8000-T4"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 1,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:614a1ae1fa2da52d"
+        }
+      },
+      "evidence_file": "B1-设备清单.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-17",
+      "clause_no": "5.2",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "locator": "第五章 > 5.2 参数表 2",
+        "excerpt": "S5735-L48T4X-A1"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 2,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:ed586336c61d9892"
+        }
+      },
+      "evidence_file": "B1-设备清单.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-18",
+      "clause_no": "5.3",
+      "clause_anchor": {
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "locator": "第五章 > 5.3 参数表 3",
+        "excerpt": "USG6650E-AC550"
+      },
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 3,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:257af8d41810d2a5"
+        }
+      },
+      "evidence_file": "B1-设备清单.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    }
+  ]
+}

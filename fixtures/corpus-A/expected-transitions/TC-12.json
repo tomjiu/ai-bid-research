@@ -1,0 +1,54 @@
+{
+  "tc_id": "TC-12",
+  "title": "暗标导出",
+  "risk": "R-11,AD-05",
+  "precondition": "全部章节 ACCEPTED；暗标模式开启；BLOCKER 清零",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "export_bid_document",
+      "args": {
+        "mode": "dark_bid"
+      },
+      "expect": {
+        "project.status": "EXPORTED",
+        "artifact.sha256": "记录"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "count",
+      "path": "dark_bid_word_scan_hits",
+      "op": "==",
+      "value": 0,
+      "note": "禁字扫描 0 命中（投标人名称/Logo/人员姓名）"
+    },
+    {
+      "kind": "state",
+      "path": "artifact.pages_word_render",
+      "op": "<=",
+      "value": 200,
+      "note": "Word 渲染口径页数（LibreOffice 页数不可信）"
+    },
+    {
+      "kind": "state",
+      "path": "artifact.sha256",
+      "op": "!=",
+      "value": null,
+      "note": "产物哈希可复验"
+    },
+    {
+      "kind": "engine_gap",
+      "value": [
+        "G2",
+        "G3"
+      ],
+      "note": "文档级样式断言与 docProps 元数据清零依赖引擎 P0 缺口——补齐前该项降级为人工检查单"
+    }
+  ],
+  "engine_gaps": [
+    "G2-文档级样式",
+    "G3-暗标元数据清零"
+  ]
+}

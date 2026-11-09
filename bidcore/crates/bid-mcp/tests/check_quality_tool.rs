@@ -1,0 +1,291 @@
+//! #68 阶段 2 · check_bid_quality 壳层契约测试（bid-mcp tools.rs）。
+//!
+//! 验收面（issue #68 §2.1/§2.2）：
+//! - 状态机裁决：FILES_IMPORTED 越级 → E_STATE；项目路由 E_NOTFOUND；
+//! - 无章节树 → E_STATE；
+//! - 纯内存态：报告内联返回 + artifact null + 「未落盘」告警；
+//! - workspace 在场：`artifacts/quality-report.json` 落盘（artifact.path/size）；
+//! - 覆盖度面：draft 后 REQ 未回应 → stats.uncovered_requirements + warning；
+//! - needs_human 清单在 out（§2.2「哪些章需要人工处理」的 Agent 面）。
+
+use bid_mcp::{dispatch_with, BidService, ToolCall, ToolReply};
+use bid_domain::outline::OutlineSpec;
+use serde_json::{json, Value};
+
+fn call(svc: &mut BidService, tool: &str, mut args: Value) -> ToolReply {
+    if tool == "draft_response_section" && args.get("generator").is_none() {
+        args.as_object_mut().unwrap().insert("generator".into(), json!("mock"));
+    }
+    dispatch_with(svc, ToolCall { tool: tool.to_string(), args })
+}
+
+fn ok_result(reply: ToolReply) -> Value {
+    match reply {
+        ToolReply::Ok(out) => out.result,
+        ToolReply::Err { error, .. } => panic!("预期成功，实际错误: {error}"),
+    }
+}
+
+fn err_parts(reply: &ToolReply) -> (String, String) {
+    match reply {
+        ToolReply::Err { error, .. } => (error.code().to_string(), error.to_string()),
+        ToolReply::Ok(out) => panic!("预期错误，实际成功: {}", out.result),
+    }
+}
+
+fn mk_req(id: &str, excerpt: &str) -> bid_domain::Requirement {
+    use bid_domain::{Anchor, Requirement};
+    Requirement {
+        id: id.into(),
+        category: "技术参数".into(),
+        clause_no: None,
+        anchors: vec![Anchor {
+            file: "A-招标文件.docx".into(),
+            kind: "para".into(),
+            locator: format!("第二章/{id}"),
+            excerpt: excerpt.into(),
+                block_idx: None,
+                page: None,
+                line: None
+        }],
+        params: Default::default(),
+        source_file: "A-招标文件.docx".into(),
+    }
+}
+
+/// 「MATRIX_READY + 建纲 + 已起草一章」服务态（记忆面或 workspace 面）。
+fn svc_drafted(tag: &str, ws: Option<&std::path::Path>) -> (BidService, String, String) {
+    let mut svc = match ws {
+        Some(dir) => BidService::open(dir).unwrap(),
+        None => BidService::new(),
+    };
+    let pid = ok_result(call(&mut svc, "create_bid_project", json!({
+        "name": "质量工具测试", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": tag,
+    })))["project_id"].as_str().unwrap().to_string();
+    svc.store_mut().upsert_file(
+        "A-招标文件.docx", "招标文件", "sha-q", 10, 1, 50, 0,
+        bid_domain::ParseStatus::Ok, "",
+    ).unwrap();
+    svc.set_requirements(vec![
+        mk_req("REQ-0001", "具备贰级及以上资质"),
+        mk_req("REQ-0002", "项目经理须持一级建造师证书"),
+    ]).unwrap();
+    let (_, _, _) = svc
+        .prepare_outline_and_matrix(OutlineSpec { target_total_chars: 400, max_reqs_per_leaf: 2 })
+        .unwrap();
+    // 素材面（#110 任务 1 缺失回报闸）：两 REQ 均为技术参数类——须有可用证据
+    // 佐证（绑产品文档类证据 + 重建矩阵），否则 draft 拒生成
+    use bid_domain::evidence::{EvidenceKind, EvidenceSpec};
+    use bid_domain::locator::EngineLocator;
+    let (eid, _) = svc.store_mut().register_evidence(EvidenceSpec {
+        kind: EvidenceKind::ProductDoc,
+        title: "设备检测报告".into(),
+        source_file: "EV-tech.pdf".into(),
+        source_sha256: "sha-q-tech".into(),
+        locator: EngineLocator::DocxParagraph { paragraph_index: 5, text_fingerprint: "fnv64:qt".into() },
+        fingerprint: "fnv64:qt".into(),
+        valid_from: None,
+        valid_until: None,
+        subject_name: "某公司".into(),
+        scope: "设备参数佐证".into(),
+        client: None,
+        amount_wan: None,
+        completed_on: None,
+        fields: Default::default(), // #147
+        excerpt: None,
+        excerpt_locator: None,
+        verification_tier: None,
+    }).unwrap();
+    for rid in ["REQ-0001", "REQ-0002"] {
+        svc.store_mut().bind_evidence(&eid, rid, "2026-12-31").unwrap();
+    }
+    let _ = svc.store_mut().build_matrix().unwrap();
+    // L3 无补遗阻塞的人工出口（#131）：本基座只导入招标文件（无补遗件），
+    // 起草会被 MissingAddendum 拒——#118 合入时漏适配本套件（与
+    // draft_iterative/readiness_wire 同类债）。走 AddendumWaiver 门
+    // 确认无补遗（本套件面在质量工具契约，不在 L3 阻塞语义）。
+    use bid_domain::review::{Decision, Gate};
+    svc.store_mut()
+        .record_review(Gate::AddendumWaiver, &bid_domain::TrustedPrincipal::human("quality-tool-test"), Decision::Approved, vec![], None)
+        .unwrap();
+    let parents: std::collections::HashSet<&str> = svc.store().sections().iter()
+        .filter_map(|n| n.parent_id.as_deref()).collect();
+    let leaf = svc.store().sections().iter()
+        .find(|n| !parents.contains(&n.id[..])).unwrap().id.clone();
+    (svc, pid, leaf)
+}
+
+// ---------------------------------------------------------------- 测试
+
+#[test]
+fn quality_rejects_early_state_and_bad_project() {
+    // 早态：只导入（FILES_IMPORTED）→ guard_tool 拒（check 的状态门 MatrixReady+）
+    let mut svc = BidService::new();
+    let pid = ok_result(call(&mut svc, "create_bid_project", json!({
+        "name": "早态测试", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": "q-early",
+    })))["project_id"].as_str().unwrap().to_string();
+    svc.store_mut().upsert_file(
+        "A.docx", "招标文件", "sha-e", 5, 0, 20, 0, bid_domain::ParseStatus::Ok, "",
+    ).unwrap();
+    let reply = call(&mut svc, "check_bid_quality", json!({ "project_id": &pid }));
+    assert_eq!(err_parts(&reply).0, "E_STATE", "FILES_IMPORTED 态不可查质量");
+
+    let (mut svc2, _, _) = svc_drafted("q-route", None);
+    let reply = call(&mut svc2, "check_bid_quality", json!({ "project_id": "PRJ-9999" }));
+    let (code, msg) = err_parts(&reply);
+    assert_eq!(code, "E_NOTFOUND");
+    assert!(msg.contains("PRJ-9999"), "{msg}");
+}
+
+#[test]
+fn quality_report_inline_with_degrade_warning_in_memory_mode() {
+    let (mut svc, pid, leaf) = svc_drafted("q-mem", None);
+    // 起草一章（mock——REQ-0001/0002 都会被模板引用 → 全覆盖）
+    let r = ok_result(call(&mut svc, "draft_response_section", json!({
+        "project_id": &pid, "section_id": &leaf,
+    })));
+    assert_eq!(r["stats"]["generator"], "mock");
+    let q = ok_result(call(&mut svc, "check_bid_quality", json!({
+        "project_id": &pid,
+    })));
+    // summary 面：全部起草且覆盖
+    assert_eq!(q["summary"]["total"], q["summary"]["drafted"]);
+    assert_eq!(q["summary"]["uncovered_req_total"], 0, "mock 模板全覆盖");
+    assert_eq!(q["summary"]["failed"], 0);
+    // 记忆面：无 artifact + 告警
+    assert!(q["artifact"].is_null(), "纯内存态不落盘");
+    let warns = q["warnings"].as_array().unwrap();
+    assert!(warns.iter().any(|w| w.as_str().unwrap().contains("未落盘")), "{warns:?}");
+    // sections 内联（逐章明细）
+    assert!(q["sections"].as_array().unwrap().len() >= 1);
+}
+
+#[test]
+fn quality_artifact_written_in_workspace_mode() {
+    let dir = std::env::temp_dir().join(format!(
+        "bid-mcp-quality-{}-{}", std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (mut svc, pid, leaf) = svc_drafted("q-ws", Some(&dir));
+    ok_result(call(&mut svc, "draft_response_section", json!({
+        "project_id": &pid, "section_id": &leaf,
+    })));
+    let q = ok_result(call(&mut svc, "check_bid_quality", json!({
+        "project_id": &pid,
+    })));
+    let artifact = &q["artifact"];
+    assert!(artifact.is_object(), "workspace 在场必落盘: {artifact}");
+    let path = artifact["path"].as_str().unwrap();
+    // Windows 上 Path 的分隔符是反斜杠，直接用 ends_with 会误判——
+    // 统一成正斜杠再比（跨平台可移植）。
+    let norm = path.replace('\\', "/");
+    assert!(norm.ends_with("artifacts/quality-report.json"), "{path}");
+    assert!(artifact["size"].as_u64().unwrap() > 0);
+    // 落盘内容是合法报告（roundtrip——summary 面对账）
+    let text = std::fs::read_to_string(path).unwrap();
+    let parsed: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(parsed["summary"]["total"], q["summary"]["total"]);
+    // 文件是 QualityReport 形态（needs_human 在 summary 内）；MCP out 是顶层
+    assert_eq!(parsed["summary"]["needs_human"], q["needs_human"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn draft_out_reports_uncovered_requirements() {
+    let (mut svc, pid, leaf) = svc_drafted("q-uncovered", None);
+    // 定向起草：只响应 REQ-0001（override）——REQ-0002 不在响应面 → 不算未覆盖；
+    // 再看全量起草的正常面：mock 模板逐 REQ 引用 → uncovered 恒空。
+    // 未覆盖面的构造：用 instructions 不影响模板（mock 确定性）——改用
+    // 「重起草前先查」路径：未起草章在报告里是 pending（uncovered=0）。
+    // 真正的 uncovered 只在真实 AI 面出现——此处断言契约字段在场 + 空清单语义。
+    let r = ok_result(call(&mut svc, "draft_response_section", json!({
+        "project_id": &pid, "section_id": &leaf,
+        "source_requirements": ["REQ-0001"],
+    })));
+    let unc = r["stats"]["uncovered_requirements"].as_array().unwrap();
+    assert!(unc.is_empty(), "override 面 REQ-0001 被模板回应: {unc:?}");
+    // 报告面：该章 covered=REQ-0001（响应面就是 override 集）
+    let q = ok_result(call(&mut svc, "check_bid_quality", json!({
+        "project_id": &pid,
+    })));
+    let sec = q["sections"].as_array().unwrap().iter()
+        .find(|s| s["section_id"] == json!(leaf)).unwrap();
+    assert_eq!(sec["covered_reqs"], json!(["REQ-0001"]), "override 面被回应");
+    // 节点绑定面仍含 REQ-0002——正文未回应它 → 未覆盖清单如实报（Agent 面：
+    // 要么补写要么补一次面向 REQ-0002 的起草）
+    assert_eq!(sec["uncovered_reqs"], json!(["REQ-0002"]));
+}
+
+#[test]
+fn needs_human_lists_failed_and_uncovered_sections() {
+    let (mut svc, pid, leaf) = svc_drafted("q-human", None);
+    // 域面经真实状态机落一个 FAILED 章（组装线的失败面——工具只读报告）
+    use bid_domain::outline::SectionStatus;
+    for to in [SectionStatus::Outlining, SectionStatus::Drafting, SectionStatus::Failed] {
+        svc.store_mut().advance_section_status(&leaf, to).unwrap();
+    }
+    let q = ok_result(call(&mut svc, "check_bid_quality", json!({
+        "project_id": &pid,
+    })));
+    assert_eq!(q["summary"]["failed"], 1);
+    let needs: Vec<&str> = q["needs_human"].as_array().unwrap()
+        .iter().filter_map(|v| v.as_str()).collect();
+    assert!(needs.contains(&&leaf[..]), "FAILED 章进 needs_human: {needs:?}");
+}
+
+// ---------------------------------------------------------------- B3 评分接线（#131 任务 3）
+
+/// #131 质量真实性回归：MCP 生产路径必须评 B3 三维度——
+/// check_bid_quality 此前走旧调用面（ctx=None），specificity/substance/score
+/// 全 None（评分器只在 quality_integrate 测试里接过线）。接线后已起草章的
+/// 三面必须非 null 且在 [0,1] 值域（防评分面再断线假绿）。
+#[test]
+fn quality_report_carries_b3_scores_on_drafted_sections() {
+    let (mut svc, pid, leaf) = svc_drafted("q-b3", None);
+    let _ = ok_result(call(&mut svc, "draft_response_section", json!({
+        "project_id": &pid, "section_id": &leaf,
+        "instructions": "质量评分接线测试",
+    })));
+    let q = ok_result(call(&mut svc, "check_bid_quality", json!({
+        "project_id": &pid,
+    })));
+    let drafted: Vec<&Value> = q["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| s["status"] == "DRAFTED" || s["status"] == "VALIDATING")
+        .collect();
+    assert!(!drafted.is_empty(), "已起草章非空（B3 评面对象）");
+    for s in &drafted {
+        let sid = s["section_id"].as_str().unwrap();
+        // specificity：结构体在场且分数值域合法
+        let sp = &s["specificity"];
+        assert!(sp.is_object(), "{sid} specificity 为 null（B3 接线断裂——#131 修复回归）");
+        let spv = sp["score"].as_f64().unwrap();
+        assert!((0.0..=1.0).contains(&spv), "{sid} specificity.score={spv} 越域 [0,1]");
+        // substance：同上
+        let su = &s["substance"];
+        assert!(su.is_object(), "{sid} substance 为 null（B3 接线断裂）");
+        let suv = su["score"].as_f64().unwrap();
+        assert!((0.0..=1.0).contains(&suv), "{sid} substance.score={suv} 越域 [0,1]");
+        // score（B2 自评）：结构体在场（本夹具无评分项 REQ → estimated/max=0 +
+        // rationale 诚实说明——不是 null 伪装）
+        let sc = &s["score"];
+        assert!(sc.is_object(), "{sid} score 为 null（B2 联动断裂）");
+        assert!(
+            sc["rationale"].as_str().unwrap_or("").contains("无映射")
+                || sc["max"].as_f64().unwrap_or(0.0) > 0.0,
+            "{sid} score 要么有映射项（max>0）要么 rationale 诚实说明: {sc:?}"
+        );
+    }
+    // mock 正文（套话为主）的针对性不应满分——评分器有判别力，不是恒 1.0
+    let sp_all: Vec<f64> = drafted
+        .iter()
+        .filter_map(|s| s["specificity"]["score"].as_f64())
+        .collect();
+    assert!(
+        sp_all.iter().all(|v| *v < 1.0),
+        "mock 正文 specificity 全满分（评分器无判别力——恒 1 是假评）: {sp_all:?}"
+    );
+}

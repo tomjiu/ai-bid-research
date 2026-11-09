@@ -1,0 +1,60 @@
+# 构建产物
+bidcore/target/
+scripts/*/target/
+
+# M1 运行产物（可由 m1 重新生成；确定性由 m1 双跑字节一致测试保证）
+runs/
+
+# M1.7-TEL 电信真实语料二进制暂存（86MB+83MB——B1.5 起 parse-input/ 17 件已转入库；
+# 二进制按 fetch-report.json 哈希可重取复验：python3 scripts/telecom_refetch.py，重取协议见 real-corpus/telecom/README.md）
+real-corpus/telecom/files/
+real-corpus/telecom/extracted/
+real-corpus/telecom/converted/
+real-corpus/telecom/lo-tmp/
+
+# title-impact 实验全量 dump（约 7MB 过程数据，issue #2 评论 2026-10-27 03:28 PR 精简要求）：
+# 结论入 artifacts/title-impact/summary.json + gt-recall-by-variant.json；
+# 本地可再生（scripts/title_impact/ + scripts/title_impact_summary.py），不入库。
+artifacts/title-impact/experiment.json
+
+# #68 阶段 1：LLM 配置与用量台账——llm.json 含 api_key 绝不入库（凭据纪律）；
+# llm-usage.json 是运行时累计态（按项目工作区再生）。
+.mang/llm.json
+.mang/llm-usage.json
+
+# 绿色版打包产物（scripts/package-mang-app.ps1 的输出目录）
+dist-pkg/
+
+artifacts/veto-gt/*.bak-*
+
+
+# #80 第二批：e2e 产物只留 latest（时间戳 run 目录可再生成——10_report.md 内含 run-id）
+artifacts/e2e/e2e-*
+artifacts/e2e-real-path/2*
+
+# #80 第三批：同款只留 latest（run-id 在 phase 日志与产物内可查）
+artifacts/e2e-subagent-path/2*
+__pycache__/
+
+# #245：real-corpus-e2e 中间明细（02-08 号件）不入库（19d11ff/20dce7d 惯例——
+# 全量测试运行会再生成本批文件，防 git add -A 误扫入；终态件
+# 01/09/10/11/report.md 正常入库）
+artifacts/real-corpus-e2e/latest/*/02_*
+artifacts/real-corpus-e2e/latest/*/03_*
+artifacts/real-corpus-e2e/latest/*/04_*
+artifacts/real-corpus-e2e/latest/*/05_drafts/
+artifacts/real-corpus-e2e/latest/*/06_*
+artifacts/real-corpus-e2e/latest/*/07_*
+artifacts/real-corpus-e2e/latest/*/08_*
+
+# Python 工具缓存（feature/llm-module 新增）
+.pytest_cache/
+output/
+
+# #563 Python 研究侧数据目录（SQLite 本地工作区，不入库）
+# 注意：data/fonts/ 是 #565 的渲染字体放置位（fixture_spec.resolve_render_font
+# 会在此查找 SarasaMonoSC）——data/ 整体忽略不影响该约定（字体本就不入库），
+# 但保留显式一行为后续想单独放行留口。
+data/
+!data/fonts/
+data/fonts/

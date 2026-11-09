@@ -1,0 +1,44 @@
+{
+  "tc_id": "TC-05",
+  "title": "确定性审校命中（8 类规则）",
+  "risk": "R-03,R-07,R-11,R-13",
+  "precondition": "以 defect-drafts/技术标草稿-缺陷样本.docx（植入 8 类缺陷，映射见 defect-map.json）为 validate 输入",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "validate_bid_document",
+      "args": {
+        "draft": "defect-drafts/技术标草稿-缺陷样本.docx",
+        "rules": "deterministic_8"
+      },
+      "expect": {
+        "findings": 8
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "rules_hit",
+      "value": [
+        "CERT_EXPIRED",
+        "PRICE_EXCEEDS_BUDGET",
+        "DURATION_MISMATCH",
+        "PAGE_LIMIT",
+        "MISSING_SIGNATURE",
+        "DARK_BID_WORD",
+        "TODO_RESIDUE",
+        "INJECTION_PATTERN"
+      ],
+      "op": "==",
+      "note": "8/8 命中 0 漏报；假阳 ≤1 且可 WAIVE"
+    },
+    {
+      "kind": "count",
+      "path": "findings[kind=DETERMINISTIC].severity=BLOCKER",
+      "op": ">=",
+      "value": 1,
+      "note": "BLOCKER 未清零禁止 export（状态机硬闸门）"
+    }
+  ],
+  "engine_gaps": []
+}

@@ -1,0 +1,17 @@
+[package]
+name = "bid-kb"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bid-parse = { path = "../bid-parse" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+regex = { workspace = true }
+unicode-normalization = { workspace = true }
+
+# B4（issue #11 任务 3）：docx/xlsx 样本改走引擎路径（kb_probe 测试路由）。
+[dev-dependencies]
+bid-engine = { path = "../bid-engine" }

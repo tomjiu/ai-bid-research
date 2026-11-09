@@ -1,0 +1,35 @@
+{
+  "tc_id": "TC-11",
+  "title": "状态机越级防护",
+  "risk": "R-14",
+  "precondition": "project.status = FILES_IMPORTED（P1 阶段）",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "draft_response_section",
+      "args": {
+        "section": "任意"
+      },
+      "expect": {
+        "error": "E_STATE",
+        "side_effect": "none"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "error",
+      "path": "last_tool_result.error",
+      "op": "==",
+      "value": "E_STATE"
+    },
+    {
+      "kind": "count",
+      "path": "sections",
+      "op": "==",
+      "value": 0,
+      "note": "无副作用：未创建任何章节"
+    }
+  ],
+  "engine_gaps": []
+}

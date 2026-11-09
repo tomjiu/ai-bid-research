@@ -1,0 +1,407 @@
+//! 最近打开（%APPDATA%\\mang\\recent.json）+ 版本历史（<workspace>/.mang/history/index.json）
+//!
+//! 两者都是"多进程/多线程可能同时写"的小 JSON，所以：
+//!   * recent：一把全局 Mutex 串行读写
+//!   * 写盘一律 先写 .tmp 再 rename
+
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+use serde_json::{json, Value};
+
+use crate::ipc::{Args, IpcError};
+use crate::paths::{self, Workspace};
+
+pub const RECENT_MAX: usize = 50;
+
+static RECENT_LOCK: Mutex<()> = Mutex::new(());
+
+/// %APPDATA%\\mang\\recent.json（APPDATA 缺失时退回 %LOCALAPPDATA% → %TEMP%）
+pub fn recent_path() -> PathBuf {
+    let base = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir);
+    base.join("mang").join("recent.json")
+}
+
+fn read_items(path: &std::path::Path) -> Vec<Value> {
+    let Ok(bytes) = std::fs::read(path) else {
+        return Vec::new();
+    };
+    let Ok(v) = serde_json::from_slice::<Value>(&bytes) else {
+        eprintln!("[mang] recent.json 损坏，已忽略：{}", path.display());
+        return Vec::new();
+    };
+    match v {
+        Value::Array(a) => a,
+        Value::Object(o) => o
+            .get("items")
+            .and_then(|i| i.as_array())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+fn clean_item(v: &Value) -> Option<Value> {
+    let o = v.as_object()?;
+    let path = o.get("path")?.as_str()?.trim();
+    if path.is_empty() {
+        return None;
+    }
+    let name = o
+        .get("name")
+        .and_then(|n| n.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            std::path::Path::new(path)
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_string())
+        });
+    let kind = match o.get("kind").and_then(|k| k.as_str()) {
+        Some("dir") => "dir",
+        Some("file") => "file",
+        _ => "file",
+    };
+    let opened_at = o
+        .get("openedAt")
+        .and_then(|t| t.as_u64().or_else(|| t.as_f64().map(|f| f as u64)))
+        .unwrap_or_else(crate::ipc::now_ms);
+    let exists = std::path::Path::new(path).exists();
+    Some(json!({
+        "path": path,
+        "name": name,
+        "kind": kind,
+        "openedAt": opened_at,
+        "exists": exists,
+    }))
+}
+
+/// recent.load → {items:[{path,name,kind,openedAt,exists}], file}
+pub fn load() -> Result<Value, IpcError> {
+    let _g = RECENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let path = recent_path();
+    let items: Vec<Value> = read_items(&path)
+        .iter()
+        .filter_map(clean_item)
+        .take(RECENT_MAX)
+        .collect();
+    Ok(json!({ "items": items, "file": paths::display(&path) }))
+}
+
+// ── #194：最后工作区记忆（%APPDATA%\mang\last-workspace.json）────
+//
+// 用途：mang-app 无参启动（双击/开始菜单）时停留在上次的工作区，
+// 而不是落进无意义的 cwd。CLI 显式参数依然优先（见 main.rs 解析序）。
+// 写盘与 recent.json 同口径：先 .tmp 再 rename，防半截 JSON。
+
+/// last-workspace.json 的路径（与 recent.json 同目录）。
+pub fn last_workspace_path() -> PathBuf {
+    recent_path().with_file_name("last-workspace.json")
+}
+
+/// 读回上次工作区（文件缺失/损坏/目录已不存在 → None——回退 cwd）。
+pub fn last_workspace() -> Option<PathBuf> {
+    let _g = RECENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bytes = std::fs::read(last_workspace_path()).ok()?;
+    let v: Value = serde_json::from_slice(&bytes).ok()?;
+    let root = v.get("root")?.as_str()?.trim().to_string();
+    if root.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(&root);
+    // 目录没了就不再「停留」——拿着失效路径起 Workspace::new 只会启动失败
+    if !p.is_dir() {
+        return None;
+    }
+    Some(p)
+}
+
+/// 切换工作区成功后落盘（display 形态存根路径——与 UI 呈现一致）。
+pub fn remember_last_workspace(root: &std::path::Path) -> Result<(), IpcError> {
+    let _g = RECENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let path = last_workspace_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| paths::map_io(dir, &e))?;
+    }
+    let bytes = serde_json::to_vec_pretty(&json!({ "root": paths::display(root) }))
+        .map_err(|e| IpcError::io(e.to_string()))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &bytes).map_err(|e| paths::map_io(&tmp, &e))?;
+    std::fs::rename(&tmp, &path).map_err(|e| paths::map_io(&path, &e))?;
+    Ok(())
+}
+
+/// recent.save {items:[...]} → {ok:true, count, file}
+pub fn save(args: Args<'_>) -> Result<Value, IpcError> {
+    let arr = match args.get("items") {
+        Some(Value::Array(a)) => a.clone(),
+        Some(_) => return Err(IpcError::bad_args("items 必须是数组")),
+        None => return Err(IpcError::bad_args("缺少参数 items")),
+    };
+    let mut items: Vec<Value> = Vec::new();
+    for v in arr.iter() {
+        if let Some(c) = clean_item(v) {
+            // 同一个 path 只留最新一条
+            if let Some(pos) = items.iter().position(|x| x["path"] == c["path"]) {
+                items[pos] = c;
+            } else {
+                items.push(c);
+            }
+        }
+    }
+    items.sort_by_key(|v| std::cmp::Reverse(v["openedAt"].as_u64().unwrap_or(0)));
+    items.truncate(RECENT_MAX);
+
+    let _g = RECENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let path = recent_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| paths::map_io(dir, &e))?;
+    }
+    let bytes = serde_json::to_vec_pretty(&json!(items)).map_err(|e| IpcError::io(e.to_string()))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &bytes).map_err(|e| paths::map_io(&tmp, &e))?;
+    std::fs::rename(&tmp, &path).map_err(|e| paths::map_io(&path, &e))?;
+    Ok(json!({ "ok": true, "count": items.len(), "file": paths::display(&path) }))
+}
+
+/// history.list {path?} → {items:[{ts,kind,message,file,snapshot?}], file, present}
+///
+/// 读 <workspace>/.mang/history/index.json。容忍三种形态：
+///   * 数组 [ {ts,kind,message,file,...} ]
+///   * 对象 {items:[...]}
+///   * 对象 { "<relpath>": [ {...} ] }（按文件分组）
+/// `path` 给了就只返回该文件的记录（相对工作区，或绝对路径）。
+pub fn history_list(ws: &Workspace, args: Args<'_>) -> Result<Value, IpcError> {
+    let filter = args.opt_path("path")?;
+    let limit = args.u64("limit")?.unwrap_or(200) as usize;
+    let index = ws.sub(".mang").join("history").join("index.json");
+    let exists = index.exists();
+    if !exists {
+        return Ok(json!({
+            "items": [],
+            "file": paths::display(&index),
+            "present": false,
+        }));
+    }
+    let bytes = std::fs::read(&index).map_err(|e| paths::map_io(&index, &e))?;
+    let v: Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(e) => {
+            // 历史索引坏了也不能让 UI 崩；返回空 + 提示
+            return Ok(json!({
+                "items": [],
+                "file": paths::display(&index),
+                "present": true,
+                "error": format!("index.json 解析失败：{e}"),
+            }));
+        }
+    };
+
+    let filter_norm = filter.map(|f| {
+        let s = f.replace('\\', "/");
+        s.trim_start_matches("./").to_string()
+    });
+
+    let mut items: Vec<Value> = Vec::new();
+    let mut push = |entry: &Value, owner: Option<&str>| {
+        let Some(o) = entry.as_object() else { return };
+        let ts = o
+            .get("ts")
+            .or_else(|| o.get("time"))
+            .or_else(|| o.get("mtimeMs"))
+            .and_then(|t| t.as_u64().or_else(|| t.as_f64().map(|f| f as u64)))
+            .unwrap_or(0);
+        let kind = match o.get("kind").and_then(|k| k.as_str()) {
+            Some("ai") => "ai",
+            Some("manual") => "manual",
+            _ => "auto",
+        };
+        let message = o
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("")
+            .to_string();
+        let file = o
+            .get("file")
+            .or_else(|| o.get("path"))
+            .and_then(|f| f.as_str())
+            .map(|s| s.replace('\\', "/"))
+            .or_else(|| owner.map(|s| s.to_string()))
+            .unwrap_or_default();
+        let snapshot = o
+            .get("snapshot")
+            .and_then(|s| s.as_str())
+            .map(|s| s.replace('\\', "/"));
+        items.push(json!({
+            "ts": ts,
+            "kind": kind,
+            "message": message,
+            "file": file,
+            "snapshot": snapshot,
+        }));
+    };
+
+    match v {
+        Value::Array(a) => {
+            for e in &a {
+                push(e, None);
+            }
+        }
+        Value::Object(mut o) => {
+            if let Some(Value::Array(a)) = o.remove("items") {
+                for e in &a {
+                    push(e, None);
+                }
+            } else {
+                for (k, val) in o.iter() {
+                    let owner = k.replace('\\', "/");
+                    match val {
+                        Value::Array(a) => {
+                            for e in a {
+                                push(e, Some(&owner));
+                            }
+                        }
+                        Value::Object(_) => push(val, Some(&owner)),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    if let Some(f) = filter_norm {
+        items.retain(|i| {
+            let file = i["file"].as_str().unwrap_or("");
+            file == f || file.ends_with(&format!("/{f}")) || f.ends_with(file)
+        });
+    }
+    // 新的在前
+    items.sort_by_key(|v| std::cmp::Reverse(v["ts"].as_u64().unwrap_or(0)));
+    items.truncate(limit);
+
+    Ok(json!({
+        "items": items,
+        "file": paths::display(&index),
+        "present": true,
+    }))
+}
+
+// ── 测试级互斥（cfg(test)——不进产物） ────────────────────────
+
+/// last-workspace.json 测试序列锁（#303/FG-01 + 2026-11-07 CI 实证）。
+///
+/// 全局单文件 + cargo test 默认并行 = 多步断言序列会互踩：
+/// 运行时 RECENT_LOCK 只保单次读写原子，不保「写→断言读回」序列。
+/// 凡写这个文件的测试（本文件 roundtrip 测试、ipc::tests 的
+/// workspace.open 三件套）必须持本锁整段串行。
+/// 2026-11-07 windows CI：switches_root 未持锁，把 persistence 测试
+/// 刚落的 lb 路径覆盖成自己的 b 路径（38/39）——锁从 ipc.rs 局部
+/// 上提到资源属主模块，就是为堵这类「漏网写入方」。
+#[cfg(test)]
+pub(crate) static LAST_WS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ipc::Args;
+    // #383：save/load 写读全局 recent.json；roundtrip 直写全局
+    // last-workspace.json——两者都必须持 crate 级共享锁（见
+    // test_support.rs），否则与 ipc::tests 的 workspace 序列互踩。
+    use crate::test_support::workspace_files_guard;
+
+    #[test]
+    fn history_tolerates_missing_and_grouped() {
+        let d = std::env::temp_dir().join(format!(
+            "mang-hist-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(d.join(".mang/history")).unwrap();
+        let ws = Workspace::new(&d).unwrap();
+        // 缺失
+        let out = history_list(&ws, Args::new(&serde_json::Map::new())).unwrap();
+        assert_eq!(out["present"], json!(false));
+        assert_eq!(out["items"].as_array().unwrap().len(), 0);
+        // 分组形态
+        std::fs::write(
+            d.join(".mang/history/index.json"),
+            r#"{"技术标.md":[{"ts":100,"kind":"manual","message":"第1章","snapshot":".mang/history/技术标.md/100.md"},{"ts":300,"kind":"auto","message":""}],"报价.xlsx":[{"ts":200,"kind":"manual","message":"x"}]}"#,
+        )
+        .unwrap();
+        let out = history_list(&ws, Args::new(&serde_json::Map::new())).unwrap();
+        assert_eq!(out["items"].as_array().unwrap().len(), 3);
+        assert_eq!(out["items"][0]["ts"], json!(300)); // 新的在前
+        // 过滤
+        let mut m = serde_json::Map::new();
+        m.insert("path".into(), json!("技术标.md"));
+        let out = history_list(&ws, Args::new(&m)).unwrap();
+        assert_eq!(out["items"].as_array().unwrap().len(), 2);
+        assert_eq!(out["items"][0]["kind"], json!("auto"));
+        // 坏 JSON 不炸
+        std::fs::write(d.join(".mang/history/index.json"), "{oops").unwrap();
+        let out = history_list(&ws, Args::new(&serde_json::Map::new())).unwrap();
+        assert_eq!(out["items"].as_array().unwrap().len(), 0);
+        assert!(out["error"].is_string());
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn recent_roundtrip() {
+        // #383：save/load 触碰全局 recent.json（与 last-workspace 同目录
+        // 的进程级单文件），持共享锁。
+        let _guard = workspace_files_guard();
+        let mut m = serde_json::Map::new();
+        m.insert(
+            "items".into(),
+            json!([
+                {"path":"C:\\a\\b.md","name":"b.md","kind":"file","openedAt":10},
+                {"path":"C:\\a\\b.md","openedAt":99},
+                {"path":"  ","openedAt":1},
+            ]),
+        );
+        let out = save(Args::new(&m)).unwrap();
+        assert_eq!(out["count"], json!(1));
+        let loaded = load().unwrap();
+        assert!(loaded["items"].is_array());
+    }
+
+    // ── #194：最后工作区记忆 ───────────────────────────────
+
+    #[test]
+    fn last_workspace_roundtrip_and_staleness() {
+        // #383：本测试直写（绕过 remember_last_workspace）+ 读回全局
+        // last-workspace.json——#303 修 ipc 时漏掉的那个触碰者，正是
+        // CI 并行红的插队者；现在与 ipc::tests 持同一把锁。
+        let _guard = workspace_files_guard();
+
+        let dir = std::env::temp_dir().join(format!(
+            "mang-lastws-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        // 落盘 → 读回一致
+        remember_last_workspace(&dir).unwrap();
+        assert_eq!(last_workspace().as_deref(), Some(dir.as_path()));
+        // 目录没了 → None（不再「停留」在失效路径）
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(last_workspace(), None);
+        // 损坏 JSON → None（不炸）
+        std::fs::write(last_workspace_path(), "{oops").unwrap();
+        assert_eq!(last_workspace(), None);
+        // 空根串 → None
+        std::fs::write(last_workspace_path(), r#"{"root":"  "}"#).unwrap();
+        assert_eq!(last_workspace(), None);
+        let _ = std::fs::remove_file(last_workspace_path());
+    }
+}

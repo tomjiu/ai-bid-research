@@ -1,0 +1,78 @@
+{
+  "eval": "P2-real-file",
+  "extract": {
+    "by_category": {
+      "其他": 2207,
+      "否决项": 48,
+      "评分项": 248,
+      "资格条件": 125
+    },
+    "by_file": {
+      "A-伊犁水库质量检测招标文件.pdf": 333,
+      "A-塔里木水库除险加固招标文件.pdf": 1396,
+      "A-某水利施工标段招标文件.pdf": 898,
+      "C-福建修订通知-扫描件.pdf": 1
+    },
+    "elapsed_secs": 0.191026645,
+    "total": 2628
+  },
+  "files": [
+    {
+      "alias": "A-塔里木水库除险加固招标文件.pdf",
+      "blocks": 8107,
+      "blocks_json": "/home/z/my-project/download/bid-agent-research/artifacts/real-eval/parse/A-塔里木水库除险加固招标文件.pdf.json",
+      "desc": "主文件·文本层 PDF·284 页",
+      "elapsed_secs": 2.194070989,
+      "has_text_layer": true,
+      "ocr_blocks": 0,
+      "pages": 283,
+      "parse_summary": "pdf 文本层: 283 页 8107 行块",
+      "status": "ok"
+    },
+    {
+      "alias": "A-某水利施工标段招标文件.pdf",
+      "blocks": 3525,
+      "blocks_json": "/home/z/my-project/download/bid-agent-research/artifacts/real-eval/parse/A-某水利施工标段招标文件.pdf.json",
+      "desc": "主文件·文本层 PDF·142 页（GT 主体）",
+      "elapsed_secs": 0.208850046,
+      "has_text_layer": true,
+      "ocr_blocks": 0,
+      "pages": 142,
+      "parse_summary": "pdf 文本层: 142 页 3525 行块",
+      "status": "ok"
+    },
+    {
+      "alias": "A-伊犁水库质量检测招标文件.pdf",
+      "blocks": 2272,
+      "blocks_json": "/home/z/my-project/download/bid-agent-research/artifacts/real-eval/parse/A-伊犁水库质量检测招标文件.pdf.json",
+      "desc": "主文件·文本层 PDF·76 页",
+      "elapsed_secs": 0.181476403,
+      "has_text_layer": true,
+      "ocr_blocks": 0,
+      "pages": 76,
+      "parse_summary": "pdf 文本层: 76 页 2272 行块",
+      "status": "ok"
+    },
+    {
+      "alias": "C-福建修订通知-扫描件.pdf",
+      "blocks": 100,
+      "blocks_json": "/home/z/my-project/download/bid-agent-research/artifacts/real-eval/parse/C-福建修订通知-扫描件.pdf.json",
+      "desc": "补遗·纯扫描 PDF·8 页（OCR 通道真实样本）",
+      "elapsed_secs": 20.602168337,
+      "has_text_layer": false,
+      "ocr_blocks": 100,
+      "pages": 8,
+      "parse_summary": "pdf 扫描层 OCR: 8 页，100 行块（chi_sim）",
+      "status": "ok"
+    },
+    {
+      "alias": "B3-北京示范文本2025.zip",
+      "desc": "不支持格式验证样本（zip 容器，预期显式拒绝）",
+      "elapsed_secs": 0.025181741,
+      "reason": "不支持的文件类型 .zip（B3-北京示范文本2025.zip）",
+      "status": "rejected"
+    }
+  ],
+  "ground_truth_status": "AI 初标草案（待人工验收，不外推为验收指标）",
+  "semantics": "INTEGRATION_TESTED 解析面（真实文件 × bid-parse 真跑）"
+}

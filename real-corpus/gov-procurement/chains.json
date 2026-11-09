@@ -1,0 +1,238 @@
+{
+ "multi_notice_chains": [
+  {
+   "project_number": "OITC-G260882522",
+   "notices": [
+    {
+     "file": "_w5_raw/w5_award_004.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075864.htm",
+     "sha256": "50cbe2c5407bf4db98ec984d983f9cc299354f92c05eb1627af1d682474cbbcb",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_005.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075863.htm",
+     "sha256": "23c9709828b96d754f671fa5e91505ef0bb667cbf2c71cbd77f968e181d122c8",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_006.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075868.htm",
+     "sha256": "593045556a020e30de874ca968d6b16526e46cd292ed172858964d4c05e4a21b",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_007.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075866.htm",
+     "sha256": "9deaef4e1c1ed5495171be27fd69688219112e243842b3bf481742886d712756",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_008.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075861.htm",
+     "sha256": "45ec23a8055648818d852d6069cbed7fc1bb804160c7566d747f353901473829",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_009.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075872.htm",
+     "sha256": "bd82a4e7f61a8565eb1de300543fe052acf99234a45c010b6b9f09232c6cfb93",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_010.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075870.htm",
+     "sha256": "4d6a78d80f881fd56c8befe01a519200e68719cc0b760cde630ff41bea5662a9",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_011.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075833.htm",
+     "sha256": "f38e080a11926fb703d0a48602a5556f0919f056e917deba01f1cf0f27e435a4",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_award_012.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27075835.htm",
+     "sha256": "dad0427757078c75f14328c0713a164094d7e40caeaddda450d982854aa7e8c7",
+     "project_name": null
+    }
+   ],
+   "type_set": [
+    "award"
+   ]
+  },
+  {
+   "project_number": "/",
+   "notices": [
+    {
+     "file": "_w3_raw/w3_correction_041.txt",
+     "notice_type": "correction",
+     "publish_date": "2026-07-28",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/gzgg/202607/t20260728_27024252.htm",
+     "sha256": "3afd3f45f35ead11378386a178f0a5959367b3bda6268cb8d357668153aec686",
+     "project_name": "四川省德阳市消防救援支队2026年度装备采购项目技术参数征求意见公告"
+    },
+    {
+     "file": "_w5_raw/w5_award_029.txt",
+     "notice_type": "award",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260805_27074814.htm",
+     "sha256": "f06ab6edf027dc5e64d5feab69aff1f64b8388e888c2a477d0eea60b2a505cac",
+     "project_name": null
+    },
+    {
+     "file": "_w5_raw/w5_correction_017.txt",
+     "notice_type": "correction",
+     "publish_date": "2026-08-03",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/gzgg/202608/t20260803_27062066.htm",
+     "sha256": "2a54174c5ddb01b0c5deb9ef2da1b2833a807002fcf4557d2f3b2ae404b06890",
+     "project_name": "新疆分中心综合机房楼暖通维修改造项目"
+    }
+   ],
+   "type_set": [
+    "award",
+    "correction"
+   ]
+  },
+  {
+   "project_number": "B0708-CMC26N7908",
+   "notices": [
+    {
+     "file": "_w3_raw/w3_award_019.txt",
+     "notice_type": "award",
+     "publish_date": "2026-07-29",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260729_27026518.htm",
+     "sha256": "3579cd8062a37c9b857732cd76e3f59c9b51846585f3931da0d41da5739c0959",
+     "project_name": null
+    },
+    {
+     "file": "_w3_raw/w3_award_020.txt",
+     "notice_type": "award",
+     "publish_date": "2026-07-29",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260729_27026520.htm",
+     "sha256": "f9ea196038bb9d137b46eda12c490e21f1b67ef6f544c4c22b21d31d2d226303",
+     "project_name": null
+    }
+   ],
+   "type_set": [
+    "award"
+   ]
+  },
+  {
+   "project_number": "JJXH2026-ZB010",
+   "notices": [
+    {
+     "file": "_w4_raw/w4_correction_074.txt",
+     "notice_type": "correction",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/dfgg/gzgg/202608/t20260805_27073902.htm",
+     "sha256": "968dc722b3cb2c399eba3d9d6f8af82e58d7efabccf8566e5fc5a139fe264ef4",
+     "project_name": "彭泽县档案馆档案整理和数字化服务(第三期"
+    },
+    {
+     "file": "_w4_raw/w4_correction_075.txt",
+     "notice_type": "correction",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/dfgg/gzgg/202608/t20260805_27073823.htm",
+     "sha256": "7210f4cb01ffe71fe1c62fe3b4a81ec749baabefac4b558521e02f6ca0407151",
+     "project_name": "彭泽县档案馆档案整理和数字化服务(第三期"
+    }
+   ],
+   "type_set": [
+    "correction"
+   ]
+  },
+  {
+   "project_number": "JXTH2026-CY-G001",
+   "notices": [
+    {
+     "file": "_w4_raw/w4_tender_087.txt",
+     "notice_type": "tender",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/dfgg/gkzb/202608/t20260805_27073883.htm",
+     "sha256": "4b027a195b5d15c77d9f8ea4ceb05aa8e44994b18de312b65037a22b12c8e2de",
+     "project_name": null
+    },
+    {
+     "file": "_w4_raw/w4_tender_088.txt",
+     "notice_type": "tender",
+     "publish_date": "2026-08-05",
+     "url": "http://www.ccgp.gov.cn/cggg/dfgg/gkzb/202608/t20260805_27073879.htm",
+     "sha256": "d1719212ca6d5653c297d4d6e7657882005194939727fb1b8677bb5b8aca7e7f",
+     "project_name": null
+    }
+   ],
+   "type_set": [
+    "tender"
+   ]
+  },
+  {
+   "project_number": "OITC-G260262510-2",
+   "notices": [
+    {
+     "file": "_w3_raw/w3_award_028.txt",
+     "notice_type": "award",
+     "publish_date": "2026-07-28",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260728_27025768.htm",
+     "sha256": "c6c01596ab2247432440b66994c82fdbaafbc2125804ebc8ae547277f62b26e2",
+     "project_name": null
+    },
+    {
+     "file": "_w3_raw/w3_award_029.txt",
+     "notice_type": "award",
+     "publish_date": "2026-07-28",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260728_27025758.htm",
+     "sha256": "15b38d152a1e29d01565c2417686a5bfaa1a9c0b4be31528876c627df40c0a61",
+     "project_name": null
+    }
+   ],
+   "type_set": [
+    "award"
+   ]
+  },
+  {
+   "project_number": "ZKGS(ZB",
+   "notices": [
+    {
+     "file": "_w4_raw/w4_correction_025.txt",
+     "notice_type": "correction",
+     "publish_date": "2026-08-04",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/gzgg/202608/t20260804_27071442.htm",
+     "sha256": "cb04c0d74fb6f99f38121ca8d673dc5b92d3586cd1eea63c8f10f090d1f9282b",
+     "project_name": "湖南大学ZK-2026057货物及服务采购项目"
+    },
+    {
+     "file": "_w5_raw/w5_correction_014.txt",
+     "notice_type": "correction",
+     "publish_date": "2026-08-03",
+     "url": "http://www.ccgp.gov.cn/cggg/zygg/gzgg/202608/t20260803_27062510.htm",
+     "sha256": "f0afd09cbbb22198358400883863bb02b1c4a528c08e44c9e44b061fee581f6f",
+     "project_name": "湖南大学ZK-2026051货物及服务采购项目"
+    }
+   ],
+   "type_set": [
+    "correction"
+   ]
+  }
+ ],
+ "single_notice_pids": 497
+}

@@ -1,0 +1,266 @@
+{
+ "chain": {
+  "chain_id": "cuc-028",
+  "project_pid": "中传招标【2026】第028号/CFTC-BJ01-2606001",
+  "nodes": [
+   {
+    "role": "tender",
+    "file": "real-corpus/gov-procurement/files/cuc-028-tender-20260713.txt",
+    "sha256": "2ed6f0a6f746b557b8c7185a2ffa9a5e65ad0a660e0bfb6fa8a598abc541ae0b",
+    "url": "http://www.ccgp.gov.cn/cggg/zygg/gkzb/202607/t20260713_26925801.htm",
+    "publish": "2026-07-13 20:39"
+   },
+   {
+    "role": "correction",
+    "file": "real-corpus/gov-procurement/files/cuc-028-correction-20260728.txt",
+    "sha256": "f729b8df9c0f1baccc187332bc79bfe579a2d48d7513adb41409a6f89713d92d",
+    "url": "http://www.ccgp.gov.cn/cggg/zygg/gzgg/202607/t20260728_27025731.htm",
+    "publish": "2026-07-29 09:20:36（原始抓取存档：外部参考仓库 tlyyxjz__BidAgent/_w3_raw/w3_correction_031.txt，只读复制）"
+   },
+   {
+    "role": "award",
+    "file": "real-corpus/gov-procurement/files/cuc-028-award-20260814.txt",
+    "sha256": "ad8dbe82ef045a4d8c157dedfe637bc889e8ff378b2acbf37e8ec197d69da208",
+    "url": "http://www.ccgp.gov.cn/cggg/zygg/zbgg/202608/t20260814_27133532.htm",
+    "publish": "2026-08-14 12:32"
+   }
+  ],
+  "gt_file": "real-corpus/gov-procurement/gt/ground-truth-draft.jsonl"
+ },
+ "scope_statement": "公告级真实链闭环；文件级（招标文件本体）为在案待人工项",
+ "data_provenance": "ccgp.gov.cn 官方文本 + cuc.edu.cn 官方镜像 HTML（sha256 在 nodes 列表）",
+ "caliber": "REAL_DATA + DESIGN_ENGINE（真实数据/设计语义引擎；Rust 交叉验证待 cargo）",
+ "results": [
+  {
+   "group": "P0",
+   "name": "P0a 三节点解析成功（头部溯源字段齐全）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P0",
+   "name": "P0b 链主键逐字一致（项目编号）",
+   "pass": true,
+   "detail": "tender=中传招标【2026】第028号/CFTC-BJ01-2606001 corr=中传招标【2026】第028号/CFTC-BJ01-2606001 award=中传招标【2026】第028号/CFTC-BJ01-2606001"
+  },
+  {
+   "group": "P0",
+   "name": "P0c 招标公告关键域（预算108/限价108/开标08-03 14:00/窗口07-13~07-20/综合评分法）",
+   "pass": true,
+   "detail": "{\"budget\": 108.0, \"price_cap\": 108.0, \"open_bid\": \"2026-08-03 14:00\", \"doc_window\": [\"2026-07-13\", \"2026-07-20\"]}"
+  },
+  {
+   "group": "P0",
+   "name": "P0d 首次公告日期回指一致（更正公告 2026-07-13 = 招标公告发布日）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P0",
+   "name": "P0e 中标公告关键域（知途/105.0万/89.36分/08-14）",
+   "pass": true,
+   "detail": "{\"pid\": \"中传招标【2026】第028号/CFTC-BJ01-2606001\", \"winner\": \"江苏知途教育科技有限公司\", \"amount\": 105.0, \"score\": 89.36, \"award_date\": \"2"
+  },
+  {
+   "group": "P0",
+   "name": "P0f 官方镜像交叉校验（cuc.edu.cn 存档：招标 5 锚点/中标 3 锚点全命中）",
+   "pass": true,
+   "detail": "miss=[]"
+  },
+  {
+   "group": "P1",
+   "name": "P1a 更正段切分（更正内容/现更正为/其他内容均无修改 三界标齐全）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P1",
+   "name": "P1b 原文引用侧解析（开标 08-03 14:00 + 节点1-4 = 07-31/08-30/09-23/无）",
+   "pass": true,
+   "detail": "{\"1\": \"2026-07-31\", \"2\": \"2026-08-30\", \"3\": \"2026-09-23\", \"4\": null}"
+  },
+  {
+   "group": "P1",
+   "name": "P1c 更正后侧解析（开标 08-13 14:00 + 节点1-4 = 08-30/09-10/09-23/无）",
+   "pass": true,
+   "detail": "{\"1\": \"2026-08-30\", \"2\": \"2026-09-10\", \"3\": \"2026-09-23\", \"4\": null}"
+  },
+  {
+   "group": "P1",
+   "name": "P1d 恰 3 个真实 MODIFY（开标/节点1/节点2），0 新增 0 删除",
+   "pass": true,
+   "detail": "[{\"clause\": \"open_bid_time\", \"type\": \"MODIFY\", \"old\": \"2026-08-03 14:00\", \"new\": \"2026-08-13 14:00\"}, {\"clause\": \"node_1\", \"type\": \"MODIFY\", \"old\": \"2026-07-31\", \"new\": \"2026-08-30\"}, {\"clause\": \"node_2\", \"type\": \"MODIFY\", \"old\": \"2026-08-30\", \"new\": \"2026-09-10\"}]"
+  },
+  {
+   "group": "P1",
+   "name": "P1e 2 个真实不变陷阱保真（节点3/节点4 零事件）",
+   "pass": true,
+   "detail": "unchanged=['node_3', 'node_4']"
+  },
+  {
+   "group": "P1",
+   "name": "P1f 同值陷阱：节点1新值 08-30 == 节点2旧值——节点对齐未串位",
+   "pass": true,
+   "detail": "若节点按文本流而非序号对齐将在此错位"
+  },
+  {
+   "group": "P2",
+   "name": "P2a 版本戳恰 +1（content_version=2，一次导入一个戳）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P2",
+   "name": "P2b DIRTY 恰两章 {投标邀请, 采购需求}（=更正公告『其他内容均无修改』声明）",
+   "pass": true,
+   "detail": "got=['投标邀请', '采购需求']"
+  },
+  {
+   "group": "P2",
+   "name": "P2c 无关不重跑：资格要求/评审办法/商务与合同 三章零误伤",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P2",
+   "name": "P2d 同章节内未变更条款不改动（投标邀请.doc_window 值与历史均未动）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P2",
+   "name": "P2e 开标日级联：全项目重检触发（recheck_log+1），公告层零证书绑定零误翻",
+   "pass": true,
+   "detail": "{\"from\": \"2026-08-03\", \"to\": \"2026-08-13\", \"flips\": []}"
+  },
+  {
+   "group": "P2",
+   "name": "P2f 冲突双版本登记（开标时间 tender 08-03 vs correction 08-13）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P2",
+   "name": "P2g 终裁门禁三段：脏阻断→未裁决冲突阻断→更正优先终裁 08-13 后放行",
+   "pass": true,
+   "detail": "gate_seq=[DIRTY|UNRESOLVED_CONFLICT:['CONFLICT-open_bid_time']|ok] final=2026-08-13 14:00"
+  },
+  {
+   "group": "P2",
+   "name": "P2h 更正优先终裁后矩阵口径切换（open_bid 当前值=终裁值）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P2",
+   "name": "P2i 幂等：同 sha 重复导入 no-op（版本戳不变/DIRTY 集前后一致）",
+   "pass": true,
+   "detail": "before=['采购需求'] after=['采购需求']"
+  },
+  {
+   "group": "P3",
+   "name": "P3a 修正后条款在位 + 历史留痕（node_1 现 08-30/史 [07-31]；开标现 08-13/史 [08-03]）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3b 不变陷阱值保真（node_3 09-23 无历史；node_4 无日期无历史）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3c 中标金额 ≤ 预算 且 ≤ 最高限价（105.0 ≤ 108.0 双口径，无超限异常）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3d 时序自洽：开标（更正后 08-13）≤ 中标公告（08-14）",
+   "pass": true,
+   "detail": "2026-08-13 <= 2026-08-14"
+  },
+  {
+   "group": "P3",
+   "name": "P3e 评审口径互证：综合评分法 ↔ 评审得分 89.36 存在",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3f 跨文件采购需求引文逐字一致（招标公告↔中标公告『本地化+云化混合建设模式』）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3g 证据义务链：资格条款(面向中小企业) ↔ 中标公告附件《中小企业声明函.pdf》",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3h 文件级缺口如实登记：中标公告挂《更正后…--招标文件.pdf》附件（本体待人工获取）",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "P3",
+   "name": "P3i 双跑确定性：同输入两引擎终态哈希一致",
+   "pass": true,
+   "detail": "hash=76330860a02ed7a4"
+  },
+  {
+   "group": "P4",
+   "name": "P4a GT 草案 24 条且字段完备（定位/答案/理由/复核状态）",
+   "pass": true,
+   "detail": "count=24"
+  },
+  {
+   "group": "P4",
+   "name": "P4b 原文定位逐字读回：engine/source 类 GT 的 excerpt 逐字见于对应源文件",
+   "pass": true,
+   "detail": "miss=[]"
+  },
+  {
+   "group": "P4",
+   "name": "P4c engine 类 GT 与引擎状态逐项吻合（7 项代表性核对全过）",
+   "pass": true,
+   "detail": "n=7 ok=7"
+  },
+  {
+   "group": "P4",
+   "name": "P4d manual 类 GT=1 项（GT-M17-24 招标文件本体）——仅剩人工事项在案",
+   "pass": true,
+   "detail": "manual=['GT-M17-24']"
+  }
+ ],
+ "summary": {
+  "P0": {
+   "pass": 6,
+   "total": 6
+  },
+  "P1": {
+   "pass": 6,
+   "total": 6
+  },
+  "P2": {
+   "pass": 9,
+   "total": 9
+  },
+  "P3": {
+   "pass": 9,
+   "total": 9
+  },
+  "P4": {
+   "pass": 4,
+   "total": 4
+  }
+ },
+ "all_pass": true,
+ "pending_manual": [
+  "GT-M17-24：ccgp 中标公告附件《更正后（以此版本为准）3-1…--招标文件.pdf》受 WAF 阻断未获取，待人工下载后执行文件级验证"
+ ],
+ "gt_status": "draft_pending_human ×24（初标草案，未人工冻结前仅作探索性指标）"
+}

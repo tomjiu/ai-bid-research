@@ -1,0 +1,882 @@
+//! merge.rs —— #219 第二步：抽取通路合并（Agent 优先 + 正则兜底）。
+//!
+//! 两条通路并存的现状（PR #227 后）：
+//! - A 通路（正则确定性）：`extract::extract_requirements`——字符形态匹配，
+//!   覆盖不了无编号段落/表格语义，且把「规则说明」误判为要求（#226）；
+//! - B 通路（Agent 判断）：`submit_block_marks`——区间标记 + 关键点提交。
+//!
+//! 本模块把两通路合并成一个最终条款集，规则（issue #219，#422 修订）：
+//! - **Agent 优先**：被区间标记覆盖的块上，正则产物按 verdict 分流——
+//!   `noise`/`rule`/`review_table` 裁决 → 丢弃（Agent 显式拒绝，正则不再
+//!   插嘴）；`requirement` 裁决且有 submitted 承接 → 丢弃（REQ-A 替代）；
+//!   **`requirement` 裁决但无 submitted 承接 → 保留**（#422 黑洞防护——
+//!   requirement 的语义是「本块含我方必须回答的要求」，无关键点承接时
+//!   丢弃正则产物 = 条款无告警地从矩阵消失，R-09/B-01。保留 + 计数 +
+//!   工具面告警，Agent 可补提交或显式改标后消除）；
+//! - **正则兜底**：未被任何标记覆盖的块（uncovered），正则产物保留；
+//! - **冲突以 Agent 为准**：Agent 标了 requirement 的块，其产出以
+//!   [`SubmittedRequirement`] 转换的 REQ 为准（`REQ-Axxxx` 编号）。
+//!
+//! **无标记时严格 no-op**（GT 红线保护）：空 marks + 空 submitted →
+//! 输出与输入逐位一致、编号不动——`real_corpus_e2e`（只走正则全链）
+//! 的 L1/否决红线零位移。
+//!
+//! 本模块是纯函数（零 IO）：输入 parsed blocks + marks + submitted +
+//! 正则产物，输出最终集与统计。语义判断全在上游（Agent/正则）。
+
+use std::collections::HashMap;
+
+use bid_domain::coverage::{BlockMark, SubmittedRequirement};
+use bid_domain::{Anchor, Requirement};
+
+use crate::{Block, BlockKind};
+
+/// 每文件的合并输入面（调用方组装——tools.rs 按 TenderFile sha256 join parsed）。
+pub struct MergeFace<'a> {
+    /// 文件 ID（TF-xxxx——marks/submitted 的存储键）。
+    pub file_id: &'a str,
+    /// 解析产物名（anchor.file / source_file 的对齐键）。
+    pub name: &'a str,
+    /// 块面（索引与定位的唯一真源）。
+    pub blocks: &'a [Block],
+    /// Agent 区间标记（可能为空）。
+    pub marks: &'a [BlockMark],
+    /// Agent 提交的关键点（可能为空——须已通过 validate_submitted）。
+    pub submitted: &'a [SubmittedRequirement],
+}
+
+/// 合并统计（响应面——extract_requirements 的 `merge` 字段）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MergeStats {
+    /// 正则抽取总数（合并过滤前）。
+    pub regex_total: usize,
+    /// 因块被 Agent 标记覆盖而丢弃的正则 REQ 数。
+    pub regex_dropped_covered: usize,
+    /// Agent 提交转化入库的 REQ 数（REQ-Axxxx）。
+    pub agent_requirements: usize,
+    /// 有抽取面文件中未被标记覆盖的块数。
+    pub uncovered_blocks: usize,
+    /// 有抽取面文件是否全部覆盖。
+    pub coverage_complete: bool,
+    /// Agent 标 mandatory=true 且类别不在类别阻断面（资格条件/否决项）的条数。
+    ///
+    /// 历史名 `agent_mandatory_not_blocking`（AGENT_MANDATORY_NOT_BLOCKING
+    /// 警告时代——那批条款确实不拦）。Agent 必选标记接线进矩阵 blocking 面
+    /// 后这些条款**会拦**（matrix.rs `agent_mandatory`），改名 offcategory
+    /// 防语义漂移：本统计只计「靠 Agent 标记而非类别进入阻断面」的条数，
+    /// 供 extract 响应面的信息性提示（AGENT_MANDATORY_OFFCATEGORY warning）。
+    pub agent_mandatory_offcategory: usize,
+    /// #422（R-09/B-01 黑洞防护）：因「requirement 裁决覆盖但无 submitted
+    /// 承接」而被**保留**的正则 REQ 数（旧规则直接丢弃——条款静默消失）。
+    /// 工具面据此出 `MARKED_REQUIREMENT_WITHOUT_SUBMITTED` 告警。
+    pub regex_kept_unbacked_requirement: usize,
+}
+
+/// 该文件是否有条款抽取面（#250：按业务 kind 判定，与
+/// `extract::extract_requirements_with_kind` 的 #196/#199 分发口径同源——
+/// **反向清单**：仅附件/图纸/证据无条款面，其余登记 kind 一律有面）。
+///
+/// - `kind = Some(...)`（生产路径——导入时登记，`TenderFile.kind: String`
+///   恒有值）：按业务事实判定。真实用户文件（如「光纤租赁费招标文件.docx」）
+///   与夹具文件（「A-招标文件.docx」）走**完全相同**的合并路径；
+/// - `kind = None`（夹具直调/未登记）：文件名前缀兜底（A-/C-/B1/B2）——
+///   前缀是测试夹具的命名约定，**不是生产判据**（#196 修 extract.rs 时
+///   已判定为错，本处是同一根因的第二次出现——issue #250）。
+///   B3（图纸目录/证据件）无抽取面 → 不进合并统计（uncovered 语义 =
+///   「抽取面的未覆盖」，B3 无兜底可漏）。
+///
+/// 与 extract 分发的保守性差异：extract 对「None 且无前缀」仍主抽取
+/// （fail-visible——宁多勿漏），本门禁判无面（正则产物不经覆盖过滤、
+/// 不进 uncovered 统计——no-op 保守方向）。生产路径 kind 恒登记，该
+/// 差异仅存在于直调测试面。
+pub fn has_extraction_face(kind: Option<&str>, name: &str) -> bool {
+    match kind {
+        // #271：「格式模板」同入无面清单（与 extract.rs is_attachment 同口径）
+        // ——格式件是填空模板非条款源，不进覆盖/矩阵面。
+        Some("附件") | Some("图纸") | Some("证据") | Some("格式模板") => false,
+        Some(_) => true,
+        None => name.starts_with("A-")
+            || name.starts_with("C-")
+            || name.starts_with("B1")
+            || name.starts_with("B2"),
+    }
+}
+
+/// 阻断面类别（is_mandatory 同源口径——matrix.rs）。
+const BLOCKING_CATEGORIES: [&str; 2] = ["资格条件", "否决项"];
+
+fn block_kind_str(k: BlockKind) -> &'static str {
+    match k {
+        BlockKind::Para => "para",
+        BlockKind::TableRow => "table",
+        BlockKind::PdfLine => "pdf_line",
+        BlockKind::OcrLine => "ocr",
+        BlockKind::XlsxRow => "xlsx_row",
+    }
+}
+
+/// 合并两通路（纯函数）。
+///
+/// 输出的编号纪律：
+/// - 正则保留项**原 id 原序不动**（REQ-0001..N 的子序列——无标记时与
+///   旧产物逐位一致）；
+/// - Agent 项追加在后，id = `REQ-A{seq:04}`（seq 按 face 顺序 + block_idx
+///   稳定序全局递增）。`A` 前缀保证与正则数字编号零碰撞；CMP 派生 id
+///   走非数字后缀回退分支（`CMP-0000-REQ-A0001`），与正则 `CMP-000N`
+///   零碰撞（matrix.rs `derived_cmp_id`）。
+/// - 跨运行 id 稳定（#419/B-19）见 [`merge_extraction_with_prior`]——
+///   生产 extract 调用应传 store 现存 REQ-A 集，本便捷签名仅供首跑/
+///   测试。
+pub fn merge_extraction(
+    faces: &[MergeFace<'_>],
+    regex_reqs: Vec<Requirement>,
+) -> (Vec<Requirement>, MergeStats) {
+    merge_extraction_with_prior(faces, regex_reqs, &[])
+}
+
+/// #419（B-19）：REQ-A id 跨运行稳定——带 prior 承接面的合并。
+///
+/// 「先 extract → 补 submit → 再 extract」工作流下，运行序编号会使同一
+/// 条款的 REQ-A id 漂移，以 req id 为外部键的下游对象（矩阵覆写/
+/// 证据绑定/人工记录）全部悬空。承接规则：
+///
+/// - **锚点命中保旧 id**：prior 中与新增项锚点（源文件名 + locator +
+///   excerpt——同文件版本内块级稳定）相同的项，其 id 被保留。同文件
+///   重解析（补遗/引擎变更）使锚点变化 → 不命中 → 起新 id（锚点变了
+///   即条款位置变了，保守起新）；
+/// - **新 id 从 max+1 起**：prior 数字后缀最大值 + 1 起、按 face 顺序 +
+///   block_idx 稳定序递增——**不复用已释放 id**（被删提交的旧 id 若被
+///   新条款复用，旧悬空引用会错位指向新条款，比悬空更危险）；
+/// - **首跑零回归**：`prior` 为空时与 [`merge_extraction`] 逐位一致
+///   （REQ-A0001.. 递增、正则项原 id 原序）。
+pub fn merge_extraction_with_prior(
+    faces: &[MergeFace<'_>],
+    mut regex_reqs: Vec<Requirement>,
+    prior_agent_reqs: &[Requirement],
+) -> (Vec<Requirement>, MergeStats) {
+    let regex_total = regex_reqs.len();
+
+    // ---- ① 每文件两个索引：
+    //      块定位（locator+text → idx）：GT 块对齐同款惯用法——首个命中
+    //      （real_corpus_e2e.rs 的 anchor→块匹配用 `find`，这里用
+    //      entry().or_insert() 保持「首块优先」语义）；
+    //      覆盖集（idx → ()）：被任何区间标记覆盖即算；
+    //      #422 分流集：req_covered（requirement 裁决覆盖）与
+    //      submitted_blocks（有承接）分立——覆盖≠拒绝（见 ②）。
+    struct FaceIdx<'a> {
+        covered: HashMap<usize, ()>,
+        /// #422：被 requirement 裁决标记覆盖的块（与 covered 分立——
+        /// 覆盖≠拒绝，requirement 裁决的丢弃须有 submitted 承接）。
+        req_covered: HashMap<usize, ()>,
+        /// #422：有 submitted 关键点承接的块（block_idx 集）。
+        submitted_blocks: HashMap<usize, ()>,
+        index: HashMap<(&'a str, &'a str), usize>,
+    }
+    let mut by_name: HashMap<&str, FaceIdx<'_>> = HashMap::with_capacity(faces.len());
+    for f in faces {
+        let mut covered: HashMap<usize, ()> = HashMap::new();
+        let mut req_covered: HashMap<usize, ()> = HashMap::new();
+        for m in f.marks {
+            let is_req = m.verdict.produces_requirement();
+            for i in m.from..=m.to {
+                covered.insert(i, ());
+                if is_req {
+                    req_covered.insert(i, ());
+                }
+            }
+        }
+        let mut submitted_blocks: HashMap<usize, ()> = HashMap::new();
+        for s in f.submitted {
+            submitted_blocks.insert(s.block_idx, ());
+        }
+        let mut index: HashMap<(&str, &str), usize> = HashMap::with_capacity(f.blocks.len());
+        for b in f.blocks {
+            index
+                .entry((b.locator.as_str(), b.text.as_str()))
+                .or_insert(b.idx);
+        }
+        by_name.insert(
+            f.name,
+            FaceIdx {
+                covered,
+                req_covered,
+                submitted_blocks,
+                index,
+            },
+        );
+    }
+
+    // ---- ② 过滤（#422 按 verdict 分流）：正则 REQ 的锚块被覆盖时——
+    //      noise/rule/review_table 裁决 → 丢弃（Agent 显式拒绝）；
+    //      requirement 裁决且有 submitted 承接 → 丢弃（REQ-A 替代）；
+    //      requirement 裁决但无 submitted 承接 → 保留（黑洞防护，见模块注）。
+    //      多锚点 REQ：任一锚命中可弃裁决即弃（保守——Agent 优先口径不动）。
+    //      anchor 匹配不到块（跨版本解析差异等防御分支）→ 保留
+    //      （宁多勿漏——L1 召回纪律）。
+    let mut unbacked_kept = 0usize;
+    let before = regex_reqs.len();
+    regex_reqs.retain(|r| {
+        let mut covered_any = false;
+        let mut dropworthy = false;
+        for a in &r.anchors {
+            let Some(fi) = by_name.get(a.file.as_str()) else {
+                continue;
+            };
+            let Some(&idx) = fi
+                .index
+                .get(&(a.locator.as_str(), a.excerpt.as_str()))
+            else {
+                continue;
+            };
+            if fi.covered.contains_key(&idx) {
+                covered_any = true;
+                // 可弃 = 非 requirement 裁决，或 requirement 且该块有 submitted 承接
+                let backed = fi.submitted_blocks.contains_key(&idx);
+                if !fi.req_covered.contains_key(&idx) || backed {
+                    dropworthy = true;
+                    break;
+                }
+            }
+        }
+        if covered_any && !dropworthy {
+            unbacked_kept += 1;
+        }
+        !dropworthy
+    });
+    let regex_dropped_covered = before - regex_reqs.len();
+
+    // ---- ③ 转换：submitted → REQ-Axxxx（按 face 顺序 + block_idx 稳定序）。
+    // #419（B-19）：id 承接——prior 锚点命中保旧 id（跨运行键稳定），
+    // 未命中从 max+1 起新编（不复用已释放 id）。
+    // prior 索引：锚点（源文件名 + locator + excerpt）→ 旧 id。首锚即
+    // 块锚（创建时固化，见下）；仅 REQ-A 前缀参与（正则项原 id 原序
+    // 不动，不在承接面）。
+    let prior_by_anchor: HashMap<(&str, &str, &str), &str> = prior_agent_reqs
+        .iter()
+        .filter(|r| r.id.starts_with("REQ-A"))
+        .filter_map(|r| {
+            let a = r.anchors.first()?;
+            Some(((r.source_file.as_str(), a.locator.as_str(), a.excerpt.as_str()), r.id.as_str()))
+        })
+        .collect();
+    // 新 id 起点零：首跑无 prior 时即旧行为（REQ-A0001..）。
+    let mut seq = prior_agent_reqs
+        .iter()
+        .filter_map(|r| r.id.strip_prefix("REQ-A")?.parse::<usize>().ok())
+        .max()
+        .unwrap_or(0);
+    let mut agent_reqs: Vec<Requirement> = Vec::new();
+    let mut offcategory = 0usize; // Agent 必选且类别不在类别阻断面（见 MergeStats 字段注）
+    for f in faces {
+        let mut subs: Vec<&SubmittedRequirement> = f.submitted.iter().collect();
+        // 稳定排序：同 block_idx 保持提交序（sort_by_key 是稳定排序）
+        subs.sort_by_key(|s| s.block_idx);
+        for s in subs {
+            // 块必在（validate_submitted 已挡越区间，此处防御性跳过）
+            let Some(block) = f.blocks.iter().find(|b| b.idx == s.block_idx) else {
+                continue;
+            };
+            let id = match prior_by_anchor.get(&(
+                f.name,
+                block.locator.as_str(),
+                block.text.as_str(),
+            )) {
+                // 锚点命中：保旧 id（不占新号——号序与 face/block 序解耦，
+                // 新号只分给真正的新条款）
+                Some(old) => (*old).to_string(),
+                None => {
+                    seq += 1;
+                    format!("REQ-A{seq:04}")
+                }
+            };
+            let category = s.category.clone().unwrap_or_else(|| "其他".to_string());
+            if s.mandatory && !BLOCKING_CATEGORIES.contains(&category.as_str()) {
+                offcategory += 1;
+            }
+            let mut params: HashMap<String, serde_json::Value> = HashMap::new();
+            params.insert("statement".into(), serde_json::json!(s.statement));
+            params.insert("mandatory".into(), serde_json::json!(s.mandatory));
+            params.insert("block_idx".into(), serde_json::json!(s.block_idx));
+            params.insert("marked_by".into(), serde_json::json!("agent"));
+            // #276：★实质性条款显式落库（bool 都写——false = Agent 看过并判非★，
+            // 区别于抽取面的「仅在检测到★时写 true」；派生面统一按 == true 判）
+            params.insert("star".into(), serde_json::json!(s.substantive));
+            agent_reqs.push(Requirement {
+                id,
+                category,
+                clause_no: None,
+                anchors: vec![{
+                    let (page, line) = crate::page_line_of(&block.locator);
+                    Anchor {
+                        file: f.name.to_string(),
+                        kind: block_kind_str(block.kind).to_string(),
+                        locator: block.locator.clone(),
+                        // 溯源锚 = 块原文（与正则 anchor 同纪律：创建时固化）
+                        excerpt: block.text.clone(),
+                        // #285 ② 块级定位回填（Agent 项锚定块——s.block_idx 已
+                        // 校验落在 requirement 区间内，此处必中）
+                        block_idx: Some(block.idx),
+                        page,
+                        line,
+                    }
+                }],
+                params,
+                source_file: f.name.to_string(),
+            });
+        }
+    }
+    let agent_requirements = agent_reqs.len();
+
+    // ---- ④ 覆盖统计（有抽取面文件的口径）。
+    let mut uncovered_blocks = 0usize;
+    let mut coverage_complete = true;
+    for f in faces {
+        let total = f.blocks.len();
+        if let Some(fi) = by_name.get(f.name) {
+            let covered_n = fi.covered.len().min(total);
+            uncovered_blocks += total - covered_n;
+            if covered_n < total {
+                coverage_complete = false;
+            }
+        }
+    }
+
+    // ---- ⑤ 合并：正则保留项（原 id 原序）在前，Agent 项追加。
+    regex_reqs.extend(agent_reqs);
+
+    (
+        regex_reqs,
+        MergeStats {
+            regex_total,
+            regex_dropped_covered,
+            agent_requirements,
+            uncovered_blocks,
+            coverage_complete,
+            agent_mandatory_offcategory: offcategory,
+            regex_kept_unbacked_requirement: unbacked_kept,
+        },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn block(idx: usize, locator: &str, text: &str) -> Block {
+        Block {
+            idx,
+            kind: BlockKind::PdfLine,
+            locator: locator.to_string(),
+            text: text.to_string(),
+            cells: vec![],
+        }
+    }
+
+    fn mark(from: usize, to: usize) -> BlockMark {
+        BlockMark {
+            from,
+            to,
+            verdict: bid_domain::coverage::BlockVerdict::Noise,
+            reason: String::new(),
+        }
+    }
+
+    fn submitted(idx: usize, statement: &str) -> SubmittedRequirement {
+        SubmittedRequirement {
+            block_idx: idx,
+            statement: statement.to_string(),
+            category: None,
+            mandatory: false,
+            substantive: false,
+        }
+    }
+
+    /// #276：★实质性条款标记面落库——substantive → params.star
+    /// （bool 都写：true=Agent 判★，false=看过判非★；与 #280 抽取面的
+    /// 「仅★时写 true」在派生面 == true 判定下统一）。
+    #[test]
+    fn agent_substantive_marks_params_star() {
+        let blocks = vec![block(0, "p1", "★接到通知2小时内响应"), block(1, "p1", "普通条款")];
+        let marks = vec![BlockMark {
+            from: 0,
+            to: 1,
+            verdict: bid_domain::coverage::BlockVerdict::Requirement,
+            reason: String::new(),
+        }];
+        let subs = vec![
+            SubmittedRequirement {
+                block_idx: 0,
+                statement: "★接到通知2小时内响应".into(),
+                category: Some("技术参数".into()),
+                mandatory: false,
+                substantive: true,
+            },
+            SubmittedRequirement {
+                block_idx: 1,
+                statement: "普通条款（非★）".into(),
+                category: Some("技术参数".into()),
+                mandatory: false,
+                substantive: false,
+            },
+        ];
+        let (out, _) = merge_extraction(&[face("A-主文件", &blocks, &marks, &subs)], vec![]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(
+            out[0].params.get("star").and_then(|v| v.as_bool()),
+            Some(true),
+            "Agent 标★ → params.star = true"
+        );
+        assert_eq!(
+            out[1].params.get("star").and_then(|v| v.as_bool()),
+            Some(false),
+            "Agent 显式判非★ → params.star = false（看过与没看过的审计区分）"
+        );
+        // ★与 mandatory 正交：★条款可以非必选（★技术参数不属类别阻断面）
+        assert_eq!(
+            out[0].params.get("mandatory").and_then(|v| v.as_bool()),
+            Some(false),
+            "substantive=true 不改变 mandatory=false（两条轴独立）"
+        );
+    }
+
+    fn regex_req(id: &str, locator: &str, text: &str, name: &str) -> Requirement {
+        Requirement {
+            id: id.to_string(),
+            category: "其他".to_string(),
+            clause_no: None,
+            anchors: vec![Anchor {
+                file: name.to_string(),
+                kind: "pdf_line".to_string(),
+                locator: locator.to_string(),
+                excerpt: text.to_string(),
+                    block_idx: None,
+                    page: None,
+                    line: None
+            }],
+            params: HashMap::new(),
+            source_file: name.to_string(),
+        }
+    }
+
+    fn face<'a>(
+        name: &'a str,
+        blocks: &'a [Block],
+        marks: &'a [BlockMark],
+        submitted: &'a [SubmittedRequirement],
+    ) -> MergeFace<'a> {
+        MergeFace {
+            file_id: "TF-0001",
+            name,
+            blocks,
+            marks,
+            submitted,
+        }
+    }
+
+    #[test]
+    fn no_marks_is_strict_noop() {
+        // GT 红线保护：空 marks + 空 submitted → 逐位一致
+        let blocks = vec![block(0, "p1", "1.1 要求A"), block(1, "p1", "1.2 要求B")];
+        let reqs = vec![
+            regex_req("REQ-0001", "p1", "1.1 要求A", "A-主文件"),
+            regex_req("REQ-0002", "p1", "1.2 要求B", "A-主文件"),
+        ];
+        let f = face("A-主文件", &blocks, &[], &[]);
+        let (out, stats) = merge_extraction(&[f], reqs.clone());
+        assert_eq!(out, reqs);
+        assert_eq!(stats.regex_total, 2);
+        assert_eq!(stats.regex_dropped_covered, 0);
+        assert_eq!(stats.agent_requirements, 0);
+        assert_eq!(stats.uncovered_blocks, 2);
+        assert!(!stats.coverage_complete);
+    }
+
+    #[test]
+    fn covered_block_regex_dropped_any_verdict() {
+        // #422 基线更新（根因：R-09/B-01）：本测试原把「requirement 裁决 +
+        // 无 submitted 承接 → 正则 REQ 丢弃」钉为预期——那是条款黑洞
+        // （Agent 主张此处有要求，正则产物却被静默清掉，矩阵面缩水）。
+        // 现口径：noise/rule/review_table 裁决 → 丢弃（显式拒绝不动）；
+        // requirement 裁决无承接 → **保留** + 计数（黑洞防护）。
+        let blocks = vec![
+            block(0, "p1", "1.1 要求A"),
+            block(1, "p1", "1.2 要求B"),
+            block(2, "p1", "1.3 要求C"),
+            block(3, "p1", "1.4 要求D"),
+        ];
+        let marks = vec![
+            BlockMark {
+                from: 0,
+                to: 0,
+                verdict: bid_domain::coverage::BlockVerdict::Noise,
+                reason: String::new(),
+            },
+            BlockMark {
+                from: 1,
+                to: 1,
+                verdict: bid_domain::coverage::BlockVerdict::Rule,
+                reason: String::new(),
+            },
+            BlockMark {
+                from: 2,
+                to: 2,
+                verdict: bid_domain::coverage::BlockVerdict::ReviewTable,
+                reason: String::new(),
+            },
+            BlockMark {
+                from: 3,
+                to: 3,
+                verdict: bid_domain::coverage::BlockVerdict::Requirement,
+                reason: String::new(),
+            },
+        ];
+        let reqs = vec![
+            regex_req("REQ-0001", "p1", "1.1 要求A", "A-主文件"),
+            regex_req("REQ-0002", "p1", "1.2 要求B", "A-主文件"),
+            regex_req("REQ-0003", "p1", "1.3 要求C", "A-主文件"),
+            regex_req("REQ-0004", "p1", "1.4 要求D", "A-主文件"),
+        ];
+        let f = face("A-主文件", &blocks, &marks, &[]);
+        let (out, stats) = merge_extraction(&[f], reqs);
+        assert_eq!(out.len(), 1, "拒绝裁决丢弃 3 条；requirement 无承接保留 1 条");
+        assert_eq!(out[0].id, "REQ-0004", "保留项原 id 原序");
+        assert_eq!(stats.regex_dropped_covered, 3, "仅拒绝裁决/有承接面计数丢弃");
+        assert_eq!(stats.regex_kept_unbacked_requirement, 1, "黑洞防护计数");
+        assert_eq!(stats.coverage_complete, true);
+    }
+
+    /// #422 黑洞防护主场景：requirement 区间标记 + 零 submitted →
+    /// 正则 REQ 全保留（旧行为：静默清空——条款从矩阵消失）。
+    #[test]
+    fn requirement_mark_without_submitted_keeps_regex() {
+        let blocks = vec![
+            block(0, "p1", "2.1 投标人须具备一级资质"),
+            block(1, "p1", "2.2 项目经理须持证"),
+        ];
+        let marks = vec![BlockMark {
+            from: 0,
+            to: 1,
+            verdict: bid_domain::coverage::BlockVerdict::Requirement,
+            reason: "正文要求区".into(),
+        }];
+        let reqs = vec![
+            regex_req("REQ-0001", "p1", "2.1 投标人须具备一级资质", "A-主文件"),
+            regex_req("REQ-0002", "p1", "2.2 项目经理须持证", "A-主文件"),
+        ];
+        let f = face("A-主文件", &blocks, &marks, &[]);
+        let (out, stats) = merge_extraction(&[f], reqs.clone());
+        assert_eq!(out, reqs, "无承接 → 逐位保留（黑洞防护）");
+        assert_eq!(stats.regex_dropped_covered, 0);
+        assert_eq!(stats.regex_kept_unbacked_requirement, 2);
+    }
+
+    /// #422 对偶场景：requirement 区间 + 该块有 submitted 承接 → REQ-A
+    /// 替代（旧行为不变——本修复只救「无承接」面）。
+    #[test]
+    fn requirement_mark_with_submitted_still_replaces() {
+        let blocks = vec![
+            block(0, "p1", "2.1 投标人须具备一级资质"),
+            block(1, "p1", "2.2 项目经理须持证"),
+        ];
+        let marks = vec![BlockMark {
+            from: 0,
+            to: 1,
+            verdict: bid_domain::coverage::BlockVerdict::Requirement,
+            reason: "正文要求区".into(),
+        }];
+        let subs = vec![submitted(0, "须具备一级资质（Agent 提炼）")];
+        let reqs = vec![
+            regex_req("REQ-0001", "p1", "2.1 投标人须具备一级资质", "A-主文件"),
+            regex_req("REQ-0002", "p1", "2.2 项目经理须持证", "A-主文件"),
+        ];
+        let f = face("A-主文件", &blocks, &marks, &subs);
+        let (out, stats) = merge_extraction(&[f], reqs);
+        // 块 0 有承接 → REQ-A 替代；块 1 无承接 → 正则保留（部分提交形态）
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].id, "REQ-0002", "未承接块的正则项保留且原序在前");
+        assert_eq!(out[1].id, "REQ-A0001", "承接块由 REQ-A 替代");
+        assert_eq!(stats.regex_dropped_covered, 1);
+        assert_eq!(stats.regex_kept_unbacked_requirement, 1);
+        assert_eq!(stats.agent_requirements, 1);
+    }
+
+    /// #422 多锚点保守口径：任一锚命中拒绝裁决即弃（即使另一锚是
+    /// requirement 无承接——Agent 优先的多锚面口径不动）。
+    #[test]
+    fn multi_anchor_reject_verdict_still_drops() {
+        let blocks = vec![
+            block(0, "p1", "1.1 要求A"),
+            block(1, "p2", "附表：要求A（重复锚）"),
+        ];
+        let marks = vec![
+            BlockMark {
+                from: 0,
+                to: 0,
+                verdict: bid_domain::coverage::BlockVerdict::Noise,
+                reason: String::new(),
+            },
+            BlockMark {
+                from: 1,
+                to: 1,
+                verdict: bid_domain::coverage::BlockVerdict::Requirement,
+                reason: String::new(),
+            },
+        ];
+        // 双锚 REQ：锚 1 命中 noise 块（可弃），锚 2 命中 requirement 无承接块
+        let mut r = regex_req("REQ-0001", "p1", "1.1 要求A", "A-主文件");
+        r.anchors.push({
+            let (page, line) = crate::page_line_of("p2");
+            Anchor {
+                file: "A-主文件".to_string(),
+                kind: "pdf_line".to_string(),
+                locator: "p2".to_string(),
+                excerpt: "附表：要求A（重复锚）".to_string(),
+                block_idx: Some(1),
+                page,
+                line,
+            }
+        });
+        let f = face("A-主文件", &blocks, &marks, &[]);
+        let (out, stats) = merge_extraction(&[f], vec![r]);
+        assert!(out.is_empty(), "任一锚命中拒绝裁决 → 弃（保守口径不动）");
+        assert_eq!(stats.regex_dropped_covered, 1);
+        assert_eq!(stats.regex_kept_unbacked_requirement, 0);
+    }
+
+    #[test]
+    fn uncovered_regex_kept_and_agent_appended() {
+        // 正则兜底：块0被标 noise 丢弃；块1未覆盖保留；块2 requirement+提交→REQ-A
+        let blocks = vec![
+            block(0, "p1", "第一章 招标公告"),
+            block(1, "p2", "2.1 未覆盖块"),
+            block(2, "p2", "投标人须具备资质"),
+        ];
+        let marks = vec![
+            mark(0, 0),
+            BlockMark {
+                from: 2,
+                to: 2,
+                verdict: bid_domain::coverage::BlockVerdict::Requirement,
+                reason: String::new(),
+            },
+        ];
+        let subs = vec![submitted(2, "须具备水利水电二级资质")];
+        let reqs = vec![
+            regex_req("REQ-0001", "p1", "第一章 招标公告", "A-主文件"),
+            regex_req("REQ-0002", "p2", "2.1 未覆盖块", "A-主文件"),
+            regex_req("REQ-0003", "p2", "投标人须具备资质", "A-主文件"),
+        ];
+        let f = face("A-主文件", &blocks, &marks, &subs);
+        let (out, stats) = merge_extraction(&[f], reqs);
+        assert_eq!(out.len(), 2, "块1 正则兜底 + 块2 Agent");
+        assert_eq!(out[0].id, "REQ-0002", "正则保留项原 id 原序");
+        assert_eq!(out[1].id, "REQ-A0001", "Agent 项追加 REQ-A 编号");
+        assert_eq!(
+            out[1].params.get("statement").unwrap(),
+            "须具备水利水电二级资质"
+        );
+        assert_eq!(out[1].params.get("marked_by").unwrap(), "agent");
+        assert_eq!(
+            out[1].anchors[0].excerpt, "投标人须具备资质",
+            "溯源锚=块原文"
+        );
+        assert_eq!(out[1].source_file, "A-主文件");
+        assert_eq!(stats.regex_dropped_covered, 2);
+        assert_eq!(stats.agent_requirements, 1);
+        assert_eq!(stats.uncovered_blocks, 1, "块1 未覆盖");
+        assert!(!stats.coverage_complete);
+    }
+
+    #[test]
+    fn anchor_not_matching_block_is_kept() {
+        // 防御分支：anchor 匹配不到块（解析版本差异）→ 保留（宁多勿漏）
+        let blocks = vec![block(0, "p1", "1.1 要求A")];
+        let marks = vec![mark(0, 0)];
+        let reqs = vec![regex_req("REQ-0001", "p9", "完全不同的文本", "A-主文件")];
+        let f = face("A-主文件", &blocks, &marks, &[]);
+        let (out, stats) = merge_extraction(&[f], reqs.clone());
+        assert_eq!(out, reqs);
+        assert_eq!(stats.regex_dropped_covered, 0);
+    }
+
+    #[test]
+    fn multi_face_seq_and_mandatory_stat() {
+        // 多文件：编号跨 face 全局递增；mandatory 非 blocking 计数
+        let blocks_a = vec![block(0, "p1", "块A")];
+        let blocks_c = vec![block(0, "p1", "块C")];
+        let marks_a = vec![BlockMark {
+            from: 0,
+            to: 0,
+            verdict: bid_domain::coverage::BlockVerdict::Requirement,
+            reason: String::new(),
+        }];
+        let marks_c = vec![BlockMark {
+            from: 0,
+            to: 0,
+            verdict: bid_domain::coverage::BlockVerdict::Requirement,
+            reason: String::new(),
+        }];
+        let subs_a = vec![SubmittedRequirement {
+            block_idx: 0,
+            statement: "A件要求".into(),
+            category: Some("资格条件".into()),
+            mandatory: true,
+            substantive: true,
+        }];
+        let subs_c = vec![
+            SubmittedRequirement {
+                block_idx: 0,
+                statement: "C件必选".into(),
+                category: Some("商务要求".into()),
+                mandatory: true,
+                substantive: true,
+            },
+            SubmittedRequirement {
+                block_idx: 0,
+                statement: "C件普通".into(),
+                category: Some("其他".into()),
+                mandatory: false,
+                substantive: false,
+            },
+        ];
+        let fa = face("A-主文件", &blocks_a, &marks_a, &subs_a);
+        let fc = face("C-补遗", &blocks_c, &marks_c, &subs_c);
+        let (out, stats) = merge_extraction(&[fa, fc], vec![]);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0].id, "REQ-A0001");
+        assert_eq!(out[1].id, "REQ-A0002");
+        assert_eq!(out[2].id, "REQ-A0003");
+        assert_eq!(out[0].category, "资格条件");
+        assert_eq!(out[1].category, "商务要求");
+        assert_eq!(
+            stats.agent_mandatory_offcategory, 1,
+            "C件必选（商务要求）计入"
+        );
+        assert!(stats.coverage_complete);
+    }
+
+    #[test]
+    fn same_block_two_statements_both_kept() {
+        // 同块两条 statement → 两条 REQ（replace 语义不去重——见域层）
+        let blocks = vec![block(0, "p1", "复合要求块")];
+        let marks = vec![BlockMark {
+            from: 0,
+            to: 0,
+            verdict: bid_domain::coverage::BlockVerdict::Requirement,
+            reason: String::new(),
+        }];
+        let subs = vec![submitted(0, "要点一"), submitted(0, "要点二")];
+        let f = face("A-主文件", &blocks, &marks, &subs);
+        let (out, stats) = merge_extraction(&[f], vec![]);
+        assert_eq!(out.len(), 2, "同块两条都保留");
+        assert_eq!(stats.agent_requirements, 2);
+    }
+
+    // ---------------- #419（B-19）：REQ-A id 跨运行稳定 ----------------
+
+    /// 场景①首跑零回归：prior 为空时与旧签名逐位一致（REQ-A0001.. 递增）。
+    #[test]
+    fn prior_empty_matches_legacy_numbering() {
+        let blocks = vec![
+            block(0, "p1", "条款甲"),
+            block(1, "p1", "条款乙"),
+            block(2, "p1", "条款丙"),
+        ];
+        let subs = vec![submitted(0, "甲"), submitted(1, "乙"), submitted(2, "丙")];
+        let (legacy, _) = merge_extraction(&[face("A-主文件", &blocks, &[], &subs)], vec![]);
+        let (with_prior, _) =
+            merge_extraction_with_prior(&[face("A-主文件", &blocks, &[], &subs)], vec![], &[]);
+        assert_eq!(legacy, with_prior, "空 prior 必须与便捷签名逐位一致");
+        assert_eq!(
+            with_prior.iter().map(|r| r.id.clone()).collect::<Vec<_>>(),
+            vec!["REQ-A0001", "REQ-A0002", "REQ-A0003"],
+            "首跑编号从 1 起、按 block_idx 稳定序"
+        );
+    }
+
+    /// 场景②插入：补标后重跑，新提交插在更小 block_idx——旧三条 id 不漂移，
+    /// 新条款从 max+1 起新号（矩阵覆写/绑定键不悬空）。
+    #[test]
+    fn inserted_submission_keeps_prior_ids() {
+        let blocks = vec![
+            block(0, "p1", "条款甲"),
+            block(1, "p1", "条款乙"),
+            block(2, "p1", "条款丙"),
+        ];
+        // 首跑：两条（乙丙——甲尚未补标）
+        let subs1 = vec![submitted(1, "乙"), submitted(2, "丙")];
+        let f1 = face("A-主文件", &blocks, &[], &subs1);
+        let (first, _) = merge_extraction(&[f1], vec![]);
+        assert_eq!(
+            first.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+            vec!["REQ-A0001", "REQ-A0002"]
+        );
+
+        // 重跑：Agent 在更小 block_idx=0 插入新提交「甲」+ 保留乙丙
+        let subs2 = vec![submitted(0, "甲"), submitted(1, "乙"), submitted(2, "丙")];
+        let f2 = face("A-主文件", &blocks, &[], &subs2);
+        let (second, _) = merge_extraction_with_prior(&[f2], vec![], &first);
+        let ids: Vec<&str> = second.iter().map(|r| r.id.as_str()).collect();
+        // 旧锚点（乙/丙）保旧 id；新锚点（甲）从 max+1=3 起
+        assert_eq!(ids, vec!["REQ-A0003", "REQ-A0001", "REQ-A0002"],
+            "插入不漂移：乙=A0001 丙=A0002 保旧，甲（新）=A0003；输出序仍按 block_idx");
+        // 承接的是同一 id 的条款内容（锚点不变）
+        assert_eq!(second[1].anchors[0].excerpt, "条款乙");
+        assert_eq!(second[2].anchors[0].excerpt, "条款丙");
+        assert_eq!(second[0].anchors[0].excerpt, "条款甲");
+    }
+
+    /// 场景③删减：重跑少一条——幸存者保旧 id（编号留空位，不复用）。
+    #[test]
+    fn removed_submission_leaves_gap_not_reuse() {
+        let blocks = vec![
+            block(0, "p1", "条款甲"),
+            block(1, "p1", "条款乙"),
+            block(2, "p1", "条款丙"),
+        ];
+        let subs1 = vec![submitted(0, "甲"), submitted(1, "乙"), submitted(2, "丙")];
+        let f1 = face("A-主文件", &blocks, &[], &subs1);
+        let (first, _) = merge_extraction(&[f1], vec![]);
+
+        // 重跑：只保留甲丙（乙被撤）
+        let subs2 = vec![submitted(0, "甲"), submitted(2, "丙")];
+        let f2 = face("A-主文件", &blocks, &[], &subs2);
+        let (second, _) = merge_extraction_with_prior(&[f2], vec![], &first);
+        assert_eq!(
+            second.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+            vec!["REQ-A0001", "REQ-A0003"],
+            "幸存者保旧 id，A0002 留空不复用（悬空引用宁可指向空号也不错位新条款）"
+        );
+    }
+
+    /// 场景④非连续 max：prior 编号有空洞（历史删减）——新 id 从全局 max+1 起，
+    /// 不回填空洞。
+    #[test]
+    fn new_ids_start_from_global_max_even_with_gaps() {
+        let blocks = vec![block(0, "p1", "旧条款"), block(9, "p9", "新条款")];
+        let prior = vec![Requirement {
+            id: "REQ-A0007".into(),
+            category: "其他".into(),
+            clause_no: None,
+            anchors: vec![Anchor {
+                file: "A-主文件".into(),
+                kind: "pdf_line".into(),
+                locator: "p1".into(),
+                excerpt: "旧条款".into(),
+                block_idx: Some(0),
+                page: Some(1),
+                line: Some(1),
+            }],
+            params: HashMap::new(),
+            source_file: "A-主文件".into(),
+        }];
+        let subs = vec![submitted(9, "新")];
+        let f = face("A-主文件", &blocks, &[], &subs);
+        let (out, _) = merge_extraction_with_prior(&[f], vec![], &prior);
+        assert_eq!(
+            out.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+            vec!["REQ-A0008"],
+            "非连续 max=7 → 新号从 8 起（不回填 1-6 空洞——被删条款的悬空引用不得错位）"
+        );
+    }
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "conflict_id": "CONFLICT-01",
+    "gt_ids": [
+      "GT-21",
+      "GT-08"
+    ],
+    "dimension": "招标控制价（含税）",
+    "versions": [
+      {
+        "source": "A-招标文件.docx",
+        "clause": "第一章/第六章 6.1",
+        "value": 4800000,
+        "value_text": "人民币 480 万元（含税）"
+      },
+      {
+        "source": "C-补遗文件01.docx",
+        "clause": "三、招标控制价调整",
+        "value": 4650000,
+        "value_text": "人民币 465 万元（含税）"
+      }
+    ],
+    "resolution_rule": "补遗优先（后到有效版本覆盖）",
+    "expected_final_value": 4650000,
+    "assert": "终裁前相关章节不得 ACCEPTED；终裁后矩阵与控制价断言须用 465 万口径"
+  }
+]

@@ -1,0 +1,358 @@
+{
+  "breakdown": [
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0010——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0010"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0012——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0012"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0013——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0013"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0015——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0015"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0017——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0017"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0019——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0019"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0021——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0021"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0023——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0023"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0025——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0025"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0027——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0027"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0029——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0029"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0030——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0030"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0031——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0031"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0032——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0032"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0033——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0033"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0034——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0034"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0035——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0035"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0036——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0036"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0037——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0037"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0038——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0038"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0039——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0039"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0041——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0041"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0042——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0042"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0044——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0044"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0045——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0045"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0046——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0046"
+    },
+    {
+      "covered_items": [],
+      "estimated": 0.0,
+      "item_scores": [],
+      "max": 0.0,
+      "missing_items": [],
+      "rationale": "无映射到本章节的评分项（section_id=SEC-0048——评分项 section 映射面为空，人工核对面）",
+      "section_id": "SEC-0048"
+    }
+  ],
+  "by_item": [
+    {
+      "contributions": [],
+      "coverage": null,
+      "criteria": "4.1 价格分（30 分）：以通过初步评审的有效投标报价的算术平均值下浮 5% 为基准价，价格分＝（基准价／投标报价）×30，四舍五入保留两位小数。",
+      "estimated": 0.0,
+      "item_id": "REQ-0059",
+      "mapping_ids": [],
+      "max": 30.0,
+      "rule_checkpoints": [],
+      "rule_gaps": 0,
+      "score_rules": null,
+      "section_id": null,
+      "tier": "价格分（f(报价)——score_price/B1 计算）",
+      "weight_share": null
+    },
+    {
+      "contributions": [],
+      "coverage": 0.0,
+      "criteria": "4.2 技术分（55 分）：技术方案完整性与针对性 30 分；项目实施方案与进度保障措施 10 分；售后服务方案（含响应时限承诺）8 分；信息安全与等保符合性方案 7 分。",
+      "estimated": -0.0,
+      "item_id": "REQ-0060",
+      "mapping_ids": [],
+      "max": 55.0,
+      "rule_checkpoints": [],
+      "rule_gaps": 0,
+      "score_rules": null,
+      "section_id": null,
+      "tier": "未覆盖",
+      "weight_share": null
+    },
+    {
+      "contributions": [],
+      "coverage": 0.0,
+      "criteria": "4.3 商务分（15 分）：近三年完成的合同额 500 万元（含）以上类似工程业绩，每提供 1 个得 2 分，最多得 6 分；企业认证体系（ISO9001）1 分；企业认证体系（ISO27001）1 分；银行资信等级 AAA 级 2 分；类似项目获省级以上奖项每个 1 分，最多 3 分；拟派项目团队中级以上职称人员每人 1 分，最多 2 分。",
+      "estimated": -0.0,
+      "item_id": "REQ-0061",
+      "mapping_ids": [],
+      "max": 15.0,
+      "rule_checkpoints": [],
+      "rule_gaps": 0,
+      "score_rules": null,
+      "section_id": null,
+      "tier": "未覆盖",
+      "weight_share": null
+    },
+    {
+      "contributions": [],
+      "coverage": 0.0,
+      "criteria": "4.4 项目团队评分（10 分，计入技术分）：项目负责人具备一级注册建造师（机电工程）资格且无在建项目的加 3 分；项目团队具有高级网络工程师或高级信息系统项目管理师职称证书的每人 1 分，最多 3 分；拟派项目经理具有同类项目管理业绩的每个 1 分，最多 2 分。",
+      "estimated": -0.0,
+      "item_id": "REQ-0062",
+      "mapping_ids": [],
+      "max": 10.0,
+      "rule_checkpoints": [],
+      "rule_gaps": 0,
+      "score_rules": null,
+      "section_id": null,
+      "tier": "未覆盖",
+      "weight_share": null
+    },
+    {
+      "contributions": [],
+      "coverage": null,
+      "criteria": "4.7 评标委员会按照得分由高到低排序推荐中标候选人，并出具评标报告；得分相同的，投标报价低者优先。",
+      "estimated": 0.0,
+      "item_id": "REQ-0078",
+      "mapping_ids": [],
+      "max": 0.0,
+      "rule_checkpoints": [],
+      "rule_gaps": 0,
+      "score_rules": null,
+      "section_id": null,
+      "tier": "价格分（f(报价)——score_price/B1 计算）",
+      "weight_share": null
+    }
+  ],
+  "commercial": null,
+  "diagnostic_only": true,
+  "gap": 110.0,
+  "mappings": [],
+  "notes": [
+    "UNMAPPED: 3 个评分项未映射章节（REQ-0060,REQ-0061,REQ-0062）——无法自评，总分可能偏低（section 槽位空，人工核对）",
+    "NO_PRICE_INPUT: 未提供报价——价格分未计入（total 不含价格面）"
+  ],
+  "price": null,
+  "price_input": null,
+  "project_id": "PRJ-0001",
+  "request_id": "req-000037",
+  "result_kind": "rule_heuristic",
+  "sections_scored": 27,
+  "target": 110.0,
+  "technical": 0.0,
+  "total": 0.0,
+  "unmapped_scoring_items": [
+    {
+      "criteria": "4.2 技术分（55 分）：技术方案完整性与针对性 30 分；项目实施方案与进度保障措施 10 分；售后服务方案（含响应……",
+      "req_id": "REQ-0060",
+      "weight": 55.0
+    },
+    {
+      "criteria": "4.3 商务分（15 分）：近三年完成的合同额 500 万元（含）以上类似工程业绩，每提供 1 个得 2 分，最多得 6……",
+      "req_id": "REQ-0061",
+      "weight": 15.0
+    },
+    {
+      "criteria": "4.4 项目团队评分（10 分，计入技术分）：项目负责人具备一级注册建造师（机电工程）资格且无在建项目的加 3 分；项目……",
+      "req_id": "REQ-0062",
+      "weight": 10.0
+    }
+  ]
+}

@@ -1,0 +1,284 @@
+{
+  "eval": "P2-real-file-score",
+  "schema_version": "1.0",
+  "gt_status": "AI 初标草案（待人工验收）——指标为草案对齐结果，不外推为验收指标；GT 锚定核验对解析文本层，属半自证（FG-18）：anchor PASS 不构成独立验证，冻结前须过异源抽检（gt-crosscheck.json）+ 人工逐条复核",
+  "gt_file_target": "04_某水利工程施工标段_施工招标文件.pdf（142 页）",
+  "reqs_in_file": 898,
+  "gt_total": 24,
+  "recall": 17,
+  "recall_rate": 0.7083,
+  "category_match": 12,
+  "category_match_rate": 0.5,
+  "category_mismatches": [
+    {
+      "gt_id": "GT-V05",
+      "category": "否决项",
+      "risk": "高",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": "资格条件",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B01",
+      "category": "商务要求",
+      "risk": "高（报价红线）",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": "3.2.3",
+      "category_match": false,
+      "matched_category": "其他",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B02",
+      "category": "商务要求",
+      "risk": "高",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": "1.3.2",
+      "category_match": false,
+      "matched_category": "其他",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B03",
+      "category": "商务要求",
+      "risk": "中",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": "10.7.1",
+      "category_match": false,
+      "matched_category": "其他",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B04",
+      "category": "商务要求",
+      "risk": "中",
+      "recall_hit": true,
+      "matched_reqs": 2,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": "否决项",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    }
+  ],
+  "citation_supported": 17,
+  "citation_support_rate": 1.0,
+  "citation_support_criterion": "严格：excerpt 归一串出现在 anchor 自报页 ±1（R3-S3-4；原任意页子串判据恒真风险已除）",
+  "supported_elsewhere_ids": [],
+  "page_delta_distribution": {
+    "0": 16,
+    "-1": 1
+  },
+  "by_category": {
+    "资格条件": {
+      "total": 6,
+      "recall": 4,
+      "cat_match": 4,
+      "supported": 4
+    },
+    "否决项": {
+      "total": 7,
+      "recall": 7,
+      "cat_match": 6,
+      "supported": 7
+    },
+    "商务要求": {
+      "total": 4,
+      "recall": 4,
+      "cat_match": 0,
+      "supported": 4
+    },
+    "评分项": {
+      "total": 5,
+      "recall": 2,
+      "cat_match": 2,
+      "supported": 2
+    },
+    "技术参数": {
+      "total": 2,
+      "recall": 0,
+      "cat_match": 0,
+      "supported": 0
+    }
+  },
+  "misses": [
+    {
+      "gt_id": "GT-R01",
+      "category": "资格条件",
+      "risk": "高（一票否决型资格）",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    },
+    {
+      "gt_id": "GT-R05",
+      "category": "资格条件",
+      "risk": "中",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    },
+    {
+      "gt_id": "GT-V05",
+      "category": "否决项",
+      "risk": "高",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": "资格条件",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B01",
+      "category": "商务要求",
+      "risk": "高（报价红线）",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": "3.2.3",
+      "category_match": false,
+      "matched_category": "其他",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B02",
+      "category": "商务要求",
+      "risk": "高",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": "1.3.2",
+      "category_match": false,
+      "matched_category": "其他",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B03",
+      "category": "商务要求",
+      "risk": "中",
+      "recall_hit": true,
+      "matched_reqs": 1,
+      "first_clause_no": "10.7.1",
+      "category_match": false,
+      "matched_category": "其他",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-B04",
+      "category": "商务要求",
+      "risk": "中",
+      "recall_hit": true,
+      "matched_reqs": 2,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": "否决项",
+      "citation_supported": true,
+      "supported_elsewhere": false,
+      "page_delta": 0
+    },
+    {
+      "gt_id": "GT-S03",
+      "category": "评分项",
+      "risk": "高（评标核心算法）",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    },
+    {
+      "gt_id": "GT-S04",
+      "category": "评分项",
+      "risk": "高",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    },
+    {
+      "gt_id": "GT-S05",
+      "category": "评分项",
+      "risk": "中",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    },
+    {
+      "gt_id": "GT-T01",
+      "category": "技术参数",
+      "risk": "中",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    },
+    {
+      "gt_id": "GT-T02",
+      "category": "技术参数",
+      "risk": "低",
+      "recall_hit": false,
+      "matched_reqs": 0,
+      "first_clause_no": null,
+      "category_match": false,
+      "matched_category": null,
+      "citation_supported": null,
+      "supported_elsewhere": false,
+      "page_delta": null
+    }
+  ],
+  "false_positive_note": "误报率不自动判定（'其他'类 2227 条含大量正文编号行噪声）——建议人工抽样 50 条 Other 类 REQ 核对（抽样协议同 test-plan §5.3）",
+  "findings": [
+    "真实文件章节用阿拉伯数字（第2章）——已修 extract_main_pdf（首轮抓出，合成夹具中文数字形态掩盖）",
+    "多页扫描件页数错报（pdftotext 空文本层）——已修 OCR 渲染张数回写（02 号 8 页正确）",
+    "真实水利范本 subsection 为数字小节（1.4 资格要求），政采货物范本为中文序号——分类面 94% 落'其他'：M1 确定性分类器的场景局限（设计内：M2 模型归类补全；S2 场景裁决的实证输入）",
+    "前附表两列结构（layout 拆行）使跨行条款对齐依赖滑窗容忍——D1 表格结构抽取为已知差距（corpus-R D1a 已实证引擎面，业务侧 M2+）"
+  ]
+}

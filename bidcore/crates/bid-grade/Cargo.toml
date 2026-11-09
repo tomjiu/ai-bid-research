@@ -1,0 +1,17 @@
+[package]
+name = "bid-grade"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "bidgrade"
+path = "src/main.rs"
+
+[dependencies]
+bid-tools = { path = "../bid-tools" }
+bid-parse = { path = "../bid-parse" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+bid-domain = { path = "../bid-domain" }

@@ -1,0 +1,314 @@
+{
+  "chains": [
+    {
+      "gt_id": "GT-01",
+      "clause_no": "3.2.1",
+      "bookmark": "CIT-GT-01",
+      "body_paragraph_index": 13,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 15,
+          "text_fingerprint": "fnv64:3dd6586bfc99cf92"
+        }
+      },
+      "evidence_file": "EV-01-营业执照.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:857396a704bfb6df"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-02",
+      "clause_no": "3.2.2",
+      "bookmark": "CIT-GT-02",
+      "body_paragraph_index": 14,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 16,
+          "text_fingerprint": "fnv64:dc9d9c067ec90fc8"
+        }
+      },
+      "evidence_file": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:99e9ff58dfe1e404"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-03",
+      "clause_no": "3.2.3",
+      "bookmark": "CIT-GT-03",
+      "body_paragraph_index": 15,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 17,
+          "text_fingerprint": "fnv64:c84857c1ec4a949c"
+        }
+      },
+      "evidence_file": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:4edd926f3c42488d"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-05",
+      "clause_no": "3.2.5",
+      "bookmark": "CIT-GT-05",
+      "body_paragraph_index": 16,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 19,
+          "text_fingerprint": "fnv64:f8a157e3bbc106d4"
+        }
+      },
+      "evidence_file": "EV-06-财务审计报告-2025年度.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:3c93228de30ea855"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-06",
+      "clause_no": "3.2.6",
+      "bookmark": "CIT-GT-06",
+      "body_paragraph_index": 17,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 20,
+          "text_fingerprint": "fnv64:9f695d231e98de11"
+        }
+      },
+      "evidence_file": "EV-07-无失信记录承诺函.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:9c329b0d5afa6367"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-13",
+      "clause_no": "4.2",
+      "bookmark": "CIT-GT-13",
+      "body_paragraph_index": 30,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 45,
+          "text_fingerprint": "fnv64:13537006b96405e4"
+        }
+      },
+      "evidence_file": "EV-13-安全生产许可证.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:e4f4a50f4ba2f0c3"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-15",
+      "clause_no": "4.4",
+      "bookmark": "CIT-GT-15",
+      "body_paragraph_index": 35,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 47,
+          "text_fingerprint": "fnv64:0996607bd544c6dc"
+        }
+      },
+      "evidence_file": "EV-10-项目团队人员证书-网络工程师高级.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:a52283cc5e6921a2"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-16",
+      "clause_no": "5.1",
+      "bookmark": "CIT-GT-16",
+      "body_paragraph_index": 23,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 1,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:614a1ae1fa2da52d"
+        }
+      },
+      "evidence_file": "B1-设备清单.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-17",
+      "clause_no": "5.2",
+      "bookmark": "CIT-GT-17",
+      "body_paragraph_index": 24,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 2,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:ed586336c61d9892"
+        }
+      },
+      "evidence_file": "B1-设备清单.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    },
+    {
+      "gt_id": "GT-18",
+      "clause_no": "5.3",
+      "bookmark": "CIT-GT-18",
+      "body_paragraph_index": 25,
+      "clause_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 3,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:257af8d41810d2a5"
+        }
+      },
+      "evidence_file": "B1-设备清单.pdf",
+      "evidence_locator": {
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 1 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      }
+    }
+  ],
+  "R1_recheck": {
+    "results": {
+      "GT-01": "valid",
+      "GT-02": "valid",
+      "GT-03": "valid",
+      "GT-05": "valid",
+      "GT-06": "valid",
+      "GT-13": "valid",
+      "GT-15": "valid",
+      "GT-16": "valid",
+      "GT-17": "valid",
+      "GT-18": "valid"
+    },
+    "pass": true
+  },
+  "R2_content_stale": {
+    "results": {
+      "GT-01": "stale_content",
+      "GT-02": "valid",
+      "GT-03": "valid",
+      "GT-05": "valid",
+      "GT-06": "valid",
+      "GT-13": "valid",
+      "GT-15": "valid",
+      "GT-16": "valid",
+      "GT-17": "valid",
+      "GT-18": "valid"
+    },
+    "pass": true,
+    "note": "run 级改写（书签保留）：恰 GT-01 stale_content，其余 valid"
+  },
+  "R3_structure_drift": {
+    "results": {
+      "GT-01": "stale_content",
+      "GT-02": "stale_content",
+      "GT-03": "stale_content",
+      "GT-05": "stale_content",
+      "GT-06": "stale_content",
+      "GT-13": "stale_content",
+      "GT-15": "stale_content",
+      "GT-16": "stale_content",
+      "GT-17": "stale_content",
+      "GT-18": "stale_content"
+    },
+    "pass": true,
+    "deleted_paragraph_index": 12,
+    "note": "删除更早段落后索引型定位器全体漂移失效（stale）"
+  },
+  "R3b_bookmark_rebind": {
+    "results": {
+      "GT-01": "valid",
+      "GT-02": "valid",
+      "GT-03": "valid",
+      "GT-05": "valid",
+      "GT-06": "valid",
+      "GT-13": "valid",
+      "GT-15": "valid",
+      "GT-16": "valid",
+      "GT-17": "valid",
+      "GT-18": "valid"
+    },
+    "pass": true,
+    "note": "CIT- 书签再寻址 + 显式重验（reverify_claim 语义）恢复 valid"
+  }
+}

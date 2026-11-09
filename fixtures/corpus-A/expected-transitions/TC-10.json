@@ -1,0 +1,41 @@
+{
+  "tc_id": "TC-10",
+  "title": "检索质量 A/B（AdapterA vs AdapterB）",
+  "risk": "R-08,R-09",
+  "note": "归档型用例：metric 断言不作发布门禁（test-plan §3），结论回填 AD-03/R-08",
+  "precondition": "同一 corpus 入库两个 Adapter（B 限自托管实例）",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "search_evidence",
+      "args": {
+        "adapter": "A",
+        "queries": "exact-25.jsonl"
+      }
+    },
+    {
+      "n": 2,
+      "tool": "search_evidence",
+      "args": {
+        "adapter": "B",
+        "queries": "exact-25.jsonl"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "metric",
+      "path": "adapterA.ndcg@10",
+      "op": ">=",
+      "value": "adapterB.ndcg@10"
+    },
+    {
+      "kind": "metric",
+      "path": "adapterA.exact_precision",
+      "op": ">=",
+      "value": "adapterB.exact_precision",
+      "note": "未达标记录差距并重评 AD-03（默认仍 A）"
+    }
+  ],
+  "engine_gaps": []
+}

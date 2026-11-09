@@ -1,0 +1,183 @@
+# P6 校验细则（validate_bid_document）
+
+> 契约依据：仓库根 `docs/bid-mcp-contract.md`（路径约定见 SKILL.md 头部——`docs/` 指仓库根，非本目录相对） §7。规则分层：**确定性规则代码断言、
+> 先行必跑、BLOCKER 必须清零**；模型规则只产 finding 不改稿。
+
+## 何时可调（#243 校验状态安全）
+
+| 时点 | 用法 | 行为 |
+|---|---|---|
+| 起草中（仍有叶未 DRAFTED） | `scope="sections"` + `section_ids`（章节级检查） | 纯读诊断：矩阵未响应面仍全量报告；不推进状态 |
+| 起草中误调 `scope="all"` | — | `E_DRAFT_INCOMPLETE`（missing 清单）**零副作用**拒：状态/版本/审核记录均不变，起草面照常——按 missing 清单回 P5 逐叶补起草 |
+| 全稿完成 | `scope="all"`（全稿最终校验） | 跑全部规则；**仅 ok=true（BLOCKER==0）才推进 VALIDATING** |
+| 校验失败（ok=false） | 修复后重调 | 项目留在 DRAFTING，可修订可重试（draft_response_section / set_matrix_override / 证据补绑）；无状态变迁不落版本 |
+| 项目滞留 VALIDATING 且缺章（历史异常态） | `recover_validating_state` | 回 DRAFTING 解锁起草面（见下「历史异常态恢复」） |
+
+## 调用形
+
+```json
+{ "project_id": "…", "scope": "all", "rules_profile": "standard" }
+```
+
+- `scope`：`"all"`（全稿最终校验——要求全部叶达 DRAFTED）或 `"sections"` +
+  `section_ids[]`（章节级检查——起草期诊断面；修订后只重跑受影响章）；
+- `rules_profile`：`standard`（缺省）/ `dark_bid`（暗标——附加禁字清单扫描）。
+
+**注意**：校验通过且发生状态推进（DRAFTING → VALIDATING）时，响应携带的
+`project_version` 是**推进后的新值**，后续工具必须用新值，否则 E_CONFLICT；
+前置拒（`E_DRAFT_INCOMPLETE`）与校验失败（ok=false）零副作用——版本不变。
+
+## 返回核对
+
+```
+findings: [ { vf_id, kind: DETERMINISTIC|MODEL, rule_code, severity,
+              section_id?, requirement_id?, message, evidence } ]
+counts:   { blocker, major, minor, deterministic, model }
+categories: {                      # #187 分类返回（四桶各自独立状态）
+  structural: { status: "passed" | "failed", findings? },
+  semantic:   { status: "passed" | "failed", findings? }
+            | { status: "not_performed", reason: "no model configured" },
+  evidence:   { status: "passed" | "failed", findings? },
+  compliance: { status: "passed" | "failed", findings? } }
+```
+
+**四桶语义（#187）**：`ok: true` 只意味着「**已执行的检查**中 BLOCKER == 0」，
+**不等于整本标书已通过审核，也不等于可正式提交**（提交就绪看响应内
+`submission_readiness.ready`，#241）。四桶各自独立：
+
+| 桶 | 覆盖规则 | 实现状态 |
+|---|---|---|
+| `structural` | E_SECTION_EMPTY / E_CITATION_GHOST / W_PLACEHOLDER / W_CHARS_OFF_TARGET / E_SCOPE_UNKNOWN / E_CHARS_BELOW_MIN（#253：仅评分章节 BLOCKER）/ W_CHARS_BELOW_MIN（#253：行政/实质章节 MAJOR）/ E_TOTAL_CHARS_BELOW_MIN（#253：全稿总量硬门 BLOCKER） | 已实现 |
+| `semantic` | M_ 前缀模型发现（表述质量等） | **未实现**——现网恒 `not_performed` |
+| `evidence` | E_EVIDENCE_EXPIRED | 部分实现 |
+| `compliance` | E_VETO_UNRESPONDED / E_QUAL_UNMET / W_FORMAT_BASELINE | 部分实现 |
+
+**篇幅门禁分级（#253，#287 起总量门按档位判定）**：① **评分章节**（绑定
+评分项 REQ 或被 ScoringMapping 映射的叶）正文 < 配额 × 80% →
+`E_CHARS_BELOW_MIN` **BLOCKER**（评分主体写不够 = 直接丢分）；② 行政/
+实质章节短稿 → `W_CHARS_BELOW_MIN` **MAJOR**（不翻 ok、不拦导出——内容
+完整即可，篇幅是质量提示）；③ **全稿实写总量 < 当前档位目标** →
+`E_TOTAL_CHARS_BELOW_MIN` **BLOCKER**（硬比较无容差——章节级 ±20% 是
+起草容差，产品级门不吃容差）。
+
+**注意（#287）**：③ 的阈值不是固定值，而是**当前 `length_profile` 的
+`target_total_chars`**——= `outline_total_chars()`（配额总和），档位化后
+自动按建纲时选中的档位生效（选档流程见主 Skill「篇幅纪律 · 配额定标」：
+四档 + `recommend_length_profile` 推荐 + 用户确认）。`build_outline`
+响应 `length.target_total_chars` 与门禁阈值同源——选了哪档，门就按哪档
+判。档位在 `build_outline` 的状态窗口（REQUIREMENTS_EXTRACTED）内选定；
+MATRIX_READY 后不存在「悄悄改档」——重建面按 p3-matrix 状态窗口约束走，
+配额与阈值始终同源不漂移。
+
+- `status: "not_performed"` = 该类检查**没做**（如未配置模型）——**没做 ≠ 做对了**
+  （issue #9 口径），不得当成通过；
+- `status: "failed"` = 该类**有发现**（含 MINOR 告警——废标级与否看 ok/counts）；
+- `not_performed` 不把 `ok` 翻 false（能力缺席不是缺陷）。
+
+**必须向用户复述**：`BLOCKER b / MAJOR j / MINOR k`，逐条 BLOCKER 给出修复
+方案；**同时如实转述四桶状态**——semantic 为 not_performed 时必须明说
+「语义质量复核未执行（未配置模型）」，不得宣称「全部检查已通过」。
+
+## 确定性规则清单（代码断言——引擎实测面）
+
+| rule_code | 触发 | severity | Agent 修复姿势 |
+|---|---|---|---|
+| `E_VETO_UNRESPONDED` | 否决项未响应（#241：正文已实写的行算 RESPONDED，不报——只拦真正没写/未落章的） | BLOCKER | 回 P5 对应章节补响应（引用 REQ+EV） |
+| `E_QUAL_UNMET` | 资质行不满足（同上：正文实写即 RESPONDED；证据缺口另走 submission_readiness） | BLOCKER | 如实声明偏离或走用户决策（不可伪装满足） |
+| `E_SECTION_EMPTY` | 章节空内容 | BLOCKER | 回 P5 补写正文 |
+| `E_CITATION_GHOST` | 幻觉引用（EV 不存在/未绑定） | BLOCKER | 正文引用键改为已绑定 EV——纪律 3 的拦截点 |
+| `E_EVIDENCE_EXPIRED` | 引用了过期证据 | BLOCKER | 回 P4 换绑 ACTIVE 证据 |
+| `E_SCOPE_UNKNOWN` | scope 引用了不存在的章节 | 错误（参数面） | 改 scope 重调 |
+| `W_PLACEHOLDER` | 残留 TODO/待确认/占位符 | WARNING | 草稿痕迹清零（纪律 7）——替换为正式表述或引用其他章节 |
+| `W_CHARS_OFF_TARGET` | 字数带外（target ±20%） | WARNING | 增删正文至带宽内（check_bid_quality 的 within_band 可预检） |
+| `W_FORMAT_BASELINE` | 格式基线偏离 | WARNING | 对齐格式模板件 |
+
+另（引擎规则族持续增补，以 find 出的 rule_code 原样转述为准——不要按本表
+猜测未列出的规则含义，message 是人读正文）。
+
+## 模型检查范围（kind=MODEL，rule_code 以 `M_` 前缀）
+
+表述质量 / 逻辑连贯 / 偏离合理化 / 疑似过度承诺——**只产 finding 不改稿**：
+你读 finding 后回 P5 修订该章（external 模式重提 content），再重跑 validate。
+
+**状态条件（#534/C-29 残留——照做前先看项目状态）**：「回 P5 重提」只在
+**DRAFTING 期**可走（`draft_response_section` 的窗口是 MatrixReady+ 至
+DRAFTING）。`scope=sections` 章节级检查**同样跑模型复核**——M_ findings
+在起草期即可拿全，**纪律：M_ MAJOR 清零后才 scope=all**（ok=true 即推进
+VALIDATING，M_ 不拦推进；VALIDATING 态无内容写入工具，届时新出现的 M_
+修订出口见 p7-review.md 诚实桥接段——当前无工具出口，如实上报）。
+
+## BLOCKER 清零路径（导出前置）
+
+`校验通过（ok=true）才推进 VALIDATING；BLOCKER 清零才可 EXPORT`
+
+**没有通用「豁免」通道**——导出门在工具内独立复算（fail-closed），每类
+BLOCKER 走各自的**真实出口**（每个出口自带留痕纪律；不经出口的「口头确认
+豁免」不会出现在任何审计面，等于没豁免）。
+
+主路径（推荐）：逐条 BLOCKER 按上表修复 → `scope` 重跑受影响章 → 全量
+`scope=all` 复核。误报/业务可接受时，也按下表走对应出口：
+
+| BLOCKER 类别 | 出口（真实工具，非豁免话术） |
+|---|---|
+| 矩阵 blocking（`E_VETO_UNRESPONDED` / `E_QUAL_UNMET`） | `set_matrix_override` 人工覆写（带偏离说明——#226 否决项死锁出口） |
+| 引用幽灵/占位（`E_CITATION_GHOST` / `E_CITATION_PLACEHOLDER`） | 回 P5 修正文引用（真实 EV-id），或先 `register_evidence` 补件再改引用 |
+| 失效证据绑定（`E_EVIDENCE_EXPIRED`） | 换版登记新证据 + 重新绑定（R-03：失效证据禁绑，无绕行） |
+| 占位证据绑定（`E_EVIDENCE_PLACEHOLDER`） | 补真实材料换版；确属不适用 → `set_matrix_override` NOT_APPLICABLE + 偏离说明 + Human receipt（占位豁免的唯一合法形态——普通状态覆写不豁免） |
+| 写作验收（`E_SECTION_EMPTY` / `E_CHARS_BELOW_MIN` / `E_TOTAL_CHARS_BELOW_MIN`） | **只能补写**——导出门独立复算，审核已批准也不放行；篇幅系统性不足 → `recommend_length_profile` 调档位后重建纲 |
+| scope 引用不存在（`E_SCOPE_UNKNOWN`） | 改传真实 section_id 重跑 |
+| 审核面 BLOCKER（record_review_gate 的 findings，非本工具产出） | 修订后关单 RevisionTask（Done 带关单说明） |
+
+（「AI 操作者不得自审自过」的门禁精神落在**每个出口的留痕**上：覆写有
+偏离说明、占位豁免要 Human receipt、审核 BLOCKER 要关单说明——向用户
+复述 finding 并取得口头确认，本身不构成任何记录。）
+
+## 全局一致性预检（check_bid_quality 的 global_conflicts——#423）
+
+`validate_bid_document` 的规则都是**章内**检查；金额/工期/术语/承诺的**跨章
+冲突**（投标函写 350 万、报价面写 358 万这类）由 `check_bid_quality` 响应的
+`global_conflicts` 分节承载（S-5 全局柱）。**P6 全量校验前应先查一次**：
+
+```
+check_bid_quality → global_conflicts: [
+  { kind: "amount_conflict", severity: "blocker",
+    section_id: "SEC-0007",            # 位置锚：冲突少数派首现位
+    message: "金额冲突：投标保证金 在 SEC-0001=3500000 与 PR-0003=3580000" } ]
+```
+
+消费纪律：
+
+- **位置双形态**：`section_id` 是 `SEC-xxxx`（章正文）或 `PR-xxxx`（参数响应
+  行——`message` 里列出全部取值与各自首现位置，逐处核对）；
+- **修复姿势**：先人工裁决正确值，再把**全部**位置对齐（多数派通常是笔误的
+  少数派——但以用户确认为准，不要自动选边）；章内改稿走 P5 修订，参数行走
+  `set_param_responses` 覆写；
+- **空清单 ≠ 全文已核对**：比对面是保守词表（投标保证金/招标控制价/项目
+  预算/服务费/工期/交付周期/实施周期/服务期 + 缩写（全称）+ 服务窗口/响应
+  时间），词表外的数字口径一致性仍需人工核对——空数组只说明「比对面内无
+  冲突」；
+- 同响应的 `negative_deviations` 是**废标级**负偏离参数行（如「不低于 3 年」
+  响应「2 年」）——逐行向用户复述，修复 = 改响应值或如实声明偏离，**不得
+  伪装满足**；
+- 该分节只做诊断不改稿——与 validate 的章内规则（W_PLACEHOLDER 等）分属
+  两面，`global_conflicts` 不进 validate 的 counts/ok（两工具状态面独立）。
+
+## P7 审校闭环（validate 的 MAJOR 面）
+
+每个 MAJOR finding → 修订任务（RT）→ 修订 → `DONE`。只重跑 DIRTY 章节
+（上游 content_version 变化波及面）；未受影响的 ACCEPTED 章节不动。
+
+## 历史异常态恢复（#243 · recover_validating_state）
+
+旧版引擎的校验会在草稿未完成/校验失败时误推进 VALIDATING，而 VALIDATING
+态禁起草 → 项目死锁（用户曾被迫终止进程并手改 db.json 才能续跑——那不是
+受支持路径）。若 `get_bid_project_state` 显示项目在 `VALIDATING` 且仍有
+未起草叶：
+
+1. 调 `recover_validating_state`（`reason` 必填非空白，如实写明原因——审计
+   留底：何时/为何/从哪到哪/缺哪些章）→ 项目回 `DRAFTING`，起草面解锁；
+2. 按恢复响应的 `missing_sections`（或重查矩阵）逐叶补起草；
+3. 全稿完成后 `scope=all` 校验 → 通过后进导出流程。
+
+约束：仅 VALIDATING 态、仅缺章可恢复（草稿完整的 VALIDATING 是健康态，拒）；
+重复恢复被状态门拒（E_STATE，非死锁态）。**禁止手改 db.json**。

@@ -1,0 +1,348 @@
+name: linux-check
+
+# R-21（#555）：真件链 Linux CI 门——三个 Windows CI 覆盖不到的面：
+#   1. unix-only 编译面：guard.rs 等的 #[cfg(unix)] 分支在 windows runner
+#      从不编译（windows-check.yml 头注记载的 E0596 原始事故形态）；
+#   2. tesseract OCR 面：Windows CI 无 tesseract（#295 只装了 poppler），
+#      OCR 依赖测试恒 SKIP 横幅——「CI 全绿 ≠ 稳定」缺口（AGENTS 13.4）；
+#   3. mang-app Linux 后端：tao/wry cfg(linux) + rfd 补齐段的编译面
+#      （Windows 面已由 windows-check 覆盖，Linux 后端零 CI）。
+#
+# 本机实测基线（2026-11-08，Agent-uc2w，issue #555 正文）：
+#   check（ex-mang-app）干净；bid-domain/engine/kb/grade 468 绿；
+#   bid-parse 全绿（含 cross_platform_structure 395s 慢测）；bid-mcp 快测族
+#   全绿；SDK e2e 9/9（2026-11-08 审计）。CI 语义与本地实测对齐。
+#
+# 已知缺口（登记不伪装）：pdfium 无 Linux 标准包——pdfium 面测试 SKIP
+#   属预期，见下方 SKIP 汇总（只汇总不判红）；其余横幅 = 意外缺件 → 红。
+#
+# 纪律对齐 windows-check：
+#   - 凭据：mdcore 只读 deploy key（secret MD_CORE_DEPLOY_KEY），无 secret
+#     时跳过布置（真门禁是 cargo fetch，fetch 失败即红）；
+#   - cache：#308 拆分模式——restore 前置 + save 后置显式步骤，
+#     continue-on-error 只许加在 cache 面（加速不是正确性）；
+#   - 退出码：bash `set -o pipefail`（pwsh 管道吞码坑在此不存在）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 3
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  linux:
+    name: linux / 真件链（poppler + tesseract + gtk 全装面）
+    runs-on: ubuntu-latest
+    # #584：main push 阶段 --include-ignored 全量重测需要时长余量——
+    # 15 个重型验收测试 Windows 实测合计 ~59 分钟（windows-check 口径），
+    # Linux runner 通常更快；PR 阶段仍默认跳过、快速退出，不受本值影响
+    #（GitHub 按实际用时分计费，抬高上限不空耗）。首跑如实以结果为准。
+    timeout-minutes: 150
+    env:
+      # job 级 env 才能被 step 的 if 读到（GitHub 不允许 if 直接用 secrets）
+      # ——与 windows-check 同款条件执行模式。
+      MD_CORE_DEPLOY_KEY: ${{ secrets.MD_CORE_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure mdcore read access (deploy key)
+        # issue #2 §3.1：mdcore 私有仓凭据 = 只读 deploy key（secret
+        # MD_CORE_DEPLOY_KEY）。key 只写 runner 的 ~/.ssh/id_ed25519，
+        # 不入日志。无 secret 时跳过（mdcore public 窗口匿名 clone 即可）；
+        # 真门禁 = cargo check 的 fetch。
+        if: env.MD_CORE_DEPLOY_KEY != ''
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          # 行尾归一（secret 传输面可能引入 CRLF）+ 精确写入
+          printf '%s\n' "$MD_CORE_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          # https → ssh 改道（仅 mdcore 仓——其他 git 依赖不受影响）
+          git config --global url."git@github.com:mmqz/mdcore.git".insteadOf "https://github.com/mmqz/mdcore"
+          # 凭据连通性探测（诊断面：不判死——真门禁是 cargo check 的 fetch；
+          # GitHub 对 ssh -T 不提供 shell，认证成功也返回 1，故归一）
+          ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -T git@github.com 2>/dev/null || true
+          echo "ssh probe done（连通性以 cargo fetch 为准）"
+
+      - name: Install external toolchain (poppler + tesseract + chi_sim)
+        # #295 镜像 + R-21 扩面：Linux 侧 tesseract + chi_sim 一并装齐——
+        # OCR 依赖测试从「恒 SKIP」转「真跑」。装后自检：版本号进日志
+        # （基线跨平台核对的证据面），chi_sim 语言数据在位验证。
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            poppler-utils poppler-data tesseract-ocr tesseract-ocr-chi-sim
+          pdftotext -v
+          pdfinfo -v
+          pdftoppm -v
+          tesseract --version | head -1
+          if ! tesseract --list-langs 2>/dev/null | grep -q chi_sim; then
+            echo "::error::chi_sim 语言数据缺失——OCR 面测试将误报 SKIP"
+            exit 1
+          fi
+          tesseract --list-langs 2>/dev/null | grep chi_sim
+
+      - name: Link chi_sim to ~/.tessdata (环境探测口径对齐)
+        # env_preflight::tessdata_dir() 的解析口径（TESSDATA_PREFIX 优先，
+        # 否则 $HOME/.tessdata）——与 bid-parse/src/pdf.rs 消费面同源。
+        # apt 的 tesseract-ocr-chi-sim 落在 /usr/share/tesseract-ocr/*/tessdata/，
+        # 不在上述口径上 → 测试侧判 ENV_MISSING 而误报 SKIP（linux-check 的双向
+        # 断言随后判红）。此处软链到 ~/.tessdata 对齐探测面与消费面。
+        run: |
+          mkdir -p ~/.tessdata
+          SRC=$(find /usr/share/tesseract-ocr -name "chi_sim.traineddata" | head -1)
+          if [ -z "$SRC" ]; then
+            echo "::error::chi_sim.traineddata 未找到（apt 装完仍缺）"
+            exit 1
+          fi
+          echo "源: $SRC"
+          ln -sf "$SRC" ~/.tessdata/chi_sim.traineddata
+          ls -la ~/.tessdata/
+          test -f ~/.tessdata/chi_sim.traineddata && echo "chi_sim 已对齐到 ~/.tessdata"
+
+      - name: Install Python fixture deps (reportlab + Pillow)
+        # service_import.rs 的 ocr_blank_scan_surfaces_per_file_warning 等测试用
+        # python3 + reportlab 现场合成空白扫描件 PDF（合成夹具生成器）。缺件时
+        # gen.status.success() 断言直接红（不是 SKIP）——本步骤补齐。
+        # Pillow 供 reportlab 的 ImageReader（部分夹具生成路径需要）。
+        # Ubuntu 24.04 的 python3 是 PEP 668 外部管理环境——两种装法：
+        # --break-system-packages（直接进系统 site-packages，与下方 SDK e2e 的
+        #   `pip install pytest` 可能冲突）或 --user（用户级，优先被 import）。
+        # 用 --user：与现有步骤互不干扰，且 PEP 668 下不报 externally-managed。
+        run: |
+          python3 -m pip install --quiet --user --break-system-packages reportlab Pillow || \
+            python3 -m pip install --quiet --break-system-packages reportlab Pillow
+          python3 -c "import reportlab, PIL; print('reportlab', reportlab.Version, 'PIL ok')"
+
+      - name: Verify Poppler CJK mapping (B1 text-layer fixture)
+        # --no-install-recommends omits poppler-data: pdftotext can return 0
+        # with empty text for Adobe-GB1. Verify real text before the m1 chain.
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          source = Path("fixtures/corpus-A/files/B1-设备清单.pdf")
+          result = subprocess.run(
+              ["pdftotext", "-layout", "-enc", "UTF-8", str(source), "-"],
+              capture_output=True, text=True, check=True,
+          )
+          cjk_chars = sum("\u4e00" <= ch <= "\u9fff" for ch in result.stdout)
+          if not result.stdout.strip() or cjk_chars == 0:
+              print("::error::B1 text-layer PDF produced no CJK text; check poppler-data CMap installation")
+              print(result.stderr)
+              raise SystemExit(1)
+          print(f"Poppler CJK mapping verified: chars={len(result.stdout.strip())}, CJK={cjk_chars}")
+          PY
+
+      - name: Install gtk/webkit dev (mang-app Linux 构建件)
+        # mang-app 的 tao/wry Linux 后端需要 gtk+-3.0 / webkit2gtk-4.1 的
+        # dev 包（pkg-config 面）。装齐后 workspace --all-targets 在 Linux
+        # 全量编译（含 cfg(unix) 分支 + mang-app Linux 后端）。
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+          pkg-config --exists gtk+-3.0 || { echo "::error::gtk+-3.0 dev 缺失"; exit 1; }
+          pkg-config --exists webkit2gtk-4.1 || { echo "::error::webkit2gtk-4.1 dev 缺失"; exit 1; }
+          echo "gtk3: $(pkg-config --modversion gtk+-3.0)"
+          echo "webkit: $(pkg-config --modversion webkit2gtk-4.1)"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cargo cache (#308 拆分——Post save 挂死面根治)
+        id: cache-cargo
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            bidcore/target/
+          key: Linux-cargo-${{ hashFiles('bidcore/Cargo.lock') }}
+          restore-keys: |
+            Linux-cargo-
+
+      - name: cargo check --workspace --all-targets (unix 编译面 + mang-app Linux 后端)
+        working-directory: bidcore
+        run: cargo check --workspace --all-targets
+
+      - name: cargo test (全量 workspace，真件链真跑；main 阶段含重型验收面)
+        # 与 windows-check 同款 --no-fail-fast + --nocapture：
+        #   · --no-fail-fast：一次看全所有红灯（2026-11-02 教训）；
+        #   · --nocapture：SKIP 横幅（单行 eprintln! 写 stderr）可见，
+        #     下方双向断言/汇总步骤才有日志可读（FG-03 ③ 同因）。
+        # bash 的 `set -o pipefail` 保证 tee 不吞 cargo 退出码（pwsh 管道
+        # 吞码坑在 bash 不存在——FG-03 ② 的 Windows 侧形态不适用）。
+        #
+        # #584 分层镜像（windows-check.yml:227-244 同型，bash 版）：
+        # 15 个重型验收测试（6 二进制：block_bidi_acceptance /
+        # star_coverage_acceptance / structure_probe_272 /
+        # coverage_gate_corpus / cross_platform_structure /
+        # real_corpus_e2e，单个 6-13 分钟真实语料全量解析）已标 #[ignore]，
+        # 文案承诺「main 阶段 --include-ignored 全跑」——此前只在
+        # windows-check 兑现，Linux 侧任何触发面都不带 --include-ignored，
+        # cross_platform_structure 4 个跨平台结构不变量在 Unix 侧
+        # 永久零 CI（#584 假绿缺口）。本步补齐 Linux 兑现面：
+        #   PR 阶段   = 默认口径（libtest 自动跳过 ignore）→ 快反馈；
+        #   push main = --include-ignored 全量回归 → Unix 侧重型面补齐。
+        # 本地手动跑重测试：cargo test -p <crate> -- --ignored
+        working-directory: bidcore
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "PR 阶段：默认口径（15 个重型验收测试 #[ignore] 自动跳过）"
+            cargo test --workspace --no-fail-fast -- --nocapture 2>&1 |
+              tee "$RUNNER_TEMP/test-output.log"
+          else
+            echo "main 阶段：--include-ignored 全量（含 15 个重型验收测试）"
+            cargo test --workspace --no-fail-fast -- --nocapture --include-ignored 2>&1 |
+              tee "$RUNNER_TEMP/test-output.log"
+          fi
+
+      - name: 失败测试清单（一眼可读——区分真失败与 #[should_panic] 预期 panic）
+        # 排查教训：`panicked at ...` 行在两种情况下都会打印——
+        #   · #[should_panic] 测试**通过**时（libtest 打印 panic 消息但 test ok）
+        #   · 真实失败时
+        # 人眼扫日志先看到 panicked 会误判（实测排查被带偏 3 次）。
+        # 本步骤只认 `^test .* FAILED$` 与 `test result: FAILED`，
+        # 输出一份纯失败清单，并注解到 PR 页面。
+        if: always()
+        working-directory: bidcore
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/test-output.log"
+          if [ ! -f "$LOG" ]; then
+            echo "::warning::测试日志缺失（$LOG）——跳过失败清单汇总"
+            exit 0
+          fi
+          # 真失败：libtest 的 `test <name> ... FAILED` 行（should_panic 通过时是 `... ok`）
+          FAILED=$(grep -E "^test .+ \.\.\. FAILED" "$LOG" | sed -E "s/^test //; s/ \.\.\. FAILED$//" | sort -u || true)
+          # 汇总行（每个测试二进制一行，FAILED 的才计入）
+          SUMMARIES=$(grep -E "^test result: FAILED" "$LOG" || true)
+          COUNT=$(printf "%s" "$FAILED" | grep -c . || true)
+          echo "### 失败测试清单（linux-check）" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "零失败 ✅（日志里的 panicked 行均来自 #[should_panic] 预期 panic）" >> "$GITHUB_STEP_SUMMARY"
+            echo "== 失败测试: 0 =="
+          else
+            echo "**$COUNT 个测试失败**：" >> "$GITHUB_STEP_SUMMARY"
+            printf "%s\n" "$FAILED" | while read -r t; do
+              [ -n "$t" ] && echo "- \`$t\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "```" >> "$GITHUB_STEP_SUMMARY"
+            printf "%s\n" "$SUMMARIES" >> "$GITHUB_STEP_SUMMARY"
+            echo "```" >> "$GITHUB_STEP_SUMMARY"
+            echo "== 失败测试: $COUNT =="
+            printf "%s\n" "$FAILED" | while read -r t; do [ -n "$t" ] && echo "  ✗ $t"; done
+            echo "::error::$COUNT 个测试失败（清单见上 / step summary）"
+          fi
+      - name: Verify SKIP banner absent (日志回放 + 双向断言)
+        # FG-03 修复形态镜像（方向相反）：本 job 三工具 + chi_sim 全装 →
+        # 「工具在位却出横幅 = 横幅误报」是唯一红面。探针测试
+        # probe_corpus_a_full_chain 的环境门（FULL_PDF_CHAIN = poppler×3 +
+        # tesseract + chi_sim）在 Linux CI 全满足——它必须真跑，出横幅即红。
+        # pdfium 面测试在 Linux 无标准包，其 SKIP 属已知缺口（下一汇总步骤
+        # 可见），不在本断言面。
+        working-directory: bidcore
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/test-output.log"
+          if [ ! -f "$LOG" ]; then
+            echo "::error::测试日志缺失（$LOG）——上一步未产出，无法核验横幅"
+            exit 1
+          fi
+          if grep -q 'SKIP: probe_corpus_a_full_chain' "$LOG"; then
+            echo "::error::环境工具齐备（poppler+tesseract+chi_sim 已装）却出现 SKIP 横幅——横幅误报（测试没跳却报跳），或环境自检误判缺件"
+            exit 1
+          fi
+          echo "PASS: 工具齐备，probe_corpus_a_full_chain 真跑，无横幅（符合预期）"
+
+      - name: SKIP 汇总（#295 方案 C 镜像——CI 覆盖缺口可见性）
+        # 不判红（缺件跳过是 #9 机制的设计行为）——但 SKIP 数 > 0 时用
+        # ::warning 注解顶到 PR 页面。Linux 侧预期唯一 SKIP 族 = pdfium
+        # （无标准包，env_preflight_pdfium 的 SKIP 属已知缺口）；出现其它
+        # SKIP 即意外缺件，人工核对。
+        if: always()
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/test-output.log"
+          echo '### SKIP 汇总（linux-check）' >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -f "$LOG" ]; then
+            echo '（测试日志缺失——测试步骤未跑或被跳过）' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          SKIPS=$(grep -E '^SKIP: .+$' "$LOG" | sort -u || true)
+          if [ -z "$SKIPS" ]; then
+            echo '零 SKIP——全部测试真实运行 ✅（poppler + tesseract + chi_sim 全装面）' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**$(echo "$SKIPS" | wc -l) 个测试被 SKIP（ENV_MISSING——CI 覆盖缺口，见下）**：" >> "$GITHUB_STEP_SUMMARY"
+            echo "$SKIPS" | while read -r s; do echo "- $s" >> "$GITHUB_STEP_SUMMARY"; done
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '预期缺口：pdfium（Linux 无标准包）。出现其它 SKIP = 意外缺件，需人工核对。' >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::CI 覆盖缺口：$(echo "$SKIPS" | wc -l) 个测试 SKIP——$SKIPS"
+          fi
+
+      - name: SDK e2e（MCP 真传输面——test_mcp_e2e.py）
+        # R-20 部分面：SDK Python e2e（9 用例，2026-11-08 审计 9/9 基线）
+        # 首次进 CI。BID_MCP_TARGET_DIR 指向构建 target；auto 发现
+        # bid-mcp-stdio → linejson 模式。run_tests.py T0-T19 主链不在此面
+        # （另单跟踪——含 m1/SEMUL 已知问题，需先治红）。
+        working-directory: bidcore
+        shell: bash
+        run: |
+          cargo build -p bid-mcp --bin bid-mcp-stdio
+          # transport=mcp 用例需要官方 MCP Python SDK（HAS_MCP_SDK 门）；
+          # 缺件时 9 个用例里 8 个直接 AssertionError（不是 SKIP）——必须装。
+          # --user + --break-system-packages 同 reportlab 步骤口径（PEP 668）。
+          python3 -m pip install --quiet --user --break-system-packages pytest mcp || \
+            python3 -m pip install --quiet --break-system-packages pytest mcp
+          python3 -c "import mcp; print('mcp SDK ok')" || echo "::warning::mcp SDK 未装上——transport=mcp 用例将失败"
+          cd ..
+          set +e
+          BID_MCP_TARGET_DIR="$PWD/bidcore/target" python3 -m pytest sdk/tests/test_mcp_e2e.py -v 2>&1 | tee "$RUNNER_TEMP/sdk-e2e.log"
+          PYCODE=${PIPESTATUS[0]}
+          set -e
+          # 失败清单（同 cargo test 步骤口径——pytest 面也要一眼可读）
+          FAILED=$(grep -E "^FAILED " "$RUNNER_TEMP/sdk-e2e.log" | sed -E "s/^FAILED //; s/ - .*$//" | sort -u || true)
+          COUNT=$(printf "%s" "$FAILED" | grep -c . || true)
+          echo "### SDK e2e 失败清单（linux-check）" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "- 零失败 ✅" >> "$GITHUB_STEP_SUMMARY"
+            echo "== SDK e2e 失败: 0 =="
+          else
+            echo "**$COUNT 个用例失败**：" >> "$GITHUB_STEP_SUMMARY"
+            printf "%s\n" "$FAILED" | while read -r t; do [ -n "$t" ] && echo "- \`$t\`" >> "$GITHUB_STEP_SUMMARY"; done
+            echo "== SDK e2e 失败: $COUNT =="
+            printf "%s\n" "$FAILED" | while read -r t; do [ -n "$t" ] && echo "  ✗ $t"; done
+          fi
+          exit $PYCODE
+
+      - name: Save cargo cache (#308 收尾——save 独立后置)
+        # exact 命中（cache-hit == 'true'）时跳过——同 key 已存，重存纯浪费；
+        # always()：测试红了也存（编译产物与测试结论正交，下轮照常加速）；
+        # continue-on-error 纪律：只许加在 cache/产物类步骤（#308）。
+        if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            bidcore/target/
+          key: Linux-cargo-${{ hashFiles('bidcore/Cargo.lock') }}

@@ -1,0 +1,132 @@
+{
+  "results": {
+    "R1_tc09_main": {
+      "pass": true,
+      "detail": {
+        "dirty_exact": true,
+        "gt18_v2": true,
+        "conflict_registered": true,
+        "version_bump_1": true,
+        "no_mixing": true
+      }
+    },
+    "R2_cascade": {
+      "pass": true,
+      "detail": {
+        "gt02_flip": true,
+        "gt02_in_flips": true,
+        "ev13_stays_expired": true,
+        "no_false_flips": true,
+        "recheck_log": true
+      }
+    },
+    "R3_no_overreach": {
+      "pass": true,
+      "detail": {
+        "not_dirty_exact": true
+      }
+    },
+    "R4_adjudication_gate": {
+      "pass": true,
+      "detail": {
+        "blocked_when_dirty": true,
+        "blocked_when_conflict": true,
+        "accept_after_adjudication": true,
+        "final_465": true,
+        "tc09_conflict_assert": true
+      }
+    },
+    "R5_idempotent": {
+      "pass": true,
+      "detail": {
+        "idempotent_noop": true
+      }
+    },
+    "R6_delete_add_rules": {
+      "pass": true,
+      "detail": {
+        "delete_removes": true,
+        "delete_dirties_only_related": true,
+        "add_creates_row": true,
+        "add_no_section_overreach": true
+      },
+      "synthetic": true
+    },
+    "R0_tc09_contract": {
+      "pass": true,
+      "detail": [
+        {
+          "path": "requirements[GT-18].params.model_v2",
+          "kind": "state",
+          "pass": true
+        },
+        {
+          "path": "sections",
+          "kind": "dirty",
+          "pass": true
+        },
+        {
+          "path": "sections",
+          "kind": "not_dirty",
+          "pass": true
+        },
+        {
+          "path": "requirements[GT-02].recheck",
+          "kind": "state",
+          "pass": true
+        },
+        {
+          "path": "matrix[GT-02].policy",
+          "kind": "policy",
+          "pass": true
+        },
+        {
+          "path": "conflicts[CONFLICT-01]",
+          "kind": "conflict",
+          "pass": true
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "修改": {
+      "证据绑定": "R1(GT-18→B1 重检)",
+      "矩阵行": "R1(GT-18)",
+      "章节": "R1(技术方案)",
+      "评分结论": "R2(GT-13 维持 EXPIRED 禁绑=重检不推翻)",
+      "资格判断": "R2(GT-02 翻转)"
+    },
+    "级联(基准日)": {
+      "证据绑定": "R2(全项目重检)",
+      "矩阵行": "R2(GT-02)",
+      "章节": "R1(资格响应)",
+      "评分结论": "R2(EV-13 细项 0 分)",
+      "资格判断": "R2(eligible→EXPIRED)"
+    },
+    "矛盾": {
+      "证据绑定": "—(控制价无 EV 绑定)",
+      "矩阵行": "R4(GT-21/GT-08 口径切换)",
+      "章节": "R4(商务部分-报价 门禁)",
+      "评分结论": "—",
+      "资格判断": "—"
+    },
+    "删除": {
+      "证据绑定": "R6(GT-13 绑定解除)",
+      "矩阵行": "R6(GT-13 行移除)",
+      "章节": "R6(售后服务方案)",
+      "评分结论": "R6(行移除即细项移除)",
+      "资格判断": "—",
+      "synthetic": true
+    },
+    "新增": {
+      "证据绑定": "—(无既有绑定)",
+      "矩阵行": "R6(新行)",
+      "章节": "R6(无归属零误伤)",
+      "评分结论": "—",
+      "资格判断": "—",
+      "synthetic": true
+    }
+  },
+  "semul_note": "影响面规则为 bid-domain-model §2 设计语义的 Python 复刻；bidcore/bid-domain Rust 同语义交叉验证待 cargo 环境（D3 真实补遗链样本入库后替换合成层）",
+  "suite": "V2 补遗/答疑/版本影响面计算验证"
+}

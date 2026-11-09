@@ -1,0 +1,37 @@
+{
+  "results": {
+    "Q1_rewrite_5rounds": {
+      "pass": true,
+      "detail": {
+        "rounds": 5,
+        "each_round_exact": true,
+        "reverify_recovers": true,
+        "no_dangling": true,
+        "no_silent_recovery": true
+      }
+    },
+    "Q2_undo_and_reopen": {
+      "pass": true,
+      "detail": {
+        "undo_no_auto_recovery": true,
+        "reverify_recovers": true,
+        "external_change_detected": true,
+        "no_silent_adopt": true,
+        "adopt_note": "引擎 plan_reload 三分（Noop/SilentAdopt/OfferChoice）——业务对 OfferChoice 默认转人工（doc-engine-audit §5.3），无自动重绑"
+      }
+    },
+    "Q3_export_interrupt": {
+      "pass": true,
+      "detail": {
+        "exporting_before_confirm": true,
+        "exported_with_sha": true,
+        "interrupted_stays_exporting": true,
+        "interrupted_no_exported_without_sha": true,
+        "invariant_holds": true,
+        "resume_same_sha": true
+      }
+    }
+  },
+  "semul_note": "三问断言为 doc-engine-audit §5 映射契约的设计语义验证（LinkageLedger = evidence.rs 有状态语义复刻；ExportGate = 原子发布+sha256 落库为界）；引擎本体接入后升 ENGINE_RUN",
+  "suite": "V3 文档内核集成边界三问断言"
+}

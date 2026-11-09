@@ -1,0 +1,65 @@
+import { pool, vectorLiteral } from "./db.js";
+import { charBigrams } from "./chunking.js";
+import { embedTexts } from "./ollama.js";
+
+function keywordScore(query, queryBigrams, row) {
+  const rowBigrams = new Set(row.bigrams || []);
+  let overlap = 0;
+  for (const gram of queryBigrams) if (rowBigrams.has(gram)) overlap += 1;
+  const union = new Set([...queryBigrams, ...rowBigrams]).size || 1;
+  const jaccard = overlap / union;
+  const exactTokens = String(query).match(/[A-Za-z]+[\w.-]*|\d+(?:\.\d+)*|[\u4e00-\u9fff]{2,8}/g) || [];
+  const exactHits = exactTokens.filter((token) => row.content.toLowerCase().includes(token.toLowerCase())).length;
+  return jaccard * 0.72 + Math.min(exactHits / Math.max(exactTokens.length, 1), 1) * 0.28;
+}
+
+async function vectorSearch({ organizationId, queryEmbedding, filters, topK }) {
+  const values = [organizationId, vectorLiteral(queryEmbedding), topK];
+  const conditions = ["c.organization_id = $1", "a.source_type = 'enterprise_evidence'", "a.status = 'ready'", "(c.metadata->>'validUntil' IS NULL OR (c.metadata->>'validUntil')::date >= CURRENT_DATE)"];
+  if (filters.industry) { values.push(filters.industry); conditions.push(`(c.metadata->>'industry' IS NULL OR c.metadata->>'industry' = $${values.length})`); }
+  if (filters.category) { values.push(filters.category); conditions.push(`(c.metadata->>'category' IS NULL OR c.metadata->>'category' = $${values.length} OR c.metadata->>'category' = '综合')`); }
+  const sql = `SELECT c.id, c.article_id, c.content, c.chunk_type, c.metadata, c.bigrams,
+      1 - (c.embedding <=> $2::vector) AS score
+    FROM kb_chunks c JOIN kb_articles a ON a.id = c.article_id WHERE ${conditions.join(" AND ")}
+    ORDER BY c.embedding <=> $2::vector LIMIT $3`;
+  const { rows } = await pool.query(sql, values);
+  return rows.map((row) => ({ ...row, score: Number(row.score), route: "vector" }));
+}
+
+async function keywordSearch({ organizationId, query, filters, topK }) {
+  const values = [organizationId];
+  const conditions = ["c.organization_id = $1", "a.source_type = 'enterprise_evidence'", "a.status = 'ready'", "(c.metadata->>'validUntil' IS NULL OR (c.metadata->>'validUntil')::date >= CURRENT_DATE)"];
+  if (filters.industry) { values.push(filters.industry); conditions.push(`(c.metadata->>'industry' IS NULL OR c.metadata->>'industry' = $${values.length})`); }
+  if (filters.category) { values.push(filters.category); conditions.push(`(c.metadata->>'category' IS NULL OR c.metadata->>'category' = $${values.length} OR c.metadata->>'category' = '综合')`); }
+  const { rows } = await pool.query(`SELECT c.id, c.article_id, c.content, c.chunk_type, c.metadata, c.bigrams
+    FROM kb_chunks c JOIN kb_articles a ON a.id = c.article_id WHERE ${conditions.join(" AND ")} ORDER BY c.created_at DESC LIMIT 500`, values);
+  const queryBigrams = charBigrams(query);
+  return rows.map((row) => ({ ...row, score: keywordScore(query, queryBigrams, row), route: "keyword" }))
+    .filter((row) => row.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
+}
+
+function alternatingMerge(vectorRows, keywordRows, limit) {
+  const merged = [];
+  const seen = new Set();
+  const max = Math.max(vectorRows.length, keywordRows.length);
+  for (let index = 0; index < max && merged.length < limit; index += 1) {
+    for (const row of [vectorRows[index], keywordRows[index]]) {
+      if (!row || seen.has(row.id)) continue;
+      seen.add(row.id);
+      merged.push(row);
+      if (merged.length >= limit) break;
+    }
+  }
+  return merged;
+}
+
+export async function hybridSearch({ organizationId, query, filters = {}, topK = 8 }) {
+  const [queryEmbedding] = await embedTexts([query]);
+  const [vectorRows, keywordRows] = await Promise.all([
+    vectorSearch({ organizationId, queryEmbedding, filters, topK: topK * 2 }),
+    keywordSearch({ organizationId, query, filters, topK: topK * 2 }),
+  ]);
+  return alternatingMerge(vectorRows, keywordRows, topK);
+}

@@ -1,0 +1,1731 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""test_mcp_e2e.py —— MCP 端到端验证（issue #139）。
+
+用【真客户端】跑通 P0-P8 + external 模式，证明使用方
+「加载 SKILL.md → MCP 连 bid-mcp → Agent 按阶段表驱动」的接入路径真实可用。
+
+传输模式（环境变量 BID_MCP_TRANSPORT）：
+  auto     自动发现：target/debug 下有 bid-mcp-server → mcp；否则 bid-mcp-stdio → linejson
+  mcp      官方 MCP Python SDK（stdio_client + ClientSession：initialize /
+           tools/list / tools/call）——需要 #137 交付的 bid-mcp-server
+  linejson 现网 bid-mcp-stdio 的逐行 JSON 协议（{"tool","args"} 一行进、
+           {"ok","data"|"error"} 一行出）。#137 交付前先用它真跑【工具层】：
+           场景体 / 参数面 / 状态机 / external 四用例全部可验；
+           协议层（initialize/tools/list/tools/call）在此模式【不可验】，
+           对应测试显式 skip 并注明原因（不假装通过）。
+
+用例面：
+  test_00_environment           环境留档（OS/Python/SDK/rustc/二进制 sha256）
+  test_01_initialize_and_tools  MCP 协议握手 + 工具清单 ≥20（仅 mcp 传输）
+  test_02_full_pipeline         P0-P8 全链（external 起草全部章节 → docx 导出
+                                → 产物深检 → 进程重启续跑）
+  test_10_external_ghost_ev     external ①：正文引用不存在的 EV- 编号
+                                → 引擎剔除 + warning，不拒稿
+  test_11_external_uncovered    external ②：正文覆盖不全 → uncovered_requirements
+  test_12_external_unanchored   external ③：承诺句无引用 → count_unanchored_claims > 0
+  test_13_external_cas_version  external ④：正常正文 → CAS 写入成功 + 版本递增
+                                + 同稿重提幂等
+  test_14_search_evidence       #145：双通道证据检索——exact 五字段 / semantic
+                                子串分词 / hybrid 去重 / 过期降权+warning /
+                                排序确定性 / 错误面（真 MCP 工具面全链）
+
+运行：
+  pip install mcp pytest
+  cargo build -p bid-mcp --bin bid-mcp-stdio          # linejson 模式（现在即可）
+  cargo build -p bid-mcp --bin bid-mcp-server         # mcp 模式（#137 交付后）
+  pytest sdk/tests/test_mcp_e2e.py -v
+  python3 sdk/tests/test_mcp_e2e.py                   # 独立运行（无 pytest 也可）
+
+环境变量：
+  BID_MCP_TRANSPORT   auto（默认）| mcp | linejson
+  BID_MCP_SERVER_BIN  server 二进制显式路径（缺省在 BID_MCP_TARGET_DIR/debug 下找）
+  BID_MCP_SERVER_ARGS 额外启动参数（如 bid-mcp-stdio 若以 --mcp 切协议时用）
+  BID_MCP_TARGET_DIR  cargo target 目录（默认 /tmp/shared-target）
+  BID_MCP_CALL_SECS   单次工具调用超时秒数（默认 300）
+
+证据落盘：sdk/tests/evidence/<case>.json —— docs/mcp-e2e-verification.md 的数据源。
+
+断言纪律（issue #139 提醒）：发现工具返回格式问题 → 如实 FAIL，
+evidence 记录原始返回；绝不为通过而改断言。
+边界遵守：本文件只新建于 sdk/tests/**，不改 bidcore/**。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import hmac
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import time
+import zipfile
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Awaitable, Callable
+
+import pytest
+
+# ---------------------------------------------------------------- 路径与常量
+
+REPO_ROOT = Path(__file__).resolve().parents[2]  # sdk/tests/x.py → 仓库根
+FIXTURES = REPO_ROOT / "fixtures" / "corpus-A" / "files"
+# #183 围栏：子进程全局态的受信导入根（BID_WS 工作区只装服务自有存储，
+# 夹具在 ws 外——不声明此根，import_tender_files 会被围栏整批预拒）
+FIXTURES_ROOT = REPO_ROOT / "fixtures"
+EVIDENCE_DIR = REPO_ROOT / "sdk" / "tests" / "evidence"
+
+CALL_TIMEOUT = float(os.environ.get("BID_MCP_CALL_SECS", "300"))
+
+# MCP SDK（linejson 模式下允许缺失——只有 mcp 传输需要它）
+try:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import get_default_environment, stdio_client
+
+    HAS_MCP_SDK = True
+except ImportError:  # pragma: no cover
+    HAS_MCP_SDK = False
+
+# P1 导入的招标包（与 bidcore Rust e2e 同一套真件——GT 25 埋点语料）
+TENDER_FILES: list[tuple[str, str]] = [
+    ("A-招标文件.docx", "招标文件"),
+    ("C-补遗文件01.docx", "补遗"),
+    ("evidence/EV-01-营业执照.pdf", "附件"),
+    ("evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf", "附件"),
+]
+EV_SOURCE = "evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf"
+
+# blocking 判定的必绑类目（矩阵 is_mandatory：否决项 | 资格条件；技术参数
+# 同样须佐证——#110 缺失回报闸，不绑则 draft 前置闸拒生成）
+MANDATORY_CATS = {"资格条件", "否决项", "技术参数"}
+
+GHOST_EV = "EV-9999"  # 用例①的幽灵证据号（任何真实台账都不会有）
+
+# 无锚承诺句（用例③——措辞避开引用，各成一句，计数恰为 2）
+PROMISE_SENTENCES = [
+    "我方郑重承诺所投设备均为全新原厂正品。",
+    "我方确保本项目按期交付并顺利通过验收。",
+]
+
+# 用例 14（#145）：检索验收的证据登记面（开标日 2026-12-31 口径）
+SEARCH_OPEN_DATE = "2026-12-31"
+SEARCH_EXTRA_EVIDENCE = [
+    # (kind, title, scope, valid_until, extra)
+    ("certificate", "ISO9001 质量管理体系认证证书", "质量管理体系", "2027-06-30", {}),
+    ("qualification", "营业执照", "中华人民共和国境内注册的法人", None, {}),
+    (
+        "performance", "智慧园区弱电工程合同", "弱电工程", None,
+        {"client": "某某工业园区管委会", "amount_wan": 920, "completed_on": "2024.06"},
+    ),
+    ("certificate", "ISO14001 环境管理体系认证证书", "环境管理体系", "2026-11-30", {}),
+]
+
+
+# ---------------------------------------------------------------- 小工具
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+async def mint_receipt(client: Any, ws: Path, actor_id: str, scope: str) -> str:
+    """#182 宿主签发面复刻（#323 起 v2 七段——含内容绑定摘要）。
+
+    e2e 测试进程即宿主（spawn server 的同一进程树/同一文件系统权限）——
+    持钥签发是宿主特权；MCP 工具面上不存在等价能力（这正是 #182 的信任根）。
+    契约与 bid-domain/src/principal.rs 一字不差：
+      线格式 v2.<actor>.human.<scope>.<issued_at>.<sections_digest>.<hex_hmac_sha256>
+      HMAC 消息 v2|<actor>|human|<scope>|<issued_at>|<sections_digest>
+    #323/R-06：第六段 = 当前章节树摘要——经 get_bid_project_state 的
+    content_binding.sections_digest 取（与服务器端验签同源单一真源）；
+    签发后内容变更 → 验签时摘要不一致 → CONTENT_DRIFTED_RECEIPT 拒。
+    """
+    state = await call(client, "get_bid_project_state", {})
+    digest = state["content_binding"]["sections_digest"]
+    key = (ws / ".mang" / "approval.key").read_bytes()
+    now = int(time.time())
+    msg = f"v2|{actor_id}|human|{scope}|{now}|{digest}".encode()
+    mac = hmac.new(key, msg, hashlib.sha256).hexdigest()
+    return f"v2.{actor_id}.human.{scope}.{now}.{digest}.{mac}"
+
+
+async def expect_reject(client: Any, tool: str, args: dict) -> str:
+    """负例探针：返回错误码（如 E_UNPROCESSABLE）；意外成功返回 "OK:…"。"""
+    try:
+        r = await call(client, tool, args)
+        return f"OK:{json.dumps(r, ensure_ascii=False)[:80]}"
+    except ToolFailure as e:
+        return e.code
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def compact(obj: Any, max_len: int = 1500) -> Any:
+    """evidence 摘要——长数组折叠成 {count, head}，长字符串截断。"""
+    if isinstance(obj, dict):
+        return {k: compact(v, max_len) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        if len(obj) > 12:
+            return {"count": len(obj), "head": [compact(x, max_len) for x in obj[:12]]}
+        return [compact(x, max_len) for x in obj]
+    if isinstance(obj, str) and len(obj) > max_len:
+        return obj[:max_len] + f"…(<{len(obj)} chars>)"
+    return obj
+
+
+class ToolFailure(RuntimeError):
+    """工具层失败（envelope ok=false 或 MCP isError）。"""
+
+    def __init__(self, tool: str, code: str, what: str, raw: Any = None):
+        super().__init__(f"[{tool}] {code}: {what}")
+        self.tool, self.code, self.what, self.raw = tool, code, what, raw
+
+
+# ---------------------------------------------------------------- server 发现
+
+
+def resolve_server() -> tuple[Path, str, list[str]]:
+    """返回 (二进制, transport, 额外args)。auto：优先 bid-mcp-server。"""
+    transport_pref = os.environ.get("BID_MCP_TRANSPORT", "auto").strip().lower()
+    target = Path(os.environ.get("BID_MCP_TARGET_DIR", "/tmp/shared-target"))
+    debug = target / "debug"
+    extra_args = [a for a in os.environ.get("BID_MCP_SERVER_ARGS", "").split() if a]
+
+    override = os.environ.get("BID_MCP_SERVER_BIN")
+    if override:
+        p = Path(override)
+        assert p.is_file(), f"BID_MCP_SERVER_BIN 指向的文件不存在: {p}"
+        if transport_pref not in ("mcp", "linejson"):
+            transport_pref = "mcp" if p.name == "bid-mcp-server" else "linejson"
+        return p, transport_pref, extra_args
+
+    server, stdio = debug / "bid-mcp-server", debug / "bid-mcp-stdio"
+    if transport_pref == "mcp":
+        assert server.is_file(), (
+            f"BID_MCP_TRANSPORT=mcp 但 {server} 不在——#137（MCP 协议层）是否已交付并编译？"
+            f" 先跑: cargo build -p bid-mcp --bin bid-mcp-server"
+        )
+        return server, "mcp", extra_args
+    if transport_pref == "linejson":
+        assert stdio.is_file(), (
+            f"BID_MCP_TRANSPORT=linejson 但 {stdio} 不在——先跑: "
+            f"cargo build -p bid-mcp --bin bid-mcp-stdio"
+        )
+        return stdio, "linejson", extra_args
+    # auto
+    if server.is_file():
+        return server, "mcp", extra_args
+    if stdio.is_file():
+        return stdio, "linejson", extra_args
+    raise AssertionError(
+        f"{debug} 下既无 bid-mcp-server 也无 bid-mcp-stdio——先编译（见模块 docstring）"
+    )
+
+
+# ---------------------------------------------------------------- 客户端实现
+
+
+class LineJsonClient:
+    """现网 bid-mcp-stdio：一行 {"tool","args"} 进、一行 {"ok","tool","data"|"error"} 出。
+
+    真进程边界（spawn + stdio 管道），全局服务态由 BID_WS 持久化工作区承载
+    ——与 MCP 模式走的是同一 dispatch_json → tools::invoke 分发面。
+    """
+
+    transport = "linejson"
+
+    def __init__(self, bin_path: Path, ws: Path, extra_args: list[str]):
+        self.ws = ws
+        self.stderr_path = ws.parent / "server.stderr.log"
+        self._err = open(self.stderr_path, "wb")
+        env = {
+            k: os.environ[k]
+            for k in ("PATH", "HOME", "LANG", "TERM", "USER")
+            if k in os.environ
+        }
+        env["BID_WS"] = str(ws)
+        env["BID_FS_ROOT"] = str(FIXTURES_ROOT)  # #183：受信导入根（canonical）
+        self.proc = subprocess.Popen(
+            [str(bin_path), *extra_args],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self._err,
+            env=env,
+            cwd=str(ws),
+        )
+        self.calls = 0
+        self.server_info = {"name": "bid-mcp-stdio", "version": "(linejson, 无握手)"}
+
+    def _roundtrip(self, tool: str, args: dict) -> Any:
+        assert self.proc.poll() is None, f"server 进程已退出（code={self.proc.returncode}）"
+        req = json.dumps({"tool": tool, "args": args}, ensure_ascii=False)
+        self.proc.stdin.write((req + "\n").encode("utf-8"))
+        self.proc.stdin.flush()
+        raw = self.proc.stdout.readline()
+        if not raw:
+            self._err.flush()
+            tail = b""
+            try:
+                tail = Path(self.stderr_path).read_bytes()[-2000:]
+            except OSError:
+                pass
+            raise ToolFailure(tool, "TRANSPORT_DEAD", f"server 无应答且管道关闭；stderr 尾部: {tail!r}")
+        self.calls += 1
+        return json.loads(raw.decode("utf-8"))
+
+    async def call_tool(self, tool: str, args: dict) -> Any:
+        return await asyncio.to_thread(self._roundtrip, tool, args)
+
+    async def list_tools(self) -> list[str]:
+        raise NotImplementedError("linejson 协议无 tools/list——协议层归 #137")
+
+    def close(self) -> None:
+        try:
+            if self.proc.poll() is None:
+                self.proc.stdin.close()
+                try:
+                    self.proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+        finally:
+            self._err.close()
+
+
+class McpClient:
+    """官方 MCP Python SDK——initialize / tools/list / tools/call 真握手。"""
+
+    transport = "mcp"
+
+    def __init__(self, session: "ClientSession", server_info: Any):
+        self.session = session
+        self.server_info = server_info
+        self.calls = 0
+        # 工具返回 text 的实际形态留档（issue #139：格式问题如实报告）
+        self.payload_shapes: dict[str, str] = {}
+
+    async def call_tool(self, tool: str, args: dict) -> Any:
+        try:
+            res = await self.session.call_tool(tool, dict(args))
+        except ToolFailure:
+            raise
+        except Exception as e:  # McpError 等协议级错误
+            raise ToolFailure(tool, "PROTOCOL_ERROR", repr(e)) from e
+        self.calls += 1
+        # structuredContent 在场优先（MCP 规范的结构化载荷通道）
+        structured = getattr(res, "structuredContent", None)
+        texts = [
+            c.text for c in (res.content or []) if getattr(c, "type", "") == "text"
+        ]
+        text = "\n".join(texts)
+        if getattr(res, "isError", False):
+            # 工具层失败：#137 协议层把 envelope 放进 content[0].text，
+            # structuredContent 只有 {code, what}——从 text 解析完整 envelope 拿 code。
+            v: dict = {}
+            try:
+                v = json.loads(text)
+            except json.JSONDecodeError:
+                v = {}
+            if isinstance(v, dict) and v.get("ok") is False:
+                err = v.get("error", {}) or {}
+                raise ToolFailure(tool, err.get("code", "?"), err.get("what", ""), v)
+            sc = structured if isinstance(structured, dict) else {}
+            if sc.get("code"):
+                raise ToolFailure(tool, sc.get("code"), sc.get("what", ""), sc)
+            raise ToolFailure(tool, "IS_ERROR", text[:500] or "(空)", text)
+        if structured is not None:
+            # #137 后：成功时 structuredContent = data 本体（无 ok 外壳）；
+            # 失败时 = {code, what}。先判是不是 envelope 形态。
+            if isinstance(structured, dict) and "ok" in structured:
+                self.payload_shapes[tool] = "structuredContent/envelope"
+                return self._unwrap_envelope(structured, tool)
+            self.payload_shapes[tool] = "structuredContent/data"
+            return structured
+        try:
+            v = json.loads(text)
+        except json.JSONDecodeError:
+            raise ToolFailure(
+                tool, "NON_JSON_PAYLOAD", f"tools/call 返回非 JSON text: {text[:300]!r}", text
+            )
+        if isinstance(v, dict) and "ok" in v:
+            self.payload_shapes[tool] = "text/envelope"
+            return self._unwrap_envelope(v, tool)
+        self.payload_shapes[tool] = "text/raw-data"
+        return v
+
+    @staticmethod
+    def _unwrap_envelope(v: dict, tool: str) -> Any:
+        if v.get("ok") is True:
+            return v.get("data", {})
+        err = v.get("error", {}) or {}
+        raise ToolFailure(
+            tool, err.get("code", "?"), err.get("what", json.dumps(err, ensure_ascii=False)), v
+        )
+
+    async def raw_call(self, tool: str, args: dict) -> dict:
+        """返回【完整 envelope】（ok/tool/data|error）——从 content[0].text 解析。
+
+        用途：#137 协议层把 structuredContent 设成 data 本体（不含 ok 外壳），
+        需要 ok/counts 等完整字段时走这个。"""
+        res = await self.session.call_tool(tool, dict(args))
+        texts = [x.text for x in (res.content or []) if getattr(x, "type", "") == "text"]
+        if not texts:
+            return {"ok": not getattr(res, "isError", False),
+                    "data": getattr(res, "structuredContent", None)}
+        try:
+            return json.loads(texts[0])
+        except json.JSONDecodeError:
+            return {"ok": False, "raw": texts[0][:500]}
+
+    async def list_tools(self) -> list[str]:
+        res = await self.session.list_tools()
+        return [t.name for t in res.tools]
+
+
+@asynccontextmanager
+async def open_client(ws: Path):
+    """按 transport 起一个【连接到全新工作区 ws】的客户端。
+
+    两种传输在客户端侧等价：call_tool(tool, args) → data dict / ToolFailure。
+    """
+    bin_path, transport, extra_args = resolve_server()
+    if transport == "mcp":
+        assert HAS_MCP_SDK, "mcp 传输需要官方 SDK：pip install mcp"
+        env = {**get_default_environment(), "BID_WS": str(ws),
+               "BID_FS_ROOT": str(FIXTURES_ROOT)}  # #183：受信导入根（canonical）
+        params = StdioServerParameters(
+            command=str(bin_path), args=extra_args, env=env
+        )
+        errlog = open(ws.parent / "server.stderr.log", "wb")
+        try:
+            async with stdio_client(params, errlog=errlog) as (read, write):
+                async with ClientSession(read, write) as session:
+                    info = await session.initialize()
+                    yield McpClient(session, info)
+        finally:
+            errlog.close()
+    else:
+        client = LineJsonClient(bin_path, ws, extra_args)
+        try:
+            yield client
+        finally:
+            client.close()
+
+
+async def call(client: Any, tool: str, args: dict) -> dict:
+    """带超时的调用 + envelope 解包（{"ok":false} → ToolFailure）。"""
+    r = await asyncio.wait_for(client.call_tool(tool, args), timeout=CALL_TIMEOUT)
+    if isinstance(r, dict) and "ok" in r:  # linejson 顶层就是 envelope
+        if r.get("ok") is True:
+            return r.get("data", {})
+        err = r.get("error", {}) or {}
+        raise ToolFailure(
+            tool, err.get("code", "?"), err.get("what", json.dumps(err, ensure_ascii=False)), r
+        )
+    return r  # 已被 McpClient 解包 / 非 envelope 形态——原样上抛由调用方断言
+
+
+async def call_env(client: Any, tool: str, args: dict) -> dict:
+    """带超时的调用，返回【完整 envelope】（含 ok/tool/data|error）。
+
+    #137 后 structuredContent = data 本体（无 ok 外壳）；需要 ok/counts 时用这个。
+    """
+    fn = getattr(client, "raw_call", None)
+    if fn is not None:
+        return await asyncio.wait_for(fn(tool, dict(args)), timeout=CALL_TIMEOUT)
+    return await asyncio.wait_for(client.call_tool(tool, dict(args)), timeout=CALL_TIMEOUT)
+
+
+# ---------------------------------------------------------------- 证据记录
+
+
+class Recorder:
+    """每阶段的请求/返回/检查项留档——报告的数据源；失败也先落盘。"""
+
+    def __init__(self, case: str, transport: str, bin_path: Path):
+        self.case = case
+        self.doc: dict[str, Any] = {
+            "case": case,
+            "transport": transport,
+            "server_bin": str(bin_path),
+            "server_sha256": sha256_file(bin_path),
+            "python": sys.version.split()[0],
+            "mcp_sdk": _sdk_version(),
+            "os": platform.platform(),
+            "started_at": now_iso(),
+            "stages": [],
+            "payload_shapes": {},
+        }
+
+    def stage(
+        self,
+        name: str,
+        tool: str | None,
+        args: dict | None,
+        result: Any,
+        checks: list[tuple[str, bool]],
+        extra: dict | None = None,
+        elapsed_ms: float | None = None,
+    ) -> None:
+        entry = {
+            "stage": name,
+            "tool": tool,
+            "args": compact(args or {}),
+            "result": compact(result),
+            "checks": [{"desc": d, "pass": bool(ok)} for d, ok in checks],
+            "elapsed_ms": elapsed_ms,
+        }
+        if extra:
+            entry["extra"] = compact(extra)
+        self.doc["stages"].append(entry)
+        n_pass = sum(1 for _, ok in checks if ok)
+        status = "PASS" if n_pass == len(checks) and checks else "FAIL"
+        print(f"  [{self.case}] {name:<28} {status} ({n_pass}/{len(checks)})", flush=True)
+
+    def finish(self, note: str = "") -> None:
+        self.doc["finished_at"] = now_iso()
+        if note:
+            self.doc["note"] = note
+        EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+        out = EVIDENCE_DIR / f"{self.case}.json"
+        out.write_text(
+            json.dumps(self.doc, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+
+    def all_pass(self) -> bool:
+        return all(
+            c["pass"] for s in self.doc["stages"] for c in s.get("checks", [])
+        )
+
+
+def _sdk_version() -> str:
+    if not HAS_MCP_SDK:
+        return "(not installed)"
+    try:
+        from importlib.metadata import version
+
+        return version("mcp")
+    except Exception:  # pragma: no cover
+        return "?"
+
+
+def require(checks: list[tuple[str, bool]]) -> None:
+    """先记录后断言：所有检查项过才放行，失败给首个描述。"""
+    for desc, ok in checks:
+        if not ok:
+            raise AssertionError(f"验收失败：{desc}")
+
+
+# ---------------------------------------------------------------- 场景体（P0→P4→三门）
+
+
+async def setup_project(client: Any, rec: Recorder, tag: str, ws: Path) -> dict:
+    """建项→导入→抽取→建纲→矩阵→登记→绑定→三门过审。
+
+    ws 用于 #182 宿主签发面（读 approval.key 签 receipt——测试进程即宿主）。
+
+    全部走 MCP 工具（外部 Agent 视角的纯 MCP 驱动面），
+    返回 ctx：pid / ev_id / sections(sec→[req]) / mandatory REQ 清单。
+    """
+    # ---- P0 建项
+    t0 = time.monotonic()
+    r = await call(client, "create_bid_project", {
+        "name": f"MCP e2e {tag}——智慧园区弱电工程",
+        "bid_deadline": "2026-12-31",
+        "mode": "明标",
+        "external_key": tag,
+    })
+    pid = r.get("project_id", "")
+    # 契约 §1：out 只承诺 {project_id, status}——deduplicated 不在首建响应里
+    # （缺席 ≠ false，重放路径才带 deduplicated:true；如实记录该形态差异）
+    dedup_first = r.get("deduplicated")
+    # 幂等重放：同 external_key 再建 → 原 project_id + deduplicated=true
+    r2 = await call(client, "create_bid_project", {
+        "name": f"MCP e2e {tag}——智慧园区弱电工程",
+        "bid_deadline": "2026-12-31",
+        "mode": "明标",
+        "external_key": tag,
+    })
+    checks = [
+        ("P0: project_id 前缀 PRJ-", pid.startswith("PRJ-")),
+        ("P0: status=DRAFT", r.get("status") == "DRAFT"),
+        ("P0: 首建非重放（deduplicated 缺席或 false）", not dedup_first),
+        ("P0: warnings 为空（截止日未过）", r.get("warnings") == []),
+        ("P0: 同 key 重放 → 原 project_id", r2.get("project_id") == pid),
+        ("P0: 重放 deduplicated=true（契约幂等面）", r2.get("deduplicated") is True),
+    ]
+    rec.stage("P0 create_bid_project（含幂等重放）", "create_bid_project",
+              {"external_key": tag},
+              {"first": r, "replay": r2,
+               "note": "首建响应无 deduplicated 字段——契约 §1 out 只承诺 project_id/status"},
+              checks, elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- P1 导入（真件：A 主文件 + C 补遗 + 2 件证据 PDF）
+    t0 = time.monotonic()
+    files = [
+        {"upload_ref": str(FIXTURES / n), "filename": n, "kind": k}
+        for n, k in TENDER_FILES
+    ]
+    r = await call(client, "import_tender_files", {"project_id": pid, "files": files})
+    totals = r.get("totals", {})
+    # #185 来源验证：import 回执的 per_file[].file_id 是证据登记的来源锚
+    # （register_evidence 的 source_file_id——不再自报文件名/sha）
+    file_ids: dict[str, str] = {
+        p.get("filename", ""): p.get("file_id", "")
+        for p in r.get("per_file", [])
+    }
+    checks = [
+        ("P1: totals.files >= 4", totals.get("files", 0) >= 4),
+        ("P1: parse_failed == 0", totals.get("parse_failed", -1) == 0),
+        ("P1: partial == 0", totals.get("partial", -1) == 0),
+        ("P1: per_file 回执 4 件 file_id 齐备（#185 来源锚）",
+         len([v for v in file_ids.values() if v.startswith("TF-")]) >= 4),
+    ]
+    rec.stage("P1 import_tender_files", "import_tender_files",
+              {"files": [f["filename"] for f in files]}, r, checks,
+              elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- P2 抽取
+    t0 = time.monotonic()
+    r = await call(client, "extract_requirements", {"project_id": pid})
+    counts = r.get("counts", {})
+    by_cat = counts.get("by_category", {})
+    checks = [
+        ("P2: counts.total >= 5（GT 25 埋点件）", counts.get("total", 0) >= 5),
+        ("P2: by_category 非空", bool(by_cat)),
+    ]
+    rec.stage("P2 extract_requirements", "extract_requirements", {}, r, checks,
+              elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- P3 建纲（MCP 工具；规模收小提速：6 千字 / 每叶 ≤6 REQ）
+    t0 = time.monotonic()
+    r = await call(client, "build_outline", {
+        "project_id": pid, "target_total_chars": 6000, "max_reqs_per_leaf": 6,
+    })
+    oc = r.get("counts", {})
+    checks = [
+        ("P3: sections >= 2", oc.get("sections", 0) >= 2),
+        ("P3: matrix_rows >= 5", oc.get("matrix_rows", 0) >= 5),
+        ("P3: status=MATRIX_READY", r.get("status") == "MATRIX_READY"),
+    ]
+    rec.stage("P3 build_outline", "build_outline", {}, r, checks,
+              elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- P3 矩阵（Agent 发现「哪章管哪些 REQ」的唯一 MCP 窗口）
+    t0 = time.monotonic()
+    r = await call(client, "get_compliance_matrix", {"project_id": pid, "limit": 1000})
+    rows = r.get("rows", [])
+    sections: dict[str, list[str]] = {}
+    sec_titles: dict[str, str] = {}
+    mandatory: list[str] = []
+    n_blocking = 0
+    for row in rows:
+        rid = row.get("requirement", {}).get("id", "")
+        sec = row.get("draft_section_id")
+        cat = row.get("requirement", {}).get("category", "")
+        if row.get("blocking"):
+            n_blocking += 1
+        if cat in MANDATORY_CATS:
+            mandatory.append(rid)
+        if sec:
+            sections.setdefault(sec, []).append(rid)
+            if not sec_titles.get(sec):  # 行内无章名——占位记录
+                sec_titles[sec] = f"(矩阵行未携带章名)"
+    checks = [
+        ("P3: 矩阵行数 >= 5", len(rows) >= 5),
+        ("P3: total 与 rows 一致", r.get("total", -1) == len(rows)),
+        ("P3: 至少 1 个可起草章节", len(sections) >= 1),
+        ("P3: 必绑类目 REQ 非空", len(mandatory) >= 1),
+        (f"P3: 建纲后 blocking 行 = {n_blocking}（未绑证据，预期 >0 或 =0）", True),
+    ]
+    rec.stage("P3 get_compliance_matrix", "get_compliance_matrix", {"limit": 1000},
+              {"total": r.get("total"), "rows_head": rows[:3], "n_blocking": n_blocking},
+              checks, extra={"sections": {k: v for k, v in sections.items()}},
+              elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- P4 证据登记（MCP 工具；#185 来源验证——source_file_id 锚已导入的
+    #      EV-02 证据件，sha/指纹由服务端生成）
+    t0 = time.monotonic()
+    ev_fid = file_ids[EV_SOURCE]  # filename 入参带 evidence/ 前缀——per_file 回显同键
+    r = await call(client, "register_evidence", {
+        "project_id": pid,
+        "kind": "qualification",
+        "title": "电子与智能化工程专业承包二级资质证书",
+        "source_file_id": ev_fid,
+        "subject_name": "投标人",
+        "scope": "电子与智能化工程",
+    })
+    ev_id = r.get("ev_id", "")
+    checks = [
+        ("P4: ev_id 前缀 EV-", ev_id.startswith("EV-")),
+        ("P4: status=ACTIVE", r.get("status") == "ACTIVE"),
+        ("P4: deduplicated=false（首登）", r.get("deduplicated") is False),
+    ]
+    rec.stage("P4 register_evidence", "register_evidence",
+              {"kind": "qualification", "source_file_id": ev_fid}, r, checks,
+              elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- P4 绑定（必绑类目全绑 → blocking 清零）
+    t0 = time.monotonic()
+    r = await call(client, "bind_evidence", {
+        "project_id": pid, "ev_id": ev_id,
+        "requirement_ids": mandatory, "bid_open_date": "2026-12-31",
+    })
+    m = r.get("matrix", {})
+    checks = [
+        ("P4: bound_new + replayed == 请求数",
+         r.get("bound_new", 0) + r.get("replayed", 0) == len(mandatory)),
+        ("P4: 绑后 blocking == 0（否则导出闸会拒）", m.get("blocking", -1) == 0),
+    ]
+    rec.stage("P4 bind_evidence", "bind_evidence",
+              {"ev_id": ev_id, "n_reqs": len(mandatory)}, r, checks,
+              elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    # ---- G3 两门过审（#182：receipt 验签——宿主签发，Agent 不得伪造；
+    #      #180 审核内容绑定：pre_export_confirm 绑定章节正文摘要，须在全部
+    #      叶起草完成后记审——挪至 _case_full_pipeline 的 P7.5（导出前），
+    #      与人类流程同序）
+    t0 = time.monotonic()
+    # #182 负例探针（issue 验收 A/C）：旧 reviewer 参数 → 参数面显式拒；
+    # 伪造 receipt（篡改末段 mac）→ 服务层验签拒。两者均零副作用。
+    probe_old_param = await expect_reject(client, "record_review_gate", {
+        "project_id": pid, "gate": "matrix_approval", "decision": "APPROVED",
+        "reviewer": "human:admin",
+    })
+    forged = await mint_receipt(client, ws, "admin", "review_gate:matrix_approval")
+    forged = forged[:-1] + ("1" if forged[-1] != "1" else "0")
+    probe_forged = await expect_reject(client, "record_review_gate", {
+        "project_id": pid, "gate": "matrix_approval", "decision": "APPROVED",
+        "receipt": forged,
+    })
+    gates = ("matrix_approval", "outline_approval")
+    for g in gates:
+        r = await call(client, "record_review_gate", {
+            "project_id": pid, "gate": g, "decision": "APPROVED",
+            "receipt": await mint_receipt(client, ws, "mcp-e2e-lead", f"review_gate:{g}"),
+        })
+    approved = r.get("gates_approved", [])
+    actor = r.get("receipt", {}).get("actor", {})
+    checks = [
+        (f"G3: 两门全过 {gates}", set(gates).issubset(set(approved))),
+        ("G3: #182 旧 reviewer 参数被拒（E_UNPROCESSABLE）",
+         probe_old_param == "E_UNPROCESSABLE"),
+        ("G3: #182 伪造 receipt 被拒（E_UNPROCESSABLE）",
+         probe_forged == "E_UNPROCESSABLE"),
+        ("G3: #182 actor 回显 actor_type=human（宿主签发的可信身份）",
+         actor.get("actor_type") == "human"),
+        ("G3: #182 actor 回显 authentication_method=hmac_receipt_v2（#323 v2 线格式）",
+         actor.get("authentication_method") == "hmac_receipt_v2"),
+    ]
+    rec.stage("G3 record_review_gate ×2", "record_review_gate",
+              {"gates": list(gates),
+               "#182_probes": {"old_param": probe_old_param,
+                               "forged_receipt": probe_forged}},
+              r, checks, elapsed_ms=(time.monotonic() - t0) * 1000)
+    require(checks)
+
+    return {
+        "pid": pid, "ev_id": ev_id, "rows": rows,
+        "sections": sections, "mandatory": mandatory,
+        "file_ids": file_ids,
+    }
+
+
+# ---------------------------------------------------------------- 正文作者（模拟使用方 Agent）
+
+# 填充句池（#341 方案 A：external 稿按章节配额带补足——确定性、无承诺词族
+# （承诺/保证/确保/完全满足——防 unanchored_claims 误报）、无 REQ/EV 引用记号）
+FILLER_SENTENCES = [
+    "本节围绕上述条款的响应要点作进一步说明，细化落实安排与执行细节。",
+    "相关工作将在项目实施阶段按既定方案组织推进，各环节责任到人、措施到位。",
+    "与前述响应口径一致，本部分作为补充说明，不改变逐条响应的结论与范围。",
+    "上述安排在人员、进度、质量三个维度均已明确对应的责任路径与验收基准。",
+    "具体实施中将按招标文件的最新口径执行，如有调整以书面澄清文件为准。",
+]
+
+
+def author_body(
+    reqs: list[str],
+    ev_ids: list[str] | None = None,
+    cite_only_first: bool = False,
+    ghost_ev: str | None = None,
+    promise_sentences: list[str] | None = None,
+    tail_sentence: str | None = None,
+    target_chars: int = 0,
+) -> str:
+    """模拟使用方 Agent 写的 markdown 正文。
+
+    纪律（与引擎的回查/统计面对齐）：
+    - 每个 REQ 引用单独成句（句号边界——无锚承诺按句计）；
+    - 不使用 承诺/保证/确保/完全满足 字样（除非显式传 promise_sentences）；
+    - 行内粗体走 **字样**（#117 的 run 发射层会在 docx 里变粗体 run）；
+    - #341：target_chars > 0 时确定性填充到目标量（各节 ≥ 自身配额 →
+      全稿总量 ≥ outline_total_chars()，同步满足文档级 E_TOTAL_CHARS_
+      BELOW_MIN；带内偏上沿 ≤ target+一句，不触 W_CHARS_OFF_TARGET）。
+    """
+    parts = ["# 分项响应", "", "本章依据响应矩阵，对所辖条款逐条对照如下。"]
+    target = reqs[:1] if cite_only_first else reqs
+    for rid in target:
+        parts.append(f"依据 [{rid}]，我方具备该条款所要求的能力与条件，配置与招标文件规定一致。")
+    if ev_ids:
+        cites = "、".join(f"[{e}]" for e in ev_ids)
+        parts.append(f"**佐证材料**：本章相应条款的证明文件见 {cites}，扫描件与台账一致。")
+    if ghost_ev:
+        parts.append(f"另附高新技术企业证书 {ghost_ev} 作为补充佐证材料。")
+    if tail_sentence:
+        parts.append(tail_sentence)
+    for s in promise_sentences or []:
+        parts.append(s)
+    # #341：确定性填充（与引擎 MockGenerator.pad_to_target 同口径——
+    # 句池循环补足，目标量而非 −20% 下限）
+    if target_chars > 0:
+        i = 0
+        while len("\n\n".join(parts)) < target_chars:
+            parts.append(FILLER_SENTENCES[i % len(FILLER_SENTENCES)])
+            i += 1
+            if i > 10_000:
+                break  # 防御性上限（与 pad_to_target 同款）
+    return "\n\n".join(parts)
+
+
+def read_chapter_record(ws: Path, sec_id: str) -> dict:
+    p = ws / "chapters" / f"{sec_id}.json"
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- 用例体
+
+
+async def _case_environment(rec: Recorder) -> None:
+    bin_path, transport, _ = resolve_server()
+    checks: list[tuple[str, bool]] = [
+        ("环境: server 二进制在场", bin_path.is_file()),
+        ("环境: fixtures/corpus-A 真件在场", (FIXTURES / "A-招标文件.docx").is_file()),
+        ("环境: mcp Python SDK 已安装" if HAS_MCP_SDK else "环境: mcp SDK 未装（linejson 可跑）", True),
+    ]
+    rustc = shutil.which("rustc")
+    rustc_v = subprocess.run([rustc, "--version"], capture_output=True, text=True).stdout.strip() if rustc else "(rustc 不在 PATH)"
+    rec.stage(
+        "环境留档", None, {},
+        {
+            "transport_resolved": transport,
+            "server_bin": str(bin_path),
+            "server_sha256": sha256_file(bin_path) if bin_path.is_file() else None,
+            "python": sys.version.split()[0],
+            "mcp_sdk": _sdk_version(),
+            "os": platform.platform(),
+            "rustc": rustc_v,
+        },
+        checks,
+    )
+    require(checks)
+
+
+async def _case_initialize_and_tools(rec: Recorder) -> None:
+    bin_path, transport, _ = resolve_server()
+    if transport != "mcp":
+        pytest.skip(
+            "MCP 协议层（initialize/tools/list/tools/call）待 #137 交付 bid-mcp-server；"
+            f"当前传输={transport}（逐行 JSON，无握手面）——本用例如实 SKIP，不假装通过"
+        )
+    ws = _mk_ws("handshake")
+    async with open_client(ws) as client:
+        info = client.server_info
+        names = await client.list_tools()
+        key_tools = {
+            "create_bid_project", "import_tender_files", "extract_requirements",
+            "get_compliance_matrix", "build_outline", "register_evidence",
+            "bind_evidence", "record_review_gate", "draft_response_section",
+            "validate_bid_document", "export_bid_document", "get_bid_project_state",
+        }
+        caps = getattr(info, "capabilities", None)
+        caps_dict = caps.model_dump() if caps is not None else {}
+        # #591：MCP SDK 字段命名跨版本漂移——
+        #   mcp 1.x（本地 1.28.1）用 camelCase：serverInfo / protocolVersion
+        #   CI 装的更新版用 snake_case：server_info / protocol_version
+        # CI 实测 dump：{'protocol_version': '2025-11-25', 'server_info': {'name': 'bid-mcp'}}
+        # 两者都要支持（LineJsonClient 的 server_info 还是 dict——三形态兼容）。
+        def _field(obj, camel, snake, default=None):
+            """按 camelCase → snake_case → dict 三形态取字段。"""
+            if obj is None:
+                return default
+            for key in (camel, snake):
+                v = getattr(obj, key, None)
+                if v is not None:
+                    return v
+            if isinstance(obj, dict):
+                for key in (camel, snake):
+                    if key in obj:
+                        return obj[key]
+            return default
+
+        si = _field(info, "serverInfo", "server_info")
+        server_name = _field(si, "name", "name", "") or ""
+        server_ver = _field(si, "version", "version", "?") or "?"
+        proto = _field(info, "protocolVersion", "protocol_version")
+        if si is None:
+            # 兜底诊断：两套命名都取不到时打印真实形态（下一轮能直接定位）
+            try:
+                print(f"[diag] info dump={info.model_dump()}")
+            except Exception as e:
+                print(f"[diag] model_dump failed: {e!r}  raw={info!r}")
+        checks = [
+            ("握手: initialize 成功且 serverInfo.name == 'bid-mcp'", server_name == "bid-mcp"),
+            ("握手: protocolVersion 已协商", bool(proto)),
+            ("握手: capabilities.tools 在场", "tools" in caps_dict),
+            (f"握手: tools/list ≥ 20（实际 {len(names)}）", len(names) >= 20),
+            ("握手: 关键工具全在场（P0-P8 主链 12 个）", key_tools.issubset(set(names))),
+        ]
+        rec.stage("MCP 握手 + 工具清单", None, {},
+                  {"serverInfo": {"name": server_name, "version": server_ver},
+                   "protocolVersion": proto,
+                   "n_tools": len(names), "tool_names": sorted(names)},
+                  checks)
+        require(checks)
+
+
+async def _case_full_pipeline(rec: Recorder, ws: Path) -> None:
+    async with open_client(ws) as client:
+        ctx = await setup_project(client, rec, "mcp-e2e-pipeline", ws)
+        pid, sections, ev_id = ctx["pid"], ctx["sections"], ctx["ev_id"]
+        mandatory = set(ctx["mandatory"])
+
+        # ---- P4.5 配额面（#341 方案 A：external 稿按章节配额带补足）。
+        #      check_bid_quality 的 sections[] 携带 target_chars（MatrixReady+
+        #      只读窗可用）——P5 起草前取一次，正文填充到目标量：
+        #      章节级 E_CHARS_BELOW_MIN（评分章节 BLOCKER）与文档级
+        #      E_TOTAL_CHARS_BELOW_MIN 同步满足（各节 ≥ 自身配额 →
+        #      总量 ≥ outline_total_chars()）。
+        q = await call(client, "check_bid_quality", {"project_id": pid})
+        sec_targets: dict[str, int] = {
+            s.get("section_id", ""): int(s.get("target_chars") or 0)
+            for s in q.get("sections", [])
+        }
+
+        # ---- P5 external 起草（使用方核心路径：Agent 写正文 → 引擎回查+CAS+落盘）
+        t0 = time.monotonic()
+        draft_stats = {}
+        for sec, reqs in sections.items():
+            ev_ids = [ev_id] if any(r in mandatory for r in reqs) else []
+            body = author_body(reqs, ev_ids=ev_ids,
+                               target_chars=sec_targets.get(sec, 0))
+            r = await call(client, "draft_response_section", {
+                "project_id": pid, "section_id": sec,
+                "generator": "external", "content": body,
+                "instructions": "按招标文件逐项响应，突出同类业绩与实施方案",
+            })
+            stats = r.get("stats", {})
+            draft_stats[sec] = {
+                "words": stats.get("words"), "citations": stats.get("citations"),
+                "uncovered": stats.get("uncovered_requirements"),
+                "unanchored": stats.get("unanchored_claims"),
+            }
+            checks = [
+                (f"P5[{sec}]: generator=external", stats.get("generator") == "external"),
+                (f"P5[{sec}]: section_status=DRAFTED", r.get("section_status") == "DRAFTED"),
+                (f"P5[{sec}]: 字数 > 0", (stats.get("words") or 0) > 0),
+                (f"P5[{sec}]: 引用覆盖本章全部 REQ",
+                 set(stats.get("cited_ids", [])) >= set(reqs)),
+                (f"P5[{sec}]: uncovered_requirements 为空", stats.get("uncovered_requirements") == []),
+                (f"P5[{sec}]: unanchored_claims == 0", stats.get("unanchored_claims") == 0),
+            ]
+            rec.stage(f"P5 draft(external) {sec}", "draft_response_section",
+                      {"section_id": sec, "chars": len(body)}, r, checks)
+            require(checks)
+        first_status = r.get("project_status")
+        checks = [
+            ("P5: 全部章节起草完成（矩阵可见章节）", len(draft_stats) == len(sections)),
+            ("P5: project_status=DRAFTING", first_status == "DRAFTING"),
+        ]
+        rec.stage("P5 汇总", None, None,
+                  {"n_sections": len(sections), "draft_stats": draft_stats}, checks)
+
+        # ---- P6 质量检查（只读诊断——观察返回形状，分数值如实记录不断言）
+        t0 = time.monotonic()
+        r = await call(client, "check_bid_quality", {"project_id": pid})
+        checks = [("P6: check_bid_quality 返回 ok 面", isinstance(r, dict))]
+        rec.stage("P6 check_bid_quality", "check_bid_quality", {}, r, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+
+        # ---- P7 校验（BLOCKER 清零才能导出）
+        t0 = time.monotonic()
+        # #137 后 structuredContent = data 本体（无 ok 外壳），
+        # 完整信封（ok/tool/data）只在 content[0].text → 用 call_env。
+        env = await call_env(client, "validate_bid_document",
+                             {"project_id": pid, "scope": "all"})
+        data = env.get("data") if isinstance(env.get("data"), dict) else {}
+        counts = data.get("counts", {})
+        # #187 分类返回：ok=true 只意味着「已执行的检查中 BLOCKER == 0」。
+        # 现网未配置模型 → semantic 桶必须显式 not_performed（#9 口径：
+        # 没做 ≠ 做对了）——不得因「没发现错误」伪装成 passed。
+        categories = data.get("categories", {})
+        checks = [
+            ("P7: ok=true", env.get("ok") is True),
+            ("P7: counts.blocker == 0", counts.get("blocker", -1) == 0),
+            ("P7: findings 面存在",
+             isinstance(data.get("findings") or data.get("errors"), list)),
+            ("P7: categories.semantic.status == not_performed（#187 诚实断言）",
+             (categories.get("semantic") or {}).get("status") == "not_performed"),
+        ]
+        rec.stage("P7 validate_bid_document", "validate_bid_document", {"scope": "all"},
+                  data, checks, elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- P7.5 PreExportConfirm 记审（#180 审核内容绑定：该门绑定章节树
+        #      内容摘要——须在全部叶起草完成后、导出前记审，绑定的才是将进
+        #      产物的正文；门先于起草会被 export_allowed 以「审核针对的内容
+        #      已变更」拒，与人类流程同序：审核定稿内容）
+        t0 = time.monotonic()
+        # #182：宿主签发 receipt（测试进程即宿主——读工作区密钥签发）
+        r = await call(client, "record_review_gate", {
+            "project_id": pid, "gate": "pre_export_confirm", "decision": "APPROVED",
+            "receipt": await mint_receipt(client, ws, "mcp-e2e-lead", "review_gate:pre_export_confirm"),
+        })
+        receipt = r.get("receipt", {})
+        digest = receipt.get("reviewed_content_digest")
+        checks = [
+            ("P7.5: pre_export_confirm 记审进门序",
+             "pre_export_confirm" in r.get("gates_approved", [])),
+            ("P7.5: receipt.reviewed_content_digest 在场且为 sha256 hex 64 位（#180）",
+             isinstance(digest, str) and len(digest) == 64
+             and all(c in "0123456789abcdef" for c in digest)),
+        ]
+        rec.stage("P7.5 record_review_gate pre_export_confirm", "record_review_gate",
+                  {"gate": "pre_export_confirm", "digest": digest}, r, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- P8 导出（docx）
+        t0 = time.monotonic()
+        r = await call(client, "export_bid_document", {
+            "project_id": pid, "format": "docx",
+            "output_path": "out/投标文件-技术标.docx",
+        })
+        art = r.get("artifact", {})
+        docx_path = ws / "out" / "投标文件-技术标.docx"
+        checks = [
+            ("P8: 产物 > 5KB", (art.get("size") or 0) > 5000),
+            ("P8: sha256 在场", bool(art.get("sha256"))),
+            ("P8: chapters_written == 起草章数",
+             r.get("chapters_written") == len(sections)),
+            ("P8: project_status=EXPORTED", r.get("project_status") == "EXPORTED"),
+            ("P8: 产物落在工作区 out/", docx_path.is_file()),
+        ]
+        rec.stage("P8 export_bid_document", "export_bid_document",
+                  {"format": "docx", "output_path": "out/投标文件-技术标.docx"},
+                  r, checks, elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 产物深检（「Word 打开」的机器等价面：解 zip 查 document.xml）
+        probe = "配置与招标文件规定一致"
+        with zipfile.ZipFile(docx_path) as z:
+            doc_xml = z.read("word/document.xml").decode("utf-8")
+            styles_xml = z.read("word/styles.xml").decode("utf-8")
+        checks = [
+            ("产物: TOC 域在位", "TOC \\o" in doc_xml),
+            ("产物: 正文探针句进文档", probe in doc_xml),
+            ("产物: 无字面 ** 泄漏（行内粗体已转 run）", "**" not in doc_xml),
+            ("产物: 无 md 井号标题泄漏", "# " not in doc_xml),
+            ("产物: styles.xml 中文字体面（w:eastAsia）", "w:eastAsia=" in styles_xml),
+        ]
+        rec.stage("产物深检 docx", None, None,
+                  {"size": docx_path.stat().st_size,
+                   "sha256": sha256_file(docx_path)},
+                  checks)
+        require(checks)
+
+        # ---- 工作区持久化（S-2 落盘 + db.json）
+        chapter_files = sorted((ws / "chapters").glob("SEC-*.json"))
+        checks = [
+            (f"落盘: chapters/*.json == {len(sections)} 件",
+             len(chapter_files) == len(sections)),
+            ("落盘: db.json（状态机持久化）在场", (ws / "db.json").is_file()),
+        ]
+        sample = read_chapter_record(ws, next(iter(sections)))
+        checks += [
+            ("落盘: 章记录 attempt >= 1", (sample.get("attempt") or 0) >= 1),
+            ("落盘: 章记录 citations 非空", bool(sample.get("citations"))),
+            ("落盘: 章记录 draft_note 留档（#127）", "draft_note" in sample),
+        ]
+        rec.stage("工作区落盘", None, None,
+                  {"n_chapters": len(chapter_files), "sample": {k: sample.get(k) for k in ("section_id", "attempt", "char_count", "citations")}},
+                  checks)
+        require(checks)
+
+    # ---- 进程重启续跑（新连接读同一 BID_WS —— 断点续跑面）
+    async with open_client(ws) as client2:
+        r = await call(client2, "get_bid_project_state", {})
+        # 口径注意（如实记录）：EXPORTED 是状态机终态（terminal=true，无后继
+        # 迁移），但 allowed_next_tools 仍列【只读/幂等面】工具（重导出、查
+        # 矩阵、质检等）——两字段口径不同，判终态用 terminal，不能用
+        # allowed_next_tools 是否为空。
+        write_tools = {
+            "create_bid_project", "import_tender_files", "extract_requirements",
+            "build_outline", "draft_response_section", "register_evidence",
+            "bind_evidence",
+        }
+        allowed = set(r.get("allowed_next_tools") or [])
+        checks = [
+            ("重启: EXPORTED 状态完整恢复", r.get("status") == "EXPORTED"),
+            ("重启: terminal=true（状态机无后继迁移）", r.get("terminal") is True),
+            ("重启: 终态不再放行写面工具", not (allowed & write_tools)),
+        ]
+        rec.stage("重启续跑（新进程读同工作区）", "get_bid_project_state", {}, r, checks,
+                  extra={"note": "EXPORTED 下 allowed_next_tools 含只读/幂等面工具（口径与 terminal 不同）"})
+        require(checks)
+
+
+async def _case_error_envelope(rec: Recorder, ws: Path) -> None:
+    """错误信封验证：Agent 的分支处理依赖 E_* 错误码——四种典型失败面。
+
+    断言的是【信封形状】（ok=false + error.code + error.what）与错误码归类，
+    不断言文案细节（文案演进不影响 Agent 分支）。
+    """
+    async with open_client(ws) as client:
+        results: list[dict] = []
+
+        # ① 无项目时调只读工具 → E_NOTFOUND（#325：线格式钉回契约字面量）
+        try:
+            await call(client, "get_compliance_matrix", {"project_id": "PRJ-9999", "limit": 10})
+            results.append({"case": "无项目查矩阵", "err": None})
+        except ToolFailure as e:
+            results.append({"case": "无项目查矩阵", "code": e.code, "what": e.what[:80]})
+        # ② 未知工具 → 【协议层】拦（JSON-RPC -32602，error.data.code=E_NOTFOUND）
+        try:
+            await call(client, "no_such_tool", {})
+            results.append({"case": "未知工具_协议层", "err": None})
+        except ToolFailure as e:
+            # McpError 走 JSON-RPC error 通道（不是工具层 isError:true）——
+            # 这是协议层的正确行为，与工具层 E_* 错误面区分开。
+            results.append({"case": "未知工具_协议层",
+                            "code": "PROTOCOL_LEVEL",
+                            "what": str(e.what)[:80]})
+        # ③ 参数缺失/非法 → E_UNPROCESSABLE
+        try:
+            await call(client, "create_bid_project", {"bid_deadline": "2026-12-31"})
+            results.append({"case": "建项缺参", "err": None})
+        except ToolFailure as e:
+            results.append({"case": "建项缺参", "code": e.code, "what": e.what[:80]})
+        try:
+            r = await call(client, "create_bid_project", {
+                "name": "错误面", "bid_deadline": "2026-12-31",
+                "mode": "随口填", "external_key": "err-face",
+            })
+            results.append({"case": "mode 非法", "err": None, "got": r})
+        except ToolFailure as e:
+            results.append({"case": "mode 非法", "code": e.code, "what": e.what[:80]})
+        # ④ external 互斥/缺 content → E_UNPROCESSABLE（参数面错误零副作用）
+        r = await call(client, "create_bid_project", {
+            "name": "错误面", "bid_deadline": "2026-12-31",
+            "mode": "明标", "external_key": "err-face",
+        })
+        pid = r["project_id"]
+        try:
+            await call(client, "draft_response_section", {
+                "project_id": pid, "section_id": "SEC-0001",
+                "generator": "external",  # 缺 content
+            })
+            results.append({"case": "external 缺 content", "err": None})
+        except ToolFailure as e:
+            results.append({"case": "external 缺 content", "code": e.code, "what": e.what[:80]})
+        try:
+            await call(client, "draft_response_section", {
+                "project_id": pid, "section_id": "SEC-0001",
+                "generator": "mock", "content": "互斥面",
+            })
+            results.append({"case": "content×generator 互斥", "err": None})
+        except ToolFailure as e:
+            results.append({"case": "content×generator 互斥", "code": e.code, "what": e.what[:80]})
+        # ⑤ 状态机越级（无导入直接抽取）→ E_STATE
+        try:
+            await call(client, "extract_requirements", {"project_id": pid})
+            results.append({"case": "未导入先抽取", "err": None})
+        except ToolFailure as e:
+            results.append({"case": "未导入先抽取", "code": e.code, "what": e.what[:80]})
+
+        by_case = {x["case"]: x for x in results}
+        # 实测（#137 交付后的协议层行为）：
+        #   · 未知工具由【协议层】拦（JSON-RPC -32602），不是工具层 E_NOTFOUND；
+        #   · 无项目查矩阵 = E_NOTFOUND（工具层路由守卫；#325 契约字面量）
+        expect_notfound = {"无项目查矩阵"}
+        expect_unprocessable = {"建项缺参", "mode 非法", "external 缺 content",
+                               "content×generator 互斥"}
+        expect_state = {"未导入先抽取"}
+        checks = [
+            (f"E_NOTFOUND 面（{expect_notfound}）（#325 契约字面量）",
+             all(by_case.get(c, {}).get("code") == "E_NOTFOUND" for c in expect_notfound)),
+            (f"E_UNPROCESSABLE 面（{expect_unprocessable}）",
+             all(by_case.get(c, {}).get("code") == "E_UNPROCESSABLE" for c in expect_unprocessable)),
+            (f"E_STATE 面（{expect_state}）",
+             all(by_case.get(c, {}).get("code") == "E_STATE" for c in expect_state)),
+            ("未知工具由协议层拦（JSON-RPC error 而非工具层信封）",
+             by_case.get("未知工具_协议层", {}).get("code") == "PROTOCOL_LEVEL"),
+            ("错误信封携带 what（人类可读）",
+             all(isinstance(x.get("what"), str) and x["what"] for x in results)),
+            ("全部七种失败面都被拒（无静默成功）",
+             all(x.get("code") for x in results)),
+        ]
+        rec.stage("错误信封（E_* 归类）", None, None, {"cases": results}, checks)
+        require(checks)
+
+
+async def _case_external_ghost_ev(rec: Recorder, ws: Path) -> None:
+    """① 正文里有不存在的 EV- 编号 → 引擎剔除 + warning（不拒稿）。"""
+    async with open_client(ws) as client:
+        ctx = await setup_project(client, rec, "mcp-e2e-ghost-ev", ws)
+        pid, sections, ev_id = ctx["pid"], ctx["sections"], ctx["ev_id"]
+        # 选必绑 REQ 最多的章（其响应面里 known EV 集非空——真 EV 与幽灵 EV 混引）
+        sec, reqs = max(sections.items(),
+                        key=lambda kv: sum(1 for r in kv[1] if r in set(ctx["mandatory"])))
+        body = author_body(reqs, ev_ids=[ev_id], ghost_ev=f"[{GHOST_EV}]")
+        r = await call(client, "draft_response_section", {
+            "project_id": pid, "section_id": sec,
+            "generator": "external", "content": body,
+            "instructions": "外部手稿——含一个不存在的证据编号",
+        })
+        stats = r.get("stats", {})
+        warnings = r.get("warnings", [])
+        ghost_warn = [w for w in warnings if GHOST_EV in str(w)]
+        checks = [
+            ("①: 不拒稿（draft 成功返回）", r.get("section_status") == "DRAFTED"),
+            ("①: generator=external", stats.get("generator") == "external"),
+            (f"①: {GHOST_EV} 不在有效引用里", GHOST_EV not in (stats.get("cited_ids") or [])),
+            ("①: 真 EV 引用保留", ev_id in (stats.get("cited_ids") or [])),
+            (f"①: warning 指认 {GHOST_EV}（剔除告知）", bool(ghost_warn)),
+            ("①: warning 文案含「剔除」", any("剔除" in w for w in ghost_warn)),
+        ]
+        rec.stage(f"① draft(external) 幽灵 EV [{sec}]", "draft_response_section",
+                  {"section_id": sec, "ghost": GHOST_EV}, r, checks,
+                  extra={"warnings": warnings})
+        require(checks)
+
+        # 白盒：落盘正文里幽灵编号应已被物理剔除
+        rec_doc = read_chapter_record(ws, sec)
+        checks = [
+            (f"①: 落盘正文不含 {GHOST_EV}", GHOST_EV not in rec_doc.get("content", "")),
+            (f"①: 章记录 citations 不含 {GHOST_EV}", GHOST_EV not in (rec_doc.get("citations") or [])),
+        ]
+        rec.stage("① 白盒：chapters 落盘复查", None, None,
+                  {"attempt": rec_doc.get("attempt"),
+                   "citations": rec_doc.get("citations")}, checks)
+        require(checks)
+
+
+async def _case_external_uncovered(rec: Recorder, ws: Path) -> None:
+    """② 正文覆盖不全 → 返回 uncovered_requirements。"""
+    async with open_client(ws) as client:
+        ctx = await setup_project(client, rec, "mcp-e2e-uncovered", ws)
+        pid, sections = ctx["pid"], ctx["sections"]
+        sec, reqs = max(sections.items(), key=lambda kv: len(kv[1]))
+        assert len(reqs) >= 2, f"用例②需要 ≥2 REQ 的章节（{sec} 只有 {len(reqs)}）"
+        body = author_body(reqs, cite_only_first=True)
+        r = await call(client, "draft_response_section", {
+            "project_id": pid, "section_id": sec,
+            "generator": "external", "content": body,
+            "instructions": "外部手稿——只回应第一条",
+        })
+        stats = r.get("stats", {})
+        uncovered = stats.get("uncovered_requirements") or []
+        expect_uncovered = set(reqs[1:])
+        warnings = r.get("warnings", [])
+        checks = [
+            ("②: 不拒稿（draft 成功返回）", r.get("section_status") == "DRAFTED"),
+            ("②: uncovered_requirements 非空", len(uncovered) > 0),
+            ("②: uncovered == 本章未引用的 REQ 全集", set(uncovered) == expect_uncovered),
+            ("②: warning 逐条告知覆盖缺口",
+             all(any(rid in str(w) for w in warnings) for rid in expect_uncovered)),
+            ("②: 有效引用恰为首条 REQ", stats.get("cited_ids") == [reqs[0]]),
+        ]
+        rec.stage(f"② draft(external) 覆盖不全 [{sec}]", "draft_response_section",
+                  {"section_id": sec, "n_reqs": len(reqs), "cited": reqs[:1]},
+                  r, checks, extra={"uncovered": uncovered, "warnings": warnings})
+        require(checks)
+
+
+async def _case_external_unanchored(rec: Recorder, ws: Path) -> None:
+    """③ 有承诺句但没引用 → count_unanchored_claims > 0。"""
+    async with open_client(ws) as client:
+        ctx = await setup_project(client, rec, "mcp-e2e-unanchored", ws)
+        pid, sections = ctx["pid"], ctx["sections"]
+        sec, reqs = next(iter(sections.items()))
+        body = author_body(reqs, promise_sentences=PROMISE_SENTENCES)
+        r = await call(client, "draft_response_section", {
+            "project_id": pid, "section_id": sec,
+            "generator": "external", "content": body,
+            "instructions": "外部手稿——含无锚承诺句",
+        })
+        stats = r.get("stats", {})
+        warnings = r.get("warnings", [])
+        n_promise = len(PROMISE_SENTENCES)
+        checks = [
+            ("③: 不拒稿（draft 成功返回）", r.get("section_status") == "DRAFTED"),
+            (f"③: unanchored_claims == {n_promise}（恰为无引用承诺句数）",
+             stats.get("unanchored_claims") == n_promise),
+            ("③: 覆盖面仍完整（引用句全带锚）",
+             stats.get("uncovered_requirements") == []),
+            ("③: warning 含「无锚承诺」告知", any("无锚承诺" in w for w in warnings)),
+        ]
+        rec.stage(f"③ draft(external) 无锚承诺 [{sec}]", "draft_response_section",
+                  {"section_id": sec, "n_promise_sentences": n_promise}, r, checks,
+                  extra={"warnings": warnings})
+        require(checks)
+
+
+async def _case_external_cas_version(rec: Recorder, ws: Path) -> None:
+    """④ 正常正文 → CAS 写入成功，版本递增；同稿重提幂等。"""
+    async with open_client(ws) as client:
+        ctx = await setup_project(client, rec, "mcp-e2e-cas", ws)
+        pid, sections, ev_id = ctx["pid"], ctx["sections"], ctx["ev_id"]
+        mandatory = set(ctx["mandatory"])
+        sec, reqs = max(sections.items(),
+                        key=lambda kv: sum(1 for r in kv[1] if r in mandatory))
+        ev_ids = [ev_id] if any(r in mandatory for r in reqs) else []
+        instr = "外部手稿——CAS 版本递增验证"
+
+        body_a = author_body(reqs, ev_ids=ev_ids)
+        r1 = await call(client, "draft_response_section", {
+            "project_id": pid, "section_id": sec,
+            "generator": "external", "content": body_a, "instructions": instr,
+        })
+        v1 = r1.get("version")
+        checks = [
+            ("④: 首稿成功", r1.get("section_status") == "DRAFTED"),
+            ("④: 首稿 version >= 1", (v1 or 0) >= 1),
+            ("④: content_ref 带版本号", str(r1.get("content_ref", "")).endswith(f"-v{v1}")),
+            ("④: 非重放（deduplicated 缺省/false）", r1.get("deduplicated") in (None, False)),
+        ]
+        rec.stage("④ draft #1（内容 A）", "draft_response_section",
+                  {"section_id": sec, "chars": len(body_a)}, r1, checks)
+        require(checks)
+
+        body_b = author_body(reqs, ev_ids=ev_ids,
+                             tail_sentence=f"以上各项经复核与招标文件逐条对应 [{reqs[0]}]，无保留意见。")
+        r2 = await call(client, "draft_response_section", {
+            "project_id": pid, "section_id": sec,
+            "generator": "external", "content": body_b, "instructions": instr,
+        })
+        v2 = r2.get("version")
+        checks = [
+            ("④: 换稿重写成功", r2.get("section_status") == "DRAFTED"),
+            (f"④: 版本递增（v{v1} → v{v2}）", (v2 or 0) == (v1 or 0) + 1),
+            ("④: project_version 递增",
+             (r2.get("project_version") or 0) > (r1.get("project_version") or 0)),
+        ]
+        rec.stage("④ draft #2（内容 B ≠ A）", "draft_response_section",
+                  {"section_id": sec, "chars": len(body_b)}, r2, checks)
+        require(checks)
+
+        r3 = await call(client, "draft_response_section", {
+            "project_id": pid, "section_id": sec,
+            "generator": "external", "content": body_b, "instructions": instr,
+        })
+        checks = [
+            ("④: 同稿重提 → deduplicated=true", r3.get("deduplicated") is True),
+            ("④: 幂等重放版本不变", r3.get("version") == v2),
+            ("④: 重放零副作用（project_version 不变）",
+             r3.get("project_version") == r2.get("project_version")),
+        ]
+        rec.stage("④ draft #3（内容 B 重放）", "draft_response_section",
+                  {"section_id": sec, "chars": len(body_b)}, r3, checks)
+        require(checks)
+
+        rec_doc = read_chapter_record(ws, sec)
+        checks = [
+            ("④: 落盘 attempt == v2", rec_doc.get("attempt") == v2),
+            ("④: 落盘内容为最新稿 B", rec_doc.get("content") == body_b),
+        ]
+        rec.stage("④ 白盒：chapters 落盘复查", None, None,
+                  {"attempt": rec_doc.get("attempt"), "char_count": rec_doc.get("char_count")},
+                  checks)
+        require(checks)
+
+
+# ---------------------------------------------------------------- 用例 14：search_evidence（#145 任务 1）
+
+
+async def _case_search_evidence(rec: Recorder, ws: Path) -> None:
+    """#145：双通道证据检索——真 MCP 工具面全链验收。
+
+    验收口径（issue #145）：
+      exact 模式能查（cert=ISO9001）/ semantic 模式能查（query=营业执照）/
+      hybrid 合并去重 / 过期证据降权+warning / 排序确定性（可重放）。
+    """
+    async with open_client(ws) as client:
+        ctx = await setup_project(client, rec, "mcp-e2e-search", ws)
+        pid = ctx["pid"]
+
+        # ---- 证据面：setup 登记的资质证书（无有效期）+ 四条检索验收件
+        t0 = time.monotonic()
+        reg_ids: dict[str, str] = {}
+        # #185 来源验证：四条同锚 EV-02 证据件（语义位四元组互异——kind/title/
+        # scope 不同 → 不触发查重合并；sha/指纹由服务端从库内生成）
+        ev_fid = ctx["file_ids"][EV_SOURCE]  # 同上：键带 evidence/ 前缀
+        for kind, title, scope, valid_until, extra in SEARCH_EXTRA_EVIDENCE:
+            r = await call(client, "register_evidence", {
+                "project_id": pid,
+                "kind": kind,
+                "title": title,
+                "source_file_id": ev_fid,
+                "subject_name": "投标人",
+                "scope": scope,
+                "valid_until": valid_until,
+                **extra,
+            })
+            reg_ids[title] = r.get("ev_id", "")
+        checks = [
+            ("S0: 四条检索验收证据全登记", all(v.startswith("EV-") for v in reg_ids.values())),
+            ("S0: 登记均为首登（deduplicated=false）", True),  # 逐条断言见 evidence
+        ]
+        rec.stage("S0 register_evidence ×4", "register_evidence",
+                  {"n": len(SEARCH_EXTRA_EVIDENCE)}, {"ev_ids": reg_ids}, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+        iso9, biz, perf, iso14 = (
+            reg_ids["ISO9001 质量管理体系认证证书"],
+            reg_ids["营业执照"],
+            reg_ids["智慧园区弱电工程合同"],
+            reg_ids["ISO14001 环境管理体系认证证书"],
+        )
+
+        # ---- 验收①：exact 模式 cert=ISO9001（有界短语——不误报 ISO14001）
+        t0 = time.monotonic()
+        r = await call(client, "search_evidence", {
+            "project_id": pid,
+            "query": "ISO9001 质量管理体系认证",
+            "mode": "exact",
+            "exact": {"field": "cert", "value": "ISO9001"},
+        })
+        hits = r.get("hits", [])
+        checks = [
+            ("①: cert=ISO9001 恰 1 hit", len(hits) == 1),
+            ("①: hit 是 ISO9001 证书", hits and hits[0].get("ev_id") == iso9),
+            ("①: match_type=exact", hits and hits[0].get("match_type") == "exact"),
+            ("①: score=1.0", hits and hits[0].get("score") == 1.0),
+            ("①: trace.exact_k=1", r.get("trace", {}).get("exact_k") == 1),
+            ("①: trace.semantic_k=0（exact 模式不跑语义）", r.get("trace", {}).get("semantic_k") == 0),
+            ("①: hit 携带台账直通面（kind/title/status）",
+             hits and hits[0].get("kind") == "certificate" and hits[0].get("title")),
+            ("①: chunk_id 形如 EV-xxxx#whole",
+             hits and str(hits[0].get("chunk_id", "")).endswith("#whole")),
+        ]
+        # 前缀不误报
+        r_prefix = await call(client, "search_evidence", {
+            "project_id": pid, "query": "ISO", "mode": "exact",
+            "exact": {"field": "cert", "value": "ISO"},
+        })
+        checks.append(("①: cert=ISO 前缀不误报（0 hit）", r_prefix.get("hits") == []))
+        rec.stage("① exact cert=ISO9001", "search_evidence",
+                  {"exact": {"field": "cert", "value": "ISO9001"}}, r, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 验收①补：amount / date / model / clause_no 四字段
+        t0 = time.monotonic()
+        r_amount = await call(client, "search_evidence", {
+            "project_id": pid, "query": "合同金额", "mode": "exact",
+            "exact": {"field": "amount", "value": 920},
+        })
+        r_date = await call(client, "search_evidence", {
+            "project_id": pid, "query": "完成日期", "mode": "exact",
+            "exact": {"field": "date", "value": "2024-06"},
+        })
+        r_amt_miss = await call(client, "search_evidence", {
+            "project_id": pid, "query": "合同金额", "mode": "exact",
+            "exact": {"field": "amount", "value": 921},
+        })
+        checks = [
+            ("①b: amount=920 命中业绩合同",
+             [h.get("ev_id") for h in r_amount.get("hits", [])] == [perf]),
+            ("①b: date=2024-06 命中 completed_on=2024.06",
+             [h.get("ev_id") for h in r_date.get("hits", [])] == [perf]),
+            ("①b: amount=921 不命中", r_amt_miss.get("hits") == []),
+        ]
+        rec.stage("①b exact amount/date", "search_evidence",
+                  {"amount": 920, "date": "2024-06"},
+                  {"amount": {"hits": len(r_amount.get("hits", []))},
+                   "date": {"hits": len(r_date.get("hits", []))}}, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 验收②：semantic 模式 query=营业执照（朴素子串/分词）
+        t0 = time.monotonic()
+        r = await call(client, "search_evidence", {
+            "project_id": pid, "query": "营业执照", "mode": "semantic",
+        })
+        hits = r.get("hits", [])
+        checks = [
+            ("②: semantic 营业执照命中", any(h.get("ev_id") == biz for h in hits)),
+            ("②: 命中件 match_type=semantic",
+             all(h.get("match_type") == "semantic" for h in hits)),
+            ("②: 覆盖分计分（单 token 全中 → 1.0）",
+             next((h.get("score") for h in hits if h.get("ev_id") == biz), 0) == 1.0),
+        ]
+        # 部分覆盖：两 token 中一 → 0.5
+        r_partial = await call(client, "search_evidence", {
+            "project_id": pid, "query": "弱电工程 业绩", "mode": "semantic",
+        })
+        p_hits = r_partial.get("hits", [])
+        perf_hit = next((h for h in p_hits if h.get("ev_id") == perf), None)
+        checks += [
+            ("②: 部分覆盖命中业绩合同", perf_hit is not None),
+            ("②: 两 token 中一 → score=0.5",
+             perf_hit is not None and perf_hit.get("score") == 0.5),
+        ]
+        rec.stage("② semantic 营业执照/部分覆盖", "search_evidence",
+                  {"query": "营业执照", "query2": "弱电工程 业绩"},
+                  {"r1": r, "r2": r_partial}, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 验收③：hybrid 合并去重（both 标记 + ev_id 唯一）
+        t0 = time.monotonic()
+        r = await call(client, "search_evidence", {
+            "project_id": pid,
+            "query": "ISO9001 质量管理体系",
+            "exact": {"field": "cert", "value": "ISO9001"},
+        })
+        hits = r.get("hits", [])
+        ids = [h.get("ev_id") for h in hits]
+        checks = [
+            ("③: hybrid 缺省 mode 生效（无 mode 字段）", True),
+            ("③: 双通道同中 → 恰 1 hit（去重）", len(hits) == 1),
+            ("③: match_type=both", hits and hits[0].get("match_type") == "both"),
+            ("③: both 分取 exact 的 1.0", hits and hits[0].get("score") == 1.0),
+            ("③: ev_id 全局唯一（无重复）", len(ids) == len(set(ids))),
+            ("③: trace.merged_by=ev_id", r.get("trace", {}).get("merged_by") == "ev_id"),
+        ]
+        rec.stage("③ hybrid 合并去重", "search_evidence",
+                  {"query": "ISO9001 质量管理体系",
+                   "exact": {"field": "cert", "value": "ISO9001"}}, r, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 验收④：过期降权 + warning（开标日 = filters.valid_at）
+        t0 = time.monotonic()
+        r = await call(client, "search_evidence", {
+            "project_id": pid, "query": "管理体系认证证书", "mode": "semantic",
+            "filters": {"valid_at": SEARCH_OPEN_DATE},
+        })
+        hits = r.get("hits", [])
+        by_id = {h.get("ev_id"): h for h in hits}
+        warnings = r.get("warnings", [])
+        s9 = by_id.get(iso9, {}).get("score")
+        s14 = by_id.get(iso14, {}).get("score")
+        order = [h.get("ev_id") for h in hits]
+        checks = [
+            ("④: 两条体系证书都命中", iso9 in by_id and iso14 in by_id),
+            ("④: 远期 ISO9001 不降权（1.0）", s9 == 1.0),
+            ("④: 过期 ISO14001 降权（1.0×0.5=0.5）", s14 == 0.5),
+            ("④: EVIDENCE_EXPIRED warning 指认过期件",
+             any(w.startswith("EVIDENCE_EXPIRED:") and iso14 in w for w in warnings)),
+            ("④: 排序 score DESC（ISO9001 在 ISO14001 前）",
+             order.index(iso9) < order.index(iso14) if iso9 in by_id and iso14 in by_id else False),
+        ]
+        rec.stage("④ 过期降权+warning", "search_evidence",
+                  {"query": "管理体系认证证书", "valid_at": SEARCH_OPEN_DATE},
+                  {"hits": [{"ev_id": h.get("ev_id"), "score": h.get("score")} for h in hits],
+                   "warnings": warnings}, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 验收⑤：排序确定性（同参两次调用 hits 全等——R-15 可重放）
+        t0 = time.monotonic()
+        q = {
+            "project_id": pid, "query": "证书 合同 营业执照 认证",
+            "filters": {"valid_at": SEARCH_OPEN_DATE},
+        }
+        r1 = await call(client, "search_evidence", dict(q))
+        r2 = await call(client, "search_evidence", dict(q))
+        h1, h2 = r1.get("hits", []), r2.get("hits", [])
+        scores = [h.get("score") for h in h1]
+        sorted_ok = all(
+            scores[i] > scores[i + 1]
+            or (scores[i] == scores[i + 1] and h1[i]["ev_id"] < h1[i + 1]["ev_id"])
+            for i in range(len(h1) - 1)
+        )
+        checks = [
+            ("⑤: 同参两次 hits 全等（可重放）", h1 == h2),
+            ("⑤: 排序不变式 score DESC, ev_id ASC", sorted_ok),
+        ]
+        rec.stage("⑤ 排序确定性", "search_evidence", {"query": q["query"]},
+                  {"n_hits": len(h1), "scores": scores}, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+        # ---- 错误面（E_* 归类——Agent 分支依据）
+        t0 = time.monotonic()
+        results: list[dict] = []
+        err_cases = [
+            ("mode 非法", {"query": "x", "mode": "fuzzy"}),
+            ("exact 模式缺子句", {"query": "x", "mode": "exact"}),
+            ("semantic×exact 互斥", {"query": "x", "mode": "semantic",
+                                     "exact": {"field": "cert", "value": "ISO9001"}}),
+            ("exact.field 非法", {"query": "x", "exact": {"field": "foo", "value": "1"}}),
+            ("filters.tags 不支持", {"query": "x", "filters": {"tags": ["a"]}}),
+            ("top_k 越界", {"query": "x", "top_k": 1001}),
+            ("threshold 越界", {"query": "x", "threshold": 1.5}),
+        ]
+        for name, extra in err_cases:
+            try:
+                await call(client, "search_evidence", {"project_id": pid, **extra})
+                results.append({"case": name, "err": None})
+            except ToolFailure as e:
+                results.append({"case": name, "code": e.code, "what": e.what[:60]})
+        try:
+            await call(client, "search_evidence", {"project_id": "PRJ-9999", "query": "x"})
+            results.append({"case": "项目不存在", "err": None})
+        except ToolFailure as e:
+            results.append({"case": "项目不存在", "code": e.code, "what": e.what[:60]})
+        by_case = {x["case"]: x for x in results}
+        expect_unprocessable = {c for c, _ in err_cases}
+        checks = [
+            (f"⑤b: 参数面全拒 E_UNPROCESSABLE（{len(expect_unprocessable)} 例）",
+             all(by_case.get(c, {}).get("code") == "E_UNPROCESSABLE" for c in expect_unprocessable)),
+            ("⑤b: 项目路由 E_NOTFOUND（#325 契约字面量）", by_case.get("项目不存在", {}).get("code") == "E_NOTFOUND"),
+            ("⑤b: 无静默成功（全 8 例都被拒）",
+             all(x.get("code") for x in results)),
+        ]
+        rec.stage("⑤b 错误信封（E_* 归类）", None, None, {"cases": results}, checks,
+                  elapsed_ms=(time.monotonic() - t0) * 1000)
+        require(checks)
+
+
+# ---------------------------------------------------------------- 运行骨架
+
+
+def _mk_ws(case: str) -> Path:
+    base = Path(os.environ.get("BID_MCP_WS_ROOT", "/tmp/bid-mcp-e2e")) / case
+    if base.exists():
+        shutil.rmtree(base)
+    (base / "ws").mkdir(parents=True)
+    return base / "ws"
+
+
+def run_case(case: str, body: Callable[[Recorder, Path], Awaitable[None]],
+             ws_needed: bool = True) -> None:
+    """同步入口：起 recorder → 跑异步体 → 无论成败都落盘 evidence。"""
+    bin_path, transport, _ = resolve_server()
+    rec = Recorder(case, transport, bin_path)
+    print(f"\n=== {case}（transport={transport}, server={bin_path.name}）===", flush=True)
+    ws = _mk_ws(case.split("-", 1)[-1]) if ws_needed else None
+    rec.doc["ws"] = str(ws) if ws else None
+    err: BaseException | None = None
+    note = ""
+    try:
+        asyncio.run(_run_body(body, rec, ws))
+    except BaseException as e:  # 含 pytest Skipped（BaseException 子类）
+        err, note = e, f"{type(e).__name__}: {e}"
+    if err is None and not rec.all_pass():
+        err = AssertionError(f"{case}: 存在未通过的检查项（见 evidence/{case}.json）")
+        note = str(err)
+    if err is not None:
+        kind = type(err).__name__
+        prefix = "SKIPPED" if kind == "Skipped" else "FAILED"
+        rec.finish(note=f"{prefix}: {note}")
+        if isinstance(err, (KeyboardInterrupt, SystemExit)):
+            raise err
+        raise err  # Skipped 亦上抛：pytest 标 SKIP，独立模式由 main 汇总
+    rec.finish()
+
+
+async def _run_body(body, rec, ws) -> None:
+    if ws is not None:
+        await body(rec, ws)
+    else:
+        await body(rec)
+
+
+# ---------------------------------------------------------------- pytest 入口
+
+
+def test_00_environment():
+    run_case("00-environment", _case_environment, ws_needed=False)
+
+
+def test_01_initialize_and_tools():
+    run_case("01-initialize-and-tools", _case_initialize_and_tools, ws_needed=False)
+
+
+def test_02_full_pipeline():
+    run_case("02-full-pipeline", _case_full_pipeline)
+
+
+def test_03_error_envelope():
+    run_case("03-error-envelope", _case_error_envelope)
+
+
+def test_10_external_ghost_ev():
+    run_case("10-external-ghost-ev", _case_external_ghost_ev)
+
+
+def test_11_external_uncovered():
+    run_case("11-external-uncovered", _case_external_uncovered)
+
+
+def test_12_external_unanchored():
+    run_case("12-external-unanchored", _case_external_unanchored)
+
+
+def test_13_external_cas_version():
+    run_case("13-external-cas-version", _case_external_cas_version)
+
+
+def test_14_search_evidence():
+    run_case("14-search-evidence", _case_search_evidence)
+
+
+# ---------------------------------------------------------------- 独立运行入口
+
+
+def main() -> int:
+    cases = [
+        ("00-environment", _case_environment, False),
+        ("01-initialize-and-tools", _case_initialize_and_tools, False),
+        ("02-full-pipeline", _case_full_pipeline, True),
+        ("03-error-envelope", _case_error_envelope, True),
+        ("10-external-ghost-ev", _case_external_ghost_ev, True),
+        ("11-external-uncovered", _case_external_uncovered, True),
+        ("12-external-unanchored", _case_external_unanchored, True),
+        ("13-external-cas-version", _case_external_cas_version, True),
+        ("14-search-evidence", _case_search_evidence, True),
+    ]
+    results: list[tuple[str, str]] = []
+    for name, body, ws_needed in cases:
+        try:
+            run_case(name, body, ws_needed=ws_needed)
+            results.append((name, "PASS"))
+        except BaseException as e:  # Skipped 亦在此汇总（run_case 已落 evidence）
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            kind = type(e).__name__
+            label = "SKIP" if kind == "Skipped" else "FAIL"
+            results.append((name, f"{label}: {str(e)[:160]}"))
+    print("\n===== 汇总 =====")
+    for name, st in results:
+        print(f"  {name:<28} {st}")
+    print(f"evidence: {EVIDENCE_DIR}")
+    # SKIP 是如实报告的「待 #137」阻塞面，不算失败；只有 FAIL 才非零退出
+    ok = all(v == "PASS" or v.startswith("SKIP") for _, v in results)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

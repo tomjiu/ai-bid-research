@@ -1,0 +1,530 @@
+{
+  "suite": "V1-a 解析覆盖",
+  "corpus_a": {
+    "files": [
+      {
+        "file": "A-招标文件.docx",
+        "engine": "docx",
+        "units": {
+          "paragraphs": 184,
+          "tables": 6,
+          "sections": 1,
+          "header_paras": 0,
+          "footer_paras": 0
+        },
+        "nonbody_inventory": {
+          "textbox": 0,
+          "comment": 0,
+          "ins": 0,
+          "del": 0
+        }
+      },
+      {
+        "file": "B1-设备清单.pdf",
+        "engine": "pdf",
+        "units": {
+          "pages": 2,
+          "pages_with_text": 2,
+          "pages_with_images": 0
+        },
+        "text_layer": "full"
+      },
+      {
+        "file": "B2-投标函格式页-扫描件.pdf",
+        "engine": "pdf",
+        "units": {
+          "pages": 1,
+          "pages_with_text": 0,
+          "pages_with_images": 1
+        },
+        "text_layer": "none"
+      },
+      {
+        "file": "B3-图纸目录.xlsx",
+        "engine": "xlsx",
+        "units": {
+          "sheets": 1,
+          "cells": 128,
+          "formula_cells": 0
+        },
+        "merged_ranges": {
+          "图纸目录": [
+            "A1:F1"
+          ]
+        }
+      },
+      {
+        "file": "C-补遗文件01.docx",
+        "engine": "docx",
+        "units": {
+          "paragraphs": 11,
+          "tables": 0,
+          "sections": 1,
+          "header_paras": 0,
+          "footer_paras": 0
+        },
+        "nonbody_inventory": {
+          "textbox": 0,
+          "comment": 0,
+          "ins": 0,
+          "del": 0
+        }
+      }
+    ],
+    "anchors": {
+      "total": 27,
+      "located": 26,
+      "scan_deferred": 1,
+      "text_layer_located": 26,
+      "text_layer_total": 26,
+      "coverage_text_layer": 1.0,
+      "failures": []
+    },
+    "anchor_detail": [
+      {
+        "gt_id": "GT-01",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 15,
+          "text_fingerprint": "fnv64:3dd6586bfc99cf92"
+        }
+      },
+      {
+        "gt_id": "GT-02",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 16,
+          "text_fingerprint": "fnv64:dc9d9c067ec90fc8"
+        }
+      },
+      {
+        "gt_id": "GT-03",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 17,
+          "text_fingerprint": "fnv64:c84857c1ec4a949c"
+        }
+      },
+      {
+        "gt_id": "GT-04",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 18,
+          "text_fingerprint": "fnv64:079743dcb30d5ee7"
+        }
+      },
+      {
+        "gt_id": "GT-05",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 19,
+          "text_fingerprint": "fnv64:f8a157e3bbc106d4"
+        }
+      },
+      {
+        "gt_id": "GT-06",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 20,
+          "text_fingerprint": "fnv64:9f695d231e98de11"
+        }
+      },
+      {
+        "gt_id": "GT-07",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 35,
+          "text_fingerprint": "fnv64:4e8a8bb77dde06fc"
+        }
+      },
+      {
+        "gt_id": "GT-07",
+        "file": "B2-投标函格式页-扫描件.pdf",
+        "kind": "ocr",
+        "status": "scan_deferred",
+        "reason": "无文本层（全扫描页）——OCR 路径，M1 解析面外（D5 管道面）"
+      },
+      {
+        "gt_id": "GT-08",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 36,
+          "text_fingerprint": "fnv64:6be5419f6c940f26"
+        }
+      },
+      {
+        "gt_id": "GT-09",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 37,
+          "text_fingerprint": "fnv64:eca46890467d341d"
+        }
+      },
+      {
+        "gt_id": "GT-10",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 38,
+          "text_fingerprint": "fnv64:8e5acf8e5c7e193d"
+        }
+      },
+      {
+        "gt_id": "GT-11",
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 0,
+          "row": 10,
+          "col": 2,
+          "text_fingerprint": "fnv64:1e695fa21053197c"
+        }
+      },
+      {
+        "gt_id": "GT-12",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 44,
+          "text_fingerprint": "fnv64:08386bbd8a6986ac"
+        }
+      },
+      {
+        "gt_id": "GT-13",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 45,
+          "text_fingerprint": "fnv64:13537006b96405e4"
+        }
+      },
+      {
+        "gt_id": "GT-14",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 46,
+          "text_fingerprint": "fnv64:9044d065ac940fb7"
+        }
+      },
+      {
+        "gt_id": "GT-15",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 47,
+          "text_fingerprint": "fnv64:0996607bd544c6dc"
+        }
+      },
+      {
+        "gt_id": "GT-16",
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 1,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:614a1ae1fa2da52d"
+        }
+      },
+      {
+        "gt_id": "GT-17",
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 2,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:ed586336c61d9892"
+        }
+      },
+      {
+        "gt_id": "GT-18",
+        "file": "A-招标文件.docx",
+        "kind": "table",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 3,
+          "row": 1,
+          "col": 2,
+          "text_fingerprint": "fnv64:257af8d41810d2a5"
+        }
+      },
+      {
+        "gt_id": "GT-19",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 3,
+          "text_fingerprint": "fnv64:3d6d07e90aa8b64b"
+        }
+      },
+      {
+        "gt_id": "GT-20",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 56,
+          "text_fingerprint": "fnv64:8c9d95e5efdb9f9a"
+        }
+      },
+      {
+        "gt_id": "GT-20",
+        "file": "B1-设备清单.pdf",
+        "kind": "table",
+        "status": "located",
+        "locator": {
+          "kind": "pdf_page_text",
+          "page": 1,
+          "text_fingerprint": "fnv64:ae7174a66ff4c683"
+        },
+        "note": "命中 2 页（PdfPageText 页级定位——区域变体引擎待扩展）"
+      },
+      {
+        "gt_id": "GT-21",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 59,
+          "text_fingerprint": "fnv64:322fd031020a0e02"
+        }
+      },
+      {
+        "gt_id": "GT-22",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 60,
+          "text_fingerprint": "fnv64:60fcb5b55a6680c4"
+        }
+      },
+      {
+        "gt_id": "GT-23",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 61,
+          "text_fingerprint": "fnv64:78d428631a446708"
+        }
+      },
+      {
+        "gt_id": "GT-24",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 24,
+          "text_fingerprint": "fnv64:35d43e2b2b9917aa"
+        }
+      },
+      {
+        "gt_id": "GT-25",
+        "file": "A-招标文件.docx",
+        "kind": "para",
+        "status": "located",
+        "locator": {
+          "kind": "docx_paragraph",
+          "paragraph_index": 25,
+          "text_fingerprint": "fnv64:7a211b1fa75e3826"
+        }
+      }
+    ]
+  },
+  "corpus_r": {
+    "probes": [
+      {
+        "probe": "D1a-P1",
+        "expect": "docx_table_cell",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 0,
+          "row": 0,
+          "col": 1,
+          "text_fingerprint": "fnv64:1ab74a0c5c6963f5"
+        }
+      },
+      {
+        "probe": "D1a-P2",
+        "expect": "docx_table_cell",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 0,
+          "row": 2,
+          "col": 1,
+          "text_fingerprint": "fnv64:c02f8734509dcc07"
+        }
+      },
+      {
+        "probe": "D1a-P3",
+        "expect": "docx_table_cell",
+        "status": "located",
+        "locator": {
+          "kind": "docx_table_cell",
+          "table_index": 0,
+          "row": 2,
+          "col": 7,
+          "text_fingerprint": "fnv64:215173a3c7b8a6d4"
+        }
+      },
+      {
+        "probe": "D1a-P4",
+        "expect": "docx_paragraph",
+        "status": "located"
+      },
+      {
+        "probe": "D1b-P1",
+        "expect": "xlsx_cell",
+        "status": "located",
+        "locator": {
+          "kind": "xlsx_cell",
+          "sheet": "量价汇总",
+          "cell": "A1",
+          "value_fingerprint": "fnv64:b80724c0cbd08c37",
+          "formula_fingerprint": null
+        }
+      },
+      {
+        "probe": "D1b-P2",
+        "expect": "xlsx_cell_formula",
+        "status": "located",
+        "locator": {
+          "kind": "xlsx_cell",
+          "sheet": "量价汇总",
+          "cell": "F3",
+          "value_fingerprint": "fnv64:cbf29ce484222325",
+          "formula_fingerprint": "fnv64:f3939e3c67fc265e"
+        }
+      },
+      {
+        "probe": "D1b-P3",
+        "expect": "xlsx_cell_formula",
+        "status": "located",
+        "locator": {
+          "kind": "xlsx_cell",
+          "sheet": "量价汇总",
+          "cell": "F15",
+          "value_fingerprint": "fnv64:cbf29ce484222325",
+          "formula_fingerprint": "fnv64:c33768a8cf926ce2"
+        }
+      },
+      {
+        "probe": "D2a-P1",
+        "expect": "docx_paragraph",
+        "status": "located"
+      },
+      {
+        "probe": "D2a-H1",
+        "expect": "header_no_locator_variant",
+        "status": "parsed_no_locator",
+        "gap": "G7"
+      },
+      {
+        "probe": "D2a-F1",
+        "expect": "footer_no_locator_variant",
+        "status": "parsed_no_locator",
+        "gap": "G7"
+      },
+      {
+        "probe": "D2a-T1",
+        "expect": "inventoried_no_locator",
+        "status": "parsed_no_locator",
+        "gap": "G7"
+      },
+      {
+        "probe": "D2a-C1",
+        "expect": "inventoried_no_locator",
+        "status": "parsed_no_locator",
+        "gap": "G7"
+      },
+      {
+        "probe": "D2a-R1",
+        "expect": "inventoried_no_locator",
+        "status": "parsed_no_locator",
+        "gap": "G7"
+      },
+      {
+        "probe": "D5a-P1",
+        "expect": "scan_deferred",
+        "status": "located",
+        "detail": "无文本层（全扫描页）——OCR 路径，M1 解析面外（D5 管道面）"
+      },
+      {
+        "probe": "D5b-P1",
+        "expect": "pdf_page_text",
+        "status": "located"
+      },
+      {
+        "probe": "D5b-P2",
+        "expect": "scan_deferred",
+        "status": "located",
+        "detail": "文本层未命中；无文本层页 [2] 为 OCR 候选（图文混排件无法在解析面确认是否在图像页——D5 管道面）"
+      }
+    ],
+    "locatable": {
+      "expect": 11,
+      "pass": 11
+    },
+    "gap_attributed": {
+      "expect": 5,
+      "detected": 5,
+      "gap": "G7（页眉页脚/文本框/批注/修订——引擎 Locator 无变体，业务侧 M1 同边界）"
+    }
+  }
+}

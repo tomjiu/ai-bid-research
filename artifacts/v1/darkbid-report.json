@@ -1,0 +1,53 @@
+{
+  "forbidden_words": [
+    "杭州示例智能科技有限公司（示例用虚构主体）",
+    "91330106MA2B3C4D5E",
+    "示例智能"
+  ],
+  "D1_pages": {
+    "pages": 8,
+    "within_limit": true,
+    "same_as_bright": true
+  },
+  "D2_forbidden_scan": {
+    "docx_parts_hits": {},
+    "pdf_page_hits": {},
+    "pass": true
+  },
+  "D3_metadata_zeroing": {
+    "core_creator_empty": true,
+    "core_last_modified_by_empty": true,
+    "app_company_removed": true,
+    "pdf_metadata_author_empty": true,
+    "pass": true
+  },
+  "D4_canary": {
+    "hits": [
+      {
+        "part": "word/document.xml",
+        "words": [
+          "杭州示例智能科技有限公司（示例用虚构主体）",
+          "91330106MA2B3C4D5E",
+          "示例智能"
+        ]
+      },
+      {
+        "part": "docProps/app.xml",
+        "words": [
+          "示例智能"
+        ]
+      },
+      {
+        "page": 1,
+        "words": [
+          "杭州示例智能科技有限公司（示例用虚构主体）",
+          "91330106MA2B3C4D5E",
+          "示例智能"
+        ]
+      }
+    ],
+    "pass": true
+  },
+  "dark_docx_sha256": "3254e363a39dcdacdfe5cebfd035164063ccca58b850670c5c3e3d4dab31ed0d",
+  "pass": true
+}

@@ -1,0 +1,15 @@
+# fixtures 生成与判分环境钉子（determinism 前提：同版本库 + 同字体 → 重生成 sha256 一致，见 scripts/run_tests.py T6）
+# Python 3.12
+python-docx==1.2.0
+reportlab==4.4.9
+openpyxl==3.1.5
+Pillow==11.3.0
+pdfplumber==0.11.9
+pymupdf==1.26.7
+
+# ---- bidcore（Rust 核心）环境契约 ----
+# Rust 工具链：rustup stable（实测 1.99.1；edition 2021）
+# 外部解析引擎适配器（组件版本矩阵钉住点，test-plan §5.2）：
+#   poppler-utils：pdftotext（PDF 文本层）/ pdftoppm（扫描页渲染）  # Debian trixie 实测
+#   tesseract-ocr 5 + chi_sim（OCR 分档；语言数据 ~/.tessdata/chi_sim.traineddata，tessdata_fast）
+# 判分与测试入口：cd bidcore && cargo test --workspace

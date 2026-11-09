@@ -1,0 +1,138 @@
+{
+  "tc_id": "TC-01",
+  "title": "条款完整性召回（25 埋点全量）",
+  "risk": "R-01",
+  "precondition": "项目 DRAFT；corpus-A files 就绪（含企业资料库 13 件）",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "create_bid_project",
+      "args": {
+        "name": "某市政务服务中心智能化系统工程（货物及服务）",
+        "code": "ZFCG-2026-GK-0311",
+        "mode": "明标（技术标暗标评审）"
+      },
+      "expect": {
+        "project.status": "DRAFT"
+      }
+    },
+    {
+      "n": 2,
+      "tool": "import_tender_files",
+      "args": {
+        "files": [
+          "A-招标文件.docx",
+          "B1-设备清单.pdf",
+          "B2-投标函格式页-扫描件.pdf",
+          "B3-图纸目录.xlsx"
+        ]
+      },
+      "expect": {
+        "project.status": "FILES_IMPORTED",
+        "files[0].parse_status": "ok",
+        "files[1].parse_status": "ok",
+        "files[2].parse_status": "ocr_required",
+        "files[3].parse_status": "ok",
+        "totals.chunks_ge": 100
+      }
+    },
+    {
+      "n": 3,
+      "tool": "import_tender_files",
+      "args": {
+        "files": "evidence/ 13 件（企业资料库）",
+        "kind": "evidence"
+      },
+      "expect": {
+        "evidence_imported": 13,
+        "missing_declared": [
+          "GT-04"
+        ]
+      }
+    },
+    {
+      "n": 4,
+      "tool": "extract_requirements",
+      "args": {},
+      "expect": {
+        "project.status": "REQUIREMENTS_EXTRACTED"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "count",
+      "path": "requirements",
+      "op": ">=",
+      "value": 24,
+      "note": "v0.4 校准：真实确定性抽取产出全量编号条款（实测 160 条），计数仅作下限健全性检查；召回覆盖由 set_cover 把关，漏抽必红"
+    },
+    {
+      "kind": "set_cover",
+      "path": "requirements.gt_ids",
+      "value": [
+        "GT-01",
+        "GT-02",
+        "GT-03",
+        "GT-04",
+        "GT-05",
+        "GT-06",
+        "GT-07",
+        "GT-08",
+        "GT-09",
+        "GT-10",
+        "GT-11",
+        "GT-12",
+        "GT-13",
+        "GT-14",
+        "GT-15",
+        "GT-16",
+        "GT-17",
+        "GT-18",
+        "GT-19",
+        "GT-20",
+        "GT-21",
+        "GT-22",
+        "GT-23",
+        "GT-24",
+        "GT-25"
+      ]
+    },
+    {
+      "kind": "count",
+      "path": "requirements[gt=GT-11].anchors",
+      "op": ">=",
+      "value": 1,
+      "note": "表格内否决项不丢（前附表行 10）"
+    },
+    {
+      "kind": "count",
+      "path": "requirements[gt=GT-07].anchors",
+      "op": ">=",
+      "value": 2,
+      "note": "扫描件内条款不丢：须同时覆盖正文锚点与 B2 扫描件 OCR 锚点"
+    },
+    {
+      "kind": "count",
+      "path": "parse_failures",
+      "op": "==",
+      "value": 0,
+      "note": "解析失败件清单为空；B2 走 OCR 通道不算失败"
+    },
+    {
+      "kind": "count",
+      "path": "missing_sequence",
+      "op": "==",
+      "value": 0,
+      "note": "条款编号序列完整性校验无缺口（正文编号 3.x.y/4.x/5.x/6.x 无撞号无跳号）"
+    },
+    {
+      "kind": "ocr",
+      "path": "files[B2].ocr_blocks",
+      "op": ">=",
+      "value": 4,
+      "note": "OCR 后须含 投标函/投标总价/投标人（盖章）/日期 四要素；引擎/OCR 版本差异入 D5 矩阵"
+    }
+  ],
+  "engine_gaps": []
+}

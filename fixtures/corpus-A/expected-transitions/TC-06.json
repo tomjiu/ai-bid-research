@@ -1,0 +1,56 @@
+{
+  "tc_id": "TC-06",
+  "title": "断点恢复",
+  "risk": "R-05",
+  "precondition": "DRAFTING 阶段；章节 3 个：SEC-01 已 ACCEPTED、SEC-02 DRAFTING 中、SEC-03 PENDING",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "draft_response_section",
+      "args": {
+        "section": "SEC-02"
+      },
+      "interrupt": {
+        "after_tool_calls": 1,
+        "action": "kill"
+      }
+    },
+    {
+      "n": 2,
+      "tool": "create_bid_project#resume",
+      "args": {
+        "resume": true
+      },
+      "expect": {
+        "project.status": "DRAFTING",
+        "resume_plan.sections": [
+          "SEC-02",
+          "SEC-03"
+        ]
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "not_rerun",
+      "path": "sections[SEC-01]",
+      "value": "ACCEPTED",
+      "note": "已 ACCEPTED 章节不重跑"
+    },
+    {
+      "kind": "state",
+      "path": "sections[SEC-02].status",
+      "op": "==",
+      "value": "DRAFTING",
+      "note": "从断点阶段续起"
+    },
+    {
+      "kind": "count",
+      "path": "resume_plan.sections",
+      "op": "==",
+      "value": 2,
+      "note": ""
+    }
+  ],
+  "engine_gaps": []
+}

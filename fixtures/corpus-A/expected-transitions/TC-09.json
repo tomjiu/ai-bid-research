@@ -1,0 +1,91 @@
+{
+  "tc_id": "TC-09",
+  "title": "补遗影响面（核心链路 V2 骨架）",
+  "risk": "R-05,R-03",
+  "precondition": "正文 A 已导入抽取，矩阵就绪，部分章节已起草",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "import_tender_files",
+      "args": {
+        "files": [
+          "C-补遗文件01.docx"
+        ],
+        "kind": "addendum"
+      },
+      "expect": {
+        "project.content_version": "+1",
+        "conflicts": [
+          "CONFLICT-01"
+        ]
+      }
+    },
+    {
+      "n": 2,
+      "tool": "extract_requirements",
+      "args": {
+        "incremental": true
+      },
+      "expect": {
+        "updated": [
+          "GT-18",
+          "GT-21",
+          "GT-02-基准"
+        ]
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "state",
+      "path": "requirements[GT-18].params.model_v2",
+      "op": "==",
+      "value": "USG6705E-AC650",
+      "note": "第 3 组参数更新为补遗版本（latest_version_wins）"
+    },
+    {
+      "kind": "dirty",
+      "path": "sections",
+      "value": [
+        "技术方案-网络与安全",
+        "商务部分-报价",
+        "资格响应"
+      ],
+      "note": "关联章节标 DIRTY 并重跑：参数组 3 / 控制价冲突 / GT-02 有效期翻转三类影响面"
+    },
+    {
+      "kind": "not_dirty",
+      "path": "sections",
+      "value": [
+        "售后服务方案",
+        "项目团队"
+      ],
+      "note": "无关章节不重跑（防全量重跑掩盖影响面错误）"
+    },
+    {
+      "kind": "state",
+      "path": "requirements[GT-02].recheck",
+      "op": "==",
+      "value": "全项目有效期重检已执行",
+      "note": "开标时间 11-15→11-27 触发全项目有效期重检"
+    },
+    {
+      "kind": "policy",
+      "path": "matrix[GT-02].policy",
+      "op": "==",
+      "value": "not_eligible",
+      "note": "EV-02 有效期至 11-25 < 新开标日 11-27 → 翻转；矩阵行与关联章节 DIRTY"
+    },
+    {
+      "kind": "conflict",
+      "path": "conflicts[CONFLICT-01]",
+      "op": "==",
+      "value": {
+        "final": 4650000,
+        "rule": "补遗优先"
+      },
+      "note": "控制价终裁 465 万；终裁前相关章节不得 ACCEPTED"
+    }
+  ],
+  "engine_gaps": []
+}

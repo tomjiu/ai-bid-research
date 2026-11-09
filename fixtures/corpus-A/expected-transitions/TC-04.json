@@ -1,0 +1,45 @@
+{
+  "tc_id": "TC-04",
+  "title": "引用存在率",
+  "risk": "R-04",
+  "precondition": "EVIDENCE_BOUND；章节起草完成",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "draft_response_section",
+      "args": {
+        "section": "资格响应",
+        "evidence_ids": [
+          "EV-01",
+          "EV-02",
+          "EV-03",
+          "EV-04",
+          "EV-05",
+          "EV-06",
+          "EV-07"
+        ]
+      },
+      "expect": {
+        "section.status": "DRAFTED",
+        "unanchored_claims": 0
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "count",
+      "path": "unanchored_claims",
+      "op": "==",
+      "value": 0,
+      "note": "承诺句全部携带有效 EV 引用（引用存在≠引用支持——支持率走 §5.3 人工抽检）"
+    },
+    {
+      "kind": "count",
+      "path": "citation_coverage",
+      "op": "==",
+      "value": 1.0,
+      "note": "引用覆盖率 100%"
+    }
+  ],
+  "engine_gaps": []
+}

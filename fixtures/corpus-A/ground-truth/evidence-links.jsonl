@@ -1,0 +1,9 @@
+{"gt_id": "GT-01", "ev_files": ["EV-01-营业执照.pdf"], "valid_until": null, "expected": "eligible"}
+{"gt_id": "GT-02", "ev_files": ["EV-02-电子与智能化工程专业承包二级资质证书.pdf"], "valid_until": "2026-11-25", "benchmark": "open_bid_date", "expected": "eligible@2026-11-15;EXPIRED@2026-11-27", "flip_on_addendum": true}
+{"gt_id": "GT-03", "ev_files": ["EV-03-类似业绩合同-智慧园区弱电工程.pdf", "EV-04-类似业绩合同-数据中心机房工程.pdf", "EV-05-类似业绩合同-医院智能化改造.pdf"], "valid_until": null, "expected": "eligible（3 个≥200 万业绩，满足≥2 个）"}
+{"gt_id": "GT-04", "ev_files": [], "valid_until": null, "expected": "not_eligible（MISSING——项目经理证书故意不提供）"}
+{"gt_id": "GT-05", "ev_files": ["EV-06-财务审计报告-2025年度.pdf"], "valid_until": null, "expected": "eligible"}
+{"gt_id": "GT-06", "ev_files": ["EV-07-无失信记录承诺函.pdf"], "valid_until": null, "expected": "eligible"}
+{"gt_id": "GT-13", "ev_files": ["EV-13-安全生产许可证.pdf"], "valid_until": "2025-08-01", "expected": "EXPIRED（禁绑，细项 0 分）", "forbidden_bind": true}
+{"gt_id": "GT-14", "ev_files": ["EV-08-ISO9001质量管理体系认证证书.pdf", "EV-09-ISO27001信息安全管理体系认证证书.pdf", "EV-12-银行资信证明.pdf"], "valid_until": null, "expected": "eligible（认证/资信细项）"}
+{"gt_id": "GT-15", "ev_files": ["EV-10-项目团队人员证书-网络工程师高级.pdf"], "valid_until": null, "expected": "人员细项 eligible；项目经理细项 0 分（GT-04 缺失联动）"}

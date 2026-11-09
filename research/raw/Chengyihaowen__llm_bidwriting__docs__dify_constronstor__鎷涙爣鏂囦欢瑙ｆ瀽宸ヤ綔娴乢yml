@@ -1,0 +1,539 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 招标文件解析工作流
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.3.4@3345b596ee5117d9304097feaee866f05ffaf0d76a790fb07acd8b99f6c87cb3
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1774849891756-source-1774850154370-target
+      source: '1774849891756'
+      sourceHandle: source
+      target: '1774850154370'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1774850446045-source-1774850476720-target
+      source: '1774850446045'
+      sourceHandle: source
+      target: '1774850476720'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1774849891756-source-1774850273628-target
+      source: '1774849891756'
+      sourceHandle: source
+      target: '1774850273628'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1774849891756-source-1774850364070-target
+      source: '1774849891756'
+      sourceHandle: source
+      target: '1774850364070'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1774849891756-source-1774850446045-target
+      source: '1774849891756'
+      sourceHandle: source
+      target: '1774850446045'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1774850364070-source-1774850476720-target
+      source: '1774850364070'
+      sourceHandle: source
+      target: '1774850476720'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1774850154370-source-1774850476720-target
+      source: '1774850154370'
+      sourceHandle: source
+      target: '1774850476720'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1774850273628-source-1774850476720-target
+      source: '1774850273628'
+      sourceHandle: source
+      target: '1774850476720'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 用户输入
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: big_text
+          max_length: 500000
+          options: []
+          placeholder: ''
+          required: true
+          type: paragraph
+          variable: big_text
+      height: 108
+      id: '1774849891756'
+      position:
+        x: -102.31248549355146
+        y: 315.0214982133656
+      positionAbsolute:
+        x: -102.31248549355146
+        y: 315.0214982133656
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params: {}
+          mode: chat
+          name: gpt-5.1
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: bf8d6f62-b642-4617-b1b5-0957b35562ed
+          role: system
+          text: '你是一个通用招标文件解析引擎。
+
+            你的任务是从任意行业、任意类型的招标文件中提取结构化信息。
+
+
+            严格要求：
+
+            1. 所有信息必须从招标文件原文提取
+
+            2. 找不到的信息必须写“文件中未提及”
+
+            3. 所有金额、日期、比例、分值、编号必须按原文保留
+
+            4. 不允许猜测、不允许补全、不允许自行编造
+
+            5. 输出内容用于后续标书生成和合规检查，因此必须完整、准确、可复用
+
+            6. 输出使用清晰标题结构，不要输出 JSON，不要输出解释性前言'
+        - id: 12ad1997-1766-4f5e-bfb9-a86755860541
+          role: user
+          text: "请完整分析以下招标文件，并按照下面结构输出。\n找不到的信息请写“文件中未提及”。\n\n## A. 项目基本信息\n- 项目名称：\n\
+            - 招标编号：\n- 招标人（采购人）：\n- 招标代理机构：\n- 项目概述（一句话描述采购什么）：\n- 采购数量：\n- 交货期/工期：\n\
+            - 交货地点/服务地点：\n- 资金来源：\n- 最高投标限价（如有）：\n- 投标有效期：\n- 投标保证金金额及形式：\n- 履约保证金比例及形式：\n\
+            \n## B. 投标人资格要求\n- 按原文逐条列出，尽量保留编号\n\n## C. 评标办法\n- 评标方法名称：\n- 总分值：\n-\
+            \ 各部分分值分配：\n  - 商务/资格部分：\n  - 技术部分：\n  - 价格/报价部分：\n- 商务/资格评分标准：\n- 技术评分标准：\n\
+            - 价格评分规则：\n- 同分处理规则：\n\n## D. 技术/供货/服务要求摘要\n- 提取实质性技术要求、供货要求、服务要求、工作范围\n\
+            - 尽量保留原文结构和编号\n\n## E. 商务条款要点\n- 合同类型：\n- 付款方式及比例：\n- 质保期：\n- 售后服务要求：\n\
+            - 违约责任要点：\n- 知识产权归属：\n- 保密要求：\n\n## F. 偏差规定\n- 是否允许偏差：\n- 星号/关键条款偏差规定：\n\
+            - 非星号条款负偏差限制：\n- 偏差定义范围：\n\n## G. 其他对标书撰写有直接影响的要求\n- 例如签章要求、附件要求、响应格式要求、编制要求等\n\
+            \n招标文件原文如下：\n{{{{#1774849891756.big_text#}}}}"
+        selected: false
+        title: ParseBid
+        type: llm
+        vision:
+          enabled: false
+      height: 87
+      id: '1774850154370'
+      position:
+        x: 253.37738520627244
+        y: 427.77229676622454
+      positionAbsolute:
+        x: 253.37738520627244
+        y: 427.77229676622454
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            frequency_penalty: 0.5
+            presence_penalty: 0.5
+            temperature: 0.2
+            top_p: 0.75
+          mode: chat
+          name: gpt-5.1
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: 3b086cca-1a64-457c-af0a-2b027e73df87
+          role: system
+          text: '你是投标文件目录提取器，也是后续章节写作约束生成器。
+
+            你的任务是从招标文件中提取“投标文件组成/目录结构”，并为每个章节生成可直接驱动正文写作的 promptRequirement，最终只输出合法
+            JSON。
+
+
+            严格要求：
+
+            1. 只输出 JSON 数组，不输出任何解释文字
+
+            2. 不输出 Markdown 标题，不输出前言，不输出结尾说明
+
+            3. 每个一级节点必须包含字段：title, promptRequirement, children
+
+            4. 每个二级节点必须包含字段：title, promptRequirement
+
+            5. children 必须始终存在，没有子节点时输出空数组 []
+
+            6. promptRequirement 必须写成“可执行的写作指令”，不是章节摘要，也不是宣传语，长度控制在 20-120 字
+
+            7. promptRequirement 必须明确本章/本节的写作边界、展开顺序、响应方式或固定格式要求
+
+            8. 对技术方案类章节，优先生成“先概述/需求理解，再总体设计，再详细方案或实施内容”的顺序约束；如果原目录已经给出顺序，必须按原目录顺序写
+
+            9. 对“系统组成、技术路线、逻辑架构、技术架构、工作流程、接口设计、供货范围、配置清单”等章节，promptRequirement 要明确采用“图示或文字化结构图
+            + 文字说明 + 逐项清单/步骤/接口说明”的输出顺序
+
+            10. 对“系统组成/供货范围/配置清单”类章节，promptRequirement 必须要求后续正文逐条对照招标文件供货要求或技术要求，不得自行发明层级结构、模块名称或数量
+
+            11. 对偏差表、报价表、授权书、声明书、资格表等固定模板章节，promptRequirement 必须明确“严格按招标文件模板填写，不得增删改固定内容”
+
+            12. 禁止在 promptRequirement 中出现“行业领先”“国内一流”“先进成熟”“全面赋能”等无依据空话
+
+            13. 不要编造招标文件中没有的章节
+
+            14. 如果招标文件没有显式目录，但有明确“投标文件组成/响应内容”，可以整理为合理的一级章和二级节
+
+            15. 输出必须是可被标准 JSON 解析器直接解析的合法 JSON'
+        - id: 2b1a3af8-4ae3-4551-88f9-2a7188db495e
+          role: user
+          text: "请从以下招标文件中提取投标文件目录结构，并输出 JSON 数组。\n\n输出规则：\n1. 仅输出 JSON 数组\n2. 一级节点结构：\n\
+            \   {\n     \"title\": \"章节标题\",\n     \"promptRequirement\": \"本章写作要求\"\
+            ,\n     \"children\": []\n   }\n3. 二级节点结构：\n   {\n     \"title\": \"小节标题\"\
+            ,\n     \"promptRequirement\": \"本节写作要求\"\n   }\n4. promptRequirement\
+            \ 必须使用祈使句或约束句，写成“本节如何写、按什么顺序写、禁止什么”\n5. 如果原文目录编号存在，请尽量保留在 title 中\n6.\
+            \ 对“项目技术方案、技术路线、总体设计、详细设计、系统组成、逻辑架构、技术架构、工作流程、接口设计、供货范围、配置清单”等标题，promptRequirement\
+            \ 要体现顺序约束和逐条响应要求\n7. 对固定模板类章节，promptRequirement 要明确“严格按模板填写，不得增删改固定内容”\n\
+            8. 不要出现 id、parentId、level、orderNo 这些系统字段\n9. 不要返回 null，字符串字段为空时也要给出合理内容\n\
+            10. 不要在 promptRequirement 中使用夸赞性形容词、营销语和无依据自我评价\n11.期望输出范式示例：\n[\n  {\n\
+            \    \"title\": \"二 初步审查表\",\n    \"promptRequirement\": \"本章严格按招标文件审查表原结构填写，不得改写审查项、序号和表头。\"\
+            ,\n    \"children\": [\n      {\n        \"title\": \"1.资格性和符合性审查表\",\n\
+            \        \"promptRequirement\": \"逐条对应资格性和符合性审查要求填写，保持原条款顺序，不得新增或合并审查项。\"\
+            \n      }\n    ]\n  },\n  {\n    \"title\": \"十六、项目技术方案\",\n    \"promptRequirement\"\
+            : \"本章按“概述→技术要求→总体设计→详细设计”顺序编写，逐节对应招标要求，禁止空泛宣传语。\",\n    \"children\"\
+            : [\n      {\n        \"title\": \"1 概述\",\n        \"promptRequirement\"\
+            : \"仅说明项目目标、建设内容与交付范围，依据招标文件概况和采购内容，不写自我评价。\"\n      },\n      {\n   \
+            \     \"title\": \"2 技术要求\",\n        \"promptRequirement\": \"按招标技术要求原编号逐项响应，先写分系统概述，再写设备/软件/服务清单，不得改造原有层级。\"\
+            \n      },\n      {\n        \"title\": \"3 总体设计\",\n        \"promptRequirement\"\
+            : \"按“系统组成图或文字化结构图→文字说明→逐项清单”展开，系统组成必须逐条对照供货要求。\"\n      }\n    ]\n  }\n\
+            ]\n招标文件原文如下：\n{{{#1774849891756.big_text#}}}}"
+        selected: false
+        title: ExtractOutline
+        type: llm
+        vision:
+          enabled: false
+      height: 87
+      id: '1774850273628'
+      position:
+        x: 253.37738520627244
+        y: 215.97372440588651
+      positionAbsolute:
+        x: 253.37738520627244
+        y: 215.97372440588651
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params: {}
+          mode: chat
+          name: gpt-5.1
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: 4ad94a7f-0b20-49dc-8dcb-8ca207fef075
+          role: system
+          text: '你是投标合规风险审查专家。
+
+            你的唯一任务是找出招标文件中所有可能导致投标被否决、废标、无效或必须重点响应的条款。
+
+
+            重点包括：
+
+            1. 星号条款、关键条款
+
+            2. 明确写有“否决”“废标”“无效”“拒绝”“不予接受”等后果的条款
+
+            3. 明确要求“必须”“应当”“不得偏离”的实质性响应条款
+
+
+            严格要求：
+
+            - 尽量逐条列出
+
+            - 保留原文关键信息
+
+            - 不得遗漏明显风险条款
+
+            - 不要输出 JSON，输出结构化 Markdown 文本'
+        - id: c2671479-b7b0-4b05-93b4-95a5e01b9bd7
+          role: user
+          text: '请从以下招标文件中提取全部风险条款，并按照下面结构输出。
+
+
+            ## A. 星号/关键条款
+
+            - 逐条列出：条款编号 / 条款摘要 / 所在章节 / 原文关键内容
+
+
+            ## B. 否决性条款
+
+            - 逐条列出：否决条件 / 所在章节 / 原文关键内容
+
+
+            ## C. 实质性响应要求
+
+            - 逐条列出：要求内容 / 所在章节 / 响应重点
+
+
+            ## D. 风险提示总结
+
+            - 归纳最容易遗漏的 5-10 类要求
+
+
+            招标文件原文如下：
+
+            {{{#1774849891756.big_text#}}}}'
+        selected: false
+        title: ExtractRiskClauses
+        type: llm
+        vision:
+          enabled: false
+      height: 87
+      id: '1774850364070'
+      position:
+        x: 275.64988605620414
+        y: 320.2070997507793
+      positionAbsolute:
+        x: 275.64988605620414
+        y: 320.2070997507793
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params: {}
+          mode: chat
+          name: gpt-5.1
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: daeadea6-d354-45ee-a62f-a7680035447a
+          role: system
+          text: '你是投标文件格式提取专家。
+
+            你的任务是从招标文件中提取投标文件格式要求和模板要求，供后续系统使用。
+
+
+            严格要求：
+
+            1. 重点提取投标文件组成、格式模板、表格结构、签章要求、编制要求
+
+            2. 尽量保留原文模板结构信息
+
+            3. 不输出 JSON，输出结构化 Markdown 摘要
+
+            4. 不要编造招标文件中没有的模板'
+        - id: dfec9a9c-856c-447c-acd0-8152eb77f03b
+          role: user
+          text: '请从以下招标文件中提取投标文件格式要求，并按照下面结构输出。
+
+
+            ## A. 投标文件目录/组成
+
+            ## B. 常见模板及表格要求
+
+            - 投标函
+
+            - 偏差表
+
+            - 报价表
+
+            - 授权委托书
+
+            - 资格审查资料
+
+            - 其他声明/承诺书
+
+
+            ## C. 签字盖章要求
+
+            ## D. 正副本、装订、密封、电子版要求
+
+            ## E. 对技术文件/商务文件/价格文件的特殊要求
+
+
+            招标文件原文如下：
+
+            {{{#1774849891756.big_text#}}}}'
+        selected: true
+        title: ExtractFormatTemplate
+        type: llm
+        vision:
+          enabled: false
+      height: 87
+      id: '1774850446045'
+      position:
+        x: 275.64988605620414
+        y: 584.8005001185022
+      positionAbsolute:
+        x: 275.64988605620414
+        y: 584.8005001185022
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        outputs:
+        - value_selector:
+          - '1774850154370'
+          - text
+          value_type: string
+          variable: parsed_bid
+        - value_selector:
+          - '1774850273628'
+          - text
+          value_type: string
+          variable: outline_json
+        - value_selector:
+          - '1774850364070'
+          - text
+          value_type: string
+          variable: risk_clauses
+        - value_selector:
+          - '1774850446045'
+          - text
+          value_type: string
+          variable: format_template
+        selected: false
+        title: 输出
+        type: end
+      height: 167
+      id: '1774850476720'
+      position:
+        x: 796.3375397751838
+        y: 447.9005848098183
+      positionAbsolute:
+        x: 796.3375397751838
+        y: 447.9005848098183
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    viewport:
+      x: 175.81778433224355
+      y: -102.34710261940904
+      zoom: 0.7990533013326576
+  rag_pipeline_variables: []

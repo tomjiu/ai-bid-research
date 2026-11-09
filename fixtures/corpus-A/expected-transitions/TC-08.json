@@ -1,0 +1,44 @@
+{
+  "tc_id": "TC-08",
+  "title": "换模型恢复",
+  "risk": "R-05",
+  "precondition": "SEC-01 ACCEPTED（模型 A）；SEC-02 DIRTY（模型 A 起草未验收）",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "draft_response_section",
+      "args": {
+        "section": "SEC-02",
+        "model": "B"
+      },
+      "expect": {
+        "sections[SEC-02].last_model": "B"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "state",
+      "path": "sections[SEC-01].last_model",
+      "op": "==",
+      "value": "A",
+      "note": "非 DIRTY 章节保留"
+    },
+    {
+      "kind": "state",
+      "path": "sections[SEC-02].last_model",
+      "op": "==",
+      "value": "B"
+    },
+    {
+      "kind": "state",
+      "path": "sections[SEC-02].status",
+      "op": "in",
+      "value": [
+        "DRAFTED",
+        "VALIDATING"
+      ]
+    }
+  ],
+  "engine_gaps": []
+}

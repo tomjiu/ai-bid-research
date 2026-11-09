@@ -1,0 +1,374 @@
+//! bid-parse —— 确定性解析层（AdapterA 的读面）。
+//!
+//! B4 收敛（issue #11 任务 3）：docx/xlsx 自研解析已删——引擎（bid-engine
+//! → mdc-office-io）是 OOXML 读面的单一真源，本 crate 不再持有 zip/quick-xml/
+//! calamine 解析栈；消费方经扩展名路由直调 `bid_engine::parse_docx_via_engine`
+//! / `parse_xlsx_via_engine`（`bid-parse` dev-dep 提供，service.rs 同款）。
+//! 保留面：
+//! - PDF 文本层：poppler `pdftotext -layout`（外部引擎适配器，版本由部署清单钉住）+
+//!   PDF 扫描层：`pdftoppm` 渲染 → tesseract chi_sim（OCR 分档）——`parse_file`
+//!   的 pdf 臂与回退路径（pdfium 引擎优先，映射表 §3）；
+//! - **pdf_text.rs（纯 Rust 兜底——第三条降级路）**：pdfium 与 poppler 都不可用时，
+//!   用零外部二进制的最小 PDF 文本提取器兜底（补遗/澄清函/更正公告这类
+//!   短文本 PDF 是甜区）。实测背景：两条路全断时补遗会**静默丢失**，而补遗里的
+//!   新控制价/新截止时间没进抽取面时校验仍然 blocker=0——「不知道补遗存在」
+//!   与「补遗没问题」是两种完全不同的状态。兜底也失败时**两条原因都报出来**；
+//! - guard.rs：pdf 字节门 / 子进程治理（T-04）/ 流式哈希；
+//! - extract.rs：条款抽取业务规则（消费 locator 字符串，与解析器解耦）；
+//! - clause.rs：条款边界与跨行合并（B6·G1 纯函数面——docx 续行吸收的
+//!   边界判定单一真源）；
+//! - numbering.rs：多级编号形态识别（B6·G5 七形态全枚举 + 混排语境修正——
+//!   clause_boundary 的编号判定底层）；
+//! - nesting.rs：引号/括号嵌套配对与保护切分（B6·G6 纯函数面——
+//!   find_matching + split_respecting_nesting，未配对优雅降级）。
+//!
+//! 引擎适配器约定（组件版本矩阵的钉住点，test-plan §5.2）：
+//! - 解析失败/无文本层绝不静默：无文本层 → `has_text_layer=false` + OCR 通道；
+//!   OCR 失败 → 保留空 ocr_blocks 并在 parse_summary 说明（诚实状态）。
+//!
+//! 确定性纪律：同输入文件 → 同输出 blocks（顺序、locator、文本逐字节一致；
+//! 外部引擎版本变化入组件版本矩阵，不属本层自由度）。
+
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+pub mod clause;
+pub mod engine;
+pub mod engines;
+pub mod env_preflight;
+pub mod extract;
+pub mod guard;
+
+use crate::guard::LIMIT_INPUT_BYTES_PDF;
+// #285 ②：块级双向索引（派生态构建面——锚→块兜底解析 + 块→REQ 聚合）。
+pub mod bidi;
+pub mod merge;
+pub mod nesting;
+pub mod numbering;
+pub mod packages;
+pub mod pdf_text;
+pub mod review_table;
+pub mod scoring_table;
+pub mod star_scan;
+pub mod structure;
+
+pub mod table_semantics;
+pub mod veto_lexicon;
+// #226 层 2：规则说明识别（区分「招标人规则陈述」与「投标人响应要求」）。
+pub mod veto_rule;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockKind {
+    Para,     // DOCX 正文段落
+    TableRow, // DOCX 表格行（cells 逐列）
+    PdfLine,  // PDF 文本层行（pdftotext -layout）
+    OcrLine,  // 扫描件 OCR 行
+    XlsxRow,  // Excel 行
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Block {
+    pub idx: usize, // 文件内序号（chunk_id 稳定性的组成）
+    pub kind: BlockKind,
+    pub locator: String, // 章节/页/行 定位描述
+    pub text: String,    // 行/段落全文（表格行 = 列文本以空格连接）
+    pub cells: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParsedFile {
+    pub name: String,
+    pub sha256: String,
+    pub pages: usize,
+    pub tables: usize,
+    pub has_text_layer: bool,
+    pub ocr_blocks: usize,
+    pub blocks: Vec<Block>,
+    pub parse_summary: String,
+    /// SC-02 部件对账账本：部件在位数 vs 进入输出流提取数——present>0 而
+    /// extracted==0 的部件必须带 note 显式登记（登记不伪装面扩展到部件级，
+    /// G7 零提取面逐文件可见化）。非 docx 解析面为空账本（部件概念不适用）。
+    #[serde(default)]
+    pub components: Vec<ComponentLedger>,
+}
+
+// ---------------------------------------------------------------- #285 ② 块级定位
+
+/// 从块/锚 locator 解析 `(页号, 行号)`（均 1 基）。
+///
+/// 在产 locator 全量形态（页门纪律：**无页号 → 行号也 None**——DOCX 章节
+/// 路径/xlsx `Sheet!行N`/表行 `…表T 行R` 的「行」是表行号不是页内行号，
+/// 解析出来是假信号）：
+/// - `第1页 行2`（poppler/engine 首选路与审查表/评分表合成件——行号后置）
+/// - `第1 页 > 第2 行`（纯 Rust 兜底路——行号前置「第M 行」）
+/// - `第1页 OCR 行2`（OCR 路——行号后置；锚面拼接后缀「 + 行接」由
+///   构造方处理，本函数只认纯形态）
+/// - DOCX `第三章 > …` / 表行 `第六章 评审 表8 行3` / xlsx `Sheet1!行3`
+///   → `(None, None)` 诚实口径（非 PDF 面无页行概念）
+pub fn page_line_of(locator: &str) -> (Option<u32>, Option<u32>) {
+    use std::sync::OnceLock;
+    // 页门：行首「第N页」（N 为 ASCII 数字，页字可前带空格——兜底路形态）
+    static RE_PAGE: OnceLock<regex::Regex> = OnceLock::new();
+    let page = RE_PAGE
+        .get_or_init(|| regex::Regex::new(r"^\s*第(\d+)\s*页").unwrap())
+        .captures(locator)
+        .and_then(|c| c[1].parse().ok());
+    if page.is_none() {
+        return (None, None); // 页门：非 PDF 面不猜行号（表行/xlsx 的「行」不是页内行）
+    }
+    // 行号双模式：后置「行M」（poppler/OCR）优先，前置「第M 行」（兜底路）次之
+    static RE_LINE_POST: OnceLock<regex::Regex> = OnceLock::new();
+    let line = RE_LINE_POST
+        .get_or_init(|| regex::Regex::new(r"行\s*(\d+)").unwrap())
+        .captures(locator)
+        .and_then(|c| c[1].parse().ok())
+        .or_else(|| {
+            static RE_LINE_PRE: OnceLock<regex::Regex> = OnceLock::new();
+            RE_LINE_PRE
+                .get_or_init(|| regex::Regex::new(r"第(\d+)\s*行").unwrap())
+                .captures(locator)
+                .and_then(|c| c[1].parse().ok())
+        });
+    (page, line)
+}
+
+/// SC-02 部件对账账本行（cpa-multi-plugins issue #38 吸收：docx 进 N 个部件，
+/// 出站必须有清单；任何部件 0 提取必留显式事件）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComponentLedger {
+    pub component: String, // 正文/页眉/页脚/文本框/批注/脚注尾注/修订插入/修订删除
+    pub present: usize,    // 在位部件数（或出现次数）
+    pub extracted: usize,  // 进入独立输出块的部件数（0 = 零提取，必须带 note）
+    #[serde(default)]
+    pub note: String,
+}
+
+/// 文件类别权重：精确检索的确定性排序因子（主文件权威性优先，防附件/证据同值噪声抢占命中）。
+pub fn kind_rank(file_name: &str) -> u8 {
+    if file_name.starts_with("A-") {
+        0 // 主招标文件
+    } else if file_name.starts_with("C-") {
+        1 // 补遗（后到版本权威）
+    } else if file_name.starts_with("B") {
+        2 // 附件/图纸
+    } else {
+        3 // 证据库
+    }
+}
+
+pub fn sha256_file(path: &Path) -> std::io::Result<String> {
+    // T-03：流式哈希（原 fs::read 全量内存——大文件面顺带根治）
+    guard::sha256_streaming(path)
+}
+
+/// 统一分发：按扩展名选择解析器。kind（业务类别）仅作语义提示。
+///
+/// B4 后仅剩 **pdf 面**（文本层/扫描 OCR 补遗链——映射表 §3 的标书侧保留面）；
+/// docx/xlsx 由消费方扩展名路由直调 bid-engine 门面（service.rs 同款），
+/// 直入本函数会得到「不支持的文件类型」显式拒绝——不留静默降级。
+///
+/// 门序（#529/B-23 收口）：**扩展名门 → 字节门 → 哈希**——原实现第一步就
+/// 全文件哈希，超限件（>500MB）与不支持类型被拒前白读一遍，违反 guard.rs
+/// 「读任何内容之前先查 metadata」的门序声明。已有哈希的调用方（import
+/// 幂等面）走 [`parse_file_with_sha`] 复用，免第二遍全量读。
+pub fn parse_file(path: &Path, name: &str) -> Result<ParsedFile, String> {
+    if extension_of(path) != "pdf" {
+        return Err(format!(
+            "不支持的文件类型 .{}（{name}）",
+            extension_of(path)
+        ));
+    }
+    guard::check_input_size(path, LIMIT_INPUT_BYTES_PDF)
+        .map_err(|e| format!("pdf 防护拒绝: {e}"))?;
+    let sha256 = sha256_file(path).map_err(|e| format!("读取失败 {name}: {e}"))?;
+    parse_file_with_sha(path, name, &sha256)
+}
+
+/// [`parse_file`] 的哈希复用入口（#529/B-23 双读去重）：import 链在幂等
+/// 检查时已对同一文件算过 sha256（service.rs），经此传入免第二遍全量读。
+/// 门序与 [`parse_file`] 一致（扩展名门 + 字节门——幂等复检，metadata 级
+/// 零内容读）；解析体完全同源。
+pub fn parse_file_with_sha(
+    path: &Path,
+    name: &str,
+    sha256: &str,
+) -> Result<ParsedFile, String> {
+    if extension_of(path) != "pdf" {
+        return Err(format!(
+            "不支持的文件类型 .{}（{name}）",
+            extension_of(path)
+        ));
+    }
+    guard::check_input_size(path, LIMIT_INPUT_BYTES_PDF)
+        .map_err(|e| format!("pdf 防护拒绝: {e}"))?;
+    // #200 R2：解析链全部迁入 engines（可插拔引擎 + 仲裁器）——
+    // 乱码判决/降级/互证/OCR 救援的口径见 engines/mod.rs，此处只做
+    // 扩展名路由与 sha256 回填。
+    let mut pf = engines::parse_pdf(path, name)?;
+    pf.name = name.to_string();
+    pf.sha256 = sha256.to_string();
+    // #272 跨平台结构形态自报（追加在尾部——[pdf-*] 前缀断言不受
+    // 影响）：方案 + 章数 + 告警，import 回执透出（识别不确定
+    // 响亮可见，不静默失败）。
+    let st = structure::detect_structure(&pf.blocks);
+    let scheme_label = match st.scheme {
+        structure::TopScheme::Zhang => "第X章",
+        structure::TopScheme::Part => "第X部分/篇",
+        structure::TopScheme::Numbered => "数字顶层头",
+        structure::TopScheme::Uncertain => "未识别",
+    };
+    pf.parse_summary = format!(
+        "{}；结构形态[{}]: {} 章标记",
+        pf.parse_summary,
+        scheme_label,
+        st.chapters.len()
+    );
+    for w in &st.warnings {
+        pf.parse_summary = format!("{}；【结构告警】{}", pf.parse_summary, w);
+    }
+    Ok(pf)
+}
+
+/// 扩展名小写归一（parse_file 门序用的单一取值口）。
+fn extension_of(path: &Path) -> String {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+}
+
+// ---------------------------------------------------------------- 归一化（对齐/检索共用）
+/// N1 归一化：NFKC（全角→半角）+ 去全部空白。保留标点（代码/金额语境需要）。
+pub fn norm_n1(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let nfkc: String = s.nfkc().collect();
+    nfkc.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// N2 归一化：N1 + 去标点（OCR 噪声容忍对齐用——标点在 OCR 下不可靠）。
+pub fn norm_n2(s: &str) -> String {
+    let n1 = norm_n1(s);
+    n1.chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
+/// N3 归一化：N1 + 千分位剥离（检索判据面专用，#267）。
+///
+/// 「数据不动、匹配归一」纪律在检索判据面的延伸（先例：extract.rs 章节识别
+/// 匹配瞬间 NFKC / norm_n1 对齐面）。两个永假阴性形态：
+/// - **康熙部首**：政采 PDF 文本层用康熙部首区编码（⽇ U+2F47 ≠ 日 U+65E5），
+///   NFKC 兼容分解归一到统一汉字（N1 已覆盖）；
+/// - **千分位**：金标准 needle「20,000」与原文「20000元」形态不一致——
+///   双侧对称剥离「数字,数字」之间的逗号后比对（`1,195,800 → 1195800`）。
+///
+/// **只用于匹配瞬间**（haystack 与 needle 双侧同施），不落库、不改金标准真源。
+/// 文本逗号（「A,B」）因左右非数字不受影响。
+pub fn norm_n3(s: &str) -> String {
+    let n1 = norm_n1(s);
+    let cs: Vec<char> = n1.chars().collect();
+    let mut out = String::with_capacity(n1.len());
+    for i in 0..cs.len() {
+        let c = cs[i];
+        // 千分位逗号：前一个字符是 ASCII 数字且后一个也是 ASCII 数字 → 剥离。
+        // 连续千分位（1,195,800）每个逗号独立满足条件，一次遍历全剥离。
+        if c == ','
+            && i > 0
+            && cs[i - 1].is_ascii_digit()
+            && cs.get(i + 1).is_some_and(|n| n.is_ascii_digit())
+        {
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+#[cfg(test)]
+mod norm_tests {
+    use super::*;
+
+    /// 康熙部首（⽇ U+2F47）与标准字形（日 U+65E5）N3 归一后等值——GR-005/GR-014 形态。
+    #[test]
+    fn n3_kangxi_radical_equivalence() {
+        let kangxi = "从合同签订之\u{2F47}起15\u{2F47}历天内调测完毕";
+        let standard = "从合同签订之日起15日历天内调测完毕";
+        assert_eq!(norm_n3(kangxi), norm_n3(standard));
+        // 归一结果确实含标准字形的检索判据
+        assert!(norm_n3(kangxi).contains(&norm_n3("15日历天")));
+        assert!(norm_n3("90\u{2F47}").contains(&norm_n3("90日")));
+    }
+
+    /// 千分位双侧对称剥离——GR-011（needle 20,000 / 原文 20000元）与
+    /// GR-012（1,195,800 连续千分位）形态。
+    #[test]
+    fn n3_thousands_separator_equivalence() {
+        assert_eq!(norm_n3("20,000"), norm_n3("20000"));
+        assert_eq!(norm_n3("1,195,800"), norm_n3("1195800"));
+        // 原文形态（含康熙部首+无千分位混合）与 needle 形态归一后互检
+        let raw = "本项\u{2F47}代理服务费：20000元（贰万元整）";
+        assert!(norm_n3(raw).contains(&norm_n3("20,000")));
+        // 带小数的金额不受影响（17,000.00 → 17000.00，点保留）
+        assert_eq!(norm_n3("17,000.00元"), norm_n3("17000.00元"));
+    }
+
+    /// 文本逗号保留：左右非数字的逗号是语义的一部分，不剥离。
+    #[test]
+    fn n3_text_comma_preserved() {
+        assert_eq!(norm_n3("投标人,招标人").matches(',').count(), 1);
+        // 尾随/前导逗号（非数字对）保留
+        assert_eq!(norm_n3("1,"), "1,");
+        assert_eq!(norm_n3(",2"), ",2");
+        // 中文逗号（全角）NFKC 后为「,」但左右是汉字 → 保留
+        assert_eq!(norm_n3("序号19，代理服务费"), norm_n3("序号19，代理服务费"));
+    }
+
+    /// N3 ⊇ N1：去空白与全角半角归一语义不变（回归保护）。
+    #[test]
+    fn n3_subsumes_n1_semantics() {
+        // 全角Ｍ／ｓ → 半角 M/s（NFKC）；全角％ → 半角 %
+        assert_eq!(norm_n3("30Ｍ／ｓ"), "30M/s");
+        assert_eq!(norm_n3(" 95 ％ "), "95%");
+    }
+}
+
+#[cfg(test)]
+mod page_line_tests {
+    use super::page_line_of;
+
+    /// 三种在产 PDF 面 locator 形态全解析。
+    #[test]
+    fn pdf_face_forms_parse() {
+        // poppler/engine 首选路（行号后置）
+        assert_eq!(page_line_of("第18页 行12"), (Some(18), Some(12)));
+        // 纯 Rust 兜底路（行号前置「第M 行」、页字前带空格）
+        assert_eq!(page_line_of("第1 页 > 第2 行"), (Some(1), Some(2)));
+        // OCR 路
+        assert_eq!(page_line_of("第3页 OCR 行7"), (Some(3), Some(7)));
+        // 审查表/评分表合成件形态
+        assert_eq!(page_line_of("第25页 行3"), (Some(25), Some(3)));
+    }
+
+    /// 页门纪律：非 PDF 面（DOCX 章节路径/表行/xlsx）→ (None, None)——
+    /// 表行/xlsx 的「行」是表行号不是页内行号，解析出来是假信号。
+    #[test]
+    fn page_gate_blocks_non_pdf_faces() {
+        assert_eq!(page_line_of("第三章 > 3.2 技术要求"), (None, None));
+        assert_eq!(page_line_of("第六章 评审 表8 行3"), (None, None));
+        assert_eq!(page_line_of("Sheet1!行3"), (None, None));
+        assert_eq!(page_line_of("第四章 评标办法"), (None, None));
+        // 中文数字页号（第十章…）不在解析域——ASCII 数字才有页号
+        assert_eq!(page_line_of("第十章 投标文件格式"), (None, None));
+    }
+
+    /// 有页无行的诚实面：页可解析而行号缺失 → 行 None（不猜）。
+    #[test]
+    fn page_without_line_is_honest_none() {
+        assert_eq!(page_line_of("第5页"), (Some(5), None));
+    }
+
+    /// 锚面拼接后缀形态（OCR 续行）——后置行号先命中，不被「行接」尾骗。
+    #[test]
+    fn ocr_concat_suffix_does_not_confuse_line_parse() {
+        assert_eq!(page_line_of("第2页 OCR 行5 + 行接"), (Some(2), Some(5)));
+    }
+}

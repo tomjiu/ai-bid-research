@@ -1,0 +1,54 @@
+[package]
+name = "bid-mcp"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "bid_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bid-mcp-stdio"
+path = "src/bin/stdio.rs"
+
+[dependencies]
+bid-domain = { path = "../bid-domain" }
+bid-tools = { path = "../bid-tools" }
+bid-parse = { path = "../bid-parse" }
+mang-snap = { path = "../mang-snap" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# S-4 游标分页：opaque cursor 的 base64 线格式（0.22 已在 workspace 锁内——
+# zip/calamine 传递依赖，零新增网络取数；直连声明同 bid-engine 的 sha2 先例）
+base64 = "0.22"
+# #59 阶段 1：draft_response_section 的幂等键（instructions_hash）——
+# workspace 锁内既有版本（bid-tools 同款直连声明先例）
+sha2 = { workspace = true }
+
+[dev-dependencies]
+mang-snap = { path = "../mang-snap" }
+# #285 验收测试：黑龙江政采 PDF 文本层康熙部首（⽀付⽅式）NFKC 归一断言
+unicode-normalization = "0.1"
+# #59 阶段 2 测试面：解包导出 docx 校验（zip 部件面）——bid-tools 同款钉版本
+zip = "4"
+# #145 任务 2：审查表验证骨架——合成 docx 造件（bid-tools 同款钉版本，
+# Cargo.lock 既有条目，零新增网络取数）
+docx-rs = "0.4"
+
+# #137（MCP 协议层）：标准 MCP stdio 服务（JSON-RPC 2.0 + initialize /
+# tools/list / tools/call）。旧 bid-mcp-stdio（逐行裸 JSON）保留不动。
+[[bin]]
+name = "bid-mcp-server"
+path = "src/bin/server.rs"
+
+# 工具面注册表（#358）：派生面（位串矩阵/断言数字）的生成与校验——
+# 加工具后跑 `cargo run -p bid-mcp --bin tool-surface -- --write` 自动同步。
+[[bin]]
+name = "tool-surface"
+path = "src/bin/tool_surface.rs"
+
+# #314（Skill 启动器文档）：启动器/自检 CLI——--init 生成 MCP 客户端配置
+# 模板、--doctor 自检（binary/工具面真跑/工作区/围栏/编码）。不参与协议面。
+[[bin]]
+name = "bid-mcp"
+path = "src/bin/cli.rs"

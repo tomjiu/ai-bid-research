@@ -1,0 +1,35 @@
+{
+  "tc_id": "TC-02",
+  "title": "证据精确匹配（25 查询）",
+  "risk": "R-02,R-15",
+  "precondition": "FILES_IMPORTED（含企业资料库 13 件入库）",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "search_evidence",
+      "args": {
+        "queries": "exact-25.jsonl",
+        "channel": "exact"
+      },
+      "expect": {
+        "hits": 25
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "count",
+      "path": "exact_hits",
+      "op": "==",
+      "value": 25,
+      "note": "型号/编号/金额/日期/条款号五类精确查询全命中"
+    },
+    {
+      "kind": "repeat",
+      "path": "search_evidence",
+      "times": 5,
+      "assert": "同一查询 5 次结果完全一致（确定性 tie-breaker）"
+    }
+  ],
+  "engine_gaps": []
+}

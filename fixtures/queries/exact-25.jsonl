@@ -1,0 +1,25 @@
+{"query_id": "Q-01", "gt_id": "GT-16", "channel": "exact", "query_type": "model", "query": "GW-8000-T4", "expect": {"hit_text": "GW-8000-T4", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-02", "gt_id": "GT-17", "channel": "exact", "query_type": "model", "query": "S5735-L48T4X-A1", "expect": {"hit_text": "S5735-L48T4X-A1", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-03", "gt_id": "GT-18", "channel": "exact", "query_type": "model", "query": "USG6650E-AC550", "expect": {"hit_text": "USG6650E-AC550", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-04", "gt_id": "GT-18", "channel": "exact", "query_type": "model", "query": "USG6705E-AC650", "expect": {"hit_text": "USG6705E-AC650", "hit_file": "C-补遗文件01.docx"}}
+{"query_id": "Q-05", "gt_id": "GT-19", "channel": "exact", "query_type": "amount", "query": "350 万元 含税", "expect": {"hit_text": "设备采购预算 350 万元（含税）", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-06", "gt_id": "GT-19", "channel": "exact", "query_type": "amount", "query": "3500000", "expect": {"hit_text": "设备采购预算 350 万元（含税）", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-07", "gt_id": "GT-20", "channel": "exact", "query_type": "date", "query": "2026-12-30", "expect": {"hit_text": "2026-12-30", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-08", "gt_id": "GT-20", "channel": "exact", "query_type": "date", "query": "二〇二六年十二月三十日", "expect": {"hit_text": "二〇二六年十二月三十日", "hit_file": "B1-设备清单.pdf"}}
+{"query_id": "Q-09", "gt_id": "GT-21", "channel": "exact", "query_type": "amount", "query": "480 万元 含税", "expect": {"hit_text": "招标控制价为人民币 480 万元（含税）", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-10", "gt_id": "GT-21", "channel": "exact", "query_type": "amount", "query": "465 万元 含税", "expect": {"hit_text": "人民币 465 万元（含税）", "hit_file": "C-补遗文件01.docx"}}
+{"query_id": "Q-11", "gt_id": "GT-02", "channel": "exact", "query_type": "cert_no", "query": "D233012345", "expect": {"hit_text": "证书编号：D233012345", "hit_file": "evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf"}}
+{"query_id": "Q-12", "gt_id": "GT-01", "channel": "exact", "query_type": "cert_no", "query": "91330106MA2B3C4D5E", "expect": {"hit_text": "91330106MA2B3C4D5E", "hit_file": "evidence/EV-01-营业执照.pdf"}}
+{"query_id": "Q-13", "gt_id": "GT-03", "channel": "exact", "query_type": "amount", "query": "260 万元", "expect": {"hit_text": "合同金额：人民币 260 万元（含税）", "hit_file": "evidence/EV-03-类似业绩合同-智慧园区弱电工程.pdf"}}
+{"query_id": "Q-14", "gt_id": "GT-03", "channel": "exact", "query_type": "amount", "query": "310 万元", "expect": {"hit_text": "合同金额：人民币 310 万元（含税）", "hit_file": "evidence/EV-04-类似业绩合同-数据中心机房工程.pdf"}}
+{"query_id": "Q-15", "gt_id": "GT-03", "channel": "exact", "query_type": "amount", "query": "205 万元", "expect": {"hit_text": "合同金额：人民币 205 万元（含税）", "hit_file": "evidence/EV-05-类似业绩合同-医院智能化改造.pdf"}}
+{"query_id": "Q-16", "gt_id": "GT-05", "channel": "exact", "query_type": "clause", "query": "财务审计报告 2025 年度", "expect": {"hit_text": "经审计的上一年度（2025 年度）财务审计报告", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-17", "gt_id": "GT-09", "channel": "exact", "query_type": "clause", "query": "90 日历天", "expect": {"hit_text": "90 日历天", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-18", "gt_id": "GT-10", "channel": "exact", "query_type": "amount", "query": "9 万元 保证金", "expect": {"hit_text": "人民币 9 万元（大写：玖万元整）", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-19", "gt_id": "GT-12", "channel": "exact", "query_type": "clause", "query": "基准价", "expect": {"hit_text": "（基准价／投标报价）×30", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-20", "gt_id": "GT-13", "channel": "exact", "query_type": "clause", "query": "安全生产许可证 工期全程", "expect": {"hit_text": "持有效安全生产许可证且有效期覆盖工期全程的得 2 分", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-21", "gt_id": "GT-22", "channel": "exact", "query_type": "clause", "query": "质保期 2 年", "expect": {"hit_text": "整体项目质保期 2 年，自最终验收合格之日起算", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-22", "gt_id": "GT-23", "channel": "exact", "query_type": "clause", "query": "预付款 30%", "expect": {"hit_text": "支付预付款 30%", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-23", "gt_id": "GT-24", "channel": "exact", "query_type": "clause", "query": "暗标 不得出现 投标人名称", "expect": {"hit_text": "不得出现投标人名称、投标人 Logo、项目班子成员姓名", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-24", "gt_id": "GT-25", "channel": "exact", "query_type": "clause", "query": "页数 200 页上限", "expect": {"hit_text": "投标文件总页数不得超过 200 页", "hit_file": "A-招标文件.docx"}}
+{"query_id": "Q-25", "gt_id": "GT-11", "channel": "exact", "query_type": "clause", "query": "技术偏离表 否决", "expect": {"hit_text": "未按本表第 9 项规定格式填写技术偏离表的，其投标作否决投标处理", "hit_file": "A-招标文件.docx"}}

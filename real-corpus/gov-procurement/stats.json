@@ -1,0 +1,19 @@
+{
+ "total_files": 576,
+ "by_type": {
+  "award": 178,
+  "correction": 174,
+  "tender": 224
+ },
+ "with_url": 576,
+ "with_publish_date": 570,
+ "date_range": [
+  "2025-02-21",
+  "2026-08-05"
+ ],
+ "with_pid": 510,
+ "distinct_pids": 504,
+ "multi_notice_chains": 7,
+ "full_chains_tender_correction_award": 0,
+ "avg_body_chars": 1902
+}

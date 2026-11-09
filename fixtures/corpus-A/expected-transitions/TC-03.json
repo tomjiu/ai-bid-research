@@ -1,0 +1,54 @@
+{
+  "tc_id": "TC-03",
+  "title": "矩阵覆盖与三态判定",
+  "risk": "R-03,R-04",
+  "precondition": "REQUIREMENTS_EXTRACTED；企业资料库已绑定",
+  "steps": [
+    {
+      "n": 1,
+      "tool": "get_compliance_matrix",
+      "args": {},
+      "expect": {
+        "matrix_rows": "每条资格/否决 REQ 有显式 policy"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "kind": "count",
+      "path": "matrix[category=资格条件].explicit_policy",
+      "op": "==",
+      "value": 6,
+      "note": ""
+    },
+    {
+      "kind": "count",
+      "path": "matrix[category=否决项].explicit_policy",
+      "op": "==",
+      "value": 5,
+      "note": ""
+    },
+    {
+      "kind": "policy",
+      "path": "matrix[GT-04].policy",
+      "op": "==",
+      "value": "not_eligible",
+      "note": "项目经理证书缺失 → not_eligible（MISSING 显式枚举，非空值默认）"
+    },
+    {
+      "kind": "policy",
+      "path": "matrix[GT-02].policy@open_bid=2026-11-15",
+      "op": "==",
+      "value": "eligible",
+      "note": "原开标日下临界有效"
+    },
+    {
+      "kind": "policy",
+      "path": "matrix[GT-02].policy@open_bid=2026-11-27",
+      "op": "==",
+      "value": "not_eligible",
+      "note": "补遗后翻转 EXPIRED（与 TC-09 级联断言互证）"
+    }
+  ],
+  "engine_gaps": []
+}

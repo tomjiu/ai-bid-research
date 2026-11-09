@@ -1,0 +1,489 @@
+//! env_preflight —— 环境预检（issue #9）：外部依赖缺失 → 测试 **SKIP**，绝不伪装成业务 FAIL。
+//!
+//! 背景（issue #9 实录）：缺 `tesseract`/`pdftoppm`/`pdftotext`/`pdfinfo` 时，
+//! `e2e_m1_all_scenarios_pass` 报「TC-01 判分未过 verdict=FAIL」——看起来像抽取
+//! 逻辑坏了，实际是环境缺件。任何拿到这个失败的人第一反应都会去查
+//! `extract.rs`，浪费大量时间。
+//!
+//! 语义（issue #9 判定标准）：
+//! - 有依赖缺失时，测试输出必须是 `SKIP: <test_id>` + `reason: ENV_MISSING: <工具清单>`；
+//! - 「依赖缺失」不得判成「业务 FAIL」；
+//! - stable Rust 的 libtest 无运行时 ignore 面——本模块以「响亮横幅 + 提前 return」
+//!   实现（测试计数显示 passed，但输出首屏即见 SKIP 与原因，`--nocapture` 下不可错过）。
+//!
+//! 可测性设计：`BID_PREFLIGHT_PATH` 环境变量覆盖查找路径——CI/单测可模拟
+//! 「缺件机器」（如无 poppler 的 Windows）而不必真改系统 PATH（改 PATH 会
+//! 干扰同进程并行测试与子进程 cargo）。
+
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+
+/// PDF 全链（文本层 + 扫描件 OCR + 页数探测）所需的外部工具四件套。
+pub const PDF_CHAIN_TOOLS: &[&str] = &["pdftotext", "pdftoppm", "pdfinfo", "tesseract"];
+
+/// OCR 语言数据预检名（`missing_tools` 的特殊成员）：检查 `chi_sim.traineddata`
+/// 在 `pdf.rs` 同款解析路径（`TESSDATA_PREFIX` 或 `~/.tessdata`）在位——
+/// 本环境实测踩坑：tesseract 二进制在位而语言数据缺失，OCR 链路照断，
+/// 错误面仍是「业务 FAIL」伪装（issue #9 的一个隐蔽变体）。
+pub const OCR_LANG_CHI_SIM: &str = "chi_sim.traineddata";
+
+/// 全链预检清单：四件套 + chi_sim 语言数据（消费方一站式常量）。
+pub const FULL_PDF_CHAIN: &[&str] = &[
+    "pdftotext",
+    "pdftoppm",
+    "pdfinfo",
+    "tesseract",
+    OCR_LANG_CHI_SIM,
+];
+
+/// 合成夹具生成器预检名（特殊成员）：检查 `python3` 可调用 **且**
+/// `reportlab` 模块可导入。
+///
+/// 背景（#591 误报根治）：`ocr_blank_scan_surfaces_per_file_warning` 等测试
+/// 用 python3 + reportlab 现场合成空白扫描件 PDF（#380 纪律：不留仓内大文件）。
+/// 旧版只把 FULL_PDF_CHAIN 当环境门——python3/reportlab 缺件时，
+/// `assert!(gen.status.success())` 直接红，**不是 SKIP**：
+/// CI 装齐 poppler+tesseract+chi_sim 却缺 reportlab → 判红，
+/// 但业务代码零缺陷（真误报，实测排查被带偏）。
+/// 本成员把「生成器依赖」纳入同一预检面，缺件走 SKIP 横幅。
+pub const PYTHON_REPORTLAB: &str = "python3:reportlab";
+
+/// 合成夹具生成器依赖清单（消费方一站式常量）。
+pub const SYNTH_FIXTURE_DEPS: &[&str] = &["python3", PYTHON_REPORTLAB];
+
+fn tessdata_dir() -> PathBuf {
+    std::path::PathBuf::from(std::env::var("TESSDATA_PREFIX").unwrap_or_else(|_| {
+        format!("{}/.tessdata", std::env::var("HOME").unwrap_or_default())
+    }))
+}
+
+/// 探测工具是否可调用（spawn 成功即在位——退出码无关：参数不兼容也算「有这个程序」，
+/// 与原始失败面 `"pdftotext" 无法启动: program not found` 的判定口径一致）。
+///
+/// 超时治理（PR #24 修复批次，Lead 指令：所有等外部进程的地方必须有超时）：
+/// 旧 `.status()` 无限期阻塞等待——工具在位但挂住（等待终端输入/死循环）时
+/// 整个测试二进制无限期卡死。现纳入 `guard::run_limited`（30s 超时 + 输出上限）。
+/// Busy 重试：并行测试各自探测时可能瞬时挤满 4 席子进程并发门——探测是
+/// 轻量操作，退避重试（上限 ~2s）后仍 Busy 才判缺（与旧无门探测的观测面一致）。
+/// 探测 python3 是否可导入指定模块（python3 -c "import <mod>"）。
+///
+/// 判定口径与 [`tool_available`] 一致：spawn 成功 + 退出码 0 = 在位。
+/// 退出码非 0（ModuleNotFoundError）= 缺件（与「程序不存在」同面——
+/// 对消费方而言都是「生成器不可用」）。
+/// 超时治理同款：python 启动 + import 也在 run_limited 里（30s）。
+fn python_module_available(module: &str) -> bool {
+    for attempt in 0..4 {
+        let mut c = Command::new("python3");
+        c.arg("-c")
+            .arg(format!("import {module}"))
+            .stdin(Stdio::null());
+        match crate::guard::run_limited(c, std::time::Duration::from_secs(30), 4096) {
+            crate::guard::RunOutcome::Success { .. } => return true,
+            // 非零退出 = ModuleNotFoundError / 导入失败 → 缺件
+            crate::guard::RunOutcome::NonZeroExit { .. } => return false,
+            crate::guard::RunOutcome::Busy { .. } => {
+                if attempt == 3 {
+                    return false;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+fn tool_available(tool: &str) -> bool {
+    if tool == OCR_LANG_CHI_SIM {
+        return tessdata_dir().join(tool).is_file();
+    }
+    if tool == PYTHON_REPORTLAB {
+        return python_module_available("reportlab");
+    }
+    for attempt in 0..8 {
+        let mut c = Command::new(tool);
+        c.arg("--version").stdin(Stdio::null());
+        match crate::guard::run_limited(
+            c,
+            std::time::Duration::from_secs(30),
+            4096,
+        ) {
+            crate::guard::RunOutcome::Success { .. } | crate::guard::RunOutcome::NonZeroExit { .. } => {
+                return true; // 在位（退出码无关——与旧 .status().is_ok() 的 spawn 成功口径一致）
+            }
+            crate::guard::RunOutcome::Busy { .. } => {
+                if attempt == 7 {
+                    return false; // 并发门持续满载（异常环境）——按缺件处理走 SKIP
+                }
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+            // Spawn（程序不存在）/ Timeout（挂住）/ OutputOverflow：不在位
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// 在给定目录集合里查工具（POSIX 直名；Windows 追加 .exe——与 Command 的
+/// 查找口径对齐，覆盖本仓两类开发环境）。
+fn tool_in_dirs(tool: &str, dirs: &[PathBuf]) -> bool {
+    let mut names = vec![tool.to_string()];
+    if cfg!(windows) {
+        names.push(format!("{tool}.exe"));
+    }
+    dirs.iter().any(|d| names.iter().any(|n| d.join(n).is_file()))
+}
+
+/// 返回缺失的外部工具清单（空 = 环境完备）。
+///
+/// 覆盖面语义：`BID_PREFLIGHT_PATH` 未设时走真实探测（spawn 试调 + 语言数据在位）；
+/// 设置后模拟「裸机」（目录存在性检查 + 语言数据判缺——模拟面必然全缺，
+/// 与真实缺件机器的观测面一致）。
+///
+/// 纯函数入口在 [`missing_tools_impl`]——测试用它注入覆盖路径，
+/// **不在测试里 `set_var`**（见该函数文档：并行测试下的环境变量竞态）。
+pub fn missing_tools(tools: &[&str]) -> Vec<String> {
+    missing_tools_impl(tools, std::env::var("BID_PREFLIGHT_PATH").ok().as_deref())
+}
+
+/// [`missing_tools`] 的纯函数形态：`override_path` = `BID_PREFLIGHT_PATH` 的值
+/// （`None` = 未设置，走真实探测）。
+///
+/// 拆分动机（真实事故，压测复现）：旧版测试
+/// `restricted_path_simulates_missing_env` 在测试体内 `set_var`/`remove_var`
+/// `BID_PREFLIGHT_PATH`，而 libtest 默认**同进程并行**跑测试——并行伙伴
+/// `skip_helper_returns_true_only_when_missing` 恰好在窗口期读到被覆盖的
+/// PATH，`cargo` 被误判缺失，断言 `!skip_if_env_missing(...)` 炸（
+/// `assertion failed at env_preflight.rs:142`，高 CPU 负载下调度窗口变宽，
+/// 复现率上升）。治本：**环境变量变更不进测试体**，覆盖路径作参数注入；
+/// 同进程内只剩并发读，无竞态面。
+fn missing_tools_impl(tools: &[&str], override_path: Option<&str>) -> Vec<String> {
+    if let Some(over) = override_path {
+        let dirs: Vec<PathBuf> = std::env::split_paths(over).collect();
+        return tools
+            .iter()
+            .filter(|t| {
+                if **t == OCR_LANG_CHI_SIM || **t == PYTHON_REPORTLAB {
+                    true // 模拟裸机：语言数据 / python 模块依赖一并判缺
+                } else {
+                    !tool_in_dirs(t, &dirs)
+                }
+            })
+            .map(|t| t.to_string())
+            .collect();
+    }
+    tools
+        .iter()
+        .filter(|t| !tool_available(t))
+        .map(|t| t.to_string())
+        .collect()
+}
+
+// ---------------------------------------------------------------- L1：PDF 引擎三态探测
+
+/// PDF 解析**引擎**能力状态（L1）。
+///
+/// 为什么单独于 [`PDF_CHAIN_TOOLS`]：那套是 poppler + tesseract 的**外部进程**
+/// 链，而本仓 pdf 文本层的**首选路是 pdfium**（`mdc_pdf::engine_pdfium`，
+/// bid-engine reader.rs 直连）。只探 poppler 会让「pdfium 在位、poppler 不在」
+/// 的机器被报成「PDF 链缺失 [pdftotext...]」——实际上文本层 PDF 解析得好好的，
+/// 用户照着报错去装 poppler 是白费功夫（真实误导，Lead 点名）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdfEnvStatus {
+    /// pdfium + poppler 都可用：文本层与扫描 OCR 全链可跑。
+    Full,
+    /// 只有 pdfium：文本层 PDF 仍可解析（扫描件 OCR 不可用）。
+    PdfiumOnly,
+    /// 两者都不可用：PDF 类文件将全部失败（只剩纯 Rust 兜底 `pdf_text`，
+    /// 仅覆盖短文本件）。
+    None,
+}
+
+impl PdfEnvStatus {
+    /// 稳定机器码（日志/统计面）。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PdfEnvStatus::Full => "FULL",
+            PdfEnvStatus::PdfiumOnly => "PDFIUM_ONLY",
+            PdfEnvStatus::None => "NONE",
+        }
+    }
+
+    /// 文本层 PDF 是否可解析（pdfium 或 poppler 任一在位即可）。
+    pub fn can_parse_text_pdf(&self) -> bool {
+        !matches!(self, PdfEnvStatus::None)
+    }
+
+    /// 扫描件 OCR 是否可用（需要 poppler 渲染 + tesseract）。
+    pub fn can_ocr(&self) -> bool {
+        matches!(self, PdfEnvStatus::Full)
+    }
+
+    /// 人类可读说明（**准确**——说清哪条链断了、哪些文件会受影响）。
+    pub fn to_message(&self) -> String {
+        match self {
+            PdfEnvStatus::Full => {
+                "PDF 全链可用（pdfium 文本层 + poppler/OCR 扫描件）".to_string()
+            }
+            PdfEnvStatus::PdfiumOnly => {
+                "PDF 文本层可用（pdfium），但扫描件 OCR 不可用——缺 poppler/tesseract：扫描件将需要预转文本或人工摘录"
+                    .to_string()
+            }
+            PdfEnvStatus::None => {
+                "PDF 解析链全部缺失（pdfium 与 poppler 都不可用）——PDF 类文件（招标文件/补遗/取证材料）将无法解析，只有短文本件能走纯 Rust 兜底"
+                    .to_string()
+            }
+        }
+    }
+}
+
+/// pdfium 定位环境变量（与 `mdc_pdf::engine_pdfium::PDFIUM_LIB_ENV` 同字面）。
+///
+/// 本 crate 不依赖 mdc-pdf（依赖方向：bid-engine → mdc-pdf），所以字面量
+/// 在此复制一份——两处必须一致（单测锚定字面）。
+pub const PDFIUM_LIB_ENV: &'static str = "MDC_PDFIUM_LIB";
+
+/// pdfium 平台库文件名（与 pdfium-render `pdfium_platform_library_name` 同口径）。
+pub fn pdfium_library_filename() -> &'static str {
+    if cfg!(windows) {
+        "pdfium.dll"
+    } else if cfg!(target_os = "macos") {
+        "libpdfium.dylib"
+    } else {
+        "libpdfium.so"
+    }
+}
+
+/// pdfium 候选目录（本仓侧取件位约定——判「装没装」够用）。
+pub fn pdfium_library_candidates() -> Vec<std::path::PathBuf> {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    vec![
+        // 本仓 bin/lib（fetch-pdfium.sh 取件位约定）
+        manifest.join("../../bin/lib"),
+        // crate 本地 bin/lib
+        manifest.join("bin/lib"),
+    ]
+}
+
+/// [`pdfium_available`] 的纯函数形态（可测性——同 [`missing_tools_impl`]：
+/// 环境变量作参数注入，测试里不 `set_var`）。
+pub fn pdfium_available_impl(lib_env: Option<&str>, path_env: Option<&str>) -> bool {
+    // ① 显式环境变量（最高优先——与 engine_pdfium 定位序一致）
+    if let Some(p) = lib_env {
+        if !p.trim().is_empty() && std::path::Path::new(p).is_file() {
+            return true;
+        }
+    }
+    // ② 编译期候选目录
+    let fname = pdfium_library_filename();
+    if pdfium_library_candidates().iter().any(|d| d.join(fname).is_file()) {
+        return true;
+    }
+    // ③ 系统库（PATH 里的同名文件）
+    if let Some(paths) = path_env {
+        let dirs: Vec<std::path::PathBuf> = std::env::split_paths(paths).collect();
+        if dirs.iter().any(|d| d.join(fname).is_file()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// pdfium 库是否可用（L1 探测面，**不实际绑定**——绑定是进程级单例，
+/// 探测不该有副作用）。
+pub fn pdfium_available() -> bool {
+    pdfium_available_impl(
+        std::env::var(PDFIUM_LIB_ENV).ok().as_deref(),
+        std::env::var("PATH").ok().as_deref(),
+    )
+}
+
+/// PDF 引擎三态判定（L1 主入口）。
+///
+/// `poppler_ok` = poppler 三件套是否齐全（调用方传 [`missing_tools`] 判空，
+/// 便于测试注入）。
+pub fn pdf_env_status(poppler_ok: bool) -> PdfEnvStatus {
+    match (pdfium_available(), poppler_ok) {
+        (true, true) => PdfEnvStatus::Full,
+        (true, false) => PdfEnvStatus::PdfiumOnly,
+        (false, _) => PdfEnvStatus::None,
+    }
+}
+
+/// poppler 文本层三件套（**不含** tesseract——那是 OCR 面）。
+pub const POPPLER_TEXT_TOOLS: &[&str] = &["pdftotext", "pdftoppm", "pdfinfo"];
+
+/// 按真实环境判三态。
+pub fn detect_pdf_env_status() -> PdfEnvStatus {
+    pdf_env_status(missing_tools(POPPLER_TEXT_TOOLS).is_empty())
+}
+
+/// 三态的人类可读回报 + 缺件清单（报告面一站式）。
+pub fn pdf_env_report() -> (PdfEnvStatus, String) {
+    let status = detect_pdf_env_status();
+    let mut msg = status.to_message();
+    let miss = missing_tools(POPPLER_TEXT_TOOLS);
+    if !miss.is_empty() {
+        msg.push_str(&format!("（缺 poppler: {}）", miss.join(", ")));
+    }
+    (status, msg)
+}
+/// 测试入口预检：缺件则打印 SKIP 横幅并返回 `true`（调用方应立即 `return`）。
+///
+/// 用法（issue #9 要求的形态）：
+/// ```ignore
+/// #[test]
+/// fn e2e_m1_all_scenarios_pass() {
+///     if bid_parse::env_preflight::skip_if_env_missing(
+///         "e2e_m1_all_scenarios_pass", bid_parse::env_preflight::PDF_CHAIN_TOOLS) {
+///         return;
+///     }
+///     // ……真实测试体
+/// }
+/// ```
+pub fn skip_if_env_missing(test_id: &str, tools: &[&str]) -> bool {
+    let missing = missing_tools(tools);
+    if missing.is_empty() {
+        return false;
+    }
+    eprintln!();
+    eprintln!("====================================================================");
+    eprintln!("SKIP: {test_id}");
+    eprintln!("reason: ENV_MISSING: {}", missing.join(", "));
+    eprintln!("（环境缺件，非业务失败——issue #9：依赖缺失不得伪装成业务 FAIL）");
+    eprintln!("补装指引: poppler-utils(pdftotext/pdftoppm/pdfinfo) + tesseract-ocr");
+    eprintln!("====================================================================");
+    true
+}
+
+/// fixture 缺件 SKIP（issue #9 机制在「文件面」的延伸——同一横幅纪律）：
+/// 依赖真实样本（corpus-A / real-corpus / engine-borrowed）的测试在文件
+/// 缺失时打响亮横幅 + 提前 return（计数 passed），**绝不** panic 红脸
+/// （缺件不是业务失败）也**绝不**静默 return（假装通过——Lead 指令：
+/// SKIP 必须打横幅）。
+///
+/// 用法与 [`skip_if_env_missing`] 同款：
+/// ```ignore
+/// #[test]
+/// fn corpus_a_scoring() {
+///     let f = fixtures().join("corpus-A/files/A-招标文件.docx");
+///     if bid_parse::env_preflight::skip_if_fixture_missing("corpus_a_scoring", &[&f]) {
+///         return;
+///     }
+///     // ……真实测试体
+/// }
+/// ```
+pub fn skip_if_fixture_missing(test_id: &str, paths: &[&std::path::Path]) -> bool {
+    let missing: Vec<String> = paths
+        .iter()
+        .filter(|p| !p.exists())
+        .map(|p| p.display().to_string())
+        .collect();
+    if missing.is_empty() {
+        return false;
+    }
+    eprintln!();
+    eprintln!("====================================================================");
+    eprintln!("SKIP: {test_id}");
+    eprintln!("reason: FIXTURE_MISSING: {}", missing.join(", "));
+    eprintln!("（真实样本缺件，非业务失败——issue #9 口径：依赖缺失不得伪装成业务 FAIL）");
+    eprintln!("补件指引: 核对 git checkout 完整性（corpus-A 二进制样本在库）；");
+    eprintln!("          本地生成件走 python scripts/fixture_gen.py");
+    eprintln!("====================================================================");
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nonexistent_tool_reported_missing() {
+        // 真实 PATH 下，不存在的工具必然被报告（探测逻辑的底线正确性）。
+        // 持子进程测试锁（探测经 run_limited 占并发席——#200 R2 竞态治本）
+        let _g = crate::guard::SUBPROC_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let miss = missing_tools(&["definitely-not-a-real-tool-xyz-12345"]);
+        assert_eq!(miss, vec!["definitely-not-a-real-tool-xyz-12345".to_string()]);
+    }
+
+    #[test]
+    fn python_reportlab_probe_matches_import_face() {
+        // #591 误报根治的守卫：PYTHON_REPORTLAB 的探测结果必须与
+        // 「python3 -c "import reportlab" 退出码是否为 0」严格一致
+        // ——探测面与消费面不得分叉（同 chi_sim_check_mirrors 的口径）。
+        // 本机有 reportlab → 不应报告缺件；没有 → 必须报告缺件。
+        let _g = crate::guard::SUBPROC_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let real = std::process::Command::new("python3")
+            .arg("-c")
+            .arg("import reportlab")
+            .stdin(std::process::Stdio::null())
+            .output();
+        let expect_missing = match real {
+            Ok(o) => !o.status.success(),
+            Err(_) => true, // python3 本身不在 → 视为缺件
+        };
+        let miss = missing_tools(&[PYTHON_REPORTLAB]);
+        assert_eq!(
+            miss.len() == 1,
+            expect_missing,
+            "PYTHON_REPORTLAB 探测与真实 import 面不一致：missing={miss:?}",
+        );
+    }
+
+    #[test]
+    fn synth_fixture_deps_contains_python_gate() {
+        // 常量面守卫：生成器依赖清单必须含 python3 与 reportlab 门
+        assert!(SYNTH_FIXTURE_DEPS.contains(&"python3"));
+        assert!(SYNTH_FIXTURE_DEPS.contains(&PYTHON_REPORTLAB));
+    }
+    #[test]
+    fn skip_helper_returns_true_only_when_missing() {
+        // 一致性不变量：返回值 ⟺ 缺件清单非空（横幅与判定不得脱钩）
+        let tools = ["definitely-not-a-real-tool-xyz-12345"];
+        assert!(skip_if_env_missing("unit_probe_fake", &tools));
+        let present = ["cargo"]; // 测试进程内 cargo 必在 PATH（cargo test 自身依赖它）
+        assert!(!skip_if_env_missing("unit_probe_cargo", &present));
+    }
+
+    #[test]
+    fn restricted_path_simulates_missing_env() {
+        // 持子进程测试锁（探测经 run_limited 占并发席——#200 R2 竞态治本）
+        let _g = crate::guard::SUBPROC_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        // BID_PREFLIGHT_PATH 指向空目录 → 外部工具 + 语言数据全部判缺
+        // （模拟无 poppler / 无 tessdata 的机器）。
+        //
+        // 竞态注记（本测试的历次 flaky 根因，已治本）：旧版在此 `set_var`
+        // `BID_PREFLIGHT_PATH` 再 `remove_var`——libtest 同进程并行下，
+        // 并行伙伴 `skip_helper_returns_true_only_when_missing` 会在窗口期
+        // 读到被覆盖的 PATH，把 `cargo` 误判缺失（高负载下必现级联假红）。
+        // 现改为直调 `missing_tools_impl` 注入覆盖路径：零 env 变更、零 unsafe，
+        // 与真实缺件机器的观测面仍严格一致（同一条代码路径）。
+        let empty = std::env::temp_dir().join("bid-preflight-empty-dirs");
+        std::fs::create_dir_all(&empty).unwrap();
+        let full_chain: Vec<&str> = PDF_CHAIN_TOOLS
+            .iter()
+            .copied()
+            .chain(std::iter::once(OCR_LANG_CHI_SIM))
+            .collect();
+        let miss = missing_tools_impl(&full_chain, Some(empty.to_str().unwrap()));
+        assert_eq!(
+            miss.len(),
+            full_chain.len(),
+            "空 PATH 模拟下全链工具应全部判缺，实际: {miss:?}"
+        );
+    }
+
+    #[test]
+    fn chi_sim_check_mirrors_pdf_rs_resolution() {
+        // 语言数据判定与 pdf.rs 的解析路径同源：TESSDATA_PREFIX 优先、
+        // 否则 ~/.tessdata。真实 PATH 下（无覆盖变量），二进制在位时
+        // chi_sim 判定必须与文件在位性严格一致（防「探测面与消费面分叉」）。
+        let expect = tessdata_dir().join(OCR_LANG_CHI_SIM).is_file();
+        let miss = missing_tools(&[OCR_LANG_CHI_SIM]);
+        assert_eq!(
+            miss.is_empty(),
+            expect,
+            "chi_sim 探测({})与 pdf.rs 消费面({expect})不一致",
+            if miss.is_empty() { "在位" } else { "缺失" }
+        );
+    }
+}

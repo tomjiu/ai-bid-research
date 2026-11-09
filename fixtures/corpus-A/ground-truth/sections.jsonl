@@ -1,0 +1,6 @@
+{"id": "资格响应", "type": "资格部分", "related_gts": ["GT-01", "GT-02", "GT-03", "GT-04", "GT-05", "GT-06"]}
+{"id": "技术方案-网络与安全", "type": "技术标", "related_gts": ["GT-16", "GT-17", "GT-18"]}
+{"id": "商务部分-报价", "type": "商务标", "related_gts": ["GT-08", "GT-19", "GT-21", "GT-22", "GT-23"]}
+{"id": "售后服务方案", "type": "技术标", "related_gts": ["GT-13"]}
+{"id": "项目团队", "type": "商务标", "related_gts": ["GT-15"]}
+{"id": "格式与签署", "type": "格式部分", "related_gts": ["GT-07", "GT-24", "GT-25"]}
