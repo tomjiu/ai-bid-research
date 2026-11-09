@@ -5,6 +5,7 @@
 """
 
 from src.analyze.dataset import AnalysisDataset, load_dataset
+from src.analyze.keywords import common_bigrams, keyword_frequency
 from src.analyze.stats import (
     budget_summary,
     date_range,
@@ -19,4 +20,6 @@ __all__ = [
     "date_range",
     "monthly_trend",
     "region_distribution",
+    "keyword_frequency",
+    "common_bigrams",
 ]
