@@ -200,6 +200,53 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: pdftotext CID probe (诊断面——B1/合成件实测输出，不判死)
+        # 首跑 run 42574689388 实证：T11 B1-设备清单.pdf 与 T19 pdf_cid_identity
+        # 在本 workflow 环境红，而同代码同 runner 的 linux-check 绿——差异面
+        # 收敛到本 workflow 特有装件（Sarasa 字体 / libreoffice / tessdata）。
+        # 本探针直读 pdftotext 对 B1（非嵌入 STSong-Light + UniGB-UCS2-H，
+        # #200 形态）的实际输出，为根因定位取证据（exit 恒 0，不拦门禁）。
+        run: |
+          B1="fixtures/corpus-A/files/B1-设备清单.pdf"
+          echo "=== poppler/fontconfig 环境："
+          pdftotext -v 2>&1 | head -1
+          fc-list 2>/dev/null | grep -ci sarasa || echo "0 (fc-list 无 sarasa 或 fc-list 不可用)"
+          fc-match "STSong-Light" 2>/dev/null || true
+          fc-match "STSong" 2>/dev/null || true
+          echo "=== B1 pdftotext -layout 字符计数："
+          pdftotext -layout -enc UTF-8 "$B1" - 2>/tmp/b1-err.txt | wc -m
+          echo "stderr: $(head -c 200 /tmp/b1-err.txt)"
+          echo "=== B1 pdftotext -layout 前 300 字符："
+          pdftotext -layout -enc UTF-8 "$B1" - 2>/dev/null | head -c 300 || true
+          echo; echo "=== B1 pdftotext raw（无 -layout）字符计数："
+          pdftotext -enc UTF-8 "$B1" - 2>/dev/null | wc -m
+          echo "=== 合成 CID 探针（UniGB-UCS2-H 逐字 Tj——pdf_cid_identity 同构）："
+          python3 - <<'PY'
+          import subprocess, tempfile, os
+          line = "本项目为市政基础设施建设项目"
+          content = b"BT /F2 12 Tf\n"
+          x = 50
+          for ch in line:
+              u = ord(ch)
+              content += f"1 0 0 1 {x} 800 Tm (".encode() + bytes([u >> 8, u & 0xFF]) + b") Tj\n"
+              x += 12
+          content += b"ET\n"
+          pdf = (b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+                 b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+                 b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F2 4 0 R >> >> /Contents 5 0 R >>\nendobj\n"
+                 b"4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [6 0 R] >>\nendobj\n"
+                 b"6 0 obj\n<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> >>\nendobj\n")
+          pdf += b"5 0 obj\n<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream\nendobj\n"
+          pdf += b"xref\n0 7\ntrailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n0\n%%EOF\n"
+          p = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+          p.write(pdf); p.close()
+          r = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", p.name, "-"],
+                             capture_output=True, text=True)
+          print(f"exit={r.returncode} chars={len(r.stdout.strip())} stderr={r.stderr.strip()[:100]}")
+          print(f"output[:200]={r.stdout.strip()[:200]!r}")
+          os.unlink(p.name)
+          PY
+
       - name: Restore cargo cache (#308 拆分——bidcore 与 m1 双 target 面)
         id: cache-cargo
         uses: actions/cache/restore@v4

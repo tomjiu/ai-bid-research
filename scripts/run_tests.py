@@ -938,6 +938,26 @@ def t_bidcore_cargo():
     check("T19a bidcore workspace 测试全绿（V3-1：175+ 测试——domain/parse/engine/mcp/tools）",
           False,
           f"passed={passed} failed={failed} rc={_rc} " + out[-300:])
+    # #561 v3 可观测性（首跑 run 42574689388 实证：out[-300:] 把失败测试的
+    # 断言详情截没了——只剩 cargo 的末尾 Running 行，无法定位根因）：
+    # 正常失败面也全量转存 + 提取 failures: 段（test 名 + panic 消息直读）。
+    import tempfile as _tf
+    _log = Path(_tf.gettempdir()) / f"t19-fail-{_proc.pid}.log"
+    _log.write_text(out, encoding="utf-8", errors="replace")
+    _fail_seg = []
+    _in_fail = False
+    for _l in out.splitlines():
+        if _l.strip() == "failures:":
+            _in_fail = True
+            _fail_seg.append(_l)
+            continue
+        if _in_fail:
+            if _l.startswith("error:") or _l.strip().startswith("test result"):
+                _in_fail = False
+            elif _l.strip():
+                _fail_seg.append(_l)
+    print(f"    [T19 失败详情] 全量输出已转存 {_log}（{len(out)} 字符）；"
+          f"failures 段：{' | '.join(_fail_seg[:12]) or '（未捕获——看转存日志）'}")
 
 
 def t_engine_diff():
