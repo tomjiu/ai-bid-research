@@ -6,5 +6,13 @@
 """
 
 from src.analyze.dataset import BidDataset, load_dataset
+from src.analyze.render import format_stats_markdown, save_analysis_report
+from src.analyze.stats import compute_stats
 
-__all__ = ["BidDataset", "load_dataset"]
+__all__ = [
+    "BidDataset",
+    "load_dataset",
+    "compute_stats",
+    "format_stats_markdown",
+    "save_analysis_report",
+]
