@@ -12,6 +12,12 @@ from src.extract.extractor import (
     merge_fields,
     resolve_raw_text,
 )
+from src.extract.validator import (
+    REQUIRED_FIELDS,
+    RECOMMENDED_FIELDS,
+    ValidationResult,
+    validate_fields,
+)
 
 __all__ = [
     "AnnouncementExtractor",
@@ -20,4 +26,8 @@ __all__ = [
     "ExtractionOutcome",
     "merge_fields",
     "resolve_raw_text",
+    "REQUIRED_FIELDS",
+    "RECOMMENDED_FIELDS",
+    "ValidationResult",
+    "validate_fields",
 ]
