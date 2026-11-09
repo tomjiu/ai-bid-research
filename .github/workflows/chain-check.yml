@@ -69,15 +69,41 @@ jobs:
         # soffice（T7 V1 导出保真段的 LO headless 渲染）。p7zip-full 为
         # Sarasa 字体上游兜底源的解包件。装后自检版本进日志（基线跨平台
         # 核对的证据面）。
+        #
+        # #593 修复（T11 根因）：**必须装 poppler-data**。它提供 Adobe-GB1
+        # 等 CJK CMap——缺失时 pdftotext 对中文 PDF 输出空文本（exit 0 但
+        # 无内容），m1 侧三通道梯全部拿不到文本 → 误判为扫描件走 OCR →
+        # blocks=0 → T11 STEP-FAIL。linux-check.yml 一直在装，本 workflow
+        # 漏装（三通道梯治的是「通道面」不是「CMap 面」）。
+        # 装后自检：用 B1 夹具实测 pdftotext 能出 CJK（非零中文占比）——
+        # 比只看 --version 更接近真实使用面。
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            poppler-utils tesseract-ocr tesseract-ocr-chi-sim libreoffice p7zip-full
+            poppler-utils poppler-data tesseract-ocr tesseract-ocr-chi-sim \
+            libreoffice p7zip-full
           pdftotext -v
           pdftoppm -v
           tesseract --version | head -1
           soffice --version
           tesseract --list-langs 2>/dev/null | grep chi_sim
+          # CMap 自检：B1 夹具必须能抽出 CJK（poppler-data 到位才成立）
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess, sys
+          src = Path("fixtures/corpus-A/files/B1-设备清单.pdf")
+          if not src.is_file():
+              print(f"::warning::B1 夹具不在（{src}）——跳过 CMap 自检")
+              sys.exit(0)
+          r = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", str(src), "-"],
+                             capture_output=True, text=True)
+          cjk = sum("\u4e00" <= ch <= "\u9fff" for ch in r.stdout)
+          print(f"pdftotext CMap 自检: exit={r.returncode} chars={len(r.stdout.strip())} cjk={cjk}")
+          if r.returncode != 0 or cjk == 0:
+              print("::error::pdftotext 抽不出 CJK——poppler-data(CMap) 未到位，T11 必红")
+              print(r.stderr)
+              sys.exit(1)
+          PY
 
       - name: Install gtk/webkit dev (T19 mang-app 构建件)
         # T19 跑 cargo test --workspace（含 mang-app）——tao/wry Linux 后端
