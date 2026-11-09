@@ -97,8 +97,11 @@ check(
   "切工作区后标书面板显示旧项目"
 );
 check(
-  "占位面板不造数据（批 C/D 禁用态标注 #313；批 B 已接线）",
-  /title="批 C 接线（#313）"/.test(app) && /title="批 D 接线（#313）"/.test(app) && !/title="批 B 接线（#313）"/.test(app),
+  "占位面板不造数据（批 D 禁用态标注 #313；批 B/C 已接线）",
+  // #313 批 B + 批 C 均已合并接线：只剩批 D（覆盖报告）是禁用占位。
+  /title="批 D 接线（#313）"/.test(app)
+    && !/title="批 B 接线（#313）"/.test(app)
+    && !/title="批 C 接线（#313）"/.test(app),
   "未接线面板被启用或假数据"
 );
 
@@ -211,6 +214,121 @@ check(
   "契约文档登记 bid.state / bid.outline / bid.matrix",
   contract.includes("### bid.state") && contract.includes("### bid.outline") && contract.includes("### bid.matrix"),
   "改了代码没同步契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+
+// ---------- app.js：#313 批 C——自评面板接线 ----------
+check(
+  "数据面调用 bid.quality / bid.score（真实 IPC）",
+  /ipc\("bid\.quality", \{\}, 3e4\)/.test(app) && /ipc\("bid\.score", \{\}, 3e4\)/.test(app),
+  "IPC 调用被改名/超时口径被改"
+);
+check(
+  "演示桥补 bid.quality / bid.score stub（同形响应）",
+  /case "bid\.quality":/.test(app) && /case "bid\.score":/.test(app),
+  "浏览器预览模式下自评面板无数据"
+);
+check(
+  "工作台「自评」页签从占位禁用转为接线（data-bid-panel=quality）",
+  /data-bid-panel="quality">自评</.test(app),
+  "自评页签仍禁用或被改名"
+);
+check(
+  "占位面板只剩批 D（批 B/C 均已接线，不再出现在禁用列表）",
+  // #313 批 B（合规矩阵）+ 批 C（自评）已合并接线：禁用入口只剩覆盖报告。
+  /bidDisabledEntry\("覆盖报告", "已判定 \/ 未判定 \/ ★条款", "批 D"\)/.test(app)
+    && !/bidDisabledEntry\("合规矩阵"/.test(app)
+    && !/bidDisabledEntry\("自评"/.test(app),
+  "禁用占位与已接线状态不一致"
+);
+check(
+  "侧栏「自评」入口直达工作台自评页签（workbench-quality）",
+  /data-bid-act="workbench-quality"/.test(app) && /openBidWorkbench\("quality"\)/.test(app),
+  "侧栏入口未接线"
+);
+check(
+  "自评页签懒加载（loadBidQuality）+ 刷新动作（refresh-quality）",
+  /async loadBidQuality\(force\)/.test(app) && /ui\.loadBidQuality\(true\)/.test(app),
+  "自评数据面拉取/刷新被删"
+);
+check(
+  "#186 语义降级徽章在场（规则诊断 · 非评标模拟）",
+  /规则诊断 · 非评标模拟/.test(app),
+  "自评分数被伪装成评标结果"
+);
+check(
+  "E_STATE → 壳侧 state 码分支成「尚未开放」引导卡（非故障）",
+  /q\.code === "state"/.test(app) && /自评尚未开放/.test(app),
+  "早态项目会显示成读取失败"
+);
+check(
+  "价格未报价 = null 诚实显示（不伪缺 0）",
+  /未报价不计/.test(app) && /"未报价"/.test(app),
+  "价格面被伪装成数值"
+);
+check(
+  "BLOCKER 面（提交就绪 + 跨章冲突 + 负偏离）点击展开",
+  /提交就绪与废标风险/.test(app) && /bid-qual-list/.test(app) && /global_conflicts/.test(app) && /negative_deviations/.test(app),
+  "BLOCKER 清单被删"
+);
+check(
+  "评分项明细（by_item：估分/档位/覆盖 + 逐章贡献 + 细则检查点）",
+  /评分项明细/.test(app) && /by_item/.test(app) && /rule_checkpoints/.test(app)
+    && /Array\.isArray\(it\.contributions\) \? it\.contributions : \[\]/.test(app),
+  "逐项明细被删（注意 contributions 拼写——演示冒烟曾抓到 contribions 拼错致贡献区恒空）"
+);
+check(
+  "工作区切换重置自评数据面（#194 联动）",
+  /自评数据面同理随根失效/.test(app),
+  "切工作区后自评面板显示旧项目"
+);
+
+// ---------- styles.css：批 C 自评面板样式 ----------
+for (const sel of [".bid-qual ", ".bid-qual-scores", ".bid-qual-score ", ".bid-qual-list", ".bid-qual-item", ".bid-qual-tier", ".bid-qual-row"]) {
+  check(`styles.css 定义 ${sel.trim()}`, css.includes(sel.trim() + " {") || css.includes(sel.trim() + ","), "选择器缺失");
+}
+check(
+  "评分卡中档过渡态（data-state=mid）",
+  /\.bid-bar-fill\[data-state="mid"\]/.test(css),
+  "中档进度条样式缺失"
+);
+check(
+  "窄窗评分项行响应式（1150px 收覆盖列）",
+  /@media \(max-width: 1150px\)[\s\S]{0,400}grid-template-columns: minmax\(140px, 1fr\) 46px 46px 84px/.test(css),
+  "窄窗布局被删"
+);
+
+// ---------- 壳侧：IPC 命令真实在场（批 C） ----------
+check(
+  "mang-app bid.rs 提供 quality / score",
+  bidRs.includes("pub fn quality(") && bidRs.includes("pub fn score("),
+  "自评数据面模块被删"
+);
+check(
+  "bid.quality / bid.score 经 bid_mcp::dispatch_with 走真实工具面",
+  bidRs.includes("check_bid_quality") && bidRs.includes("score_document") && bidRs.includes("bid_mcp::dispatch_with"),
+  "直连工具面被绕过"
+);
+check(
+  "E_STATE 映射为壳侧 state 码（区别于 io 故障）",
+  /ToolError::EState \{ what \} => IpcError::state\(what\)/.test(bidRs),
+  "早态拒绝会被误报成 IO 故障"
+);
+check(
+  "ipc.rs 分发 bid.quality / bid.score",
+  /"bid\.quality" => crate::bid::quality\(/.test(ipcRs) && /"bid\.score" => crate::bid::score\(/.test(ipcRs),
+  "命令没接进 IPC 分发"
+);
+
+// ---------- 契约：IPC-CONTRACT.md 登记（批 C） ----------
+check(
+  "契约文档登记 bid.quality / bid.score",
+  contract.includes("### bid.quality") && contract.includes("### bid.score"),
+  "改了代码没同步契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "契约错误码表登记 state（#313 批 C）",
+  /\| `state` \| bid 项目未到该命令的状态窗/.test(contract),
+  "state 错误码没进 §3.3 错误码表"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);

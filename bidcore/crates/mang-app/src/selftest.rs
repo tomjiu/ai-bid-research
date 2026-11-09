@@ -5,6 +5,7 @@
 //!       / history.list / unknown_cmd / bad_json
 //!       / mcp.status / llm.status+save 往返（#76）/ fspec.status（#76）
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
+//!       / bid.quality+bid.score（#313 批 C：早态 E_STATE→state 码 / MATRIX_READY 后真实读取）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
 //! 输出形如 `PASS  <name>：<detail>` / `FAIL  <name>：<detail>`，最后一行汇总 + 退出码。
 
@@ -537,6 +538,59 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
                     && row["blocking"] == json!(true)))
                 .unwrap_or(false),
         format!("rows={} blocking={}", bm2["rows"].as_array().map(|a| a.len()).unwrap_or(0), bm2["summary"]["blocking"]),
+    );
+
+    // ---- #313 批 C：自评数据面（bid.quality / bid.score）
+    // 早态（REQUIREMENTS_EXTRACTED，矩阵未建）→ 工具面 E_STATE 透传为
+    // 壳侧 `state` 码（UI 据此分支「尚未开放」引导卡，不是故障）
+    let resp = call(&ctx, json!({"id":"t-bid-q0","cmd":"bid.quality"}));
+    r.check(
+        "bid.quality(早态拒绝)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-sc0","cmd":"bid.score"}));
+    r.check(
+        "bid.score(早态拒绝)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    // 服务层重建大纲+矩阵（与 MCP 工具同源面）→ MATRIX_READY 后两命令真读
+    {
+        let mut svc = bid_tools::service::BidService::open(&root).unwrap();
+        svc.prepare_outline_and_matrix(bid_domain::outline::OutlineSpec {
+            target_total_chars: 400,
+            max_reqs_per_leaf: 2,
+        })
+        .unwrap();
+    }
+    let resp = call(&ctx, json!({"id":"t-bid-q1","cmd":"bid.quality"}));
+    let bq = result(&resp);
+    r.check(
+        "bid.quality(矩阵就绪)",
+        resp["ok"] == json!(true)
+            && bq["present"] == json!(true)
+            && bq["quality"]["summary"]["total"].as_u64().unwrap_or(0) >= 1
+            && bq["quality"]["submission_readiness"].is_object(),
+        format!(
+            "sections={} drafted={}",
+            bq["quality"]["summary"]["total"],
+            bq["quality"]["summary"]["drafted"]
+        ),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-sc1","cmd":"bid.score"}));
+    let bsc = result(&resp);
+    r.check(
+        "bid.score(矩阵就绪)",
+        resp["ok"] == json!(true)
+            && bsc["score"]["diagnostic_only"] == json!(true)
+            && bsc["score"]["price"].is_null()
+            && bsc["score"]["by_item"].is_array(),
+        format!(
+            "total={} target={}",
+            bsc["score"]["total"],
+            bsc["score"]["target"]
+        ),
     );
 
     // ---- #194：工作区切换（workspace.open / workspace.current）

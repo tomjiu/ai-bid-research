@@ -1,5 +1,5 @@
-//! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`；
-//! 批 B：`bid.matrix`）。
+//! bid.rs —— 标书数据面 IPC（#313 批 A：`bid.state` / `bid.outline`；批 B：
+//! `bid.matrix`；批 C：`bid.quality` / `bid.score`）。
 //!
 //! 架构（原认领计划 2026-11-07T02:34Z 的批次切片，issue #313）：
 //!   * [`state`]  —— 经 `bid_mcp::dispatch_with` 走真实工具面
@@ -9,7 +9,12 @@
 //!     认领计划明示的直读面）；
 //!   * [`matrix`] —— 经 `bid_mcp::dispatch_with` 走真实工具面
 //!     （`get_compliance_matrix`，#313 批 B），壳内循工具的 cursor 分页
-//!     聚合全量后一次返回（行形状原样透传）。
+//!     聚合全量后一次返回（行形状原样透传）；
+//!   * [`quality`] / [`score`]（批 C）—— 同样经 `dispatch_with` 走真实
+//!     工具面（`check_bid_quality` / `score_document`），工具输出原样放
+//!     `quality` / `score` 键；工具面 `E_STATE`（项目未到 MatrixReady+ /
+//!     无章节树）透传为壳侧 `state` 错误码——UI 按码分支成「尚未开放」
+//!     引导卡而非故障横幅。
 //!
 //! 服务缓存（`Ctx.bid`，进程内单份）：按「工作区根 + db.json 指纹
 //! （mtime+size）」绑定——切换工作区（workspace.open）或外部进程
@@ -17,8 +22,12 @@
 //! **无 db.json → 干净的 `not_found`**：不经 `BidService::open`（它会在
 //! 任意目录里凭空创建 `.mang/approval.key`——查看状态不应留副作用）。
 //!
-//! 后续批次（不在本文件）：bid.quality、bid.score（批 C）/ bid.coverage
-//! （批 D）——同样经 dispatch_with 走真实工具面。
+//! 后续批次（不在本文件）：bid.coverage（批 D）——同样经 dispatch_with
+//! 走真实工具面。
+//!
+//! 批 C 范围纪律：`bid.score` 不透传价格推演入参（bid_price / method
+//! 等）——报价试算走既有 `score_price` 工具；未报价时 `score.price`
+//! 为 null（诚实显示，不伪缺 0）。
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -49,10 +58,13 @@ fn map_store_err(e: bid_tools::store_io::StoreIoError) -> IpcError {
     }
 }
 
-/// ToolError（bid-mcp 工具面）→ IpcError（E_NOTFOUND → not_found 是「无项目」主路径）。
+/// ToolError（bid-mcp 工具面）→ IpcError（E_NOTFOUND → not_found 是「无项目」
+/// 主路径；E_STATE → `state` 是「项目未到工具状态窗」主路径——#313 批 C
+/// 起 UI 需要区分「尚未开放」与「故障」）。
 fn map_tool_err(e: bid_mcp::ToolError) -> IpcError {
     match e {
         bid_mcp::ToolError::ENotFound { what } => IpcError::not_found(what),
+        bid_mcp::ToolError::EState { what } => IpcError::state(what),
         bid_mcp::ToolError::EUnprocessable { what } => IpcError::bad_args(what),
         other => IpcError::io(format!("工具面应答失败：{other}")),
     }
@@ -456,6 +468,105 @@ pub fn matrix(
     }))
 }
 
+
+/// `bid.quality` —— 质量覆盖度检查（只读；#313 批 C）。
+///
+/// 主体经 `bid_mcp::dispatch_with(check_bid_quality)` 走真实工具面
+/// （与 bid-mcp-stdio 同源裁决），工具输出原样放 `quality` 键——
+/// summary（起草/失败/未覆盖条款/带外/无锚/查重/字数偏离）、
+/// needs_human、submission_readiness（#241 两分账：导出可过而提交
+/// 未就绪是合法状态）、sections 逐章明细、global_conflicts（#423
+/// 金额/工期/术语/承诺跨章冲突）、negative_deviations（A-07 负偏离）、
+/// artifact（报告落盘位置）与 warnings。
+///
+/// 拒绝面：无 db.json → `not_found`；项目未到 MatrixReady+（或无章节
+/// 树）→ `state`（工具面 E_STATE 原文透传，如
+/// 「REQUIREMENTS_EXTRACTED 态无章节树——先建纲再查质量」）。
+pub fn quality(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let meta = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "check_bid_quality".to_string(),
+            args: json!({ "project_id": meta.0 }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": meta.1,
+        "quality": tool_out,
+    }))
+}
+
+/// `bid.score` —— 全文档规则自评（只读；#313 批 C）。
+///
+/// 主体经 `bid_mcp::dispatch_with(score_document)` 走真实工具面，
+/// 工具输出原样放 `score` 键——`diagnostic_only`/`result_kind`
+/// （#186 语义降级：规则诊断非评标模拟——UI 必须原样展示）、
+/// technical/commercial/price/total/target/gap、by_item 逐项明细
+/// （estimated/tier/coverage/contributions/rule_checkpoints）、
+/// mappings（#224 双向追溯）与 unmapped_scoring_items。
+///
+/// 价格面：本命令不带价格推演入参（范围纪律见模块头）——未报价时
+/// `score.price` 为 null，UI 显示「价格分不计」。
+///
+/// 拒绝面与 `bid.quality` 同：`not_found` / `state`。
+pub fn score(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let meta = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "score_document".to_string(),
+            args: json!({ "project_id": meta.0 }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": meta.1,
+        "score": tool_out,
+    }))
+}
+
+/// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
+/// 借用面：先取后放，`dispatch_with` 要 `&mut BidService`。
+fn project_meta(
+    svc: &bid_tools::service::BidService,
+) -> Result<(String, Value), IpcError> {
+    let store = svc.store();
+    let p = store.project().map_err(map_domain_err)?;
+    Ok((
+        p.id.clone(),
+        json!({
+            "id": p.id,
+            "name": p.name,
+            "status": p.status.as_str(),
+        }),
+    ))
+}
+
+
 /// 锁毒化不复位（与 ipc.rs `Ctx::ws` 同口径）。
 fn lock(cache: &Mutex<Option<CachedService>>) -> MutexGuard<'_, Option<CachedService>> {
     cache.lock().unwrap_or_else(|e| e.into_inner())
@@ -792,4 +903,113 @@ mod tests {
         assert_eq!(rows[1004]["requirement"]["id"], "REQ-P1005");
         let _ = std::fs::remove_dir_all(dir);
     }
+
+
+    // ---------------------------------------------------------------- #313 批 C
+
+    /// 建一个「矩阵就绪」项目：一条技术参数 REQ + 一条评分项 REQ
+    /// （params.score = 20 → score.by_item 的驱动面），经
+    /// `prepare_outline_and_matrix` 推到 MATRIX_READY（质量/自评工具的
+    /// 状态窗下沿——起草前即可查进度，与 MCP 工具测试同款服务面调用）。
+    fn seed_matrix_ready_project(dir: &std::path::Path) {
+        let mut scoring_params: HashMap<String, Value> = HashMap::new();
+        scoring_params.insert("score".to_string(), json!(20.0));
+        let mut svc = bid_tools::service::BidService::open(dir).unwrap();
+        svc.create_project("矩阵就绪项目", "PRJ-MR", "明标", "ext-313-c").unwrap();
+        let store = svc.store_mut();
+        store.advance_project_status(ProjectStatus::FilesImported).unwrap();
+        let mut reqs = vec![
+            req("REQ-0001", "技术参数", "投标人须提供 2000 路并发能力"),
+            Requirement {
+                params: scoring_params,
+                ..req("REQ-0002", "评分项", "技术方案完整性、先进性、可行性优者得 20 分")
+            },
+        ];
+        store.set_requirements(std::mem::take(&mut reqs)).unwrap();
+        svc.prepare_outline_and_matrix(bid_domain::outline::OutlineSpec {
+            target_total_chars: 400,
+            max_reqs_per_leaf: 2,
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn quality_and_score_clean_not_found_without_db() {
+        let (dir, _ws) = tmp_ws("nodb-c");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        for cmd in ["bid.quality", "bid.score"] {
+            let frame = call(&ctx, cmd);
+            assert_eq!(frame["ok"], json!(false), "{cmd} 无 db.json 应干净 not_found：{frame}");
+            assert_eq!(err_code_of(&frame), "not_found");
+        }
+        assert!(!dir.join(".mang").exists(), "查看自评不得在工作区留副作用");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn quality_and_score_reject_early_state_with_state_code() {
+        // seed_project 停在 REQUIREMENTS_EXTRACTED（未建矩阵）——两工具
+        // 的状态窗都是 MatrixReady+ → E_STATE 透传为壳侧 `state` 码
+        //（UI 据此显示「先建纲再查质量」引导，而非故障横幅）。
+        let (dir, _ws) = tmp_ws("early");
+        seed_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        for cmd in ["bid.quality", "bid.score"] {
+            let frame = call(&ctx, cmd);
+            assert_eq!(frame["ok"], json!(false), "{cmd} 早态应拒绝：{frame}");
+            assert_eq!(err_code_of(&frame), "state", "{cmd} E_STATE 必须映射为 state 码：{frame}");
+            let msg = frame["message"].as_str().unwrap_or("");
+            assert!(
+                msg.contains("先建纲") || msg.contains("态"),
+                "{cmd} 拒绝文案要指向状态前置：{frame}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn quality_and_score_read_after_matrix_ready() {
+        let (dir, _ws) = tmp_ws("matrix-ready");
+        seed_matrix_ready_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        let frame = call(&ctx, "bid.quality");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let q = ok_of(&frame).clone();
+        assert_eq!(q["present"], json!(true));
+        assert_eq!(q["project"]["name"], "矩阵就绪项目");
+        assert_eq!(q["project"]["status"], "MATRIX_READY");
+        let ql = &q["quality"];
+        // 工具输出原样透传（summary / submission_readiness / sections 三面在场）
+        assert!(ql["summary"]["total"].as_u64().unwrap_or(0) >= 1, "章节树在场：{ql}");
+        assert!(ql["submission_readiness"].is_object(), "#241 两分账面在场：{ql}");
+        assert!(ql["sections"].as_array().is_some_and(|a| !a.is_empty()));
+        // 未起草 → 全 PENDING；「未覆盖」只对有正文的章计数（quality.rs
+        // 语义：没正文就没有「未回应」可言）——此处应为 0 而非 2
+        assert_eq!(ql["summary"]["drafted"], 0);
+        assert_eq!(ql["summary"]["pending"], ql["summary"]["total"]);
+        assert_eq!(ql["summary"]["uncovered_req_total"], 0);
+
+        let frame = call(&ctx, "bid.score");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let s = ok_of(&frame).clone();
+        assert_eq!(s["present"], json!(true));
+        let sc = &s["score"];
+        // #186 语义降级标记必须原样在场（UI 徽章直接消费）
+        assert_eq!(sc["diagnostic_only"], json!(true));
+        assert_eq!(sc["result_kind"], "rule_heuristic");
+        // 评分项 REQ（params.score=20）→ by_item 1 行，未起草 → estimated 0
+        let items = sc["by_item"].as_array().cloned().unwrap_or_default();
+        assert_eq!(items.len(), 1, "评分项 REQ 恰一行：{sc}");
+        assert_eq!(items[0]["item_id"], "REQ-0002");
+        assert_eq!(items[0]["max"], json!(20.0));
+        assert_eq!(items[0]["estimated"], 0.0);
+        assert_eq!(items[0]["tier"], "未覆盖");
+        assert_eq!(sc["target"], json!(20.0));
+        assert_eq!(sc["total"], 0.0);
+        // 价格面：无报价 → null（诚实显示，不伪装 0）
+        assert_eq!(sc["price"], Value::Null);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
 }

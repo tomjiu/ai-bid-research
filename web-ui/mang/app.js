@@ -337,6 +337,66 @@
         warnings: [],
         project_version: 12,
         fetched_pages: 1
+      },
+      // #313 批 C：自评面板演示数据（与真实 bid.quality / bid.score 响应同形——
+      // check_bid_quality / score_document 的 out；只在此处造数，渲染代码零分支）
+      quality: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+        quality: {
+          project_id: "PRJ-0001",
+          summary: { total: 20, drafted: 12, failed: 1, pending: 7, uncovered_req_total: 3, out_of_band: 2, unanchored_total: 1, dup_pairs: 1, dup_max_similarity: 0.83, char_total: 81200, char_target: 150000, char_deviation_pct: -45.9 },
+          needs_human: ["SEC-0005", "SEC-0009"],
+          submission_readiness: {
+            ready: false, not_built: false, blockers: 4, unresponded_count: 1, evidence_missing_count: 3,
+            unresponded: [{ requirement_id: "REQ-0007", row_id: "CMP-0007", category: "技术参数", excerpt: "支持 2000 路并发", message: "矩阵行未响应（正文未提及该条款）" }],
+            evidence_missing: [
+              { requirement_id: "REQ-0003", row_id: "CMP-0003", category: "资格条件", excerpt: "具备电子与智能化二级资质", message: "响应条款无可用证据佐证" },
+              { requirement_id: "REQ-0011", row_id: "CMP-0011", category: "商务要求", excerpt: "质保期不少于三年", message: "响应条款无可用证据佐证" },
+              { requirement_id: "REQ-0018", row_id: "CMP-0018", category: "技术参数", excerpt: "磁盘阵列双活架构", message: "响应条款无可用证据佐证" }
+            ]
+          },
+          sections: [
+            { section_id: "SEC-0002", title: "1.1 技术参数", status: "DRAFTED", chars: 5000, target_chars: 6000, covered_reqs: ["REQ-0001"], uncovered_reqs: [], needs_human: false },
+            { section_id: "SEC-0005", title: "2.1 施工进度计划", status: "FAILED", chars: 0, target_chars: 5000, covered_reqs: [], uncovered_reqs: ["REQ-0007"], needs_human: true }
+          ],
+          global_conflicts: [
+            { kind: "amount_conflict", severity: "blocker", section_id: "SEC-0002", message: "投标保证金 在 SEC-0002=3500000 与 PR-0001=3580000（首现位置见各自锚点）" }
+          ],
+          negative_deviations: [
+            { param_id: "PR-0003", requirement_id: "REQ-0009", param_name: "并发容量", required_value: "2000 路", response_value: "1500 路" }
+          ],
+          artifact: { path: root + "\\artifacts\\quality-report.json", size: 20480 },
+          warnings: []
+        }
+      },
+      score: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+        score: {
+          project_id: "PRJ-0001",
+          diagnostic_only: true,
+          result_kind: "rule_heuristic",
+          technical: 34.5,
+          commercial: 18,
+          price: null,
+          total: 52.5,
+          target: 85,
+          gap: 32.5,
+          by_item: [
+            { item_id: "REQ-0102", criteria: "技术方案完整性、先进性、可行性优者得 20 分", max: 20, estimated: 12.5, tier: "良", coverage: 0.62, section_id: "SEC-0002", mapping_ids: ["SEC-0002"], weight_share: 1, contributions: [{ section_id: "SEC-0002", estimated: 12.5, tier: "良", coverage: 0.62, weight_share: 1, rule_gaps: 1 }], score_rules: null, rule_checkpoints: [{ text: "双活架构与冗余设计", hits: [2, 0], mentioned: true }, { text: "与招标参数逐项对比表", hits: [0, 0], mentioned: false }], rule_gaps: 1 },
+            { item_id: "REQ-0105", criteria: "施工组织方案合理、进度计划可行", max: 15, estimated: 9, tier: "中", coverage: 0.55, section_id: "SEC-0005", mapping_ids: ["SEC-0005"], weight_share: 1, contributions: [{ section_id: "SEC-0005", estimated: 9, tier: "中", coverage: 0.55, weight_share: 1, rule_gaps: 0 }], score_rules: null, rule_checkpoints: [{ text: "横道图或网络图", hits: [1, 0], mentioned: true }], rule_gaps: 0 }
+          ],
+          breakdown: [],
+          mappings: [],
+          unmapped_scoring_items: ["REQ-0021"],
+          notes: [],
+          price_input: null,
+          sections_scored: 12
+        }
+
       }
     };
     return {
@@ -355,6 +415,11 @@
               return respond(m.id, DEMO_BID.outline);
             case "bid.matrix":
               return respond(m.id, DEMO_BID.matrix);
+            case "bid.quality":
+              return respond(m.id, DEMO_BID.quality);
+            case "bid.score":
+              return respond(m.id, DEMO_BID.score);
+
             case "fs.tree":
               return respond(m.id, tree);
             case "fs.read": {
@@ -467,14 +532,17 @@
     git: { status: "idle", available: false, branch: "", items: [], log: [], error: "" },
     // 版本快照（issue #42 阶段 7）：{ status, file, entries, error }
     snapshots: { status: "idle", file: "", entries: [], error: "" },
-    // #313 批 A/B：标书数据面（bid.state / bid.outline / bid.matrix 拉取缓存）
+    // #313 批 A/B/C：标书数据面（bid.state / bid.outline / bid.matrix 拉取缓存）
     // + 大纲树折叠态 + 矩阵筛选/分页/展开态（mx——面板本地 UI 态，随数据面重置）
     bid: {
       status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
       matrix: { status: "idle", data: null, error: "" },
       mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" }
     },
-    bidCollapsed: /* @__PURE__ */ new Set()
+    bidCollapsed: /* @__PURE__ */ new Set(),
+    // #313 批 C：自评数据面（bid.quality + bid.score 拉取缓存——工作台「自评」页签用）。
+    // code 透传壳侧错误码：state = 项目未到 MatrixReady+（UI 显示「尚未开放」引导而非故障）
+    bidQuality: { status: "idle", quality: null, score: null, error: "", code: "", scoreError: "", ts: 0 }
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -966,6 +1034,9 @@
         else if (act === "open-folder") ui.openFolderDialog();
         else if (act === "workbench") ui.openBidWorkbench();
         else if (act === "workbench-mx") ui.openBidWorkbench("matrix");
+        else if (act === "workbench-quality") ui.openBidWorkbench("quality");
+        else if (act === "refresh-quality") ui.loadBidQuality(true);
+
       });
     });
   }
@@ -1021,8 +1092,8 @@
       + "</div>"
       + '<div class="bid-card"><div class="bid-card-title">面板</div>'
       + '<button class="bid-entry" data-bid-act="workbench"><span class="bid-entry-icon">' + ICON.outline + '</span><span class="bid-entry-main"><span class="bid-entry-name">大纲树</span><span class="bid-entry-sub">章节层级 · 字数进度 · 状态标记</span></span><span class="bid-entry-state ok">已接线</span></button>'
-      + '<button class="bid-entry" data-bid-act="workbench-mx"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">合规矩阵</span><span class="bid-entry-sub">REQ × 响应状态 × 证据</span></span><span class="bid-entry-state ok">已接线</span></button>'
-      + bidDisabledEntry("自评", "BLOCKER / WARNING / 评分", "批 C")
+      + '<button class="bid-entry" data-bid-act="workbench-mx"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">合规矩阵</span><span class="bid-entry-sub">REQ × 响应状态 × 证据</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + '<button class="bid-entry" data-bid-act="workbench-quality"><span class="bid-entry-icon">' + ICON.check + '</span><span class="bid-entry-main"><span class="bid-entry-name">自评</span><span class="bid-entry-sub">评分 · 质量摘要 · BLOCKER</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + bidDisabledEntry("覆盖报告", "已判定 / 未判定 / ★条款", "批 D")
       + "</div></div>";
     bindBidViewActions(body);
@@ -1038,7 +1109,7 @@
       + '<span class="bid-wb-project" id="bid-wb-project"></span>'
       + '<span class="bid-wb-status" id="bid-wb-status"></span>'
       + '<span class="bid-wb-spacer"></span>'
-      + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix">刷新</button>'
+      + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix / 自评数据">刷新</button>'
       + "</header>"
       + '<div class="bid-wb-body">'
       + '<aside class="bid-tree" id="bid-tree" role="tree" aria-label="标书大纲树"></aside>'
@@ -1046,7 +1117,7 @@
       + '<nav class="bid-tabs" role="tablist">'
       + '<button class="bid-tab" role="tab" data-bid-panel="detail">章节详情</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="matrix">合规矩阵</button>'
-      + '<button class="bid-tab" role="tab" disabled title="批 C 接线（#313）">自评</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="quality">自评</button>'
       + '<button class="bid-tab" role="tab" disabled title="批 D 接线（#313）">覆盖报告</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
@@ -1054,8 +1125,14 @@
     host.appendChild(wrap);
     wrap.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-bid-act]");
-      if (btn && btn.dataset.bidAct === "refresh") ui.loadBid(true);
-      // #313 批 B：右侧页签切换（章节详情 / 合规矩阵——C/D 仍禁用占位）
+      if (btn && btn.dataset.bidAct === "refresh") {
+        ui.loadBid(true);
+        // 自评面已拉取过（或正展示）则同步刷新——未拉取不预取
+        if (state.bidQuality.status !== "idle") ui.loadBidQuality(true);
+        // 矩阵面同款（#313 批 B）
+        if (state.bid.matrix && state.bid.matrix.status !== "idle") ui.loadBidMatrix(true);
+      }
+      // #313 批 B：右侧页签切换（章节详情 / 合规矩阵 / 自评）
       const tabBtn = e.target.closest('.bid-tab[data-bid-panel]');
       if (tabBtn && !tabBtn.disabled) {
         const t = bidWorkbenchTab();
@@ -1065,7 +1142,25 @@
         }
       }
     });
+    // 页签切换（#313 批 C：自评接线；批 B/D 仍占位禁用）
+    wrap.querySelectorAll(".bid-tab[data-bid-panel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const t = bidWorkbenchTab();
+        if (!t || !t.meta) return;
+        if (t.meta.panel === btn.dataset.bidPanel) return;
+        t.meta.panel = btn.dataset.bidPanel;
+        syncBidTabBar(host, t.meta.panel);
+        renderBidWorkbenchPanes(host);
+      });
+    });
+    syncBidTabBar(host, (tab.meta && tab.meta.panel) || "detail");
     renderBidWorkbenchPanes(host);
+  }
+  /** 页签选中态与 tab.meta.panel 同步（aria-selected 驱动样式） */
+  function syncBidTabBar(host, panel) {
+    Array.prototype.forEach.call(host.querySelectorAll(".bid-tab[data-bid-panel]"), (b) => {
+      b.setAttribute("aria-selected", String(b.dataset.bidPanel === panel));
+    });
   }
   function bidOutlineNodes() {
     const o = state.bid.outline;
@@ -1116,8 +1211,12 @@
     projEl.title = (b.data && b.data.workspace) || "";
     statEl.innerHTML = '<span class="bid-badge" data-status="' + esc(p.status) + '">' + esc(bidProjectStatusZh(p.status)) + "</span>";
     const nodes = bidOutlineNodes();
+    // 右面板路由（#313 批 C）：自评页签优先——树空也能给「先建纲」引导卡
+    const wbTab = bidWorkbenchTab();
+    const activePanel = (wbTab && wbTab.meta && wbTab.meta.panel) || "detail";
     if (!nodes.length) {
       treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
+      if (activePanel === "quality") renderBidQualityPanel(host);
       return;
     }
     const byId = {};
@@ -1156,15 +1255,23 @@
           renderBidWorkbenchIfOpen();
           return;
         }
-        // #313 批 B：点树节点回到章节详情面（页签联动）
+        // #313 批 B/C：点树节点回到章节详情面（页签联动）
         const wt = bidWorkbenchTab();
         if (wt) wt.meta.panel = "detail";
-        renderBidTabsState(host);
+        if (typeof renderBidTabsState === "function") renderBidTabsState(host);
+        if (typeof syncBidTabBar === "function") syncBidTabBar(host, "detail");
         renderBidDetail(host, node);
       });
     });
-    // 选中态：保持已选（刷新后仍指向同一节）；初次进入选第一片叶；
-    // 右侧面板按 tab.meta.panel 分发（详情 / 矩阵——#313 批 B）
+    if (activePanel === "quality") {
+      renderBidQualityPanel(host);
+      return;
+    }
+    if (activePanel === "matrix") {
+      renderBidMatrixPanel(host);
+      return;
+    }
+    // 选中态：保持已选（刷新后仍指向同一节）；初次进入选第一片叶
     const tab = bidWorkbenchTab();
     const selId = tab && tab.meta && tab.meta.selectedId;
     if (!(selId && byId[selId])) {
@@ -1235,6 +1342,198 @@
           bodyEl.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">读取章节失败</div><div>' + esc(err.message || String(err)) + "</div></div>";
         });
     }
+  }
+  // ============ #313 批 B：矩阵面板（bid.matrix） ============
+  // 数据来源：壳侧 bid.quality（check_bid_quality 真实工具面——summary /
+  // submission_readiness / global_conflicts / negative_deviations / artifact）与
+  // bid.score（score_document——diagnostic_only / technical / commercial / price /
+  // total / by_item）。契约：docs/mang/IPC-CONTRACT.md §6。
+  // 合规矩阵 = 批 B / 覆盖报告 = 批 D（占位禁用态）。
+  /** 全局冲突 kind 中文面（#423 金额/工期/术语/承诺——四类恒 blocker） */
+  function bidConflictZh(kind) {
+    return (
+      {
+        amount_conflict: "金额冲突",
+        schedule_conflict: "工期冲突",
+        term_conflict: "术语冲突",
+        commitment_conflict: "承诺冲突"
+      }[kind] || kind
+    );
+  }
+  function fmtScore(v) {
+    return typeof v === "number" && isFinite(v) ? String(Math.round(v * 10) / 10) : "—";
+  }
+  /** 评分卡单元：无报价/无数据 → 「未报价」诚实显示（不伪缺 0） */
+  function bidQualScoreCell(label, v, max, hint) {
+    const has = typeof v === "number" && isFinite(v);
+    const pct = has && max > 0 ? Math.min(100, Math.round((v / max) * 100)) : 0;
+    return (
+      '<div class="bid-qual-score" data-has="' + String(has) + '">'
+      + '<span class="bid-qual-score-v">' + (has ? fmtScore(v) : "未报价") + "</span>"
+      + '<span class="bid-qual-score-k">' + esc(label) + (hint ? " · " + esc(hint) : "") + "</span>"
+      + '<span class="bid-bar"><span class="bid-bar-fill" data-state="' + (has ? (pct >= 80 ? "ok" : pct >= 50 ? "mid" : "low") : "pending") + '" style="width:' + pct + '%"></span></span>'
+      + "</div>"
+    );
+  }
+  /** BLOCKER 清单（<details> 原生展开——无 JS 状态） */
+  function bidQualList(title, rows) {
+    return (
+      '<details class="bid-qual-list"><summary>' + esc(title) + "</summary>"
+      + rows.map((r) => '<div class="bid-qual-row">' + esc(r) + "</div>").join("")
+      + "</details>"
+    );
+  }
+  /** 自评面板主体（工作台右面板） */
+  function renderBidQualityPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const q = state.bidQuality;
+    if (q.status === "idle") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取自评数据…</div></div>';
+      ui.loadBidQuality();
+      return;
+    }
+    if (q.status === "loading") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在评估质量与评分…</div></div>';
+      return;
+    }
+    if (q.code === "not_found") {
+      panel.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">当前工作区不是标书项目</div><div>' + esc(q.error || "无 db.json") + "</div></div>";
+      return;
+    }
+    if (q.code === "state") {
+      // 壳侧 state 码 = 项目未到 MatrixReady+（如刚抽取条款还没建矩阵）——
+      // 引导卡而非故障横幅（E_STATE 原文已含状态与前置说明）
+      panel.innerHTML =
+        '<div class="bid-qual">'
+        + '<div class="view-state"><div class="view-state-title">自评尚未开放</div>'
+        + "<div>" + esc(q.error) + "</div>"
+        + '<div class="bid-qual-hint">矩阵就绪（MATRIX_READY）后此面板显示：评分（技术 / 商务 / 总分 + 逐评分项估分档位）、质量摘要（未覆盖条款 / 字数偏离 / 查重）与提交就绪 BLOCKER 清单。先经 MCP 管线建纲建矩阵（prepare_outline_and_matrix）。</div>'
+        + '<button class="btn" data-bid-act="refresh-quality">重试</button></div>'
+        + "</div>";
+      bindBidViewActions(panel);
+      return;
+    }
+    if (!q.quality) {
+      panel.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">自评数据读取失败</div><div>' + esc(q.error || "未知错误") + '</div><button class="btn" data-bid-act="refresh-quality">重试</button></div>';
+      bindBidViewActions(panel);
+      return;
+    }
+    const ql = q.quality;
+    const sm = ql.summary || {};
+    const rd = ql.submission_readiness || {};
+    const unresp = Array.isArray(rd.unresponded) ? rd.unresponded : [];
+    const evMissing = Array.isArray(rd.evidence_missing) ? rd.evidence_missing : [];
+    const conflicts = Array.isArray(ql.global_conflicts) ? ql.global_conflicts : [];
+    const negs = Array.isArray(ql.negative_deviations) ? ql.negative_deviations : [];
+    const needsHuman = Array.isArray(ql.needs_human) ? ql.needs_human : [];
+    const blockerCount = unresp.length + evMissing.length + conflicts.length + negs.length;
+    const sc = q.score;
+    let html = '<div class="bid-qual">';
+    // 头部：语义徽章 + 刷新
+    html +=
+      '<div class="bid-qual-head">'
+      + '<span class="bid-qual-tag" title="#186 语义降级：估分与档位是关键词覆盖 / 长度 / 证据词存在性的启发式诊断（rule_heuristic），不代表评委会会给的分与档">规则诊断 · 非评标模拟</span>'
+      + '<span class="bid-qual-sub">' + (q.ts ? timeAgo(q.ts) : "—") + "</span>"
+      + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm" data-bid-act="refresh-quality" title="重新读取 bid.quality / bid.score">' + ICON.refresh + "刷新自评</button>"
+      + "</div>";
+    // ① 评分卡（bid.score）
+    if (sc) {
+      const unmapped = Array.isArray(sc.unmapped_scoring_items) ? sc.unmapped_scoring_items : [];
+      html +=
+        '<div class="bid-card"><div class="bid-card-title">评分（自评估分）</div>'
+        + '<div class="bid-qual-scores">'
+        + bidQualScoreCell("技术", sc.technical, sc.target)
+        + bidQualScoreCell("商务", sc.commercial, sc.target)
+        + bidQualScoreCell("价格", sc.price, sc.target, "未报价不计")
+        + bidQualScoreCell("总分", sc.total, sc.target, "目标 " + fmtScore(sc.target))
+        + "</div>"
+        + '<div class="bid-card-sub">距目标差 ' + fmtScore(sc.gap) + " 分 · 已评章节 " + fmtChars(sc.sections_scored)
+        + (unmapped.length ? ' · <span class="bid-qual-warn">' + ICON.warning + " 未映射评分项 " + unmapped.length + " 个（总分可能偏低）</span>" : "")
+        + "</div></div>";
+    } else {
+      html += '<div class="bid-card"><div class="bid-card-title">评分（自评估分）</div><div class="bid-card-sub">' + (q.scoreError ? "bid.score 读取失败：" + esc(q.scoreError) : "无评分数据") + "</div></div>";
+    }
+    // ② 质量摘要（check_bid_quality 的 summary 面）
+    const dev = typeof sm.char_deviation_pct === "number" ? (sm.char_deviation_pct > 0 ? "+" : "") + sm.char_deviation_pct + "%" : "—";
+    html +=
+      '<div class="bid-card"><div class="bid-card-title">质量摘要</div><div class="bid-stats">'
+      + bidStatCell(fmtChars(sm.total), "章节总数")
+      + bidStatCell(fmtChars(sm.drafted), "已起草")
+      + bidStatCell(fmtChars(sm.failed), "失败")
+      + bidStatCell(fmtChars(sm.pending), "待起草")
+      + bidStatCell(fmtChars(sm.uncovered_req_total), "未覆盖条款")
+      + bidStatCell(fmtChars(sm.out_of_band), "字数带外")
+      + bidStatCell(fmtChars(sm.unanchored_total), "无锚断言")
+      + bidStatCell(fmtChars(sm.dup_pairs), "严重重复对")
+      + bidStatCell(fmtChars(sm.char_total) + "/" + fmtChars(sm.char_target), "实际/配额字数")
+      + bidStatCell(dev, "字数偏离")
+      + "</div>"
+      + (needsHuman.length ? '<div class="bid-card-sub bid-qual-warn">' + ICON.warning + " 需人工处理 " + needsHuman.length + " 章：" + esc(needsHuman.join("、")) + "</div>" : "")
+      + "</div>";
+    // ③ 提交就绪与废标风险（BLOCKER 面——点击展开）
+    html += '<div class="bid-card" data-kind="blockers"><div class="bid-card-title">' + (blockerCount ? ICON.warning + " " : ICON.check + " ") + "提交就绪与废标风险（" + blockerCount + "）</div>";
+    if (!blockerCount) {
+      html += '<div class="bid-card-sub">' + ICON.check + " 无 BLOCKER：未响应 0 · 证据缺口 0 · 跨章冲突 0 · 负偏离 0" + (rd.ready ? " · 已就绪" : "") + "</div>";
+    } else {
+      if (unresp.length) html += bidQualList("未响应条款（" + unresp.length + "）", unresp.map((r) => r.requirement_id + " · " + r.category + "：" + r.message));
+      if (evMissing.length) html += bidQualList("证据缺口（" + evMissing.length + "）", evMissing.map((r) => r.requirement_id + " · " + r.category + "：" + r.message));
+      if (conflicts.length) html += bidQualList("跨章冲突（" + conflicts.length + "）", conflicts.map((c) => bidConflictZh(c.kind) + " · " + c.section_id + "：" + c.message));
+      if (negs.length) html += bidQualList("技术参数负偏离（" + negs.length + "）", negs.map((p) => p.param_name + "：" + p.required_value + " → 我方 " + p.response_value + "（" + p.param_id + "）"));
+      html += '<div class="bid-card-sub">导出可过而提交未就绪是合法状态（#241 两分账）——按清单逐项补件后复核</div>';
+    }
+    html += "</div>";
+    // ④ 评分项明细（by_item——<details> 行原生展开：逐章贡献 + 细则检查点）
+    if (sc && Array.isArray(sc.by_item)) {
+      html += '<div class="bid-card"><div class="bid-card-title">评分项明细（' + sc.by_item.length + "）</div>";
+      if (!sc.by_item.length) {
+        html += '<div class="bid-card-sub">无评分项条款（category=评分项 且带分值）——评分面为空是诚实态，不伪装</div>';
+      } else {
+        html += '<div class="bid-qual-items"><div class="bid-qual-item bid-qual-item-head"><span>评分项</span><span>满分</span><span>估分</span><span>档位</span><span>覆盖</span></div>';
+        sc.by_item.forEach((it) => {
+          const cov = typeof it.coverage === "number" ? Math.round(it.coverage * 100) + "%" : "—";
+          const contribs = Array.isArray(it.contributions) ? it.contributions : [];
+          const cps = Array.isArray(it.rule_checkpoints) ? it.rule_checkpoints : [];
+          const crit = it.criteria ? String(it.criteria).slice(0, 60) : "";
+          html +=
+            '<details class="bid-qual-item"><summary>'
+            + "<span class=\"bid-qual-item-name\" title=\"" + esc(it.item_id + (it.criteria ? "：" + it.criteria : "")) + "\">" + esc(it.item_id) + (crit ? '<span class="bid-qual-item-crit">' + esc(crit) + "</span>" : "") + "</span>"
+            + "<span>" + fmtScore(it.max) + "</span>"
+            + "<span>" + fmtScore(it.estimated) + "</span>"
+            + "<span><span class=\"bid-qual-tier\">" + esc(it.tier) + "</span></span>"
+            + "<span>" + cov + "</span>"
+            + "</summary><div class=\"bid-qual-item-body\">";
+          if (contribs.length) {
+            html += '<div class="bid-qual-sec">逐章贡献</div>';
+            contribs.forEach((c) => {
+              html += '<div class="bid-qual-row"><span class="bid-qual-sec-id">' + esc(c.section_id) + "</span><span>估分 " + fmtScore(c.estimated) + " · " + esc(c.tier) + " · 份额 " + Math.round((c.weight_share || 0) * 100) + "%</span></div>";
+            });
+          }
+          if (cps.length) {
+            const hit = cps.filter((c) => c.mentioned).length;
+            html += '<div class="bid-qual-sec">细则检查点（提及 ' + hit + "/" + cps.length + "）</div>";
+            cps.forEach((c) => {
+              html += '<div class="bid-qual-row" data-hit="' + String(!!c.mentioned) + '"><span class="bid-qual-cp">' + (c.mentioned ? ICON.check : ICON.warning) + "</span><span>" + esc(c.text) + "</span></div>";
+            });
+          }
+          if (!contribs.length && !cps.length) html += '<div class="bid-card-sub">无逐章明细（未起草 / 未映射）</div>';
+          html += "</div></details>";
+        });
+        html += "</div>";
+      }
+      html += "</div>";
+    }
+    // 落盘与告警面
+    if (ql.artifact && ql.artifact.path) {
+      html += '<div class="bid-card-sub">质量报告已落盘：' + esc(ql.artifact.path) + "（" + fmtChars(ql.artifact.size) + " B）</div>";
+    }
+    if (Array.isArray(ql.warnings) && ql.warnings.length) {
+      html += '<div class="bid-card-sub bid-qual-warn">' + ql.warnings.map(esc).join("；") + "</div>";
+    }
+    html += "</div>";
+    panel.innerHTML = html;
+    bindBidViewActions(panel);
   }
 
   // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
@@ -1558,6 +1857,7 @@
       .catch((err) => ui.toast("error", "导出失败：" + ((err && err.message) || err)));
   }
   // ============ #313 批 B 矩阵面板 END ============
+
 
   // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 ============
   /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
@@ -3277,6 +3577,8 @@
         mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" }
       };
       state.bidCollapsed = new Set();
+      // #313 批 C：自评数据面同理随根失效
+      state.bidQuality = { status: "idle", quality: null, score: null, error: "", code: "", scoreError: "", ts: 0 };
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
@@ -3360,7 +3662,7 @@
       renderBidWorkbenchIfOpen();
     },
     /** #313 批 A/B：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
-     *  panel（"detail" | "matrix"）——面板直开（侧栏面板入口用） */
+     *  panel（"detail" | "matrix" | "quality"）——面板直开（侧栏面板入口用） */
     async openBidWorkbench(panel) {
       const existing = bidWorkbenchTab();
       if (existing) {
@@ -3369,6 +3671,74 @@
         renderBidWorkbenchIfOpen();
         return;
       }
+      const tab = {
+        id: "t" + ++tabSeq,
+        path: "mang://bid-workbench",
+        name: "标书工作台",
+        kind: "bidwork",
+        dirty: false,
+        state: "loading",
+        error: "",
+        meta: { selectedId: "", panel: panel || "detail" },
+        dispose: null
+      };
+      state.tabs.push(tab);
+      state.activeTabId = tab.id;
+      renderTabs();
+      renderEmpty();
+      renderStatusBar();
+      await ui.loadTab(tab);
+    },
+    /** #313 批 C：拉取自评数据面（bid.quality + bid.score 并行）——工作台「自评」页签用。
+     * 壳侧 state 码（项目未到 MatrixReady+）与 not_found（无 db.json）分别记在
+     * code 字段，渲染层分支成引导卡而非故障。 */
+    async loadBidQuality(force) {
+      if (!state.bridge) return;
+      if (state.bidQuality.status === "loading" && !force) return;
+      state.bidQuality.status = "loading";
+      state.bidQuality.error = "";
+      state.bidQuality.code = "";
+      state.bidQuality.scoreError = "";
+      renderBidWorkbenchIfOpen();
+      const settled = await Promise.allSettled([
+        ipc("bid.quality", {}, 3e4),
+        ipc("bid.score", {}, 3e4)
+      ]);
+      const q = settled[0];
+      const s = settled[1];
+      if (q.status === "fulfilled" && q.value) {
+        state.bidQuality.quality = q.value.quality || null;
+      } else {
+        state.bidQuality.quality = null;
+        const reason = q.reason || {};
+        state.bidQuality.code = reason.code || "";
+        state.bidQuality.error = reason.message || reason.code || "bid.quality 读取失败";
+      }
+      if (s.status === "fulfilled" && s.value) {
+        state.bidQuality.score = s.value.score || null;
+        state.bidQuality.scoreError = "";
+      } else {
+        state.bidQuality.score = null;
+        const reason = s.reason || {};
+        // 同源 state 拒绝已在 quality 面呈现——不重复报；其它失败如实记
+        state.bidQuality.scoreError = reason.code === "state" ? "" : reason.message || reason.code || "bid.score 读取失败";
+      }
+      state.bidQuality.status = "ready";
+      state.bidQuality.ts = Date.now();
+      renderBidWorkbenchIfOpen();
+    },
+    /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
+     *  批 C：panel 入参直达指定页签（"quality" = 自评——侧栏面板入口用） */
+    async openBidWorkbench(panel) {
+
+      const existing = bidWorkbenchTab();
+      if (existing) {
+        if (panel && existing.meta.panel !== panel) existing.meta.panel = panel;
+        await ui.activateTab(existing.id);
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+
       const tab = {
         id: "t" + ++tabSeq,
         path: "mang://bid-workbench",
