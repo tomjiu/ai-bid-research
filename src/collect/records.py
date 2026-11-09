@@ -24,9 +24,14 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from typing import Any, Dict, List, Optional
 
+from src.collect.normalize import (
+    clean_text as _clean_text,
+    normalize_budget as _normalize_budget,
+    normalize_date as _normalize_date,
+    normalize_requirements as _normalize_requirements,
+)
 #: 规范字段名 ← 来源别名（小写比较；别名命中即映射到规范名）。
 #: 规范名集合与 ``src/storage.database._BID_COLUMNS`` 对齐。
 _FIELD_ALIASES: Dict[str, str] = {
@@ -67,16 +72,6 @@ _FIELD_ALIASES: Dict[str, str] = {
     "资格要求": "requirements",
     "资格条件": "requirements",
 }
-
-#: 日期归一可接受形态：``2026-11-09`` / ``2026/11/9`` / ``2026.11.9`` /
-#: ``2026年11月9日`` / ``2026-11-09 14:30[:00]``（取日期面）。
-_DATE_PATTERNS = (
-    re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})"),
-    re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日"),
-)
-
-#: requirements 切分符（全角/半角分号与换行）。
-_REQ_SPLIT_RE = re.compile(r"[;；\n]+")
 
 
 class RecordValidationError(ValueError):
@@ -287,105 +282,3 @@ class AnnouncementRecord:
             )
         )
         return hashlib.sha256(material.encode("utf-8")).hexdigest()[:12]
-
-
-# ----------------------------------------------------------------------
-# 清洗与归一化内部函数
-# ----------------------------------------------------------------------
-
-def _clean_text(value: Any) -> str:
-    """文本清洗：None→空串；折叠内部空白并去首尾空白。"""
-    if value is None:
-        return ""
-    text = str(value)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _normalize_budget(value: Any) -> tuple:
-    """金额归一为万元（float）。
-
-    接受形态::
-
-        350 / 350.5            → 数值型，单位约定为万元
-        "350" / "350.5"        → 数值字符串，单位约定为万元
-        "350万" / "350万元"     → 万元
-        "3,500,000元" / "3500000元" → 元 → ÷10000 归一为万元
-        "1.2亿" / "1.2亿元"     → 亿元 → ×10000 归一为万元
-        None / "" / "面议" / 其他不可解析 → (None, 告警)
-
-    Returns:
-        (万元数值或 None, 告警消息或 None) 二元组。
-    """
-    if value is None:
-        return None, None
-    if isinstance(value, bool):
-        return None, f"不可解析的金额类型: {type(value).__name__}"
-    if isinstance(value, (int, float)):
-        result = float(value)
-        return (result, None) if result >= 0 else (None, f"金额为负: {result}")
-
-    text = str(value).strip()
-    if not text:
-        return None, None
-
-    # 去千分位逗号
-    plain = text.replace(",", "").replace("，", "")
-
-    # 亿元 → 万元
-    match = re.fullmatch(r"(\d+(?:\.\d+)?)[亿万]?元?", plain)
-    if not match:
-        return None, f"金额无法解析: {text!r}"
-
-    number = float(match.group(1))
-    if "亿" in plain:
-        number *= 10000.0
-    elif "万" not in plain and plain.endswith("元"):
-        number /= 10000.0
-    if number < 0:
-        return None, f"金额为负: {text!r}"
-    return number, None
-
-
-def _normalize_date(value: Any) -> tuple:
-    """日期归一为 ``YYYY-MM-DD``。
-
-    Returns:
-        (归一日期字符串或 None, 告警消息或 None) 二元组。
-        空值→(None, None)（日期本就可缺）；非空但不可解析→告警。
-    """
-    if value is None:
-        return None, None
-    text = str(value).strip()
-    if not text:
-        return None, None
-    for pattern in _DATE_PATTERNS:
-        match = pattern.search(text)
-        if match:
-            year, month, day = (int(g) for g in match.groups())
-            try:
-                normalized = f"{year:04d}-{month:02d}-{day:02d}"
-            except (ValueError, TypeError):
-                return None, f"日期超出范围: {text!r}"
-            if not (1 <= month <= 12 and 1 <= day <= 31):
-                return None, f"日期月/日非法: {text!r}"
-            return normalized, None
-    return None, f"日期无法解析: {text!r}"
-
-
-def _normalize_requirements(value: Any) -> List[str]:
-    """requirements 归一为字符串列表。
-
-    - 列表 → 逐条清洗，去空项；
-    - 字符串 → 按分号/换行切分；
-    - None → 空列表；
-    - 其他类型 → 单元素列表（str() 归一）。
-    """
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [
-            item.strip() for item in (str(v) for v in value) if item.strip()
-        ]
-    if isinstance(value, str):
-        return [part.strip() for part in _REQ_SPLIT_RE.split(value) if part.strip()]
-    return [str(value).strip()] if str(value).strip() else []
