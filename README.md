@@ -23,13 +23,15 @@ P1 导入  → import_tender_files（PDF / DOCX / XLSX / .doc 两层转换）
 P2 抽取  → extract_requirements（语义表 + 评分表 + ★条款结构化）
 P3 建纲  → build_outline（评分驱动 + 篇幅档位 + 覆盖闭环门）
 P4 证据  → register_evidence / bind_evidence（台账 + 只降不升）
+          + 业绩材料库（#315 跨项目资产：登记/推荐/一键写入业绩章）
 P5 起草  → draft_response_section / append_section_segment（增量写入）
 P6 校验  → validate_bid_document（门禁 + BLOCKER 汇总）
 P7 复核  → record_review_gate（签域四重绑定 + 提交就绪面）
 P8 导出  → export_bid_document（篇幅门 + 矩阵 blocking 清零）
 ```
 
-### 44 个 MCP 工具
+
+### 50 个 MCP 工具
 
 ```
 建项导入（2）：create_bid_project / import_tender_files
@@ -38,20 +40,21 @@ P8 导出  → export_bid_document（篇幅门 + 矩阵 blocking 清零）
               / get_annotation_overlay（#285② 块级双向索引对账族）
 建纲篇幅（2）：build_outline / recommend_length_profile
 证据（4）：list_evidence / register_evidence / bind_evidence / search_evidence
+
 起草（7）：draft_response_section / append_section_segment /
             rewrite_section_segment / list_section_segments /
             register_addendum_changes / rewrite_section_partial（#319 补遗增量重写）
             / validate_bid_document
 复核评分（6）：record_review_gate / record_addendum_waiver / check_bid_quality
               / score_price / score_section / score_document
+              / check_scoring_coverage（#318 细则逐条响应覆盖检查）
 RT 生命周期（7）：assign_revision / advance_revision / complete_revision
               / batch_task / advance_task / reopen_section / set_param_responses（#321）
 全块覆盖（4）：get_document_chunks / submit_block_marks / get_coverage_report
               / get_star_coverage（★漏标检测）
-状态恢复（3）：get_bid_project_state / save_version / recover_validating_state
-任务（1）：list_tasks
-导出（1）：export_bid_document
-发现（1）：list_tools
+导出恢复（4）：export_bid_document / get_bid_project_state / save_version
+              / recover_validating_state
+其他（3）：list_tasks / list_tools（#279 行协议发现面）
 ```
 
 （工具面持续演进——以 `list_tools` / `tools/list` 应答为准，#278。）
@@ -133,7 +136,7 @@ INFO     仅记录
 | [docs/PYTHON-BOUNDARY.md](docs/PYTHON-BOUNDARY.md) | **Python 研究工具边界**——src/llm·report·storage 为非生产链路（#563） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 环境搭建 + 开发流程 |
 | [docs/bid-domain-model.md](docs/bid-domain-model.md) | 领域对象 + 状态机 + ID 命名空间 |
-| [docs/bid-mcp-contract.md](docs/bid-mcp-contract.md) | MCP 工具契约（31 个工具） |
+| [docs/bid-mcp-contract.md](docs/bid-mcp-contract.md) | MCP 工具契约（33 个工具） |
 | [docs/bid-skill-design.md](docs/bid-skill-design.md) | Skill 九阶段路径 + 停止条件 |
 | [docs/architecture-decision.md](docs/architecture-decision.md) | AD-01~AD-07 决策记录 |
 | [docs/threat-model.md](docs/threat-model.md) | 安全威胁模型 |

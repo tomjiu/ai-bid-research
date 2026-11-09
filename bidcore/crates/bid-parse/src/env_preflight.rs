@@ -36,6 +36,21 @@ pub const FULL_PDF_CHAIN: &[&str] = &[
     OCR_LANG_CHI_SIM,
 ];
 
+/// 合成夹具生成器预检名（特殊成员）：检查 `python3` 可调用 **且**
+/// `reportlab` 模块可导入。
+///
+/// 背景（#591 误报根治）：`ocr_blank_scan_surfaces_per_file_warning` 等测试
+/// 用 python3 + reportlab 现场合成空白扫描件 PDF（#380 纪律：不留仓内大文件）。
+/// 旧版只把 FULL_PDF_CHAIN 当环境门——python3/reportlab 缺件时，
+/// `assert!(gen.status.success())` 直接红，**不是 SKIP**：
+/// CI 装齐 poppler+tesseract+chi_sim 却缺 reportlab → 判红，
+/// 但业务代码零缺陷（真误报，实测排查被带偏）。
+/// 本成员把「生成器依赖」纳入同一预检面，缺件走 SKIP 横幅。
+pub const PYTHON_REPORTLAB: &str = "python3:reportlab";
+
+/// 合成夹具生成器依赖清单（消费方一站式常量）。
+pub const SYNTH_FIXTURE_DEPS: &[&str] = &["python3", PYTHON_REPORTLAB];
+
 fn tessdata_dir() -> PathBuf {
     std::path::PathBuf::from(std::env::var("TESSDATA_PREFIX").unwrap_or_else(|_| {
         format!("{}/.tessdata", std::env::var("HOME").unwrap_or_default())
@@ -50,9 +65,39 @@ fn tessdata_dir() -> PathBuf {
 /// 整个测试二进制无限期卡死。现纳入 `guard::run_limited`（30s 超时 + 输出上限）。
 /// Busy 重试：并行测试各自探测时可能瞬时挤满 4 席子进程并发门——探测是
 /// 轻量操作，退避重试（上限 ~2s）后仍 Busy 才判缺（与旧无门探测的观测面一致）。
+/// 探测 python3 是否可导入指定模块（python3 -c "import <mod>"）。
+///
+/// 判定口径与 [`tool_available`] 一致：spawn 成功 + 退出码 0 = 在位。
+/// 退出码非 0（ModuleNotFoundError）= 缺件（与「程序不存在」同面——
+/// 对消费方而言都是「生成器不可用」）。
+/// 超时治理同款：python 启动 + import 也在 run_limited 里（30s）。
+fn python_module_available(module: &str) -> bool {
+    for attempt in 0..4 {
+        let mut c = Command::new("python3");
+        c.arg("-c")
+            .arg(format!("import {module}"))
+            .stdin(Stdio::null());
+        match crate::guard::run_limited(c, std::time::Duration::from_secs(30), 4096) {
+            crate::guard::RunOutcome::Success { .. } => return true,
+            // 非零退出 = ModuleNotFoundError / 导入失败 → 缺件
+            crate::guard::RunOutcome::NonZeroExit { .. } => return false,
+            crate::guard::RunOutcome::Busy { .. } => {
+                if attempt == 3 {
+                    return false;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            _ => return false,
+        }
+    }
+    false
+}
 fn tool_available(tool: &str) -> bool {
     if tool == OCR_LANG_CHI_SIM {
         return tessdata_dir().join(tool).is_file();
+    }
+    if tool == PYTHON_REPORTLAB {
+        return python_module_available("reportlab");
     }
     for attempt in 0..8 {
         let mut c = Command::new(tool);
@@ -117,8 +162,8 @@ fn missing_tools_impl(tools: &[&str], override_path: Option<&str>) -> Vec<String
         return tools
             .iter()
             .filter(|t| {
-                if **t == OCR_LANG_CHI_SIM {
-                    true // 模拟裸机：语言数据一并判缺
+                if **t == OCR_LANG_CHI_SIM || **t == PYTHON_REPORTLAB {
+                    true // 模拟裸机：语言数据 / python 模块依赖一并判缺
                 } else {
                     !tool_in_dirs(t, &dirs)
                 }
@@ -360,6 +405,36 @@ mod tests {
         assert_eq!(miss, vec!["definitely-not-a-real-tool-xyz-12345".to_string()]);
     }
 
+    #[test]
+    fn python_reportlab_probe_matches_import_face() {
+        // #591 误报根治的守卫：PYTHON_REPORTLAB 的探测结果必须与
+        // 「python3 -c "import reportlab" 退出码是否为 0」严格一致
+        // ——探测面与消费面不得分叉（同 chi_sim_check_mirrors 的口径）。
+        // 本机有 reportlab → 不应报告缺件；没有 → 必须报告缺件。
+        let _g = crate::guard::SUBPROC_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let real = std::process::Command::new("python3")
+            .arg("-c")
+            .arg("import reportlab")
+            .stdin(std::process::Stdio::null())
+            .output();
+        let expect_missing = match real {
+            Ok(o) => !o.status.success(),
+            Err(_) => true, // python3 本身不在 → 视为缺件
+        };
+        let miss = missing_tools(&[PYTHON_REPORTLAB]);
+        assert_eq!(
+            miss.len() == 1,
+            expect_missing,
+            "PYTHON_REPORTLAB 探测与真实 import 面不一致：missing={miss:?}",
+        );
+    }
+
+    #[test]
+    fn synth_fixture_deps_contains_python_gate() {
+        // 常量面守卫：生成器依赖清单必须含 python3 与 reportlab 门
+        assert!(SYNTH_FIXTURE_DEPS.contains(&"python3"));
+        assert!(SYNTH_FIXTURE_DEPS.contains(&PYTHON_REPORTLAB));
+    }
     #[test]
     fn skip_helper_returns_true_only_when_missing() {
         // 一致性不变量：返回值 ⟺ 缺件清单非空（横幅与判定不得脱钩）

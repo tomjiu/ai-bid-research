@@ -46,7 +46,13 @@ FIXTURES = REPO / "fixtures"
 
 pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
 CN_FONT = "STSong-Light"
-NOTO_PATH = "/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf"
+# #565：NOTO_PATH 动态解析（BID_RENDER_FONT → data/fonts/ → Linux 钉版路径），
+# 缺字体时友好报错（裸 OSError: cannot open resource 无补装指引，CI 实证过）。
+NOTO_FONT = S.resolve_render_font()
+if NOTO_FONT is None:
+    print(f"[fixture_gen] {S.RENDER_FONT_HINT}", file=sys.stderr)
+    raise SystemExit(2)
+NOTO_PATH = str(NOTO_FONT)
 # 字体事实记录（2026-10-24 发现）：NotoSansSC[wght].ttf 可变字体在 PIL 下渲染为全空白
 # （FreeType 变量轴实例化失败——0 个暗像素），B2 曾因此生成“只有公章没有文字”的空扫描页；
 # reportlab+B1 不受影响（用内置 CID 字体）。B2 改用静态字体 + 像素级自证断言。
@@ -400,6 +406,37 @@ def gen_engine_borrowed(out: Path) -> dict:
     return {"files": copied}
 
 
+def gen_carried_fixtures(out: Path) -> dict:
+    """携带夹具面（#559）：手工制作、非生成器产物的治理域内夹具。
+
+    目前两枚：`corpus-A/files/澄清修改文件-3.1.1.docx`（#425 真实命名补遗
+    夹具——merge_kind_gate_tool.rs 消费；scripts/make_425_addendum.py 可
+    再生成）与 `corpus-A/ground-truth/meta.json`（#491/A-20③ 开标日
+    真源——bid-grade fixtures.rs 消费，缺失回退硬编码）。它们住在 manifest
+    治理域内但不是生成器产物——本携带面在 --out 临时目录模式下字节级
+    复制（与 gen_engine_borrowed 同款纪律：sha256 恒定），使 T6 再生成
+    比对（仓内 ↔ 临时 manifest 全等）成立。
+    """
+    carried = [
+        "corpus-A/files/澄清修改文件-3.1.1.docx",
+        "corpus-A/ground-truth/meta.json",
+
+    ]
+    copied = 0
+    for rel in carried:
+        src = REPO / "fixtures" / rel
+        if not src.exists():
+            raise SystemExit(f"携带夹具缺失：{src}（见 scripts/make_425_addendum.py）")
+        dst = out / rel
+        if dst.resolve() == src.resolve():
+            copied += 1  # 默认输出 = 仓内 fixtures 本身，原地即目标
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        copied += 1
+    return {"files": copied}
+
+
 def gen_manifest(fixtures_root: Path, stats: dict):
     """覆盖整个 fixtures 根（corpus-A + queries + corpus-R），路径相对 fixtures/。"""
     files = []
@@ -469,6 +506,7 @@ def main():
     stats["queries"] = gen_queries(out / "queries")
     stats["corpus_r"] = v1_corpus_r.gen_corpus_r(out / "corpus-R")
     stats["engine_borrowed"] = gen_engine_borrowed(out)
+    stats["carried_fixtures"] = gen_carried_fixtures(out)  # #559：治理域内手工夹具携带面
     manifest = gen_manifest(out, stats)
 
     print(json.dumps({

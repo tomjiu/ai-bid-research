@@ -17,7 +17,9 @@
   `in : { project_id, filters:{...}, cursor?, limit?, page?(仅矩阵兼容) }`；
   `out: { rows|items, total(过滤后总数), limit(生效页宽), cursor(本次生效游标), next_cursor: string|null }`，`next_cursor=null` 即取完，原样回传取下一页。
   游标规则（fail-closed）：opaque base64（内嵌版本字节/偏移/过滤器指纹）；跨过滤器或跨工具复用游标 → `E_UNPROCESSABLE`；limit 合法域 1..=1000、缺省 100，越界/非整数**显式拒**（不静默 clamp）；游标损坏/版本不认识/偏移越界（底层列表已变化）→ `E_UNPROCESSABLE`。行序确定性（矩阵=条款位置序 CMP-0001..N；证据=id 字典序；任务=target_id 字典序）是分页安全前提，不得破坏。
-- **补充建议（第 9 个只读工具）**：`get_bid_project_state`——断点恢复的入口（读项目状态、各阶段完成度、DIRTY 章节、BLOCKER 计数），仿 LingYan `check_pipeline_state`。原 8 工具契约不受影响。V3-5（S-4）另增两个只读列表工具 `list_evidence` / `list_tasks`（§4-A/§4-B，工具面共 11）。issue #42 阶段 10 增第 12 个工具 `save_version`（AI 主动存版本快照，见文末 §SV）。#80 第三批（G1-G3）后工具面 21；#219 全块覆盖三工具（§17/§18/§19）后工具面 24（§3 同步抽取通路合并语义）；#226 增 `set_matrix_override` → 25；#243 增 `recover_validating_state`（§20，校验状态安全与恢复）后工具面 26；#254 增分段三工具 `append_section_segment` / `rewrite_section_segment` / `list_section_segments`（§21，章节级增量写入）后工具面 29；#279 增 `list_tools`（§LT，行协议发现面）后工具面 30；#287 增 `recommend_length_profile`（§22，篇幅档位推荐）后工具面 31；#285① 增 `get_star_coverage`（§22，★漏标检测——只读）后工具面 32；#285② 块级双向索引三工具 `get_requirement_provenance` / `get_block_requirements` / `get_annotation_overlay`（§22 对账族）后工具面 35；#319 增补遗后增量重写两工具 `register_addendum_changes` / `rewrite_section_partial`（§23/§24，DIRTY 章节局部改写 + 局部复验）后工具面 37；#321 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（assign_revision / advance_revision / complete_revision / batch_task / advance_task / reopen_section / set_param_responses）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
+- **工具面沿革（单一真源 = `bidcore/crates/bid-mcp/src/lib.rs` TOOL_NAMES）**：原 8 工具（§1-§9）；V3-5（S-4）增只读三件——`get_bid_project_state`（§4-C，断点恢复入口）、`list_evidence` / `list_tasks`（§4-A/§4-B）→ 11；#42 阶段 10 增 `save_version`（§SV）→ 12；#80 第三批（G1-G3）后 21；#219 全块覆盖三工具（§17/§18/§19）后 24；#226 增 `set_matrix_override`（§4-D，否决项死锁人工出口）→ 25；#243 增 `recover_validating_state`（§20）后 26；#254 增分段三工具（§21-A/B/C）后 29；#279 增 `list_tools`（§LT，行协议发现面）后 30；#287 增 `recommend_length_profile`（§25，篇幅档位推荐）后 31（commit 23a2537「第 31 个」）；#285 ① 增 `get_star_coverage`（§22，★漏标检测）后 32（merge 66465fb「工具面 30->32」）；#285 ② 增块级双向索引三工具（§22-A/B/C——REQ 溯源/块反查/overlay 数据面）后 35；#319 增补遗后增量重写两工具（§23/§24）后 37；#321（A-23）增 RT 生命周期 + 分工 + 章节重开 + 参数应答七工具（§12-A~G）后工具面 **44**。（计数持续演进——**以 `TOOL_NAMES` / `list_tools` 应答为准**，文档计数仅为演进注记，#278 同款纪律。）
+
+
 
 ## 1. create_bid_project
 ```
@@ -189,6 +191,64 @@ out: { items:[{target_id:SEC-*|REQ-*, owner, deadline, status}],
 错误: E_UNPROCESSABLE（非法 status、游标与过滤器不匹配、limit 越界）；E_NOTFOUND（项目路由）
 ```
 
+## 4-C. get_bid_project_state（只读，S-4——断点恢复入口）
+```
+in : { project_status? }（调试/模拟面：显式带入状态查询该态的允许工具表；
+      合法值 DRAFT|FILES_IMPORTED|REQUIREMENTS_EXTRACTED|MATRIX_READY|
+      EVIDENCE_BOUND|DRAFTING|VALIDATING|REVIEWING|READY_TO_EXPORT|EXPORTED；
+      缺省 = 服务态真实状态——日常断点恢复不传本参数）
+out: { status,
+       allowed_next_tools:[…该态允许调用的工具名——越级防护裁决表的回显…],
+       terminal(是否终态——EXPORTED 后无 next_allowed),
+       dirty_sections:[{ section_id, title, section_status,
+                         pending_directives }](#319 发现面——补遗/重开致脏
+                         章节 + 待处置改写指令计数，断点恢复时「哪些章节
+                         还没追上补遗」一眼可见；无脏零指令 = 空数组),
+       pending_rewrite_directives:[{ id(RD-xxxx), section_id, change_id,
+                         req_id, change_type, old_text, new_requirement,
+                         affected_segments:[{ segment_id, seq, matched_by }],
+                         created_at }],
+       agent_waivers:[…](#277 过门审计面——agent 声明过的门；human_review_
+                         complete=false 时 export 正文插警告横幅),
+       human_review_complete(bool——三门全部人签) }
+```
+> **无 `project_id` 入参**——本工具读服务态当前项目（单项目服务模型）；
+> 建项目前调 → `E_NOTFOUND`（store 无项目）。无状态门（每个状态都可查，
+> `allowed_tools` 表全状态含本工具）。
+> 断点恢复协议（SKILL.md 恢复协议同源）：先调本工具对齐 status /
+> DIRTY 清单 / BLOCKER 计数，再按 `allowed_next_tools` 续作。
+
+## 4-D. set_matrix_override（#226——否决项死锁的人工出口 · 写）
+```
+in : { project_id,
+       requirement_id("REQ-xxxx"——须真实存在；receipt 签域绑定本行，
+                       REQ-0003 的 receipt 免不了 REQ-0004),
+       status("RESPONDED"|"NOT_APPLICABLE"|"NOT_RESPONDED"|"PARTIAL"),
+       deviation?(偏离/不适用说明——status=NOT_APPLICABLE 时必填：
+                 不可审计的豁免不算豁免),
+       receipt(#182 宿主签发的审批回执——签域
+               matrix_override:<project_id>:<requirement_id>:<status>:
+               <理由sha256>，项目/行/状态/理由四重绑定，换任何一项都要
+               换签；principal/operator 参数不存在，Agent 不得伪造——
+               把必选条款标不适用是豁免动作，只认真人),
+       project_version? }
+out: { requirement_id,
+       row(覆写后矩阵行的真实状态——从重算后的矩阵取，不是把入参抄
+           回去；「写成功但没生效」这类 bug 不会被响应体掩盖),
+       override:{ principal, at }(覆写审计面——谁豁免了这一行、何时),
+       actor:{ actor_id, actor_type, authentication_method }
+       (#182 可信身份回显，与 record_addendum_waiver.actor 同款),
+       matrix_rows, blocking_rows(覆写后阻塞行数),
+       status, project_version, request_id }
+语义: 人工覆写某条款的响应状态——典型场景「本次招标不接受联合体」这类
+      招标人规则说明：Agent 无法响应、也无人能提供证据 → 人工裁 NOT_
+      APPLICABLE + 理由，矩阵立即重算（blocking 行随派生清零）。
+窗口: MATRIX_READY+ 含 Exported（矩阵已建才有可覆写对象）。
+错误: E_UNPROCESSABLE（非法 status / NOT_APPLICABLE 缺 deviation /
+      传了 principal|operator 参数）；E_NOTFOUND（REQ 不存在/项目路由）；
+      E_STATE（越级）；E_CONFLICT（project_version 过期）。
+```
+
 ## 5. search_evidence（知识库检索——双通道；#217 正文摘录面）
 ```
 in : { project_id, query, mode:"hybrid"|"semantic"|"exact", exact?:{field:"model|amount|date|clause_no|cert", value},
@@ -326,7 +386,10 @@ categories 四桶（#187——「没做 ≠ 做对了」，issue #9 口径）:
       证据补绑），无状态变迁则不落版本。重复校验幂等（无变迁不推进）。
       ③ 历史异常态（VALIDATING + 缺章——旧版无条件推进所致）的恢复走 §20
       recover_validating_state，禁止手改 db.json。
-      BLOCKER 清零（或登记 WAIVED+理由）才可 EXPORT
+      BLOCKER 清零才可 EXPORT（无通用豁免通道——每类 BLOCKER 走各自出口：
+      矩阵 blocking→set_matrix_override 覆写；失效/占位证据→换版或
+      NOT_APPLICABLE+Human receipt；写作验收→只能补写；审核面 BLOCKER→
+      RT 关单。口头豁免不落在任何审计面，见 Skill p6-validation.md 出口表）
       （#86 摩擦 #10 清偿：REVIEWING 是导出时自动补齐的瞬态——单次 export 内部
       经 Drafting→Validating→Reviewing→ReadyToExport→Exported 逐态补链，
       不会作为可观察的停泊状态出现在两次调用之间；人工审面是三门
@@ -368,7 +431,8 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
          ——标书缺资质证书图是废标级事故）
        · 版面适配：宽超内容区 6 英寸等比缩放（A4 安全面）
      - 标题行：# / ## … → 剥号加粗段（不再字面输出井号）
-out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blockers:0, waived:[VF-*]},
+out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blockers:0, waived:[]},
+       （waived 恒空——预留字段，无通用豁免通道；#508）
        tables_written, table_kinds:[...], forms_written, form_titles:[...],
        agent_waivers:[{ gate, actor, actor_type, method, human_confirmed, at, reason }](#277),
        human_review_complete(bool)(#277), warnings[],
@@ -573,7 +637,7 @@ in : { project_id, length_profile?("practical"|"standard"|"conservative"|"maximu
        target_total_chars?(1000..=5000000, 直接给字数覆盖档位),
        max_reqs_per_leaf?(1..=50, 缺省 8),
        package?(#316 选包建纲——PKG id「PKG-02」/原文标签「第2包」/纯序号「2」
-       三口径任一；先用 §23 list_packages 查识别结果；共用条款自动进纲；
+       三口径任一；先用 §24 list_packages 查识别结果；共用条款自动进纲；
        「投全部」= 每包各建一个项目——单存储单大纲的边界，如实呈现),
        project_version }
        三者优先（#287）：target_total_chars 显式给 → 用它；length_profile
@@ -1221,6 +1285,69 @@ out: { file_id, file_name,
       substantive=true 后重跑 extract_requirements）；不改抽取逻辑；无 UI。
 ```
 
+## 22-A. get_requirement_provenance（#285② · REQ→原文溯源 · 只读）
+```
+in : { project_id, req_id }
+out: { project_id, req_id, category, clause_no, substantive(bool——params.star
+       ?? params.substantive ?? false), statement, marked_by, source_file,
+       anchors:[{ file, kind, locator, excerpt,
+                  block_idx(page/line——块位三级真源：
+                    ① Anchor.block_idx（#285② 起抽取时回填）→ resolved_via=
+                       "backfilled"
+                    ② 旧快照锚按 (locator, excerpt) 精确匹配兜底 →
+                       "fallback_match"
+                    ③ 解析不到 → null（跨版本锚失效，诚实可见）→
+                       "unresolved"；文件未解析 → "file_not_parsed"),
+                  page, line(page/line 从 locator 解析——PDF 面；DOCX 章节
+                  路径面为 null) }],
+       next(anchors 空 = "本 REQ 无锚点（合成/人工件）"；
+            否则提示 get_block_requirements(block_idx) 反查原文上下文) }
+```
+> **geometric（quads 页面坐标）不产出**——#285② 不做 mdcore 依赖；几何
+> 投影由 mdcore overlay-pdf 承担（本工具给 block_idx，视图层拿它去
+> mdcore 侧查几何）。多文件多锚形态（GT-07 双锚点）逐锚回显。
+> 无状态门（只读，route_project 项目路由即可）。
+
+## 22-B. get_block_requirements（#285② · 块→REQ 反查 · 只读）
+```
+in : { project_id, file_id, block_idx(0 基块序——get_document_chunks 的
+       chunks[].block_idx 同一序) }
+out: { project_id, file_id, file_name, block_idx,
+       kind(块类型小写), locator, page, line, text(块原文), in_table,
+       verdict(Agent 标记面——未标记 = null：无结论不是「noise」，是
+               「还没看过」；标记来源优先，无标记块由 mark 面兜底),
+       req_ids(派生索引聚合——反查索引现算不持久化),
+       marked_by, next(有 REQ → 提示 get_requirement_provenance 查溯源；
+               无 REQ → 提示 submit_block_marks 补标或修抽取) }
+```
+> 无 REQ 块照常返回（req_ids: []）——「这段原文没被抽成任何要求」可见。
+> 越界 block_idx → E_NOTFOUND（消息带本文件总块数）。
+
+## 22-C. get_annotation_overlay（#285② · 视图层 overlay 数据面 · 只读）
+```
+in : { project_id, file_id, page?(可选——只取该页块，PDF 面；省略 = 全文件) }
+out: { project_id, file_id, file_name,
+       total_blocks, req_bearing_blocks, suspected_miss_blocks,
+       truncated(明细 > 200 块截断——计数全量、明细截断，按 page 分页取),
+       overlay:[{ block_idx, page, line, locator, text,
+                  req_ids,
+                  semantic("emphasis"——★真值块（招标人明示强调，废标线
+                           信号；#285① star_coverage 同源双腿匹配）；
+                           "requirement"——有 REQ 锚定；同块兼有时 emphasis
+                           优先——招标人的强调信号高于我方抽取信号；
+                           其余 null——无信号，视图层不上色),
+                  status("valid"——当前抽取快照内；锚失效检测等文档重导
+                           面先恒 valid，诚实注明),
+                  suspected_miss(bool——#285① missing 块位，与 get_star_
+                           coverage 同源直接复用，两工具口径恒一致) }],
+       warnings(截断提示 + suspected_miss 计数提示),
+       next(无 REQ 锚定块 → 先 extract_requirements；否则视图层按
+            semantic 上色，suspected_miss 块先补标) }
+```
+> 对齐 mdcore OverlayMark 词汇（#239）——标书面只产出有数据源的两值
+> （emphasis/requirement）；渲染上色由视图层决定，本工具只给数据。
+> 无状态门（只读）。
+
 ## LT. list_tools（#279 行协议发现面 · 只读）
 ```
 in : {}（无参数、无状态前置——建项目前即可调）
@@ -1235,63 +1362,7 @@ out: { count, tools: [{ name, summary }...],
       全量）；本工具是 stdio 裸 JSON 行协议的发现面补口。
 ```
 
-## 22. recommend_length_profile（#287 篇幅档位推荐 · 只读）
-```
-in : { project_id }
-out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
-       profile_label, target_chars, approx_pages, confidence(high|medium|low),
-       reasons:[…逐信号一行——命中与未命中都写，用户可核对],
-       from_tender_spec: u32|null（招标文件明写篇幅——最高优先级信号）,
-       alternatives:[{profile,label,chars,pages,when}×4 全档位],
-       signals:{ scoring_detail_count, star_count, budget_yuan, tender_type,
-                 explicit_limit_chars },
-       next }
-窗口: REQUIREMENTS_EXTRACTED+ 含 Exported（只读——信号来自 REQ 面，建纲
-      前后均可查；条款集空 → E_STATE 先 extract）。
-语义: P3 建纲**前**调——把建议 + 理由 + alternatives 呈现给用户确认后
-      build_outline(length_profile=…)。**决策权在用户，Agent 只推荐**
-      （推荐可被覆盖——length_profile 四档任选或 target_total_chars 直给）。
-信号: ① 明写篇幅（锚文限值模式扫描——「不超过/最多/限制在…N 页/字」、
-      「N 页/字 以内」；页 × 844 换算）→ 覆盖一切推断；
-      ② 评分细则数（collect_scoring_rows 的 sub_items 总和——#252 预派生，
-      无需先建纲）：< 10 实用型 / 10-19 标准型 / 20-39 保险型 / ≥ 40 极限型；
-      ③ 修正项任一命中上调一档（饱和极限型）：★条款 > 30（params.star
-      标记面——#285 star_scan 字面真值口径在其 PR 合并后接入，两口径
-      档位结论等价）/ 预算 > 1000 万（amount_wan 最大值）/ 工程类
-      （项目名 + 锚文关键词推断）；多标段无引擎面信号——Agent 显式选档。
-置信度: 明写 → high；细则 ≥ 10 → high；1-9 → medium；0 → low
-      （未识别评分表——按实用型兜底，用户务必确认）。
-四档: Practical 400,000≈474页 / Standard 800,000≈948页 /
-      Conservative 1,200,000≈1422页（默认——用户裁定 2026-11-06）/
-      Maximum 2,500,000≈2963页（接近装订上限：一本胶装 ≈ 500 页，
-      2000 页 4 册；3-7 天评 20-50 家——起草成本极高，是用户显式选择）。
-门禁联动: E_TOTAL_CHARS_BELOW_MIN 按 outline_total_chars()（配额总和
-      = 选中档位目标）动态判——档位化后自动按选中档生效（非固定 844,000）。
-```
-
 ## 23. register_addendum_changes（#319① 补遗变更登记 · 起草后补遗的主入口）
-
-## 26. list_packages（#316 分包清单 · 只读）
-
-> 背景：真实招标常分包（batch2 实证：`…-第2包.doc`），一包一投或全投；
-> 引擎在 extract_requirements 时按三形态识别（文件名/章节结构/分包清单
-> 表格），本工具是识别结果与选包状态的唯一查询面。
-
-```
-in : { project_id }
-out: { detected, items:[{ id:"PKG-01", label:"第1包", kind:"包"|"标段", number,
-       req_count, sources["filename:…"|"chapter:…"|"table:…"], selected }],
-       shared_req_count(共用条款数——选任何包都进纲), total_requirements,
-       selected_package:{id,label,kind,number}|null,
-       usage(信息性提示：选包走 build_outline 的 package 参数),
-       status, project_version }
-语义: 纯读、无状态门（REQUIREMENTS_EXTRACTED+ 含 Exported——抽取时落
-      注册表，选包前后均可查）。无分包结构 → detected=0/items 空（诚实
-      空面，不是错误）。
-错误: E_NOTFOUND（project 路由失败）
-```
-
-
 ```
 in : { project_id,
        changes:[{ req_id?("REQ-xxxx"——value_changed/requirement_removed 必填；
@@ -1336,7 +1407,116 @@ out: { changes:[{ id(AC-xxxx), req_id, change_type, old_text, new_requirement,
       （断点恢复时「哪些章节还没追上补遗」一眼可见）。
 ```
 
-## 25. rewrite_section_partial（#319②+③ 指令执行：局部改写 + 局部复验）
+## 24. list_packages（#316 分包清单 · 只读）
+
+> 背景：真实招标常分包（batch2 实证：`…-第2包.doc`），一包一投或全投；
+> 引擎在 extract_requirements 时按三形态识别（文件名/章节结构/分包清单
+> 表格），本工具是识别结果与选包状态的唯一查询面。
+
+```
+in : { project_id }
+out: { detected, items:[{ id:"PKG-01", label:"第1包", kind:"包"|"标段", number,
+       req_count, sources["filename:…"|"chapter:…"|"table:…"], selected }],
+       shared_req_count(共用条款数——选任何包都进纲), total_requirements,
+       selected_package:{id,label,kind,number}|null,
+       usage(信息性提示：选包走 build_outline 的 package 参数),
+       status, project_version }
+语义: 纯读、无状态门（REQUIREMENTS_EXTRACTED+ 含 Exported——抽取时落
+      注册表，选包前后均可查）。无分包结构 → detected=0/items 空（诚实
+      空面，不是错误）。
+错误: E_NOTFOUND（project 路由失败）
+```
+
+
+
+## 25. 业绩材料库四工具（#315 · 跨项目业绩资产）
+
+> 背景：#269 黑盒实测「剩余唯一墙 = 业绩材料缺口」。业绩是投标人的**长期
+> 资产**（评标常占 10-20 分），不是单项目的输入——库文件在项目工作区之外
+> （路径解析：`BID_PERF_LIB` 环境变量 → 用户级默认位
+> Unix `$HOME/.mang/performance-library.json` / Windows
+> `%APPDATA%\mang\performance-library.json` → 内存态（本会话可用、不落盘，
+> 响应面 `library_persisted:false` 如实报告）。原子写（tmp+rename）+
+> schema_version 门 + 损坏拒载不重建（对齐 store_io 纪律）。
+
+### 23-A. register_performance（登记 · 无项目路由）
+```
+in : { entries?:[{
+         name*, client*, amount_wan*(万元 >= 0), completed_on*(YYYY-MM-DD),
+         categories?:[标签 <= 20], materials?:[材料路径 <= 20],
+         key_points?:[亮点 <= 20], subject_name?(条目级乙方主体) }] <= 200 条,
+       owner_name?(库主 = 投标人主体名——证据 subject_name 默认源，一次登记全程生效) }
+out: { added:[PERF-xxxx], added_count, deduplicated:[PERF-xxxx],
+       total_entries, owner_name, library_path, library_persisted, next }
+幂等: 语义四元组 (name, client, amount_wan, completed_on) 归一空白后命中
+      既有条目 → 回显既有 id 不重复登记。
+原子: 一条非法整批拒（零副作用）——错误文案带 entries[i] 定位。
+窗口: 无项目路由（建项目前可维护库——先有资产再投标）。
+```
+
+### 23-B. list_performance（只读 · 无项目路由）
+```
+in : { filters?:{ category?(标签子串), keyword?(name/client 包含),
+                  min_amount_wan?, max_amount_wan?, since?(完成日期下界 ISO) },
+       limit?(1..=1000，缺省 100——越界显式拒不静默 clamp) }
+out: { entries:[{ perf_id, name, client, amount_wan, completed_on,
+                  categories, materials_count, key_points,
+                  client_type(推断展示面) }], returned, owner_name,
+       library_path, library_persisted }
+```
+
+### 23-C. recommend_performance（匹配推荐 · 只读）
+```
+in : { project_id*,
+       budget_wan?(项目预算万元——仓内无预算结构面，显式入参不猜；缺省该因子弃权),
+       base_date?(评标基准日 ISO；不传 = 系统今日，signals.base_date_source 注明),
+       client_type?(government|soe|private|other——采购人类型，缺省弃权),
+       focus?(额外侧重关键词——拼进匹配语料),
+       top_k?(1..=20，缺省 10) }
+out: { recommendations:[{ perf_id, name, score(0..=1),
+                          factors:[{factor, score, available, note}×4],
+                          reasons:[逐因子人读依据] }],
+       library_total, signals:{ base_date, base_date_source, budget_wan,
+                                client_type, focus },
+       suggested_section(SEC-xxxx|null——业绩/类似项目标题的叶章节),
+       next }
+打分: 四因子确定性加权——标签重叠 40%（entry.categories 子串命中语料：
+      项目名 + REQ 陈述 + 评分项 criteria + focus；命中 3 个标签满分）/
+      金额规模 30%（min/max 比值：>= 0.5 满分 / <= 0.1 零分 / 之间线性）/
+      近三年 20%（完成日距基准日 <= 3 年满分、3-5 年半分、更早零分）/
+      客户类型 10%（同型满分 / 异型零分 / 任一侧未判定弃权 0.5）。
+      **缺信号因子弃权重归一**（available=false 不参与分母——「不知道预算」
+      不惩罚业绩）。分数是排序依据不是正确率，选哪几条由用户/Agent 裁决。
+排序: 分数降序，同分按 perf_id 字典序（确定性——同输入恒同序）。
+窗口: REQUIREMENTS_EXTRACTED+（信号来自 REQ 面）。
+```
+
+### 23-D. write_performance_section（一键写入 · 写）
+```
+in : { project_id*, section_id*(目标叶章节 SEC-xxxx),
+       perf_ids*(PERF-* 清单 >= 1),
+       bid_open_date?(开标日 ISO——证据有效性裁决基准日；缺省系统今日),
+       project_version? }
+out: { section_id, segment_id, changed, deduplicated, segment_chars,
+       evidence_registered:[{ perf_id, ev_id, source_file, deduplicated }],
+       materials_pending:[{ perf_id, materials, reason }],
+       bindings:[{ ev_id, req_ids }],
+       warnings, project_version }
+流程: ① 材料文件名（materials 的 file_name 分量）比对已导入 TF——命中 →
+      register_evidence（kind=performance；subject_name = 条目级 >
+      库主 owner_name > 工作区 bidder-profile.json 的 company_name；
+      域层语义位查重天然幂等，重跑不重复登记）；
+      ② 绑定业绩类 REQ（陈述含 业绩/类似项目）→ bind_evidence + 矩阵重算；
+      ③ 单段写入：业绩表（GFM——单元格转义）+ 逐条描述段（key_points +
+      [EV-*] 引用），幂等键 `perf-section:<section_id>`（同批重跑 no-op）。
+诚实: 材料未导入/无主体名 → materials_pending 逐条列明（正文照写、证据
+      不伪造——导入材料后重跑自动补登记）；readiness 门（可用业绩证据
+      < 3，MIN_PERFORMANCE_COUNT）拦写入并把材料指引带全。
+窗口: MATRIX_READY+（append_section_segment / register_evidence /
+      bind_evidence 三组成工具的同窗口交集）。
+```
+
+## 26. rewrite_section_partial（#319②+③ 指令执行：局部改写 + 局部复验）
 ```
 in : { project_id, directive_id("RD-xxxx"),
        rewrites?:[{ segment_id("SEG-xxxx"), content(该段重写后全文),
@@ -1372,6 +1552,74 @@ out: { directive:{…处置后状态…}, section_id, dry_run,
       E_CONFLICT（expected_version 过期——无部分写入）。
 状态: MATRIX_READY+ 含 Exported（与 register 同窗口）。
 ```
+## 27. check_scoring_coverage（#318 评标细则逐条响应覆盖检查 · 只读）
+```
+in : { project_id }
+out: { project_id,
+       summary: { criteria_total,          评分细则总数（评分项+否决项都进报告）
+                  criteria_with_points,    拆出 ≥1 点的细则数（无枚举形态的
+                                            细则如实计 0 点——notes 提示人工读）
+                  criteria_unmapped,       无章节映射的细则数（点覆盖不可判——
+                                            #224 unmapped 同面，先建纲/映射）
+                  points_total, points_covered,
+                  coverage_ratio,          covered/total（无点时 0——不伪装 100%）
+                  suggested_deduction },   Σ(满分×未覆盖点占比)——启发式参考值
+       criteria: [ { criterion_id, criteria_excerpt(≤40字), max_score,
+                     mapped_sections,
+                     points: [{ point, hit_section }],   hit_section=null 即漏点
+                     covered, total, suggested_deduction } ],
+       notes[], next }
+拆点: 细则原文（score_rules，缺省回退 criteria 摘录）的字面枚举挖掘——
+      触发词（需包含/应包括/须具备/应提供…18 词族）后的顿号/连接词
+      枚举；无触发词回退顿号串形态（≥2 合法段）。合法段 = 2..=12 字、
+      CJK 主导、无句读。确定性、可复现——**无语义理解**（语义等价表述
+      「架构设计」vs「总体架构」不识别，notes 明示）。
+覆盖: 点对细则映射章节（ScoringItem.mappings ∪ 持久化 ScoringMapping
+      账本——与 score 工具同口径）做**正文**子串命中（纯正文——建纲
+      标题不算：#252 评分驱动建纲的 L2 标题派生自细则原文，标题自命中
+      是伪覆盖；正文自带的标题行照常命中）。命中位报到首个命中章节。
+建议扣分: max_score × 未覆盖点/总点（无点或无分值不计——不可判 ≠ 全扣）。
+窗口: 与 get_coverage_report 同族只读面——建纲后可查（映射在场）；
+      起草后复跑看覆盖收敛（next 给补写指引）。
+明确不做: 不自动补写（只报告——补写走 rewrite_section_segment /
+      append_section_segment 后复跑本工具）；不做语义判档（#186 判档
+      接入前的诚实口径）。
+
+## 28. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+
+```
+in : { project_id }
+out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
+       profile_label, target_chars, approx_pages, confidence(high|medium|low),
+       reasons:[…逐信号一行——命中与未命中都写，用户可核对],
+       from_tender_spec: u32|null（招标文件明写篇幅——最高优先级信号）,
+       alternatives:[{profile,label,chars,pages,when}×4 全档位],
+       signals:{ scoring_detail_count, star_count, budget_yuan, tender_type,
+                 explicit_limit_chars },
+       next }
+窗口: REQUIREMENTS_EXTRACTED+ 含 Exported（只读——信号来自 REQ 面，建纲
+      前后均可查；条款集空 → E_STATE 先 extract）。
+语义: P3 建纲**前**调——把建议 + 理由 + alternatives 呈现给用户确认后
+      build_outline(length_profile=…)。**决策权在用户，Agent 只推荐**
+      （推荐可被覆盖——length_profile 四档任选或 target_total_chars 直给）。
+信号: ① 明写篇幅（锚文限值模式扫描——「不超过/最多/限制在…N 页/字」、
+      「N 页/字 以内」；页 × 844 换算）→ 覆盖一切推断；
+      ② 评分细则数（collect_scoring_rows 的 sub_items 总和——#252 预派生，
+      无需先建纲）：< 10 实用型 / 10-19 标准型 / 20-39 保险型 / ≥ 40 极限型；
+      ③ 修正项任一命中上调一档（饱和极限型）：★条款 > 30（params.star
+      标记面——#285 star_scan 字面真值口径在其 PR 合并后接入，两口径
+      档位结论等价）/ 预算 > 1000 万（amount_wan 最大值）/ 工程类
+      （项目名 + 锚文关键词推断）；多标段无引擎面信号——Agent 显式选档。
+置信度: 明写 → high；细则 ≥ 10 → high；1-9 → medium；0 → low
+      （未识别评分表——按实用型兜底，用户务必确认）。
+四档: Practical 400,000≈474页 / Standard 800,000≈948页 /
+      Conservative 1,200,000≈1422页（默认——用户裁定 2026-11-06）/
+      Maximum 2,500,000≈2963页（接近装订上限：一本胶装 ≈ 500 页，
+      2000 页 4 册；3-7 天评 20-50 家——起草成本极高，是用户显式选择）。
+门禁联动: E_TOTAL_CHARS_BELOW_MIN 按 outline_total_chars()（配额总和
+      = 选中档位目标）动态判——档位化后自动按选中档生效（非固定 844,000）。
+```
+
 ## 12-A. assign_revision（#321/A-23 · RT 认领/改派）
 ```
 in : { project_id, rt_id(RT-xxxx), owner(修订执行者——任意操作者面，

@@ -297,7 +297,7 @@ fn per_file_waiver_releases_parse_failed_and_is_queryable() {
     }
 
     // 确认第二份 → 不再阻塞（验收 C：逐件确认放行）
-    let rec2 = store
+    store
         .record_addendum_waiver(&fid_bad2, "扫描原件比对，条款与正文一致", &bid_domain::TrustedPrincipal::human("l3-lead"))
         .unwrap();
     let r = check_draft_readiness(&store, "SEC-0001");

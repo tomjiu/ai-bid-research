@@ -267,6 +267,7 @@ fn count_occurrences(hay: &str, needle: &str) -> usize {
 // ---------------------------------------------------------------- 主测试
 
 #[test]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
 fn real_corpus_full_chain() {
     // ---- 0. 语料在位（缺件 → SKIP 横幅，不静默假装通过） ----
     let paths: Vec<PathBuf> = CORPUS.iter().map(|(n, _)| files_dir().join(n)).collect();

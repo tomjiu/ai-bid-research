@@ -154,8 +154,6 @@ struct Verdict {
     label: String,
     /// 信封层错误码（`Err` 分支；`Ok` 分支为 `None`）。
     code: Option<String>,
-    /// 逐件失败清单（E_PARTIAL 的 `item_errors`；`Ok` 分支为空）。
-    item_errors: Vec<String>,
     /// 成功面（`Ok` 的 result，或 E_PARTIAL 随错误携带的 `data`）。
     data: Value,
     /// 红线：坏件被判成成功且**任何地方都没有失败登记**。
@@ -175,7 +173,6 @@ fn classify(label: &str, reply: ToolReply) -> Verdict {
             Verdict {
                 label: label.to_string(),
                 code: None,
-                item_errors: Vec::new(),
                 data: out.result.clone(),
                 silent_success: !registered,
             }
@@ -183,16 +180,13 @@ fn classify(label: &str, reply: ToolReply) -> Verdict {
         ToolReply::Err { error, .. } => {
             // 错误码一律取自 `ToolError::code()`（契约字面量——不解析 message）
             let code = error.code().to_string();
-            let (item_errors, data) = match &error {
-                ToolError::EPartial { item_errors, data, .. } => {
-                    (item_errors.clone(), data.clone().unwrap_or(Value::Null))
-                }
-                _ => (Vec::new(), Value::Null),
+            let data = match &error {
+                ToolError::EPartial { data, .. } => data.clone().unwrap_or(Value::Null),
+                _ => Value::Null,
             };
             Verdict {
                 label: label.to_string(),
                 code: Some(code),
-                item_errors,
                 data,
                 silent_success: false, // 信封层已响亮拒绝——不是静默
             }

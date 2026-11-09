@@ -789,7 +789,8 @@ fn readback_docx_dark_bid_scrubbed_and_structure_intact() {
 
 // ---------------------------------------------------------------- 2. pdf 回读（副面）
 
-/// PDF 回读通道（引擎侧公共路径 / 纯 Rust 兜底）。
+/// PDF 回读通道（引擎侧公共路径——pdfium/pdftotext，由 `parse_file` 裁决；
+/// 纯 Rust 兜底由 `parse_file` 内部承载，测试侧不再单建通道）。
 ///
 /// 纪律：**有首选路就用首选路**（引擎侧也是这个口径——`parse_file` 的
 /// pdf 面先 pdfium/pdftotext、最后纯 Rust 兜底）。通道全断 → SKIP
@@ -797,8 +798,6 @@ fn readback_docx_dark_bid_scrubbed_and_structure_intact() {
 enum PdfChannel {
     /// 引擎侧解析（pdfium / pdftotext，由 `parse_file` 裁决）。
     Engine(bid_parse::ParsedFile),
-    /// 纯 Rust 兜底（bid_parse::pdf_text 直读字节——零外部依赖）。
-    Fallback(bid_parse::pdf_text::PdfText),
 }
 
 fn read_pdf(path: &Path, name: &str) -> Option<PdfChannel> {
@@ -819,13 +818,11 @@ impl PdfChannel {
     fn label(&self) -> &'static str {
         match self {
             PdfChannel::Engine(_) => "引擎通道（pdfium/pdftotext）",
-            PdfChannel::Fallback(_) => "纯 Rust 兜底",
         }
     }
     fn pages(&self) -> usize {
         match self {
             PdfChannel::Engine(pf) => pf.pages,
-            PdfChannel::Fallback(t) => t.pages.len(),
         }
     }
     fn text(&self) -> String {
@@ -836,7 +833,6 @@ impl PdfChannel {
                 .map(|b| b.text.as_str())
                 .collect::<Vec<_>>()
                 .join("\n"),
-            PdfChannel::Fallback(t) => t.lines().join("\n"),
         }
     }
 }

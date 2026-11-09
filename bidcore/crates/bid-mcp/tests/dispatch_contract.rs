@@ -28,7 +28,7 @@ fn tool_names_are_the_contract_twenty() {
     // get_coverage_report——全块覆盖：Agent 区间标记 + 引擎覆盖检查）= 24；
     // #226 增 1（set_matrix_override——否决项死锁的人工出口）= 25；
     // #243 增 1（recover_validating_state——历史异常态恢复出口）= 26
-assert_eq!(TOOL_NAMES.len(), 45, "工具面必须恰为 44 个（21 + #219 全块覆盖三工具 + #226 否决项死锁出口 + #243 恢复出口 + #254 分段三工具 + #279 行协议发现面 + #287 篇幅档位推荐 + #285① ★漏标检测 + #285② 块级双向索引三工具 + #319 补遗后增量重写两工具 + #321 RT 生命周期/分工/重开/参数应答七工具）");
+assert_eq!(TOOL_NAMES.len(), 50, "工具面必须恰为 44 个（21 + #219 全块覆盖三工具 + #226 否决项死锁出口 + #243 恢复出口 + #254 分段三工具 + #279 行协议发现面 + #287 篇幅档位推荐 + #285① ★漏标检测 + #285② 块级双向索引三工具 + #319 补遗后增量重写两工具 + #321 RT 生命周期/分工/重开/参数应答七工具 + #315 业绩库四工具）");
     for name in TOOL_NAMES {
         assert!(!name.is_empty());
     }
@@ -104,7 +104,7 @@ fn json_roundtrip_failure_is_typed() {
 fn tools_schema_lists_all_twenty() {
     let v = bid_mcp::tools_schema();
     let arr = v["tools"].as_array().unwrap();
-assert_eq!(arr.len(), 45, "tools/list 必须列出全部 45 个工具");
+assert_eq!(arr.len(), 50, "tools/list 必须列出全部 50 个工具");
     let implemented: Vec<&str> = arr
         .iter()
         .filter(|t| t["implemented"] == true)
@@ -157,6 +157,8 @@ assert_eq!(arr.len(), 45, "tools/list 必须列出全部 45 个工具");
             "get_requirement_provenance",
             "get_block_requirements",
             "get_annotation_overlay",
+            // #318 评分细则逐条响应覆盖检查（只读实装）
+            "check_scoring_coverage",
             // #226 层 1：否决项死锁的人工出口
             "set_matrix_override",
             // #243：历史异常态（VALIDATING+缺章）的受支持恢复出口
@@ -182,6 +184,11 @@ assert_eq!(arr.len(), 45, "tools/list 必须列出全部 45 个工具");
             "advance_task",
             "reopen_section",
             "set_param_responses",
+            // #315 业绩材料库四工具（perf_tools.rs——登记/列表/推荐/写入）
+            "register_performance",
+            "list_performance",
+            "recommend_performance",
+            "write_performance_section",
         ]
     );
     // 描述面：新工具不得是 unknown（describe 遗漏即挂）
@@ -200,4 +207,98 @@ assert_eq!(arr.len(), 45, "tools/list 必须列出全部 45 个工具");
     }
     let lt = arr.iter().find(|t| t["name"] == "list_tools").unwrap();
     assert_ne!(lt["description"], "unknown", "#279 list_tools 描述必须在场: {lt}");
+}
+
+// ---------------------------------------------------------------- #522（C-22）：工具面二分不变量
+
+/// 工具面必须二分：`TOOL_NAMES` == 各状态 allowed_tools 并集 ∪ UNGATED_TOOLS，
+/// 且两集不相交。
+///
+/// 防的是 C-22 的复发形态：新工具接线时不设状态门（合法——如 #285② 对账
+/// 三工具），但也没登记进 UNGATED_TOOLS → get_bid_project_state 的
+/// allowed_next_tools/ungated_tools 两字段都看不到它 → Agent 对「当前可调
+/// 面」的回显出现缺口。本测试与 tool-surface 的派生面纪律互补：
+/// tool-surface 管「加工具同步派生面」，本测试管「加工具登记门归属」。
+#[test]
+fn tool_names_partition_into_gated_and_ungated() {
+    use bid_domain::{ProjectStatus, UNGATED_TOOLS};
+    use std::collections::BTreeSet;
+
+    let statuses = [
+        ProjectStatus::Draft,
+        ProjectStatus::FilesImported,
+        ProjectStatus::RequirementsExtracted,
+        ProjectStatus::MatrixReady,
+        ProjectStatus::EvidenceBound,
+        ProjectStatus::Drafting,
+        ProjectStatus::Validating,
+        ProjectStatus::Reviewing,
+        ProjectStatus::ReadyToExport,
+        ProjectStatus::Exported,
+    ];
+    let gated: BTreeSet<&str> = statuses
+        .iter()
+        .flat_map(|s| s.allowed_tools().iter().copied())
+        .collect();
+    let ungated: BTreeSet<&str> = UNGATED_TOOLS.iter().copied().collect();
+
+    // ① 不相交：登记进 UNGATED_TOOLS 的工具不得同时出现在任何状态门表
+    //    （否则 guard_tool 语义与「无门」声明矛盾）。
+    let overlap: Vec<&str> = gated.intersection(&ungated).copied().collect();
+    assert!(
+        overlap.is_empty(),
+        "UNGATED_TOOLS 与状态门表重叠（矛盾登记）: {overlap:?}"
+    );
+
+    // ② 全覆盖：每个 TOOL_NAMES 工具要么进某状态门表、要么登记无门集。
+    //    漏登即回显缺口（C-22 原始形态）。
+    let union: BTreeSet<&str> = gated.union(&ungated).copied().collect();
+    let all: BTreeSet<&str> = TOOL_NAMES.iter().copied().collect();
+    let missing: Vec<&str> = all.difference(&union).copied().collect();
+    assert!(
+        missing.is_empty(),
+        "以下工具既不在任何状态门表也不在 UNGATED_TOOLS——回显缺口，请登记归属: {missing:?}"
+    );
+
+    // ③ 无幽灵：门表/无门集里的名字必须是真工具（防拼写错成永久死条目）。
+    let ghosts: Vec<&str> = union.difference(&all).copied().collect();
+    assert!(
+        ghosts.is_empty(),
+        "门表/无门集存在 TOOL_NAMES 之外的幽灵名: {ghosts:?}"
+    );
+
+    // ④ 数量对账：44 = 状态门并集 + 无门集（演进时同步改这里——与
+    //    tool_names_are_the_contract 的计数断言同款纪律）。
+    assert_eq!(all.len(), 50);
+    assert_eq!(gated.len() + ungated.len(), 50, "门表并集 {} + 无门 {} 应 == 50", gated.len(), ungated.len());
+}
+
+/// ungated_tools 回显在位且与状态无关（#522 验收：任何状态下值一致）。
+#[test]
+fn project_state_echoes_ungated_tools() {
+    for st in ["DRAFT", "FILES_IMPORTED", "MATRIX_READY", "DRAFTING", "EXPORTED"] {
+        match call("get_bid_project_state", json!({ "project_status": st })) {
+            bid_mcp::ToolReply::Ok(out) => {
+                let ungated = out.result["ungated_tools"].as_array().unwrap();
+                let names: Vec<&str> =
+                    ungated.iter().map(|v| v.as_str().unwrap()).collect();
+                assert_eq!(
+                    names,
+                    bid_domain::UNGATED_TOOLS.to_vec(),
+                    "{st} 态 ungated_tools 应与单一真源一致"
+                );
+                // 回显与状态门不重叠（同一份不变量的运行面复证）
+                let allowed: Vec<&str> = out.result["allowed_next_tools"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap())
+                    .collect();
+                for t in &names {
+                    assert!(!allowed.contains(t), "{st} 态 {t} 不应同时出现在两清单");
+                }
+            }
+            bid_mcp::ToolReply::Err { error, .. } => panic!("{st} 态查询失败: {error}"),
+        }
+    }
 }

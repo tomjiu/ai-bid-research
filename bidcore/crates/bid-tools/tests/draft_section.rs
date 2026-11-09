@@ -336,7 +336,7 @@ fn build_input_rejects_unknown_section() {
 
 #[test]
 fn build_input_strips_ghost_reqs_with_warning() {
-    let mut svc = svc_matrix_ready("ghost-req");
+    let svc = svc_matrix_ready("ghost-req");
     let sid = first_leaf(&svc);
     let (input, warnings) = build_section_input(
         svc.store(), &sid,
