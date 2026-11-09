@@ -5,6 +5,10 @@
 
 用法示例::
 
+    # 从本地源采集公告（JSON/JSONL 文件或目录）→ 规范化 → 去重 → 入库
+    python main.py collect --source announcements/ --dry-run
+    python main.py collect --source announcements/ --db data/bids.db
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -33,6 +37,8 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
+from src.collect import dedupe_records, load_records
+from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
 from src.report.generator import ReportGenerator
 from src.storage.database import BidDatabase
@@ -100,6 +106,37 @@ def build_parser() -> argparse.ArgumentParser:
             "招标信息 SQLite 数据库路径；不指定时若默认路径"
             f" {DEFAULT_DB_PATH} 存在则自动接入"
         ),
+    )
+
+    # collect 子命令（#601 批次 A：采集面）
+    collect = sub.add_parser(
+        "collect",
+        help="从本地源采集公告（JSON/JSONL）→ 规范化 → 去重 → 入库",
+    )
+    collect.add_argument(
+        "--source",
+        type=Path,
+        required=True,
+        help=(
+            "公告源路径：.json/.jsonl 文件，或包含它们的目录"
+            "（目录源按文件名排序装载）"
+        ),
+    )
+    collect.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"目标数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    collect.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="演练模式：装载+去重+打印报告，但不写库",
+    )
+    collect.add_argument(
+        "--strict",
+        action="store_true",
+        help="严格模式：遇到坏文件/坏记录即中止（默认登记后继续）",
     )
 
     # db 子命令
@@ -220,6 +257,44 @@ async def run_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_collect(args: argparse.Namespace) -> int:
+    """执行 collect 子命令：装载 → 去重 → 入库。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 源不可读/严格模式下遇到坏数据）。
+    """
+    try:
+        loaded = load_records(args.source, skip_invalid=not args.strict)
+    except (SourceError, ValueError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+    deduped = dedupe_records(loaded.records)
+
+    print(f"源装载：读取 {loaded.files_read} 个文件，"
+          f"成功 {len(loaded.records)} 条，失败 {len(loaded.failures)} 条")
+    for failure in loaded.failures:
+        print(f"  ✗ {failure['origin']}: {failure['error']}")
+    print(f"去重：去除 {deduped.removed} 条重复"
+          f"（bid_id {deduped.by_bid_id} / 链接 {deduped.by_source_url}"
+          f" / 指纹 {deduped.by_fingerprint}），"
+          f"待入库 {len(deduped.unique)} 条")
+    for dup in deduped.duplicates:
+        print(f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件（{dup['reason']}）")
+
+    if args.dry_run:
+        print("演练模式：未写库（--dry-run）")
+        return 0
+
+    with BidDatabase(args.db) as db:
+        saved = db.import_bids([r.to_bid_row() for r in deduped.unique])
+    print(f"已入库 {saved} 条 → {args.db}")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -312,6 +387,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "report":
         return asyncio.run(run_report(args))
+    if args.command == "collect":
+        return run_collect(args)
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":

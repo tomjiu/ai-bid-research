@@ -43,16 +43,26 @@ jobs:
       - name: 运行 pytest
         run: python -m pytest tests/ -v
 
-      - name: CLI 冒烟（离线全链——help/templates/db import→stats→query）
-        # 与 PR 描述的本地冒烟口径一致：三个子命令组真跑一遍。
-        # db 链路用 $RUNNER_TEMP 隔离（不碰仓库工作区、零残留）。
+      - name: CLI 冒烟（离线全链——help/templates/collect/db import→stats→query）
+        # 与 PR 描述的本地冒烟口径一致：四个子命令组真跑一遍。
+        # db/collect 链路用 $RUNNER_TEMP 隔离（不碰仓库工作区、零残留）。
         run: |
           set -e
           python main.py --help > /dev/null
           python main.py templates | grep -q "bid_extraction"
+          # collect 链路（#601 批次 A）：源装载→去重→入库→查询
+          mkdir -p "$RUNNER_TEMP/announcements"
+          printf '[{"招标编号":"COL-001","项目名称":"ci-collect","预算金额":"1.2亿","发布日期":"2026年11月1日"},{"bid_id":"COL-001","project_name":"ci-collect-dup"}]' \
+            > "$RUNNER_TEMP/announcements/a.json"
+          printf '{"bid_id":"COL-002","项目名称":"ci-collect-二期"}\n' \
+            > "$RUNNER_TEMP/announcements/b.jsonl"
+          python main.py collect --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/collect.db" | grep -q "已入库 2 条"
+          python main.py db --query "ci-collect" --db "$RUNNER_TEMP/collect.db" | grep -q "COL-001"
+          python main.py collect --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/collect.db" --dry-run | grep -q "演练模式"
+          # db 链路
           printf '[{"bid_id":"SMOKE-001","project_name":"ci-smoke","source_url":"https://example.com/1","budget_wan":1.5,"deadline":"2026-12-31","requirements":["资质A"]}]' \
             > "$RUNNER_TEMP/smoke-import.json"
           python main.py db --import "$RUNNER_TEMP/smoke-import.json" --db "$RUNNER_TEMP/smoke.db" | grep -q "已导入 1 条"
           python main.py db --stats --db "$RUNNER_TEMP/smoke.db" | grep -q "共 1 条项目"
           python main.py db --query "ci-smoke" --db "$RUNNER_TEMP/smoke.db" | grep -q "SMOKE-001"
-          echo "CLI 冒烟：help / templates / db import→stats→query 全过"
+          echo "CLI 冒烟：help / templates / collect / db import→stats→query 全过"
