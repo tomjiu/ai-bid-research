@@ -549,6 +549,222 @@ pub fn score(
     }))
 }
 
+// ---------------------------------------------------------------- #603 批 A：治理面（人工决策驾驶舱）
+
+/// 五门读面元数据（展示序 = 三主门门序 → 两补遗门）。`note` 是门语义的
+/// 一句话口径（UI 副标题）；过门**裁决**（状态窗/门序/幂等）零重实现——
+/// 全在域层 record_review，本表只驱动读面展示。
+const GATE_META: [(bid_domain::review::Gate, &str, &str); 5] = [
+    (
+        bid_domain::review::Gate::MatrixApproval,
+        "矩阵定稿门",
+        "门序第一：条款响应矩阵定稿（MATRIX_READY+ 可过）",
+    ),
+    (
+        bid_domain::review::Gate::OutlineApproval,
+        "大纲定稿门",
+        "门序第二：章节树定稿（前置：矩阵门已过）",
+    ),
+    (
+        bid_domain::review::Gate::PreExportConfirm,
+        "导出前确认门",
+        "门序第三：导出前置确认（前置：前两门均过）",
+    ),
+    (
+        bid_domain::review::Gate::AddendumWaiver,
+        "补遗逐件确认门",
+        "L3 人工出口（#131/#379——逐件路径不再写本门）",
+    ),
+    (
+        bid_domain::review::Gate::NoAddendumConfirmed,
+        "无补遗全局确认门",
+        "#379 拆门——「本项目无补遗」全局显式确认",
+    ),
+];
+
+/// 写面门名解析——与工具面 parse_gate 同一合法值集（三主门 + addendum_
+/// waiver；no_addendum_confirmed 走 record_addendum_waiver 的
+/// confirm_no_addendum 路径，#603 批 C 接线）。壳侧只做入参早拒，
+/// 语义裁决仍全在工具/域层。
+fn gate_from_str(s: &str) -> Result<bid_domain::review::Gate, IpcError> {
+    use bid_domain::review::Gate;
+    match s {
+        "matrix_approval" => Ok(Gate::MatrixApproval),
+        "outline_approval" => Ok(Gate::OutlineApproval),
+        "pre_export_confirm" => Ok(Gate::PreExportConfirm),
+        "addendum_waiver" => Ok(Gate::AddendumWaiver),
+        other => Err(IpcError::bad_args(format!(
+            "gate 非法：{other}（合法值：matrix_approval|outline_approval|pre_export_confirm|addendum_waiver）"
+        ))),
+    }
+}
+
+/// GatePassRecord → json（读面形状与工具面 agent_waivers_json 同键同序——
+/// 单一真源防两处漂移；latest_pass 复用同一序列化）。
+fn gate_pass_json(p: Option<&bid_domain::review::GatePassRecord>) -> Value {
+    match p {
+        None => Value::Null,
+        Some(p) => json!({
+            "gate": p.gate.as_str(),
+            "actor": p.actor_id,
+            "actor_type": p.actor_type.as_str(),
+            "method": p.method,
+            "human_confirmed": p.human_confirmed,
+            "at": p.at,
+            "reason": p.reason,
+        }),
+    }
+}
+
+/// `bid.gates` —— 审核门台账（只读；#603 批 A）。
+///
+/// DomainStore 直读（`bid.outline` 先例——MCP 工具面无此整面视图）：
+/// 五门 approved 状态（`gate_approved` 同源）、每门最新过门记录
+/// （`latest_gate_pass`——追认后最新条翻 human 的判据位）、agent 豁免
+/// 清单（`agent_gate_passes`——human_confirmed=false 的门，导出警告与
+/// 追认清单素材）、`human_review_complete`（空账本或全 human → true）、
+/// reviews 裁决历史（倒序——REV/FND/RT 派生的审计面）。
+///
+/// 读面**无状态窗**：任何项目阶段都可看门态（早期态「三门都未过」本身
+/// 就是有效信息）；写面（[`gate_pass`]）才有域层状态窗裁决。
+pub fn gates(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let store = svc.store();
+    let project = store.project().map_err(map_domain_err)?;
+    let gates: Vec<Value> = GATE_META
+        .iter()
+        .map(|(g, title, note)| {
+            json!({
+                "gate": g.as_str(),
+                "title": title,
+                "note": note,
+                "approved": store.gate_approved(*g),
+                "latest_pass": gate_pass_json(store.latest_gate_pass(*g)),
+            })
+        })
+        .collect();
+    let agent_waivers: Vec<Value> = store
+        .agent_gate_passes()
+        .iter()
+        .map(|p| gate_pass_json(Some(*p)))
+        .collect();
+    let reviews: Vec<Value> = store
+        .reviews()
+        .iter()
+        .rev()
+        .map(|rv| {
+            json!({
+                "id": rv.id,
+                "gate": rv.gate.as_str(),
+                "decision": rv.decision.as_str(),
+                "reviewer": rv.reviewer,
+                "actor": rv.principal.as_ref().map(|p| json!({
+                    "actor_id": p.actor_id,
+                    "actor_type": p.actor_type.as_str(),
+                    "authentication_method": p.authentication_method,
+                })),
+                "findings": rv.findings,
+                "at": rv.at,
+                "reviewed_content_digest": rv.reviewed_content_digest,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "status": project.status.as_str(),
+        },
+        "gates": gates,
+        "human_review_complete": store.human_review_complete(),
+        "agent_waivers": agent_waivers,
+        "reviews": reviews,
+    }))
+}
+
+/// `bid.gate_pass` —— 人工过门（写面；#603 批 A——治理面写面首发）。
+///
+/// 流程（#182 宿主签发面——**不进 MCP 工具表，Agent 拿不到**）：
+/// 壳内真人经 UI 确认（门/裁决/理由/发现）→ 壳用服务态密钥签 receipt
+/// （scope 绑本门；#323 内容绑定当前章节树摘要——签发后章节被改 →
+/// 域层 ContentDrifted 拒，不假成功）→ 经
+/// `dispatch_with(record_review_gate)` 走真实工具面落账（与 bid-mcp-stdio
+/// 同源裁决：状态窗/门序/幂等/追认全在域层）→ 工具输出原样放 `gate_pass`
+/// 键（receipt 回执 / gates_approved / agent_waivers /
+/// human_review_complete / status）。
+///
+/// 参数：`gate`（见 [`gate_from_str`]）、`decision`（APPROVED|REJECTED——
+/// 工具面双形态解析）、`findings`（可选数组 `[{severity, code, message,
+/// section_id?}]`——Rejected 必须含 ≥1 BLOCKER，域层裁决）、`reason`
+/// （human 路径可选）、`actor_id`（宿主身份命名，缺省 `shell-operator`）、
+/// `project_version`（可选 CAS——乐观并发保护）。
+///
+/// 拒绝面：无 db.json → `not_found`；项目未到状态窗 / 门序未满足 /
+/// Rejected 无 BLOCKER / receipt 过期漂移 → 工具面 E_STATE /
+/// E_UNPROCESSABLE 原文透传（`state` / `bad_args` 码——UI 按码分支引导，
+/// 不假成功）。
+pub fn gate_pass(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let gate_str = a.req_str("gate")?.to_string();
+    let gate = gate_from_str(&gate_str)?;
+    let decision = a.req_str("decision")?.to_string();
+    let reason = a.str("reason")?.map(str::to_string);
+    let findings = a.get("findings").cloned().unwrap_or_else(|| json!([]));
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发面：scope 绑本门（A 门 receipt 过不了 B 门）。
+    let scope = bid_mcp::review_gate_scope(gate);
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "gate": gate_str,
+        "decision": decision,
+        "receipt": receipt,
+        "findings": findings,
+    });
+    if let Some(r) = reason {
+        args["reason"] = json!(r);
+    }
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "record_review_gate".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "gate_pass": tool_out,
+    }))
+}
+
 /// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
 /// 借用面：先取后放，`dispatch_with` 要 `&mut BidService`。
 fn project_meta(
@@ -1009,6 +1225,203 @@ mod tests {
         assert_eq!(sc["total"], 0.0);
         // 价格面：无报价 → null（诚实显示，不伪装 0）
         assert_eq!(sc["price"], Value::Null);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // ---------------------------------------------------------------- #603 批 A：治理面
+
+    /// 走公开 IPC 面的带参调用（gate_pass 用——参数顶层平铺，与壳协议
+    /// 同形：{id, cmd, gate, decision, …}）。
+    fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+        let mut full = json!({ "id": "t", "cmd": cmd });
+        if let (Some(dst), Some(src)) = (full.as_object_mut(), body.as_object()) {
+            for (k, v) in src {
+                dst.insert(k.clone(), v.clone());
+            }
+        }
+        let text = serde_json::to_string(&full).unwrap();
+        let req = crate::ipc::parse(&text).unwrap();
+        ctx.dispatch(&req)
+    }
+
+    #[test]
+    fn gates_clean_not_found_without_db() {
+        let (dir, _ws) = tmp_ws("nodb-603");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        for cmd in ["bid.gates"] {
+            let frame = call(&ctx, cmd);
+            assert_eq!(frame["ok"], json!(false), "{cmd} 无 db.json 应干净 not_found：{frame}");
+            assert_eq!(err_code_of(&frame), "not_found");
+        }
+        // 写面同款（合法入参也 not_found——不落副作用）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({ "gate": "matrix_approval", "decision": "APPROVED" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(!dir.join(".mang").exists(), "查门/过门不得在工作区留副作用");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 读面无状态窗：早期态（REQUIREMENTS_EXTRACTED）门台账可见（三门全
+    /// 未过 + 空账本 human_review_complete=true——「没有门被 agent 过」无从
+    /// 警告）；写面有状态窗：matrix 门在 MATRIX_READY 前被域层 E_STATE 拒，
+    /// 透传为壳侧 `state` 码。
+    #[test]
+    fn gates_readable_early_state_but_pass_needs_matrix_ready() {
+        let (dir, _ws) = tmp_ws("early-603");
+        seed_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.gates");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g = ok_of(&frame).clone();
+        assert_eq!(g["present"], json!(true));
+        let gates = g["gates"].as_array().expect("gates 恒为数组");
+        assert_eq!(gates.len(), 5, "五门恒在场（读面不筛）：{gates:#?}");
+        assert_eq!(gates[0]["gate"], "matrix_approval");
+        assert_eq!(gates[0]["approved"], json!(false));
+        assert_eq!(gates[0]["latest_pass"], Value::Null);
+        assert_eq!(g["human_review_complete"], json!(true), "空账本无从警告");
+        assert_eq!(g["agent_waivers"].as_array().map(Vec::len), Some(0));
+        assert_eq!(g["reviews"].as_array().map(Vec::len), Some(0));
+
+        // 写面：矩阵门需要 MATRIX_READY+（域层 E_STATE → 壳侧 state 码）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({ "gate": "matrix_approval", "decision": "APPROVED" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "早态过门应拒：{frame}");
+        assert_eq!(err_code_of(&frame), "state", "E_STATE 透传为 state 码：{frame}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 写面全链：宿主签发 receipt（#182）→ 工具面落账 → 门序推进 →
+    /// 追认语义（human_confirmed）→ Rejected+BLOCKER 派生 RT →
+    /// 拒绝面（门序跳跃 / Rejected 无 BLOCKER / 非法门名）。
+    #[test]
+    fn gate_pass_full_flow_with_host_receipt() {
+        let (dir, _ws) = tmp_ws("flow-603");
+        seed_matrix_ready_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // ① 门序跳跃：pre_export 先过 → 域层 E_STATE（前置门未过）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({ "gate": "pre_export_confirm", "decision": "APPROVED" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "state", "门序强制透传：{frame}");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("前置门"),
+            "门序拒绝文案要指向前置门：{frame}"
+        );
+
+        // ② matrix 门 APPROVED（宿主签发 receipt——human 路径）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({ "gate": "matrix_approval", "decision": "APPROVED", "actor_id": "reviewer-zhang" }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let gp = ok_of(&frame)["gate_pass"].clone();
+        assert_eq!(gp["receipt"]["gate"], "matrix_approval");
+        assert_eq!(gp["receipt"]["decision"], "APPROVED");
+        assert_eq!(gp["receipt"]["actor"]["actor_id"], "reviewer-zhang");
+        assert_eq!(gp["receipt"]["actor"]["actor_type"], "human");
+        assert_eq!(gp["receipt"]["method"], "human_receipt", "#182 人类签域验签路径：{gp}");
+        assert_eq!(gp["receipt"]["human_confirmed"], json!(true));
+        assert!(
+            gp["gates_approved"].as_array().unwrap().iter()
+                .any(|v| v == "matrix_approval"),
+            "gates_approved 同源回显：{gp}"
+        );
+
+        // ③ 读面对账：matrix 门已过 + latest_pass 审计四要素
+        let frame = call(&ctx, "bid.gates");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g = ok_of(&frame).clone();
+        let gates = g["gates"].as_array().unwrap().clone();
+        assert_eq!(gates[0]["approved"], json!(true));
+        assert_eq!(gates[0]["latest_pass"]["actor"], "reviewer-zhang");
+        assert_eq!(gates[0]["latest_pass"]["method"], "human_receipt");
+        assert_eq!(gates[0]["latest_pass"]["human_confirmed"], json!(true));
+        assert_eq!(gates[1]["approved"], json!(false), "outline 门未过");
+        assert_eq!(g["human_review_complete"], json!(true), "全 human 过门 → 无警告");
+
+        // ④ outline 门过 → pre_export 拒审（带 BLOCKER finding → RT 派生）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({ "gate": "outline_approval", "decision": "APPROVED" }),
+        );
+        assert_eq!(frame["ok"], json!(true), "缺省 actor_id=shell-operator：{frame}");
+        assert_eq!(
+            ok_of(&frame)["gate_pass"]["receipt"]["actor"]["actor_id"],
+            "shell-operator"
+        );
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({
+                "gate": "pre_export_confirm",
+                "decision": "REJECTED",
+                "findings": [
+                    { "severity": "BLOCKER", "code": "EXPORT-GUARD-1", "message": "证据缺口 3 项未清——导出前必须补齐" }
+                ]
+            }),
+        );
+        assert_eq!(frame["ok"], json!(true), "拒审是合法裁决（过程记录）：{frame}");
+        let gp = ok_of(&frame)["gate_pass"].clone();
+        let rts = gp["receipt"]["spawned_rt_ids"].as_array().cloned().unwrap_or_default();
+        assert_eq!(rts.len(), 1, "BLOCKER 强制派生 RT（结构保证）：{gp}");
+        assert_eq!(gp["receipt"]["decision"], "REJECTED");
+
+        // ⑤ Rejected 无 BLOCKER → 域层拒绝（诚实状态——Warning 不构成拒审依据）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({
+                "gate": "pre_export_confirm",
+                "decision": "REJECTED",
+                "findings": [
+                    { "severity": "WARNING", "code": "W-1", "message": "字数偏离预警" }
+                ]
+            }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "E_UNPROCESSABLE → bad_args 码：{frame}");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("BLOCKER"),
+            "拒绝文案要指向 BLOCKER 前置：{frame}"
+        );
+
+        // ⑥ 非法门名 → 壳侧入参早拒（不进工具面）
+        let frame = call_args(
+            &ctx,
+            "bid.gate_pass",
+            json!({ "gate": "no_addendum_confirmed", "decision": "APPROVED" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("合法值"),
+            "早拒文案要列出合法值：{frame}"
+        );
+
+        // ⑦ 裁决历史（reviews）：REV 记录含 APPROVED 与 REJECTED，receipt
+        //    的 reviewer 是 human: 派生（legacy 回显面）
+        let frame = call(&ctx, "bid.gates");
+        let g = ok_of(&frame).clone();
+        let reviews = g["reviews"].as_array().unwrap().clone();
+        assert!(reviews.len() >= 3, "matrix/outline/pre_export 三次记审全落账：{reviews:#?}");
+        assert_eq!(reviews[0]["gate"], "pre_export_confirm", "倒序（最新在前）");
+        assert_eq!(reviews[0]["decision"], "REJECTED");
+        assert!(reviews[0]["actor"]["actor_id"].is_string(), "#182 可信身份回显在场");
+        assert!(reviews.iter().any(|r| r["decision"] == "APPROVED" && r["gate"] == "matrix_approval"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

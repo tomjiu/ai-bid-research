@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// #313 批 A + 批 B：标书数据面接线的源级回归门（web-ui 侧）。
+// #313 批 A + 批 B + 批 C + #603 批 A：标书数据面/治理面接线的源级回归门（web-ui 侧）。
 //
 // 用法（零依赖）：
 //   node web-ui/tests/bid-panels.test.mjs
@@ -7,11 +7,13 @@
 // 设计说明（同 md-link.test.mjs 的纪律：不复制实现，断言真源）：
 //   * UI 侧：app.js 的活动栏入口 / 工作台伪标签页 / IPC 调用 / 演示桥 stub /
 //     章节跳转 / 进度条「不足标红」/ 矩阵页签（筛选/分页/导出/章节跳转）
+//     / 自评页签 / 审核门页签（#603 批 A：五门台账/追认/过门拒审）
 //     ；styles.css 的面板样式与响应式断点。
 //   * 壳侧（防 UI 接了壳没接）：mang-app/src/bid.rs 在场、ipc.rs 分发
 //     bid.state / bid.outline / bid.matrix、bid.state / bid.matrix 经
-//     bid_mcp::dispatch_with 走真实工具面。
-//   * 契约侧：docs/mang/IPC-CONTRACT.md 登记了三个命令（改代码要同步改契约）。
+//     bid_mcp::dispatch_with 走真实工具面；bid.gates / bid.gate_pass
+//     （#603：DomainStore 直读 + 宿主签发 receipt → record_review_gate）。
+//   * 契约侧：docs/mang/IPC-CONTRACT.md 登记了全部命令（改代码要同步改契约）。
 // 任一断言红 = 接线被回退或改名，CI 拦下。
 
 import { readFileSync } from "node:fs";
@@ -319,7 +321,95 @@ check(
   "命令没接进 IPC 分发"
 );
 
-// ---------- 契约：IPC-CONTRACT.md 登记（批 C） ----------
+// ---------- 壳侧：IPC 命令真实在场（#603 批 A：治理面） ----------
+check(
+  "mang-app bid.rs 提供 gates / gate_pass",
+  bidRs.includes("pub fn gates(") && bidRs.includes("pub fn gate_pass("),
+  "治理面数据面模块被删"
+);
+check(
+  "bid.gates 走 DomainStore 直读（gate_approved / agent_gate_passes / human_review_complete 同源）",
+  bidRs.includes("gate_approved") && bidRs.includes("agent_gate_passes") && bidRs.includes("human_review_complete"),
+  "门状态被第二套实现取代（必须读域层真源）"
+);
+check(
+  "bid.gate_pass 走宿主签发面 + 真实工具面（#182 receipt → record_review_gate）",
+  bidRs.includes("issue_approval_receipt") && bidRs.includes("review_gate_scope") && bidRs.includes("record_review_gate"),
+  "receipt 签发链被绕过（Agent 可伪造面）"
+);
+check(
+  "ipc.rs 分发 bid.gates / bid.gate_pass",
+  /"bid\.gates" => crate::bid::gates\(/.test(ipcRs) && /"bid\.gate_pass" => crate::bid::gate_pass\(/.test(ipcRs),
+  "治理面命令没接进 IPC 分发"
+);
+check(
+  "selftest 覆盖 bid.gates / bid.gate_pass（五门台账 + 人工过门）",
+  bidRs.includes("gates_clean_not_found_without_db") && bidRs.includes("gate_pass_full_flow_with_host_receipt"),
+  "壳侧单测面被删"
+);
+
+// ---------- app.js：#603 批 A——审核门面板接线 ----------
+check(
+  "数据面调用 bid.gates（真实 IPC）+ 写面 bid.gate_pass",
+  /ipc\("bid\.gates", \{\}, 15e3\)/.test(app) && /ipc\("bid\.gate_pass", body, 3e4\)/.test(app),
+  "审核门 IPC 调用被删或改形"
+);
+check(
+  "演示桥补 bid.gates / bid.gate_pass stub（同形响应 + 可变台账）",
+  /case "bid\.gates":/.test(app) && /case "bid\.gate_pass":/.test(app) && /demoGatePass/.test(app),
+  "演示模式面板会空转"
+);
+check(
+  "工作台「审核门」页签接线（data-bid-panel=gates）",
+  /data-bid-panel="gates">审核门</.test(app),
+  "页签被删或未接线"
+);
+check(
+  "门台账不依赖章节树（大纲未建立分支也渲染 gates 面板）",
+  /if \(activePanel === "gates"\) renderBidGatesPanel\(host\);/.test(app),
+  "早期项目看不到门台账"
+);
+check(
+  "五门台账渲染 + 追认清单 + 过门/拒审动作",
+  /data-gt-ratify=/.test(app) && /data-gt-open=/.test(app) && /data-gt-confirm=/.test(app) && /passBidGate\(/.test(app),
+  "治理面交互被删"
+);
+check(
+  "拒审必须携带 BLOCKER 发现（前端预检 + 域层兜底）",
+  /拒审必须填写 BLOCKER 发现/.test(app),
+  "拒审依据门被绕过"
+);
+check(
+  "侧栏「审核门」入口直达工作台（workbench-gates）",
+  /data-bid-act="workbench-gates"/.test(app) && /openBidWorkbench\("gates"\)/.test(app),
+  "侧栏入口未接线"
+);
+check(
+  "门台账懒加载 + 工作台刷新联动（refresh-gates）",
+  /loadBidGates\(true\)/.test(app) && /refresh-gates/.test(app),
+  "台账刷新链断了"
+);
+check(
+  "工作区切换时治理面状态随根失效",
+  /state\.bidGates = \{ status: "idle"/.test(app),
+  "旧工作区门台账会残留"
+);
+
+// ---------- styles.css：#603 批 A 审核门面板样式 ----------
+for (const sel of [".bid-gt ", ".bid-gt-head", ".bid-gt-badge", ".bid-gt-row", ".bid-gt-form", ".bid-gt-ratify-row", ".bid-gt-rev"]) {
+  check(
+    `styles.css 提供 ${sel.trim()} 样式`,
+    css.includes(sel),
+    "面板样式被删"
+  );
+}
+check(
+  "审核门面板响应式断点（1440 / 1920）",
+  /@media \(max-width: 1440px\)[\s\S]{0,300}\.bid-gt[\s\S]{0,200}@media \(min-width: 1920px\)[\s\S]{0,200}\.bid-gt/.test(css),
+  "响应式被删"
+);
+
+// ---------- 契约：IPC-CONTRACT.md 登记（批 C + #603 批 A） ----------
 check(
   "契约文档登记 bid.quality / bid.score",
   contract.includes("### bid.quality") && contract.includes("### bid.score"),
@@ -329,6 +419,11 @@ check(
   "契约错误码表登记 state（#313 批 C）",
   /\| `state` \| bid 项目未到该命令的状态窗/.test(contract),
   "state 错误码没进 §3.3 错误码表"
+);
+check(
+  "契约文档登记 bid.gates / bid.gate_pass（#603 批 A）",
+  contract.includes("### bid.gates") && contract.includes("### bid.gate_pass"),
+  "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);

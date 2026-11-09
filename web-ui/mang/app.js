@@ -23,6 +23,7 @@
     warning: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2 14.4 13H1.6z"/><path d="M8 6.2v3.1M8 11.4v.6"/></svg>',
     info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.3v4M8 5.1v.6"/></svg>',
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.2 8.4 3 3 6.6-6.8"/></svg>',
+    shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 13.4 3.8v3.4c0 3.2-2.2 5.6-5.4 6.9-3.2-1.3-5.4-3.7-5.4-6.9V3.8z"/><path d="m5.7 7.9 1.6 1.6 3-3.1"/></svg>',
     outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h2.2M4 12h2.2M4 18.5h2.2"/><path d="M10 5.5h10M10 12h7.5M10 18.5h9"/></svg>',
     bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>'
   };
@@ -397,8 +398,78 @@
           sections_scored: 12
         }
 
+      },
+      // #603 批 A：审核门台账演示数据（与真实 bid.gates 响应同形——
+      // DomainStore 直读面；演示态 = agent 已声明过矩阵/大纲两门未追认，
+      // 恰好展示「追认」交互；gate_pass 的演示模拟见 demo 桥 case 分支）
+      gates: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+        gates: [
+          { gate: "matrix_approval", title: "矩阵定稿门", note: "门序第一：条款响应矩阵定稿（MATRIX_READY+ 可过）", approved: true, latest_pass: { gate: "matrix_approval", actor: "agent-01", actor_type: "agent", method: "agent_declared", human_confirmed: false, at: Math.floor(now / 1000) - 86400 * 2, reason: "条款矩阵已全量核对（1120/1120 行）" } },
+          { gate: "outline_approval", title: "大纲定稿门", note: "门序第二：章节树定稿（前置：矩阵门已过）", approved: true, latest_pass: { gate: "outline_approval", actor: "agent-01", actor_type: "agent", method: "agent_declared", human_confirmed: false, at: Math.floor(now / 1000) - 86400, reason: "章节树与字数配额核对完成" } },
+          { gate: "pre_export_confirm", title: "导出前确认门", note: "门序第三：导出前置确认（前置：前两门均过）", approved: false, latest_pass: null },
+          { gate: "addendum_waiver", title: "补遗逐件确认门", note: "L3 人工出口（#131/#379——逐件路径不再写本门）", approved: false, latest_pass: null },
+          { gate: "no_addendum_confirmed", title: "无补遗全局确认门", note: "#379 拆门——「本项目无补遗」全局显式确认", approved: false, latest_pass: null }
+        ],
+        human_review_complete: false,
+        agent_waivers: [
+          { gate: "matrix_approval", actor: "agent-01", actor_type: "agent", method: "agent_declared", human_confirmed: false, at: Math.floor(now / 1000) - 86400 * 2, reason: "条款矩阵已全量核对（1120/1120 行）" },
+          { gate: "outline_approval", actor: "agent-01", actor_type: "agent", method: "agent_declared", human_confirmed: false, at: Math.floor(now / 1000) - 86400, reason: "章节树与字数配额核对完成" }
+        ],
+        reviews: [
+          { id: "REV-0002", gate: "outline_approval", decision: "APPROVED", reviewer: "agent:agent-01", actor: { actor_id: "agent-01", actor_type: "agent", authentication_method: "hmac_receipt_v2" }, findings: [], at: Math.floor(now / 1000) - 86400, reviewed_content_digest: "demo-digest" },
+          { id: "REV-0001", gate: "matrix_approval", decision: "APPROVED", reviewer: "agent:agent-01", actor: { actor_id: "agent-01", actor_type: "agent", authentication_method: "hmac_receipt_v2" }, findings: [], at: Math.floor(now / 1000) - 86400 * 2, reviewed_content_digest: "demo-digest" }
+        ]
       }
     };
+    // #603 批 A：演示桥的治理面可变态（gate_pass 会真改台账——与真实壳
+    // 同语义：追认后最新条翻 human、agent_waivers 消项、human_review_complete
+    // 重算；演示刷新页面即重置，与其它演示面一致）
+    const demoGates = JSON.parse(JSON.stringify(DEMO_BID.gates));
+    let demoGateRevSeq = 2;
+    function demoGatePass(m) {
+      const gate = String(m.gate || "");
+      const decision = String(m.decision || "APPROVED").toUpperCase();
+      const actor = String(m.actor_id || "shell-operator");
+      const at = Math.floor(Date.now() / 1000);
+      const g = demoGates.gates.find((x) => x.gate === gate);
+      if (!g) return fail(m.id, "bad_args", "演示模式：gate 非法（合法值：matrix_approval|outline_approval|pre_export_confirm|addendum_waiver）");
+      // 门序模拟（三主门）：矩阵 → 大纲 → 导出确认
+      const order = ["matrix_approval", "outline_approval", "pre_export_confirm"];
+      if (order.indexOf(gate) >= 0) {
+        for (let i = 0; i < order.indexOf(gate); i++) {
+          if (!demoGates.gates.find((x) => x.gate === order[i]).approved) {
+            return fail(m.id, "state", "当前状态 DRAFTING 不允许调用 record_review(" + gate + ")——前置门 " + order[i] + " 未 Approved（门序强制）");
+          }
+        }
+      }
+      if (decision === "REJECTED" && !(Array.isArray(m.findings) && m.findings.some((f) => String(f.severity || "").toUpperCase() === "BLOCKER"))) {
+        return fail(m.id, "bad_args", "演示模式：Rejected 必须携带至少一条 BLOCKER finding（Warning 不构成拒审依据——诚实状态）");
+      }
+      const pass = { gate, actor, actor_type: "human", method: "human_receipt", human_confirmed: true, at, reason: m.reason || "" };
+      if (decision === "APPROVED") g.approved = true;
+      g.latest_pass = pass;
+      demoGateRevSeq += 1;
+      demoGates.reviews.unshift({ id: "REV-" + String(demoGateRevSeq).padStart(4, "0"), gate, decision, reviewer: "human:" + actor, actor: { actor_id: actor, actor_type: "human", authentication_method: "hmac_receipt_v2" }, findings: [], at, reviewed_content_digest: "demo-digest" });
+      demoGates.agent_waivers = demoGates.gates.filter((x) => x.latest_pass && x.latest_pass.human_confirmed === false).map((x) => x.latest_pass);
+      demoGates.human_review_complete = demoGates.agent_waivers.length === 0;
+      const approved = demoGates.gates.filter((x) => x.approved).map((x) => x.gate);
+      return respond(m.id, {
+        present: true,
+        workspace: root,
+        project: demoGates.project,
+        gate_pass: {
+          receipt: { review_id: "REV-" + String(demoGateRevSeq).padStart(4, "0"), gate, decision, reviewer: "human:" + actor, actor: { actor_id: actor, actor_type: "human", authentication_method: "hmac_receipt_v2" }, method: "human_receipt", human_confirmed: true, finding_ids: [], spawned_rt_ids: [], reviewed_content_digest: "demo-digest" },
+          gates_approved: approved,
+          agent_waivers: demoGates.agent_waivers.slice(),
+          human_review_complete: demoGates.human_review_complete,
+          status: "DRAFTING",
+          project_version: 12
+        }
+      });
+    }
     return {
       mode: "demo",
       post(msg) {
@@ -419,6 +490,11 @@
               return respond(m.id, DEMO_BID.quality);
             case "bid.score":
               return respond(m.id, DEMO_BID.score);
+            case "bid.gates":
+              // #603 批 A：演示桥回可变台账（gate_pass 会真改——追认后消项）
+              return respond(m.id, demoGates);
+            case "bid.gate_pass":
+              return demoGatePass(m);
 
             case "fs.tree":
               return respond(m.id, tree);
@@ -542,7 +618,10 @@
     bidCollapsed: /* @__PURE__ */ new Set(),
     // #313 批 C：自评数据面（bid.quality + bid.score 拉取缓存——工作台「自评」页签用）。
     // code 透传壳侧错误码：state = 项目未到 MatrixReady+（UI 显示「尚未开放」引导而非故障）
-    bidQuality: { status: "idle", quality: null, score: null, error: "", code: "", scoreError: "", ts: 0 }
+    bidQuality: { status: "idle", quality: null, score: null, error: "", code: "", scoreError: "", ts: 0 },
+    // #603 批 A：治理面（审核门台账 + 过门/追认写面）——与 bidQuality 同款
+    // 生命周期（idle/loading/ready/error + code 分支引导卡）
+    bidGates: { status: "idle", data: null, error: "", code: "", ts: 0, passing: false, passError: "", passInfo: "", formGate: "", formMode: "" },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1035,7 +1114,9 @@
         else if (act === "workbench") ui.openBidWorkbench();
         else if (act === "workbench-mx") ui.openBidWorkbench("matrix");
         else if (act === "workbench-quality") ui.openBidWorkbench("quality");
+        else if (act === "workbench-gates") ui.openBidWorkbench("gates");
         else if (act === "refresh-quality") ui.loadBidQuality(true);
+        else if (act === "refresh-gates") ui.loadBidGates(true);
 
       });
     });
@@ -1094,6 +1175,7 @@
       + '<button class="bid-entry" data-bid-act="workbench"><span class="bid-entry-icon">' + ICON.outline + '</span><span class="bid-entry-main"><span class="bid-entry-name">大纲树</span><span class="bid-entry-sub">章节层级 · 字数进度 · 状态标记</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-mx"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">合规矩阵</span><span class="bid-entry-sub">REQ × 响应状态 × 证据</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-quality"><span class="bid-entry-icon">' + ICON.check + '</span><span class="bid-entry-main"><span class="bid-entry-name">自评</span><span class="bid-entry-sub">评分 · 质量摘要 · BLOCKER</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + '<button class="bid-entry" data-bid-act="workbench-gates"><span class="bid-entry-icon">' + ICON.shield + '</span><span class="bid-entry-main"><span class="bid-entry-name">审核门</span><span class="bid-entry-sub">五门台账 · 追认 · 人工过门</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + bidDisabledEntry("覆盖报告", "已判定 / 未判定 / ★条款", "批 D")
       + "</div></div>";
     bindBidViewActions(body);
@@ -1118,6 +1200,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="detail">章节详情</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="matrix">合规矩阵</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="quality">自评</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="gates">审核门</button>'
       + '<button class="bid-tab" role="tab" disabled title="批 D 接线（#313）">覆盖报告</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
@@ -1131,6 +1214,8 @@
         if (state.bidQuality.status !== "idle") ui.loadBidQuality(true);
         // 矩阵面同款（#313 批 B）
         if (state.bid.matrix && state.bid.matrix.status !== "idle") ui.loadBidMatrix(true);
+        // 门台账同款（#603 批 A）
+        if (state.bidGates.status !== "idle") ui.loadBidGates(true);
       }
       // #313 批 B：右侧页签切换（章节详情 / 合规矩阵 / 自评）
       const tabBtn = e.target.closest('.bid-tab[data-bid-panel]');
@@ -1217,6 +1302,8 @@
     if (!nodes.length) {
       treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
       if (activePanel === "quality") renderBidQualityPanel(host);
+      // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
+      if (activePanel === "gates") renderBidGatesPanel(host);
       return;
     }
     const byId = {};
@@ -1265,6 +1352,10 @@
     });
     if (activePanel === "quality") {
       renderBidQualityPanel(host);
+      return;
+    }
+    if (activePanel === "gates") {
+      renderBidGatesPanel(host);
       return;
     }
     if (activePanel === "matrix") {
@@ -1536,6 +1627,214 @@
     bindBidViewActions(panel);
   }
 
+  // ============ #603 批 A：审核门面板（bid.gates → 五门台账 + 追认 + 人工过门） ============
+  // 数据来源：壳侧 bid.gates（DomainStore 直读——五门 approved/latest_pass/
+  // agent_waivers/human_review_complete/reviews）；写面 bid.gate_pass（宿主
+  // 签发 receipt #182 → record_review_gate 真实工具面）。门序/状态窗裁决
+  // 全在域层——壳侧拒绝文案原样透传成引导，不假成功。
+  var BID_GT_TITLES = {
+    matrix_approval: "矩阵定稿门",
+    outline_approval: "大纲定稿门",
+    pre_export_confirm: "导出前确认门",
+    addendum_waiver: "补遗逐件确认门",
+    no_addendum_confirmed: "无补遗全局确认门"
+  };
+  /** 三主门可人工过/拒审；两补遗门的写面走 record_addendum_waiver（批 C） */
+  var BID_GT_MAIN = ["matrix_approval", "outline_approval", "pre_export_confirm"];
+  function bidGtTitle(g) {
+    return BID_GT_TITLES[g] || g;
+  }
+  function bidGtMethodZh(m) {
+    return m === "human_receipt" ? "人工确认" : m === "agent_declared" ? "Agent 声明" : m || "—";
+  }
+  function bidGtTime(at) {
+    if (!at) return "—";
+    const d = new Date(at * 1000);
+    const p = (x) => String(x).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  /** 过门/拒审内联确认表单（写面动作——显式二次确认 + 理由/发现输入） */
+  function bidGtFormHtml(gate, mode) {
+    const isReject = mode === "reject";
+    return (
+      '<div class="bid-gt-form" data-gt-form="' + esc(gate) + '" data-gt-mode="' + esc(mode) + '">'
+      + '<div class="bid-gt-form-title">' + (isReject ? ICON.warning + " 拒审 " : ICON.shield + " 过门确认 ") + esc(bidGtTitle(gate)) + "</div>"
+      + '<div class="bid-gt-form-sub">由宿主用本工作区审批密钥签发回执（#182——Agent 不可伪造），经审核门工具落账，审计留痕不可抹除。</div>'
+      + '<label class="bid-gt-field"><span>理由（可空）</span><input type="text" class="bid-gt-input" data-gt-reason placeholder="' + (isReject ? "如：条款 3.2 响应不实" : "如：已逐条核对响应矩阵") + '"></label>'
+      + (isReject
+        ? '<label class="bid-gt-field"><span>BLOCKER 发现（拒审必填）</span><textarea class="bid-gt-input" rows="2" data-gt-blocker placeholder="拒审依据——Warning 不构成拒审（诚实状态），将派生修订工单 RT"></textarea></label>'
+        : "")
+      + '<div class="bid-gt-form-actions">'
+      + '<button class="btn btn-sm' + (isReject ? " btn-danger" : " btn-primary") + '" data-gt-confirm="' + esc(gate) + '" data-gt-decision="' + (isReject ? "REJECTED" : "APPROVED") + '">' + (isReject ? "确认拒审" : "确认过门") + "</button>"
+      + '<button class="btn btn-sm" data-gt-cancel>取消</button>'
+      + "</div></div>"
+    );
+  }
+  /** 审核门面板主体（工作台右面板的 gates 页签） */
+  function renderBidGatesPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const gt = state.bidGates;
+    if (gt.status === "idle") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取审核门台账…</div></div>';
+      ui.loadBidGates();
+      return;
+    }
+    if (gt.status === "loading") {
+      panel.innerHTML = '<div class="bid-gt"><div class="view-state"><div class="view-spinner"></div><div>正在读取门台账…</div></div></div>';
+      return;
+    }
+    if (gt.status === "error" || !gt.data) {
+      panel.innerHTML =
+        '<div class="bid-gt"><div class="view-state" data-kind="error"><div class="view-state-title">审核门台账读取失败</div><div>'
+        + esc(gt.error || "无数据")
+        + '</div><div><button class="btn" data-gt-retry>重试</button></div></div></div>';
+      const retry = panel.querySelector("[data-gt-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidGates(true));
+      return;
+    }
+    const d = gt.data;
+    const gates = Array.isArray(d.gates) ? d.gates : [];
+    const waivers = Array.isArray(d.agent_waivers) ? d.agent_waivers : [];
+    const reviews = Array.isArray(d.reviews) ? d.reviews : [];
+    const human = !!d.human_review_complete;
+    const approvedN = gates.filter((g) => g.approved).length;
+    const passing = gt.passing;
+    let html = '<div class="bid-gt">';
+    // 头部：人工复核完成度徽章 + 刷新
+    html +=
+      '<div class="bid-gt-head">'
+      + '<span class="bid-gt-badge" data-state="' + (human ? "ok" : "warn") + '">' + (human ? ICON.check + " 人工复核完成" : ICON.warning + " 存在待追认门") + "</span>"
+      + '<span class="bid-gt-sub">' + approvedN + "/" + gates.length + " 门已过 · " + (gt.ts ? timeAgo(gt.ts) : "—") + "</span>"
+      + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm" data-bid-act="refresh-gates" title="重新读取 bid.gates">' + ICON.refresh + "刷新台账</button>"
+      + "</div>";
+    // 写面消息（成功/失败——域层拒绝原样透传，不假成功）
+    if (gt.passInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(gt.passInfo) + "</div>";
+    if (gt.passError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(gt.passError) + "</div>";
+    // ① agent 豁免追认清单（#277——human_confirmed=false 的门）
+    if (waivers.length) {
+      html += '<div class="bid-card" data-kind="ratify"><div class="bid-card-title">' + ICON.warning + " Agent 声明过门待追认（" + waivers.length + "）</div>";
+      html += '<div class="bid-card-sub">以下门由 Agent 自行声明通过（导出正文将带警告横幅）——真人补签即追认：追加一条人工确认记录，警告消除，历史两条并存可审计。</div><div class="bid-gt-ratify-list">';
+      waivers.forEach((w) => {
+        html +=
+          '<div class="bid-gt-ratify-row">'
+          + '<span class="bid-gt-ratify-gate">' + esc(bidGtTitle(w.gate)) + "</span>"
+          + '<span class="bid-gt-ratify-meta" title="' + esc(w.reason || "") + '">' + esc(w.actor || "") + " · " + bidGtTime(w.at) + " · " + esc((w.reason || "").slice(0, 40)) + "</span>"
+          + '<button class="btn btn-sm btn-primary" data-gt-ratify="' + esc(w.gate) + '"' + (passing ? " disabled" : "") + ">追认（补人工确认）</button>"
+          + "</div>";
+      });
+      html += "</div></div>";
+    } else {
+      html += '<div class="bid-card"><div class="bid-card-sub">' + ICON.check + " 无待追认门——每门最新一条过门记录均为人工确认（或尚无 agent 声明），导出不带警告</div></div>";
+    }
+    // ② 五门状态卡（三主门带过门/拒审入口；两补遗门写面归批 C）
+    html += '<div class="bid-card"><div class="bid-card-title">' + ICON.shield + " 门台账（" + approvedN + "/" + gates.length + " 已过）</div>";
+    gates.forEach((g) => {
+      const isMain = BID_GT_MAIN.indexOf(g.gate) >= 0;
+      const lp = g.latest_pass;
+      const agentLatest = lp && lp.human_confirmed === false;
+      html +=
+        '<div class="bid-gt-row" data-gate="' + esc(g.gate) + '" data-approved="' + String(!!g.approved) + '">'
+        + '<div class="bid-gt-row-main">'
+        + '<span class="bid-gt-dot" data-state="' + (g.approved ? (agentLatest ? "warn" : "ok") : "pending") + '"></span>'
+        + '<span class="bid-gt-name">' + esc(g.title || bidGtTitle(g.gate)) + "</span>"
+        + '<span class="bid-gt-state" data-state="' + (g.approved ? (agentLatest ? "warn" : "ok") : "pending") + '">' + (g.approved ? (agentLatest ? "已过（Agent）" : "已过") : "未过") + "</span>"
+        + "</div>"
+        + '<div class="bid-gt-row-note">' + esc(g.note || "") + "</div>"
+        + (lp
+          ? '<div class="bid-gt-row-pass">最近过门：' + esc(lp.actor || "") + " · <span class=\"bid-gt-method\" data-m=\"" + esc(lp.method || "") + "\">" + bidGtMethodZh(lp.method) + "</span> · " + bidGtTime(lp.at) + (lp.reason ? " · " + esc(lp.reason) : "") + "</div>"
+          : "")
+        + '<div class="bid-gt-row-actions">';
+      if (isMain) {
+        html +=
+          '<button class="btn btn-sm" data-gt-open="' + esc(g.gate) + '" data-gt-mode="approve"' + (passing ? " disabled" : "") + ">过门</button>"
+          + '<button class="btn btn-sm" data-gt-open="' + esc(g.gate) + '" data-gt-mode="reject"' + (passing ? " disabled" : "") + ">拒审</button>";
+      } else {
+        html += '<span class="bid-gt-batchc" title="record_addendum_waiver 工具面——#603 批 C 接线">写面批 C 待接线</span>';
+      }
+      html += "</div>";
+      if (gt.formGate === g.gate && gt.formMode) html += bidGtFormHtml(g.gate, gt.formMode);
+      html += "</div>";
+    });
+    html += "</div>";
+    // ③ 裁决历史（REV 记录——append-only 审计面）
+    html += '<div class="bid-card"><div class="bid-card-title">裁决历史（' + reviews.length + "）</div>";
+    if (!reviews.length) {
+      html += '<div class="bid-card-sub">尚无记审记录——过门/拒审/Agent 声明都会在此留痕（不可抹除）</div>';
+    } else {
+      html += '<div class="bid-gt-reviews">';
+      reviews.slice(0, 30).forEach((rv) => {
+        const actor = rv.actor || {};
+        html +=
+          '<div class="bid-gt-rev" data-decision="' + esc(rv.decision || "") + '">'
+          + "<span>" + esc(rv.id || "") + "</span>"
+          + "<span>" + esc(bidGtTitle(rv.gate)) + "</span>"
+          + '<span class="bid-gt-rev-decision">' + (rv.decision === "REJECTED" ? "拒审" : "过门") + "</span>"
+          + "<span>" + esc(rv.reviewer || (actor.actor_id || "")) + "（" + esc(actor.actor_type || "") + "）</span>"
+          + "<span>" + bidGtTime(rv.at) + "</span>"
+          + "</div>";
+      });
+      html += "</div>";
+      if (reviews.length > 30) html += '<div class="bid-card-sub">仅显示最近 30 条（共 ' + reviews.length + " 条）</div>";
+    }
+    html += "</div></div>";
+    panel.innerHTML = html;
+    bindBidViewActions(panel);
+    // ---- 面板本地交互（写面动作都走 ui.passBidGate——域层裁决）----
+    panel.querySelectorAll("[data-gt-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gate = btn.dataset.gtOpen;
+        const mode = btn.dataset.gtMode;
+        // 同门同模式 → 收起；否则展开（切换门/模式）
+        if (gt.formGate === gate && gt.formMode === mode) {
+          gt.formGate = "";
+          gt.formMode = "";
+        } else {
+          gt.formGate = gate;
+          gt.formMode = mode;
+        }
+        renderBidGatesPanel(host);
+      });
+    });
+    panel.querySelectorAll("[data-gt-cancel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        gt.formGate = "";
+        gt.formMode = "";
+        renderBidGatesPanel(host);
+      });
+    });
+    panel.querySelectorAll("[data-gt-confirm]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gate = btn.dataset.gtConfirm;
+        const decision = btn.dataset.gtDecision;
+        const form = panel.querySelector('[data-gt-form="' + gate + '"]');
+        const reasonEl = form && form.querySelector("[data-gt-reason]");
+        const blockerEl = form && form.querySelector("[data-gt-blocker]");
+        const reason = reasonEl ? reasonEl.value.trim() : "";
+        const blocker = blockerEl ? blockerEl.value.trim() : "";
+        if (decision === "REJECTED" && !blocker) {
+          gt.passError = "拒审必须填写 BLOCKER 发现（Warning 不构成拒审依据——诚实状态）";
+          renderBidGatesPanel(host);
+          return;
+        }
+        ui.passBidGate(gate, decision, {
+          reason: reason || undefined,
+          blockerMessage: blocker || undefined,
+          blockerCode: "SHELL-REJECT"
+        });
+      });
+    });
+    panel.querySelectorAll("[data-gt-ratify]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        ui.passBidGate(btn.dataset.gtRatify, "APPROVED", {
+          reason: "追认 agent 声明过门（人工补确认）",
+          actorId: "shell-operator"
+        });
+      });
+    });
+  }
+
   // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
   // 数据来源：壳侧 bid.matrix（经 bid_mcp::dispatch_with 走 get_compliance_matrix
   // 真实工具面，壳内聚合 cursor 分页后的全量行）。行字段 = 工具输出原样透传；
@@ -1608,6 +1907,10 @@
     if (!panel) return;
     if (bidPanelOf() === "matrix") {
       renderBidMatrixPanel(host, panel);
+      return;
+    }
+    if (bidPanelOf() === "gates") {
+      renderBidGatesPanel(host);
       return;
     }
     const nodes = bidOutlineNodes();
@@ -3579,6 +3882,8 @@
       state.bidCollapsed = new Set();
       // #313 批 C：自评数据面同理随根失效
       state.bidQuality = { status: "idle", quality: null, score: null, error: "", code: "", scoreError: "", ts: 0 };
+      // #603 批 A：治理面同理随根失效（门台账/表单态/写面消息全清）
+      state.bidGates = { status: "idle", data: null, error: "", code: "", ts: 0, passing: false, passError: "", passInfo: "", formGate: "", formMode: "" };
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
@@ -3726,6 +4031,70 @@
       state.bidQuality.status = "ready";
       state.bidQuality.ts = Date.now();
       renderBidWorkbenchIfOpen();
+    },
+    /** #603 批 A：拉取审核门台账（bid.gates——DomainStore 直读五门状态/
+     *  最新过门/agent 豁免清单/裁决历史）。读面无状态窗：早期态「三门全
+     *  未过」也是有效数据（与 quality 的 state 码引导不同，这里只在无
+     *  db.json 时分支引导）。 */
+    async loadBidGates(force) {
+      if (!state.bridge) return;
+      if (state.bidGates.status === "loading" && !force) return;
+      state.bidGates.status = "loading";
+      state.bidGates.error = "";
+      state.bidGates.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.gates", {}, 15e3);
+        if (r && r.present) {
+          state.bidGates.data = r;
+        } else {
+          state.bidGates.data = null;
+          state.bidGates.error = "当前工作区无审核门数据";
+        }
+        state.bidGates.status = "ready";
+      } catch (err) {
+        state.bidGates.data = null;
+        state.bidGates.status = "error";
+        state.bidGates.code = (err && err.code) || "";
+        state.bidGates.error = err && (err.message || err.code) || "bid.gates 读取失败";
+      }
+      state.bidGates.ts = Date.now();
+      renderBidWorkbenchIfOpen();
+    },
+    /** #603 批 A：人工过门/追认/拒审（bid.gate_pass——宿主签发 receipt（#182）
+     *  后经真实工具面 record_review_gate 落账）。壳侧不校验门序/状态窗——
+     *  域层裁决原样透传（state/bad_args 码 → 引导文案，不假成功）。 */
+    async passBidGate(gate, decision, opts) {
+      if (!state.bridge || state.bidGates.passing) return;
+      const o = opts || {};
+      state.bidGates.passing = true;
+      state.bidGates.passError = "";
+      state.bidGates.passInfo = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const body = { gate: gate, decision: decision };
+        if (o.reason) body.reason = o.reason;
+        if (o.actorId) body.actor_id = o.actorId;
+        if (decision === "REJECTED" && o.blockerMessage) {
+          body.findings = [{ severity: "BLOCKER", code: o.blockerCode || "SHELL-REJECT", message: o.blockerMessage }];
+        }
+        const r = await ipc("bid.gate_pass", body, 3e4);
+        const gp = r && r.gate_pass;
+        if (gp && gp.receipt) {
+          state.bidGates.passInfo = (decision === "APPROVED" ? "已过门：" : "已拒审：") + gp.receipt.gate
+            + (Array.isArray(gp.receipt.spawned_rt_ids) && gp.receipt.spawned_rt_ids.length ? "（派生 RT " + gp.receipt.spawned_rt_ids.join("、") + "）" : "");
+        } else {
+          state.bidGates.passInfo = decision === "APPROVED" ? "已过门" : "已拒审";
+        }
+        state.bidGates.formGate = "";
+        state.bidGates.formMode = "";
+      } catch (err) {
+        state.bidGates.passError = err && (err.message || err.code) || "bid.gate_pass 失败";
+      }
+      state.bidGates.passing = false;
+      // 台账 + 侧栏门审摘要同源刷新（agent_waivers/human_review_complete 两处都消费）
+      ui.loadBidGates(true);
+      ui.loadBid(true);
     },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  批 C：panel 入参直达指定页签（"quality" = 自评——侧栏面板入口用） */

@@ -458,6 +458,73 @@ mappings【#224 双向追溯】、unmapped_scoring_items、notes、sections_scor
 ```
 拒绝面与 `bid.quality` 同：`not_found` / `state`。
 
+### bid.gates —— 审核门台账（只读；#603 批 A——治理面）
+DomainStore 直读（`bid.outline` 先例——MCP 工具面无此整面视图，单一真源
+`gate_approved` / `latest_gate_pass` / `agent_gate_passes` /
+`human_review_complete` / `reviews`）：五门（matrix_approval / outline_approval /
+pre_export_confirm / addendum_waiver / no_addendum_confirmed）approved 状态、
+每门最新过门记录（method=human_receipt|agent_declared、human_confirmed——追认后
+最新条翻 human 的判据位）、agent 豁免清单（human_confirmed=false 的门——导出
+警告与追认清单素材）、human_review_complete（空账本或全 human → true）、
+reviews 裁决历史（倒序，REV 记录含 #182 可信身份回显与 #180 内容绑定摘要）。
+**读面无状态窗**：早期态「三门全未过」也是有效数据（写面才有域层状态窗裁决）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "gates": [ { "gate": "matrix_approval", "title": "矩阵定稿门",
+                 "note": "门序第一：…", "approved": true,
+                 "latest_pass": { "gate": "matrix_approval", "actor": "agent-01",
+                                  "actor_type": "agent", "method": "agent_declared",
+                                  "human_confirmed": false, "at": 1790000000,
+                                  "reason": "…" } }, … 共 5 门 … ],
+    "human_review_complete": false,
+    "agent_waivers": [ …每门最新一条 human_confirmed=false 的过门记录… ],
+    "reviews": [ { "id": "REV-0002", "gate": "outline_approval", "decision": "APPROVED",
+                   "reviewer": "agent:agent-01",
+                   "actor": { "actor_id": "agent-01", "actor_type": "agent",
+                              "authentication_method": "hmac_receipt_v2" },
+                   "findings": [], "at": 1790000000,
+                   "reviewed_content_digest": "…" } ] }
+```
+拒绝面：无 db.json → `not_found`（不落副作用）。
+
+### bid.gate_pass —— 人工过门（写面；#603 批 A——治理面写面首发）
+`{ gate, decision, findings?, reason?, actor_id?, project_version? }`
+
+流程（#182 宿主签发面——**不进 MCP 工具表，Agent 拿不到**）：壳内真人经 UI
+确认后，壳用服务态密钥签 receipt（scope 绑本门——A 门 receipt 过不了 B 门；
+#323 内容绑定当前章节树摘要——签发后章节被改 → 域层 ContentDrifted 拒），
+经 `bid_mcp::dispatch_with(record_review_gate)` 走真实工具面落账，工具输出
+原样放 `gate_pass` 键（receipt 回执 / gates_approved / agent_waivers /
+human_review_complete / status）。门序（矩阵→大纲→导出确认）/ 状态窗
+（matrix 门 MATRIX_READY+）/ 幂等 / 追认 / BLOCKER 强制派生 RT 全在域层裁决
+——壳侧零重实现，拒绝文案原样透传（不假成功）。
+
+参数：`gate` = matrix_approval|outline_approval|pre_export_confirm|addendum_waiver
+（no_addendum_confirmed 走 record_addendum_waiver 的 confirm_no_addendum 路径，
+#603 批 C 接线）；`decision` = APPROVED|REJECTED；`findings` =
+`[{severity, code, message, section_id?}]`（Rejected 必须含 ≥1 BLOCKER）；
+`reason`（human 路径可空）；`actor_id`（宿主身份命名，缺省 `shell-operator`）；
+`project_version`（可选 CAS）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "gate_pass": { "receipt": { "review_id": "REV-0003", "gate": "matrix_approval",
+                    "decision": "APPROVED", "reviewer": "human:shell-operator",
+                    "actor": { "actor_id": "shell-operator", "actor_type": "human",
+                               "authentication_method": "hmac_receipt_v2" },
+                    "method": "human_receipt", "human_confirmed": true,
+                    "finding_ids": [], "spawned_rt_ids": [],
+                    "reviewed_content_digest": "…" },
+                   "gates_approved": ["matrix_approval"],
+                   "agent_waivers": [], "human_review_complete": true,
+                   "status": "MATRIX_READY", "project_version": 4 } }
+```
+拒绝面：无 db.json → `not_found`；状态窗未到 / 门序未满足 → **`state`**（域层
+E_STATE 原文，如「当前状态 REQUIREMENTS_EXTRACTED 不允许调用
+record_review(matrix_approval)」）；Rejected 无 BLOCKER / 非法门名 / receipt
+过期漂移 → **`bad_args`**（E_UNPROCESSABLE 原文）。
+
 
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
