@@ -5,6 +5,7 @@
 """
 
 from src.analyze.dataset import AnalysisDataset, load_dataset
+from src.analyze.density import competition_density
 from src.analyze.keywords import common_bigrams, keyword_frequency
 from src.analyze.stats import (
     budget_summary,
@@ -22,4 +23,5 @@ __all__ = [
     "region_distribution",
     "keyword_frequency",
     "common_bigrams",
+    "competition_density",
 ]
