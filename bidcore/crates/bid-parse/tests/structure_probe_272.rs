@@ -139,6 +139,7 @@ fn probe_file(path: &Path) -> serde_json::Value {
 }
 
 #[test]
+#[ignore = "CI 重型验收测试（真实语料全量解析，单测 6-13 分钟）——PR 阶段跳过，main 阶段 --include-ignored 全跑。本地手动：cargo test -- --ignored"]
 fn probe_structure_baseline() {
     // poppler 门控（issue #9 纪律：环境差异不伪装业务结果——Windows CI 无
     // poppler 时 PDF 解析不可用，响亮 SKIP 而非假绿/假红）
