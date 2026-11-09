@@ -50,8 +50,11 @@ SCENARIOS = ("TC-01", "TC-02", "TC-07", "TC-11")
 #   + 5 TR2 引擎借鉴夹具（PR #15 引入：word-complex/word-merged/excel-complex + gen-log + PROVENANCE）
 EXPECTED_MANIFEST_FILES = (5 + len(S.EVIDENCE_FILES) + 5 + len(S.TRANSITIONS) + 2 + 2 + 1
                            + len(R.OUTPUT_FILES) + 5
-                           + 2)  # #577：TRANSITIONS 4->5（#490 meta.json 进 TRANSITIONS 计数）；
-                                # #559：澄清修改文件-3.1.1.docx（#425）+ ground-truth/meta.json（#491/A-20③）携带面
+                           + 1)  # #561 v3 计数对账（实测修正）：携带面净增恰 1——
+                                # 澄清修改文件-3.1.1.docx（#425→#559，gen_carried_fixtures 复制面）。
+                                # 旧值 +2 把 ground-truth/meta.json 双计（它已在上方 5-GT 内——
+                                # #490 A-20③ 落地时 GT 5→5 已含），58≠生成器真值 57，
+                                # T3a/T6 计数门恒红（主链不在 CI，红点无人见——本 PR 收口）。
 
 _RULE_CODES = ["CERT_EXPIRED", "PRICE_EXCEEDS_BUDGET", "DURATION_MISMATCH", "PAGE_LIMIT",
                "MISSING_SIGNATURE", "DARK_BID_WORD", "TODO_RESIDUE", "INJECTION_PATTERN"]

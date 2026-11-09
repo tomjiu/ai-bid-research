@@ -574,28 +574,8 @@
    "bytes": 5535
   },
   {
-   "path": "corpus-A/files/D-技术标-第一章.md",
-   "sha256": "b90a6ee898db5021f159b0fe7d305568f3db8430aa067d99e5663a50d92b7813",
-   "bytes": 747
-  },
-  {
    "path": "corpus-A/files/澄清修改文件-3.1.1.docx",
    "sha256": "019c15d0b7bd4184718455e1b5876ebdc72261f31b122b3d0832258a08afb3c3",
    "bytes": 36799
-  },
-  {
-   "path": "performance-samples/performance-samples.json",
-   "sha256": "9773c31f01b71ed32fa7d833152d4c0b733908f96abb976b5f73d626b0f88816",
-   "bytes": 9096
-  },
-  {
-   "path": "real-tender-batch1/README.md",
-   "sha256": "e381b6278c022c5aa43e27645559002bc1cc1dfe3526e77b8574f2ac608dc4af",
-   "bytes": 5443
-  },
-  {
-   "path": "real-tender-batch1/college-ai-230001/学院国家双高建设项目智慧教育生态下的AI赋能“专业群”建设服务招标文件（[230001]JYGS[GK]2026000620261105001）.pdf",
-   "sha256": "bad4d6ba0b23406d40f662ee28e06e4dcbbb2fb5b5bfef7fcf977c50f45370bb",
-   "bytes": 719050
   }
  ]}
