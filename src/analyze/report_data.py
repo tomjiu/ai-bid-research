@@ -16,6 +16,7 @@ from src.analyze.density import competition_density
 from src.analyze.quality import field_quality
 from src.analyze.keywords import common_bigrams, keyword_frequency
 from src.analyze.stats import (
+    budget_region_crosstab,
     budget_summary,
     date_range,
     monthly_trend,
@@ -54,6 +55,7 @@ def build_analysis_payload(
         "density": competition_density(dataset),
         "field_quality": field_quality(dataset),
         "buyer_profiles": buyer_profiles(dataset),
+        "budget_region_crosstab": budget_region_crosstab(dataset),
     }
 
 
@@ -242,6 +244,34 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
             "注：预算口径只计有值样本（样本数见 payload budget_sample_count），缺失不折零。",
+            "",
+        ]
+
+    crosstab = payload.get("budget_region_crosstab") or {}
+    # 只有「未知」区域 = 无区域信号（同二节跳节口径）
+    if crosstab and not (len(crosstab) == 1 and "未知" in crosstab):
+        first_buckets = next(iter(crosstab.values()))
+        headers = ["区域"] + list(first_buckets.keys()) + ["合计"]
+        rows = []
+        for region, buckets in crosstab.items():
+            rows.append(
+                [region]
+                + [str(count) for count in buckets.values()]
+                + [str(sum(buckets.values()))]
+            )
+        totals = [
+            str(sum(row[label] for row in crosstab.values()))
+            for label in first_buckets
+        ]
+        rows.append(
+            ["合计"] + totals + [str(sum(map(sum, (b.values() for b in crosstab.values()))))]
+        )
+        sections += [
+            "## 九、预算 × 区域交叉（计数矩阵，万元分桶）",
+            "",
+            _render_table(headers, rows),
+            "",
+            "注：分桶为研究经验口径（左闭右开，末桶无上界）；「预算未知」为数据缺口如实可见。",
             "",
         ]
 

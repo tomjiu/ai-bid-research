@@ -15,6 +15,7 @@ from src.analyze.compare import (
 from src.analyze.quality import field_quality
 from src.analyze.report_data import build_analysis_payload, render_analysis_markdown
 from src.analyze.stats import (
+    budget_region_crosstab,
     budget_summary,
     date_range,
     monthly_trend,
@@ -28,6 +29,7 @@ __all__ = [
     "date_range",
     "monthly_trend",
     "region_distribution",
+    "budget_region_crosstab",
     "keyword_frequency",
     "common_bigrams",
     "competition_density",
