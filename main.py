@@ -16,6 +16,9 @@
     # 领域数据分析（离线纯数据报告：预算/区域/趋势/关键词/密度）
     python main.py analyze --db data/bids.db --keyword 智慧城市 --days 90 --html
 
+    # 研究管道全链：采集→抽取→分析→报告一条命令（增量模式只读新文件）
+    python main.py pipeline --source announcements/ --db data/bids.db --incremental --html
+
     # 导入项目清单到 SQLite（单个对象或对象数组）
     python main.py db --import bids.json
 
@@ -216,6 +219,59 @@ def build_parser() -> argparse.ArgumentParser:
         help="报告落盘后同时导出 HTML",
     )
     analyze.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/reports"),
+        help="报告输出目录（默认 output/reports）",
+    )
+
+    # pipeline 子命令（#601 批次 D：全链编排）
+    pipeline = sub.add_parser(
+        "pipeline",
+        help=(
+            "研究管道全链：采集→抽取→分析→报告一条命令"
+            "（每阶段状态可见，失败降级不静默）"
+        ),
+    )
+    pipeline.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="公告源路径；缺省时只分析既有库（跳过采集/抽取）",
+    )
+    pipeline.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"研究工作区数据库（默认 {DEFAULT_DB_PATH}）",
+    )
+    pipeline.add_argument(
+        "--keyword",
+        default=None,
+        help="分析/报告关键词口径",
+    )
+    pipeline.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="分析/报告时间窗口（天）",
+    )
+    pipeline.add_argument(
+        "--incremental",
+        action="store_true",
+        help="增量模式：只读上次成功运行后的新文件（水位见 pipeline_runs）",
+    )
+    pipeline.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="离线模式：跳过 LLM 抽取阶段",
+    )
+    pipeline.add_argument(
+        "--html",
+        action="store_true",
+        help="报告落盘后同时导出 HTML",
+    )
+    pipeline.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output/reports"),
@@ -571,6 +627,75 @@ def run_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_pipeline(args: argparse.Namespace) -> int:
+    """执行 pipeline 子命令：全链编排 + 阶段报告。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常；2 源不可读——起步硬错）。
+    """
+    from src.extract import AnnouncementExtractor
+    from src.pipeline import ResearchPipeline
+
+    extractor = None
+    if args.source is not None and not args.no_llm:
+        client = _build_llm_client_or_none()
+        if client is not None:
+            extractor = AnnouncementExtractor(client)
+
+    pipeline = ResearchPipeline(
+        args.db, extractor=extractor, output_dir=args.output_dir
+    )
+    try:
+        result = pipeline.run(
+            args.source,
+            keyword=args.keyword,
+            days=args.days,
+            html=args.html,
+            incremental=args.incremental,
+        )
+    except SourceError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+    for stage in result.stages:
+        detail = stage.detail
+        if stage.status == "skipped":
+            # 任何阶段的跳过都有 reason（不静默——空转也要说清楚为什么）
+            line = f"跳过：{detail.get('reason', '（无原因记录）')}"
+        elif stage.name == "collect":
+            line = (
+                f"读取 {detail['files_read']} 文件，装载 {detail['loaded']} 条"
+                f"（新 {detail['new']} / 更新 {detail['updated']}），"
+                f"去重 {detail['deduped']}，失败 {len(stage.failures)}"
+            )
+        elif stage.name == "extract":
+            line = (
+                f"抽取 {detail['extracted']} 条"
+                f"（入库 {detail['stored']} / LLM 失败 {detail['llm_failures']}"
+                f" → pending {detail['parked']}）"
+            )
+        elif stage.name == "analyze":
+            rate = detail.get("complete_rate")
+            rate_txt = f"，完整度 {round(rate * 100, 1)}%" if rate else ""
+            line = f"{detail['records']} 条记录{rate_txt}"
+        else:  # report
+            line = f"报告 → {detail['path']}"
+        print(f"[{stage.name}] {stage.status}: {line}")
+        for failure in stage.failures:
+            print(f"  ✗ {failure['origin']}: {failure['error']}")
+
+    if result.report_path is not None:
+        print(f"\n报告已生成: {result.report_path}")
+        if args.html and result.payload and result.payload.get("_html_path"):
+            print(f"HTML 已导出: {result.payload['_html_path']}")
+    if result.run_id is not None:
+        print(f"运行已登记：run #{result.run_id}（pipeline_runs 台账）")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计。
 
@@ -580,7 +705,7 @@ def run_db(args: argparse.Namespace) -> int:
     Returns:
         进程退出码。
     """
-    db_path: Path = args.db
+
     creating = args.import_file is not None
     if not creating and not db_path.exists():
         print(f"错误：数据库不存在: {db_path}", file=sys.stderr)
@@ -669,6 +794,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return run_extract(args)
     if args.command == "analyze":
         return run_analyze(args)
+    if args.command == "pipeline":
+        return run_pipeline(args)
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":

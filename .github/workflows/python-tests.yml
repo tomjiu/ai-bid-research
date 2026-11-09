@@ -70,6 +70,10 @@ jobs:
           # analyze 链路（#601 批次 C）：离线纯数据报告
           python main.py analyze --db "$RUNNER_TEMP/extract.db" --output-dir "$RUNNER_TEMP/reports" | grep -q "2 条记录"
           ls "$RUNNER_TEMP/reports"/analysis_all_*.md > /dev/null
+          # pipeline 链路（#601 批次 D）：全链编排（离线模式）+ 增量重跑
+          python main.py pipeline --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/pipe.db" --output-dir "$RUNNER_TEMP/pipe-reports" --no-llm | grep -q "run #1"
+          python main.py pipeline --source "$RUNNER_TEMP/announcements" --db "$RUNNER_TEMP/pipe.db" --output-dir "$RUNNER_TEMP/pipe-reports" --no-llm --incremental | grep -q "读取 0 文件"
+          ls "$RUNNER_TEMP/pipe-reports"/analysis_all_*.md > /dev/null
           # db 链路
           printf '[{"bid_id":"SMOKE-001","project_name":"ci-smoke","source_url":"https://example.com/1","budget_wan":1.5,"deadline":"2026-12-31","requirements":["资质A"]}]' \
             > "$RUNNER_TEMP/smoke-import.json"
