@@ -5,6 +5,7 @@
 """
 
 from src.analyze.dataset import AnalysisDataset, load_dataset
+from src.analyze.buyers import buyer_profiles
 from src.analyze.density import competition_density
 from src.analyze.keywords import common_bigrams, keyword_frequency
 from src.analyze.compare import (
@@ -30,6 +31,7 @@ __all__ = [
     "keyword_frequency",
     "common_bigrams",
     "competition_density",
+    "buyer_profiles",
     "build_analysis_payload",
     "render_analysis_markdown",
     "field_quality",

@@ -825,7 +825,7 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
 
 
 def run_db(args: argparse.Namespace) -> int:
-    """执行 db 子命令：导入/查询/统计。
+    """执行 db 子命令：导入/查询/统计/导出。
 
     Args:
         args: 已解析的命令行参数。

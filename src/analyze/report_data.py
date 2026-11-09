@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
+from src.analyze.buyers import buyer_profiles
 from src.analyze.density import competition_density
 from src.analyze.quality import field_quality
 from src.analyze.keywords import common_bigrams, keyword_frequency
@@ -52,6 +53,7 @@ def build_analysis_payload(
         "bigrams": common_bigrams(dataset, top=10),
         "density": competition_density(dataset),
         "field_quality": field_quality(dataset),
+        "buyer_profiles": buyer_profiles(dataset),
     }
 
 
@@ -215,6 +217,31 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             _render_table(["最缺字段", "填充率", "已填/总数"], rows),
             "",
             f"整体字段填充率：{_fmt_pct(quality.get('overall'))}",
+            "",
+        ]
+
+    buyers = payload.get("buyer_profiles") or []
+    if buyers:
+        rows = [
+            [
+                profile["purchaser"],
+                str(profile["project_count"]),
+                _fmt_money(profile["budget_total"]),
+                _fmt_money(profile["budget_mean"]),
+                str(len(profile["active_months"])),
+                "、".join(profile["categories"]) or "——",
+            ]
+            for profile in buyers
+        ]
+        sections += [
+            "## 八、采购人画像（项目数 Top）",
+            "",
+            _render_table(
+                ["采购人", "项目数", "预算合计(万)", "平均预算(万)", "活跃月份数", "领域"],
+                rows,
+            ),
+            "",
+            "注：预算口径只计有值样本（样本数见 payload budget_sample_count），缺失不折零。",
             "",
         ]
 
