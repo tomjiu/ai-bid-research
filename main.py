@@ -58,6 +58,7 @@ from src.platform import (
 )
 from src.report.generator import ReportGenerator
 from src.storage.database import _BID_COLUMNS, BidDatabase
+from src.version import version_banner
 
 logger = logging.getLogger("ai-bid-research")
 
@@ -89,6 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="输出调试日志"
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=version_banner(),
+        help="显示版本与运行环境",
+    )
+
     sub = parser.add_subparsers(dest="command", help="可用子命令")
 
     # report 子命令
