@@ -133,10 +133,18 @@ def _page_break(doc):
 def _make_org_chart_png(path: Path):
     """确定性实施组织架构图（PIL 绘制，无随机）。静态字体——可变字体 PIL 渲染空白（v0.4 字体事实）。"""
     from PIL import Image, ImageDraw, ImageFont
+    import fixture_spec as S
+    # #565 单一真源纪律收口：旧版硬编码 /usr/share/fonts/... 绝对路径——
+    # BID_RENDER_FONT / data/fonts/ 两种部署形态下此处直接 OSError 崩（与
+    # fixture_gen/v1_corpus_r 的 resolve_render_font 三级探测不一致）。
+    _font = S.resolve_render_font()
+    if _font is None:
+        print(f"[v1_export] {S.RENDER_FONT_HINT}", file=sys.stderr)
+        raise SystemExit(2)
     W, H = 900, 430
     img = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(img)
-    font = ImageFont.truetype("/usr/share/fonts/truetype/chinese/SarasaMonoSC-Regular.ttf", 20)
+    font = ImageFont.truetype(str(_font), 20)
     boxes = [(360, 30, 540, 80, "项目经理"),
              (140, 150, 320, 200, "网络组"), (390, 150, 510, 200, "安全组"),
              (580, 150, 760, 200, "实施组"), (200, 290, 380, 340, "质检员"),

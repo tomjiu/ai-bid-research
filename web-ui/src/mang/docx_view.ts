@@ -683,7 +683,12 @@ function readRunFmt(rPr: Element): RunFmt {
         break;
       }
       case 'highlight': {
-        if (val) f.highlight = val.toLowerCase();
+        // Word 会在大量 run 上显式写 <w:highlight w:val="none"/> 表示「无高亮」。
+        // 旧实现把 "none" 也当有效值存下来，渲染时查不到映射就兜底成黄色——
+        // 真实文件里 3938/3940 处 none 全被涂黄（整页背景发黄的真因）。
+        // 这里把 none 归一为「不设置」（不透传给下游）。
+        const hv = (val ?? '').trim().toLowerCase();
+        if (hv && hv !== 'none') f.highlight = hv;
         break;
       }
       default:
@@ -750,7 +755,10 @@ function highlightColor(name: string): string {
     black: '#000000',
     white: '#ffffff',
   };
-  return table[name] ?? '#fff59d';
+  // 未知枚举：返回空串（= 不上色），绝不兜底成黄色。
+  // 兜底成黄色会把「解析不到的颜色」和「用户真的标了黄」混为一谈——
+  // 旧实现正是因此把 w:val="none" 渲染成整页黄底。
+  return table[name] ?? '';
 }
 
 /** 段落对齐映射（jc 枚举 → CSS text-align）。 */
@@ -815,7 +823,10 @@ function wrapFmt(doc: Document, inner: Node, fmt: RunFmt, measureOnly: boolean):
   if (fmt.halfPoints !== null) css.push('font-size:' + halfPointsToPx(fmt.halfPoints).toFixed(1) + 'px');
   if (fmt.color) css.push('color:' + fmt.color);
   if (fmt.font) css.push('font-family:' + quoteFamily(fmt.font));
-  if (fmt.highlight) css.push('background-color:' + highlightColor(fmt.highlight));
+  if (fmt.highlight) {
+    const hl = highlightColor(fmt.highlight);
+    if (hl) css.push('background-color:' + hl);
+  }
   if (css.length > 0 && !measureOnly) {
     const span = el(doc, 'span');
     span.setAttribute('style', css.join(';'));
@@ -1464,6 +1475,12 @@ function buildStyleSheet(): string {
     '}',
     // 纸面：A4 宽 210mm、内边距 20mm；position:relative 供证据高亮层定位；
     // overflow:visible —— 滚动归宿主外层滚动器（本模块不建滚动容器）。
+    // #34 A 级虚拟化：content-visibility:auto 让屏外纸面跳过布局/绘制，
+    // 标签切换（activateTab hidden 互斥）回切时只重排视口附近 1-2 页。
+    // contain-intrinsic-size 的 auto = 优先用「上次记忆尺寸」，首渲染前
+    // 以 1123px（A4 高 @96dpi）占位；宽度不受影响（本规则 width:100% 非
+    // 内容驱动，尺寸包含不改变显式宽度）。页脚 offsetTop 页码跟踪依赖的
+    // 盒位仍单调（占位高度只影响未渲染页的估算位）。
     SCOPE + ' .mang-docx-page {',
     '  position: relative;',
     '  overflow: visible;',
@@ -1477,6 +1494,14 @@ function buildStyleSheet(): string {
     '  color: var(--mang-fg, #1f2328);',
     '  box-shadow: var(--mang-doc-shadow);',
     '  border-radius: 2px;',
+    // 视口外的页跳过样式计算/布局/绘制。DOCX 一次性把所有页建进 DOM，
+    // 27 页真实招标文档约 8500 个 span（3940 处 w:highlight 各生成一个
+    // 带 inline style 的包装）；切换标签时这些子树全在 DOM 里，浏览器
+    // 每次都要为它们做可见性判断与重排，标签越多越慢。
+    // content-visibility:auto 让视口外的页不参与布局；contain-intrinsic-size
+    // 提供估算尺寸避免滚动条跳动（auto 关键字让浏览器记住实测过的尺寸）。
+    '  content-visibility: auto;',
+    '  contain-intrinsic-size: auto 1123px;',
     '}',
     // 页脚页码（低位、低调；纯装饰）。
     SCOPE + ' .mang-docx-page[data-page]::after {',
@@ -1595,11 +1620,13 @@ function buildStyleSheet(): string {
     '  border-radius: 3px;',
     '}',
     // 打印：纸面阴影/页码隐藏（浏览器打印不重复分页——打印走宿主整页）。
+    // #34：打印强制全量渲染（屏外页不跳过），避免打印输出丢页。
     '@media print {',
     '  ' + SCOPE + ' .mang-docx-page {',
     '    box-shadow: none;',
     '    margin: 0;',
     '    max-width: none;',
+    '    content-visibility: visible;',
     '  }',
     '  ' + SCOPE + ' .mang-docx-page[data-page]::after { display: none; }',
     '}',
@@ -1861,25 +1888,38 @@ export function renderDocx(
     disposed = true;
     // #54 页码监听清理（与 DOM 清理同生命周期）
     if (statusScrollHost) {
-      statusScrollHost.removeEventListener('scroll', reportCurrentPage);
+      statusScrollHost.removeEventListener('scroll', onScroll);
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      if (pageSizeObserver) {
+        pageSizeObserver.disconnect();
+        pageSizeObserver = null;
+      }
       statusScrollHost = null;
     }
     const teardown = (): void => {
       try {
         if (root && root.parentNode) root.parentNode.removeChild(root);
-        if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+        // 宿主标记先摘——本渲染器不再计入「还有谁在用全局样式表」。
+        host.classList.remove('mang-docx');
+        host.removeAttribute('data-mang-renderer');
+        host.removeAttribute('data-mang-theme');
+        // 样式表是全局单例（renderDocx 去重只留一份，内容确定同构）——
+        // 还有其他 docx 渲染器在场时不能摘：重载/关闭 A 标签的 dispose
+        // 不能把 B 标签正在用的纸面样式一起带走（否则 B 只能等自己重渲
+        // 才恢复样式）。
+        if (styleEl && styleEl.parentNode) {
+          const stillInUse =
+            host.ownerDocument && host.ownerDocument.querySelector('[data-mang-renderer="docx"]');
+          if (!stillInUse) styleEl.parentNode.removeChild(styleEl);
+        }
         for (const url of s.blobUrls) URL.revokeObjectURL(url);
       } catch {
         /* disposer 不抛：宿主可能已被整体移除 */
       }
       s.blobUrls.length = 0;
-      try {
-        host.classList.remove('mang-docx');
-        host.removeAttribute('data-mang-renderer');
-        host.removeAttribute('data-mang-theme');
-      } catch {
-        /* 忽略：宿主已失效 */
-      }
     };
     // 同步段已全部发生（DOM/样式表已在位）；只有异步构建可能仍在跑。
     teardown();
@@ -1911,18 +1951,56 @@ export function renderDocx(
     }
     return null;
   };
+  // #34：页码统计的性能修复。旧实现直接在 scroll 回调里 querySelectorAll + 逐页
+  // 读 offsetTop——offsetTop 是**布局属性**，读它会强制浏览器同步重排整棵树
+  // （layout thrashing）。滚动每秒触发几十次，加上标签切换后多个 docx_view 的
+  // 监听同时存活，就是「越切越卡」的真因。
+  //
+  // 两条业界标准做法一起用：
+  //   ① rAF 节流：一帧最多算一次（滚动事件比帧密，纯浪费）
+  //   ② 缓存页顶位置：只在 DOM 尺寸变化时重算，滚动时走二分查找，不读布局
+  let pageTops: { page: number; top: number }[] = [];
+  let pageTopsDirty = true;
+  let pageSizeObserver: ResizeObserver | null = null;
+  let rafId = 0;
+  const measurePageTops = (): void => {
+    if (!root) return;
+    const pages = Array.from(root.querySelectorAll('.mang-docx-page[data-page]')) as HTMLElement[];
+    // 一次性把这批布局属性全读完（读在同一批里，浏览器只排一次）
+    pageTops = pages.map((p) => ({ page: Number(p.getAttribute('data-page')) || 0, top: p.offsetTop }));
+    pageTopsDirty = false;
+  };
   const reportCurrentPage = (): void => {
     if (disposed || asyncPages <= 0) return;
     const sc = findScrollHost();
     if (!sc) return;
+    // #34：本视图隐藏时直接早退——window 级 scroll 兜底会让其它 pane 的
+    // 滚动也唤醒本视图，多标签时系数放大（每多一个 docx 标签 +1）。
+    if (sc.clientWidth === 0) return;
+    if (pageTopsDirty || pageTops.length === 0) measurePageTops();
     const top = sc.scrollTop + 80; // 视口顶部往下一点容差（页眉空白不算翻页）
-    const pages = root ? (Array.from(root.querySelectorAll('.mang-docx-page[data-page]')) as HTMLElement[]) : [];
+    // 二分找最后一个 top <= scrollTop 的页（pageTops 天然升序）
+    let lo = 0;
+    let hi = pageTops.length - 1;
     let cur = 1;
-    for (const p of pages) {
-      if (p.offsetTop <= top) cur = Number(p.getAttribute('data-page')) || cur;
-      else break;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (pageTops[mid].top <= top) {
+        cur = pageTops[mid].page || cur;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
     }
     safeOnStatus(cur, asyncPages);
+  };
+  /** rAF 节流入口——scroll 回调只排帧，真正的计算每帧最多一次。 */
+  const onScroll = (): void => {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      reportCurrentPage();
+    });
   };
   const safeOnStatus = (page: number, pages: number): void => {
     if (!opts || typeof opts.onStatus !== 'function' || disposed) return;
@@ -1936,10 +2014,10 @@ export function renderDocx(
     if (statusScrollHost) return;
     const sc = findScrollHost();
     if (sc) {
-      sc.addEventListener('scroll', reportCurrentPage, { passive: true });
+      sc.addEventListener('scroll', onScroll, { passive: true });
       statusScrollHost = sc;
     } else {
-      window.addEventListener('scroll', reportCurrentPage, { passive: true });
+      window.addEventListener('scroll', onScroll, { passive: true });
       statusScrollHost = window;
     }
   };
@@ -2010,6 +2088,23 @@ export function renderDocx(
     const built = buildFlow(parts, parts.body, root, parts.media);
     // live 回填：调用方手上那份 stats 立即反映真实结果。
     publish(built.pages, built.blocks);
+    // 页面刚建好：页码位置缓存必须失效，首次滚动时重算。
+    pageTopsDirty = true;
+    // 图片是懒加载的，加载完成会改变页高——用 ResizeObserver 兜住这种变化
+    // （比监听 load 事件稳，且不需要遍历图片）。
+    try {
+      const ro = new ResizeObserver(() => {
+        // #34：pane 隐藏时尺寸翻转（→0 / 恢复）也会触发本回调，若因此作废
+        // 页顶缓存，下次滚动会对全部页做一次 offsetTop 强制重排。只有
+        // 「可见状态下」的尺寸变化才需要作废缓存。
+        if (root.offsetParent === null) return;
+        pageTopsDirty = true;
+      });
+      if (root) ro.observe(root);
+      pageSizeObserver = ro;
+    } catch {
+      /* 无 ResizeObserver：退化为首次测量后不再更新（页码仍可用，只是图后可能偏） */
+    }
     // #54 构建成功后挂页码滚动监听（失败面/降级面不挂）。
     attachStatusListener();
     applyHighlight(s, root, opts, built.pages);

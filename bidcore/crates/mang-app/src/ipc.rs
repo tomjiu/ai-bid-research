@@ -392,6 +392,26 @@ impl Ctx {
                 "profile": if cfg!(debug_assertions) { "debug" } else { "release" },
             })),
 
+            // #34 诊断通道：页面 console 输出 → 宿主 stderr。
+            // 前端在 initialization script 里 hook 了 console.*，
+            // 这里只负责落到进程标准错误（终端 / 重定向文件都能看）。
+            // 只在 debug 构建或显式开启时生效，正式包不刷屏。
+            "diag.log" => {
+                let kind = a.str("kind")?.unwrap_or("log").to_string();
+                let text = a.str("text")?.unwrap_or("").to_string();
+                // 同时走 stderr 与落盘：Start-Process 的重定向在某些
+                // 启动方式下不写文件，落盘是唯一可靠的通道。
+                eprintln!("[web:{kind}] {text}");
+                use std::io::Write as _;
+                if let Ok(mut fp) = std::fs::OpenOptions::new()
+                    .create(true).append(true)
+                    .open(std::env::temp_dir().join("mang-web-diag.log"))
+                {
+                    let _ = writeln!(fp, "[{kind}] {text}");
+                }
+                Ok(json!({ "ok": true }))
+            }
+
             "fs.tree" => crate::fsapi::tree(&ws, a),
 
             "fs.read" => crate::fsapi::read(&ws, a),
@@ -454,7 +474,9 @@ impl Ctx {
 
             // ── #313 批 A：标书数据面（bid.rs——state 经 bid_mcp 真实工具面，
             //    outline 直读 DomainStore）；批 B：matrix 经 bid_mcp 真实工具面
-            //    （get_compliance_matrix，壳内聚合分页）──────────────
+            //    （get_compliance_matrix，壳内聚合分页）；批 D：coverage 经
+            //    bid_mcp 真实工具面（get_coverage_report + 逐文件
+            //    get_star_coverage 聚合）──────────────────────────
             "bid.state" => crate::bid::state(&ws, &self.bid, &a),
 
             "bid.outline" => crate::bid::outline(&ws, &self.bid, &a),
@@ -465,6 +487,56 @@ impl Ctx {
             "bid.quality" => crate::bid::quality(&ws, &self.bid, &a),
 
             "bid.score" => crate::bid::score(&ws, &self.bid, &a),
+
+            // ── #603 批 A：治理面（bid.rs——gates 为 DomainStore 直读台账；
+            //    gate_pass 为写面首发：宿主签发 receipt（#182）后经
+            //    bid_mcp 真实工具面 record_review_gate 落账）──────────
+            "bid.gates" => crate::bid::gates(&ws, &self.bid, &a),
+
+            "bid.gate_pass" => crate::bid::gate_pass(&ws, &self.bid, &a),
+
+
+            "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
+
+            // ── #19：导入向导写面（bid.rs——create_project 空工作区起步
+            //    （ensure_or_open——副作用即目的），经 bid_mcp 真实工具面
+            //    create_bid_project（external_key 缺省 = 工作区路径幂等键）；
+            //    import_files 壳侧注入 project_id（单一真源——UI 不自报），
+            //    E_PARTIAL 转成功面 + partial 分账）────────────────────
+            "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
+
+            "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+
+            // #47 R8（#19 拖拽导入）：壳 drop 事件路径 → 复制进工作区根
+            // （不碰 DomainStore——先拖文件再建项合法；导入仍走
+            // bid.import_files 向导确认 kind）
+            "bid.ingest_drop" => crate::bid::ingest_drop(&ws, &self.bid, &a),
+            // ── #18 出口闭环（bid.rs——validate / export 均经 bid_mcp 真实
+            //    工具面 validate_bid_document / export_bid_document；
+            //    E_STATE 透传 `state` 码 → UI 引导卡）──────────────────
+            "bid.validate" => crate::bid::validate(&ws, &self.bid, &a),
+
+            "bid.export" => crate::bid::export(&ws, &self.bid, &a),
+
+            // ── #20 治理出口三件（bid.rs——packages 只读；matrix_override /
+            //    recover_state 为写面：receipt 宿主签发（#182 四重绑定签域）
+            //    后经 bid_mcp 真实工具面 set_matrix_override /
+            //    recover_validating_state；裁决全在域层）────────────
+            "bid.packages" => crate::bid::packages(&ws, &self.bid, &a),
+
+            "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
+
+            "bid.recover_state" => crate::bid::recover_state(&ws, &self.bid, &a),
+
+            // ── #603 批 C：补遗豁免（addenda 为 DomainStore+readiness 直读
+            //    台账；两写面走 record_addendum_waiver 工具面——逐件免责
+            //    与全局无补遗确认语义分账，#379）──────────
+            "bid.addenda" => crate::bid::addenda(&ws, &self.bid, &a),
+
+            "bid.addendum_waiver" => crate::bid::addendum_waiver(&ws, &self.bid, &a),
+
+            "bid.no_addendum_confirm" => crate::bid::no_addendum_confirm(&ws, &self.bid, &a),
+
 
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}

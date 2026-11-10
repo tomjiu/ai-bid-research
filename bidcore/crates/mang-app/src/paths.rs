@@ -215,6 +215,92 @@ pub fn rel_join(p: &Path) -> String {
         .join("/")
 }
 
+/// 基名跨平台可移植性守卫（R10，#47 平台区分③ / R8 注释预留的硬化项）。
+///
+/// **两侧同拒**（不是 cfg 分支）：Linux 允许 `CON.docx`、`报告?.pdf` 这类
+/// 名字，但项目库（db.json 的 upload_ref / 文件本体）要跨平台迁移——在
+/// Linux 落库的保留名文件拷到 Windows 即失效/无法创建。守卫放在**壳侧
+/// 入口**（ingest_drop 落位 / import_files 的 upload_ref 与 filename），
+/// 域层/工具面零改动（分层不重复）。判据（Windows 文件系统规则）：
+///
+/// 1. 保留基名（不分大小写，含带扩展形态）：`CON PRN AUX NUL COM1-9 LPT1-9`
+///    ——`CON.docx` 的主干 `CON` 同样保留（Win32 CreateFile 语义）；
+/// 2. 非法字符：`< > : " | ? *` 与 ASCII 控制符（0x00-0x1F、0x7F）；
+///    `/` 与 `\` 是**基名内**的路径分隔符，同样拒（基名不该含分隔符——
+///    分隔符归一在 `normalize_upload_ref`，两守卫互补不重叠）；
+/// 3. 尾部空格或点：Windows 剥尾点/空格后实际创建的文件名与记录键
+///    不一致（幂等 sha 检查会错位）——拒。
+///
+/// 返回 Err(原因) 供调用方组装分账/错误文案；合法名返回 Ok(())。
+/// 全角冒号 `：`、CJK 标点均合法（不在禁集）。
+pub fn guard_portable_basename(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("基名为空".into());
+    }
+    // 1) 保留名：主干（第一个 '.' 前）不分大小写匹配
+    let stem = name.split('.').next().unwrap_or("");
+    let upper = stem.to_ascii_uppercase();
+    let reserved = matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+    );
+    if reserved {
+        return Err(format!(
+            "Windows 保留设备名（CON/PRN/AUX/NUL/COM1-9/LPT1-9，不分大小写、带扩展同样保留）：{name}"
+        ));
+    }
+    // 2) 非法字符：Win32 命名规则 + 路径分隔符 + 控制字符
+    if let Some(bad) = name.chars().find(|&c| {
+        matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\')
+            || (c as u32) < 0x20
+            || c as u32 == 0x7f
+    }) {
+        return Err(format!("含 Windows 非法字符 {bad:?}（<>:\"|?*/\\ 与控制符）：{name}"));
+    }
+    // 3) 尾部空格/点
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err(format!("基名以空格或点结尾（Windows 会剥掉导致落位名与记录键错位）：{name}"));
+    }
+    Ok(())
+}
+
+/// 字符串 NFC 归一（R13，#47 平台区分⑥——macOS NFD 互操作）。
+///
+/// macOS（HFS+ 时代/Finder 默认）文件名是 **NFD 分解形态**（é = e +
+/// U+0301 组合符）；Linux/NTFS 字节精确存储。同一文件名两种形态是
+/// **不同字节串**：落位/占位/幂等键直接比对会「视觉同名却两份」。
+/// 落位名与占位键统一 **NFC**（合成形态——Windows 生态主流；CJK 与
+/// ASCII 两种形态字节相同，不受影响）。**引用键（upload_ref）不归一**——
+/// 它要匹配磁盘上的真实文件名，归一后反而找不到（文件本体是 NFD 存的）。
+pub fn nfc(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    s.nfc().collect()
+}
+
+/// Windows MAX_PATH 预检（R12，#47 平台区分⑤）。
+///
+/// 传统 Win32 路径上限 260 字符（含 NUL 终止——字符串本体最长 259）。
+/// 超限路径在未启用 `LongPathsEnabled`（注册表，默认关）+ 清单未声明
+/// `longPathAware` 的进程里**创建即失败**（ERROR_PATH_NOT_FOUND）。
+/// 壳侧在**写路径**（ingest_drop 落位 / import_files 记录 upload_ref）
+/// 预检：Linux 上虽能创建超长路径，但项目库拷到 Windows 即失效——
+/// 与 R10 保留名守卫同一跨平台可迁移性口径（双平台同拒，非 cfg）。
+///
+/// 边界：`len() > 259` 拒（260 含 NUL）；`\\?\` 前缀形态（>32K 上限）
+/// 由宿主对话框直出时天然绕开本守卫的常规形态——壳侧拼接的路径永远
+/// 是常规形态。
+pub fn guard_windows_max_path(full: &str) -> Result<(), String> {
+    if full.chars().count() > 259 {
+        return Err(format!(
+            "路径超 Windows MAX_PATH（{} 字符 > 259）：{full}…——缩短文件名/目录层级，或在 Windows 启用 LongPathsEnabled",
+            full.chars().count()
+        ));
+    }
+    Ok(())
+}
+
 /// a 是否在 b 之内（按路径组件比较，大小写不敏感——Windows 语义）
 pub fn is_inside(a: &Path, b: &Path) -> bool {
     let norm = |p: &Path| -> Vec<String> {
@@ -308,5 +394,101 @@ mod tests {
         let p = ws.resolve("new/dir/file.md", true).unwrap();
         assert!(p.ends_with("file.md"));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// R2（#47 平台区分①）：盘符形态（`C:/…`）的平台归类——两侧都断言
+    /// 「本平台的正确语义」，不是把一侧放宽成另一侧的期望：
+    ///   · Windows：`C:/x` 是绝对路径 → 越界 `outside_workspace`
+    ///   · Unix：`C:` 是普通目录名 → 围栏内相对解析（落在 ws/C:/x）
+    /// 与 selftest「盘符形态平台语义」项同口径（单测面 + 集成面）。
+    #[test]
+    fn drive_letter_form_platform_semantics() {
+        let (dir, ws) = tmpws("drive-form");
+        if cfg!(windows) {
+            let e = ws.resolve("C:/Windows/win.ini", true).unwrap_err();
+            assert_eq!(e.code, "outside_workspace");
+        } else {
+            let p = ws.resolve("C:/Windows/win.ini", true).unwrap();
+            assert!(
+                p.starts_with(dir.join("C:")),
+                "Unix 上 C: 应按普通目录名围栏内解析，实际：{}",
+                display(&p)
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// R10（#47 平台区分③）：基名跨平台守卫——表驱动，双平台同拒
+    /// （守卫本身不是 cfg 分支；两侧跑同一断言集）
+    #[test]
+    fn guard_portable_basename_table() {
+        // 合法名（含中文/全角标点/多位点/大写扩展——全部 Ok）
+        for ok in [
+            "招标文件.docx",
+            "技术标 - 最终版.pdf",
+            "报价单.v2.xlsx",
+            "图纸目录.ods",
+            "Q&A 汇总.docx",
+            "说明：格式要求.docx",      // 全角冒号合法（半角 : 才拒）
+            "CONCEPT 概念设计.docx",   // CON 开头但主干是 CONCEPT——不误伤
+            "com.docx",                // 小写 com 是普通名（COM1-9 才保留）
+        ] {
+            assert!(guard_portable_basename(ok).is_ok(), "合法名被误拒：{ok}");
+        }
+        // 保留设备名（不分大小写、带扩展同样保留）
+        for bad in [
+            "CON", "con.docx", "NUL.pdf", "Aux", "aUx.xlsx",
+            "COM1", "com9.docx", "LPT1", "lpt7.pdf",
+        ] {
+            assert!(guard_portable_basename(bad).is_err(), "保留名漏拒：{bad}");
+        }
+        // 非法字符（含基名内分隔符与控制符）
+        for bad in [
+            "报告<终稿>.docx", "计划|变更.pdf", "问?号.docx",
+            "星*号.docx", "半角:冒号.docx", "引\"号.docx",
+            "斜/杠.docx", "反\\斜.docx", "a\u{0007}b.docx",
+        ] {
+            assert!(guard_portable_basename(bad).is_err(), "非法字符漏拒：{bad}");
+        }
+        // 尾部空格/点 + 空名
+        for bad in ["REPORT.", "报告 .docx ", ""] {
+            assert!(guard_portable_basename(bad).is_err(), "形态漏拒：{bad:?}");
+        }
+    }
+
+    /// R13（#47 平台区分⑥）：NFC 归一——NFD→NFC 幂等；CJK/ASCII 不动；
+    /// 占位键（nfc + lowercase）双形态同键
+    #[test]
+    fn nfc_normalization_forms() {
+        let nfc_e: String = "\u{00e9}".to_string();                 // é 单码点（合成）
+        let nfd_e: String = "\u{0065}\u{0301}".to_string();        // e + 组合锐音符
+        assert_ne!(nfc_e, nfd_e, "前提：两形态字节不同（同一文件名两串）");
+        assert_eq!(nfc(&nfd_e), nfc_e, "NFD 输入归一到 NFC");
+        assert_eq!(nfc(&nfc_e), nfc_e, "NFC 输入幂等");
+        assert_eq!(nfc("招标文件.docx"), "招标文件.docx", "CJK 不受影响");
+        assert_eq!(nfc("plain-ASCII.docx"), "plain-ASCII.docx", "ASCII 不受影响");
+        // 占位键：NFC 大写 vs NFD 小写 → 同键（NFC 先归一再 lowercase）
+        let key_a = format!("{}", nfc(&nfd_e).to_lowercase());
+        let key_b = format!("{}", nfc(&"\u{00c9}".to_string()).to_lowercase());
+        assert_eq!(key_a, key_b, "占位键 = nfc(name).to_lowercase()——双形态同键");
+    }
+
+    /// R12（#47 平台区分⑤）：MAX_PATH 边界——259 过 / 260 拒
+    /// （260 含 NUL 终止，字符串本体上限 259）
+    #[test]
+    fn guard_windows_max_path_boundary() {
+        let ok: String = "a".repeat(259);
+        assert!(guard_windows_max_path(&ok).is_ok(), "259 字符恰在上限内");
+        let bad: String = "a".repeat(260);
+        let e = guard_windows_max_path(&bad).unwrap_err();
+        assert!(e.contains("MAX_PATH"), "错误文案带原因：{e}");
+        assert!(guard_windows_max_path("").is_ok());
+        // CJK 计字符不计字节（Windows 路径上限是 UTF-16 码元——CJK 每
+        // 字符占 1 码元，与 chars().count() 一致；代理对场景忽略——
+        // 域内文件名不含增补平面字符，实测口径以字符数为准）
+        let cjk_ok: String = "标".repeat(259);
+        assert!(guard_windows_max_path(&cjk_ok).is_ok(), "259 个 CJK 字符同样在限内");
+        let cjk_bad: String = "标".repeat(260);
+        assert!(guard_windows_max_path(&cjk_bad).is_err());
     }
 }

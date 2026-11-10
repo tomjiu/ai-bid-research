@@ -42,6 +42,7 @@ REQ 纪律：`gt_ids` 恒为空（诚实管道不知道 ground truth）——召
 | 依赖 | 版本口径 | 说明 |
 |---|---|---|
 | poppler-utils | Debian trixie 系统 pdftotext/pdfimages | PDF 文本层 `-layout`；扫描件原图抽取 |
+| poppler-data | **必须同装**（与 poppler-utils 同源 apt） | Adobe-GB1 等 CJK CMap——缺失时 pdftotext 对非嵌入 CID 字体（STSong-Light + UniGB/GBK-EUC 系）提取为空且 exit 0（`Missing language pack for 'Adobe-GB1' mapping`）；⚠ 它在 poppler-utils 的 Suggests 而非 Depends，`--no-install-recommends` 装法不会带入（run 42578288979 实证：B1 提取 2 字符→误判扫描件零块） |
 | tesseract | 5.5.0 | OCR 引擎（C++，无 Python 参与） |
 | chi_sim.traineddata | tessdata_fast，`sha256=a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730` | 提交于 `m1/tessdata/`（离线可复现） |
 
