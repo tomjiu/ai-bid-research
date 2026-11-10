@@ -563,6 +563,46 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
                          "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
 ```
 
+### bid.create_project —— 新建标书项目（写面；#19——建项/导入向导）
+`{ name, bid_deadline, mode, tender_notice_ref?, external_key? }`
+
+空工作区（无 db.json）可用的「无中生有」写面：壳直接 `BidService::open`
+（无 db 目录自动建空 store——**创建是显式意图**，副作用即预期；与读面
+not_found 前置不同），经 `bid_mcp::dispatch_with(create_bid_project)` 走
+真实工具面（契约 §1），成功后服务层 auto_checkpoint 落盘 db.json →
+**服务缓存显式失效**（读面立即可读）。`external_key` 缺省
+`shell::<工作区名>::<项目名>`——同名重放幂等（防 UI 手抖重复建）；
+已有**不同** key 的项目时工具面按状态机裁决（非 DRAFT 再建 → E_STATE，
+引导文案见 §109）。`bid_deadline` 已过 → warnings 回显不阻断（契约 §1）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "create": { "project_id": "PRJ-0001", "status": "DRAFT",
+                "project_version": 1, "warnings": [] } }
+```
+
+### bid.import_tender —— 导入招标文件（写面；#19——壳侧收编）
+`{ files: [{ path, filename?, kind?, expected_pages? }], project_version? }`
+
+要求项目已建（db.json 在——否则 not_found 引导卡）。壳侧收编：`path`
+为**工作区外绝对路径**（文件对话框选中件）时拷入 `<root>/tender-src/`
+（同名冲突 `-N` 后缀不覆盖；信任边界 = 用户选中件，与 fs.stat 绝对
+路径面同级），以工作区相对路径喂工具面；**工作区内**路径原地引用不拷
+贝。`..` 词法分量预拒（与工具面 fs_fence 同口径，先于一切磁盘操作）；
+`filename` 净化为单段纯文件名（防目录入侵）。经
+`bid_mcp::dispatch_with(import_tender_files)` 走真实工具面（#183/#189
+围栏复验——围栏只认受信根内路径，壳侧收编只决定位置不豁免围栏），
+E_PARTIAL（失败件禁引）原样透传为错误（不静默）。db.json 指纹变化
+→ 服务缓存自动失效（读面刷新重开）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFT" },
+    "import": { "file_ids": ["TF-0001"],
+                "per_file": [ { "file_id": "TF-0001", "filename": "A-招标文件.docx",
+                                "kind": "招标文件", "pages": 70, "tables": 6, "chunks": 812,
+                                "parse_status": "ok", "deduplicated": false } ],
+                "totals": { "files": 1, "chunks": 812, "parse_failed": 0, "partial": 0 } } }
+```
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
@@ -742,7 +782,7 @@ mang-app.exe [DIR] [选项]
 bidcore\target\release\mang-app.exe --selftest
 ```
 
-无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ bid.coverage（#313 批 D：无 db.json→not_found / 未导入件诚实口径 total_blocks=0+next 引导）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
+无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ bid.coverage（#313 批 D：无 db.json→not_found / 未导入件诚实口径 total_blocks=0+next 引导）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）/ bid.create_project+bid.import_tender（#19：空工作区建项+db.json 落盘+缓存失效读面立即可读+缺省 external_key 幂等 / 真件收编 tender-src+词法逃逸拒+空批次拒；fixture 缺位 SKIP）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
 
 窗口内 IPC 冒烟（真实 WebView2，走 CDP）：
 ```

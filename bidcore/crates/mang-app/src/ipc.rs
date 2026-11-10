@@ -475,6 +475,12 @@ impl Ctx {
 
             "bid.gate_pass" => crate::bid::gate_pass(&ws, &self.bid, &a),
 
+            // ── #19 建项/导入写面（bid.rs——均经 bid_mcp 真实工具面：
+            //    create_bid_project / import_tender_files；空工作区可建项，
+            //    导入件收编 tender-src/ 后按围栏相对路径喂工具面）────
+            "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
+
+            "bid.import_tender" => crate::bid::import_tender(&ws, &self.bid, &a),
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 

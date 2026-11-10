@@ -718,9 +718,130 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
     let _ = std::fs::remove_dir_all(&ws_b);
 
+    // ---- #19：建项/导入写面（独立工作区——不扰动上面种子项目的主流程）
+    //    bid.create_project：空工作区建项 → db.json 落盘 → 缓存失效 →
+    //    bid.state 立即可读；缺省 external_key 同名重放幂等。
+    //    bid.import_tender：真件收编 tender-src/ + 工具面入库；
+    //    `..` 词法预拒 / 空批次拒（防御面）。fixture 缺位（发行包 exe
+    //    不在仓库里）→ 打印 SKIP 不计失败。
+    {
+        let wz_root = scratch_dir();
+        let wz_ws = match Workspace::new(&wz_root) {
+            Ok(w) => w,
+            Err(e) => {
+                println!("FAIL  #19 工作区初始化：{e}");
+                r.fail += 1;
+                std::fs::remove_dir_all(&wz_root).ok();
+                return finish(r, root);
+            }
+        };
+        let wz_ctx = Ctx::new(wz_ws.clone(), empty_ui.clone());
+        // 空工作区：读面干净 not_found
+        let resp = call(&wz_ctx, json!({"id":"t-wz-s0","cmd":"bid.state"}));
+        r.check(
+            "bid.create_project(前置无db)",
+            resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+            format!("{}", err_code(&resp)),
+        );
+        // 建项（缺省 external_key）
+        let resp = call(
+            &wz_ctx,
+            json!({"id":"t-wz-c1","cmd":"bid.create_project",
+            "name": "selftest 向导项目", "bid_deadline": "2030-01-01", "mode": "明标"}),
+        );
+        let cr = result(&resp);
+        r.check(
+            "bid.create_project(建项)",
+            resp["ok"] == json!(true)
+                && cr["present"] == json!(true)
+                && cr["create"]["project_id"].as_str().is_some()
+                && wz_root.join("db.json").is_file(),
+            format!("create={}", cr["create"]),
+        );
+        // 缓存显式失效：建项后读面立即可读
+        let resp = call(&wz_ctx, json!({"id":"t-wz-s1","cmd":"bid.state"}));
+        r.check(
+            "bid.create_project(读面立即可读)",
+            resp["ok"] == json!(true) && result(&resp)["present"] == json!(true),
+            format!("{}", result(&resp)["project"]["name"]),
+        );
+        // 同名重放幂等
+        let resp = call(
+            &wz_ctx,
+            json!({"id":"t-wz-c2","cmd":"bid.create_project",
+            "name": "selftest 向导项目", "bid_deadline": "2030-01-02", "mode": "明标"}),
+        );
+        r.check(
+            "bid.create_project(幂等重放)",
+            resp["ok"] == json!(true) && result(&resp)["create"]["deduplicated"] == json!(true),
+            format!("{}", result(&resp)["create"]["deduplicated"]),
+        );
+        // 导入：真件收编（fixture 缺位 → SKIP 不计）
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../fixtures/corpus-A/files/A-招标文件.docx")
+            .canonicalize()
+            .unwrap_or_default();
+        if fixture.is_file() {
+            let resp = call(
+                &wz_ctx,
+                json!({"id":"t-wz-i1","cmd":"bid.import_tender",
+                "files": [{"path": fixture.to_string_lossy(), "kind": "招标文件"}]}),
+            );
+            let ir = result(&resp);
+            r.check(
+                "bid.import_tender(真件收编)",
+                resp["ok"] == json!(true)
+                    && ir["import"]["file_ids"]
+                        .as_array()
+                        .map(|a| !a.is_empty())
+                        .unwrap_or(false)
+                    && wz_root.join("tender-src").join("A-招标文件.docx").is_file(),
+                format!(
+                    "file_ids={}",
+                    ir["import"]["file_ids"]
+                        .as_array()
+                        .map(|a| a.len())
+                        .unwrap_or(0)
+                ),
+            );
+        } else {
+            println!(
+                "SKIP  bid.import_tender(真件收编)：fixture 缺位（{}）",
+                fixture.display()
+            );
+        }
+        // 防御面：`..` 词法预拒（零副作用）
+        let resp = call(
+            &wz_ctx,
+            json!({"id":"t-wz-i2","cmd":"bid.import_tender",
+            "files": [{"path": "../../etc/passwd", "filename": "x.txt"}]}),
+        );
+        r.check(
+            "bid.import_tender(词法逃逸拒)",
+            resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+            format!("{}", err_code(&resp)),
+        );
+        // 防御面：空批次拒
+        let resp = call(
+            &wz_ctx,
+            json!({"id":"t-wz-i3","cmd":"bid.import_tender","files": []}),
+        );
+        r.check(
+            "bid.import_tender(空批次拒)",
+            resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+            format!("{}", err_code(&resp)),
+        );
+        let _ = std::fs::remove_dir_all(&wz_root);
+    }
+
+    finish(r, root)
+}
+
+/// 收尾打印 + 清理 + 退出码（与原 run 尾部一致——#19 段提前 return 复用）。
+fn finish(r: Report, root: &std::path::Path) -> i32 {
     println!();
     println!("== {} passed, {} failed ==", r.pass, r.fail);
-    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(root);
     if r.fail == 0 {
         0
     } else {

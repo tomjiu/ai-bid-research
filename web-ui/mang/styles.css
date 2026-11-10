@@ -4201,3 +4201,72 @@ html[data-chrome="native"][data-maximized="1"] #app {
     max-width: 1100px;
   }
 }
+
+/* #19 建项/导入向导（空工作区引导卡——与 bid-gt-form 同族语言） */
+.bid-wiz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+.bid-wiz-field > label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.bid-wiz-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #d1d5db);
+  background: var(--bg, #fff);
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.bid-wiz-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 40%, transparent);
+  outline-offset: -1px;
+}
+.bid-wiz-textarea {
+  min-height: 64px;
+  resize: vertical;
+  font-family: inherit;
+}
+.bid-wiz-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+.bid-wiz-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.bid-wiz-file-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+.bid-wiz-error {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  border: 1px solid color-mix(in srgb, #ef4444 40%, transparent);
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+}
+.bid-wiz-info {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid color-mix(in srgb, var(--ok, #22c55e) 35%, transparent);
+  background: color-mix(in srgb, var(--ok, #22c55e) 7%, transparent);
+}

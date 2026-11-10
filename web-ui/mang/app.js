@@ -531,6 +531,31 @@
               return respond(m.id, demoGates);
             case "bid.gate_pass":
               return demoGatePass(m);
+            case "bid.create_project":
+              // #19 演示桥：建项 stub（真实壳语义 = 工具面 create_bid_project——幂等 external_key）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                create: {
+                  project_id: "PRJ-DEMO-0001",
+                  status: "DRAFT",
+                  project_version: 1,
+                  warnings: []
+                }
+              });
+            case "bid.import_tender":
+              // #19 演示桥：导入 stub（真实壳语义 = 工具面 import_tender_files——逐件 parse/sha256）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFT" },
+                import: {
+                  file_ids: ["TF-DEMO-0001"],
+                  per_file: [{ file_id: "TF-DEMO-0001", filename: "招标文件.pdf", kind: "招标文件", pages: 65, tables: 3, chunks: 120, parse_status: "ok", deduplicated: false }],
+                  totals: { files: 1, chunks: 120, parse_failed: 0, partial: 0 },
+                  project_version: 2
+                }
+              });
             case "bid.coverage":
               return respond(m.id, DEMO_BID.coverage);
 
@@ -663,6 +688,10 @@
     // #603 批 A：治理面（审核门台账 + 过门/追认写面）——与 bidQuality 同款
     // 生命周期（idle/loading/ready/error + code 分支引导卡）
     bidGates: { status: "idle", data: null, error: "", code: "", ts: 0, passing: false, passError: "", passInfo: "", formGate: "", formMode: "" },
+    // #19 建项/导入向导（空工作区引导）：step = ""(关) / "create" / "import"；
+    // files 待导入路径列表（绝对或工作区相对，去重）；busy 防双击；
+    // error/info 向导内反馈（不全局 toast——用户视线在表单上）
+    bidWizard: { step: "", files: [], busy: false, error: "", info: "" },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1159,6 +1188,49 @@
         else if (act === "refresh-quality") ui.loadBidQuality(true);
         else if (act === "refresh-gates") ui.loadBidGates(true);
         else if (act === "workbench-cov") ui.openBidWorkbench("coverage");
+        // #19 向导动作（空工作区引导卡——创建/导入两步）
+        else if (act === "wizard-create") {
+          state.bidWizard.step = "create";
+          state.bidWizard.error = "";
+          state.bidWizard.info = "";
+          renderBidViewIfVisible();
+        }
+        else if (act === "wizard-create-submit") {
+          const nameEl = root.querySelector("[data-wz-name]");
+          const modeEl = root.querySelector("[data-wz-mode]");
+          const dlEl = root.querySelector("[data-wz-deadline]");
+          const ntEl = root.querySelector("[data-wz-notice]");
+          ui.createBidProject(
+            nameEl ? nameEl.value.trim() : "",
+            modeEl ? modeEl.value : "明标",
+            dlEl ? dlEl.value.trim() : "",
+            ntEl ? ntEl.value.trim() : ""
+          );
+        }
+        else if (act === "wizard-import-submit") {
+          const ta = root.querySelector("[data-wz-paths]");
+          const extra = ta ? ta.value : "";
+          const paths = state.bidWizard.files.concat(
+            extra.split(/[\n\r]+/).map((s) => s.trim()).filter(Boolean)
+          );
+          if (!paths.length) {
+            state.bidWizard.error = "请先添加至少一个文件路径";
+            renderBidViewIfVisible();
+            return;
+          }
+          ui.importTenderFiles(paths);
+        }
+        else if (act === "wizard-import-skip") {
+          state.bidWizard.step = "";
+          state.bidWizard.info = "";
+          ui.loadBid(true);
+        }
+        else if (act === "wizard-cancel") {
+          state.bidWizard.step = "";
+          state.bidWizard.error = "";
+          state.bidWizard.info = "";
+          renderBidViewIfVisible();
+        }
 
       });
     });
@@ -1172,13 +1244,20 @@
     }
     if (!b.present) {
       const notProject = b.error && b.error.indexOf("db.json") >= 0;
+      // #19：空工作区 → 新建/导入向导（产品出口不再断：代理/CLI 之外的入口）
+      if (notProject && state.bidWizard.step) {
+        renderBidWizard(body);
+        return;
+      }
       body.innerHTML =
         '<div class="bid-side"><div class="bid-card" data-kind="empty">'
         + '<div class="bid-card-title">' + (notProject ? "当前工作区不是标书项目" : "读取失败") + "</div>"
         + '<div class="bid-card-sub">' + esc(b.error || "无数据") + "</div>"
         + '<div class="bid-card-actions">'
+        + (notProject ? '<button class="btn btn-primary" data-bid-act="wizard-create">' + ICON.bid + "新建标书项目</button>" : "")
         + (notProject ? '<button class="btn" data-bid-act="open-folder">' + ICON.folderOpen + "切换工作区</button>" : "")
         + '<button class="btn" data-bid-act="refresh">重试</button></div>'
+        + (notProject ? '<div class="bid-card-sub">新建后可直接导入招标文件（PDF/DOCX/XLSX）——从空工作区到可起草状态一步到位</div>' : "")
         + "</div></div>";
       bindBidViewActions(body);
       return;
@@ -1221,6 +1300,73 @@
       + '<button class="bid-entry" data-bid-act="workbench-cov"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">覆盖报告</span><span class="bid-entry-sub">已判定 / 未判定 / ★条款</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + "</div></div>";
     bindBidViewActions(body);
+  }
+  /**
+   * #19 建项/导入向导（空工作区引导卡）：两步——「新建」（create_bid_project：
+   * 名称/招标模式/截止日）→「导入」（import_tender_files：路径列表 + 进度）。
+   * 交互语言对齐 bid.coverage 的 next 引导与审核门表单（data-* 锚点 + 面板重渲）。
+   * E_STATE / not_found 分支走引导卡文案（IPC-CONTRACT §109 约定）。
+   */
+  function renderBidWizard(body) {
+    const wz = state.bidWizard;
+    let html = '<div class="bid-side"><div class="bid-card" data-kind="wizard">';
+    if (wz.step === "create") {
+      html +=
+        '<div class="bid-card-title">新建标书项目</div>'
+        + '<div class="bid-wiz-field"><label>项目名称</label>'
+        + '<input class="bid-wiz-input" data-wz-name type="text" placeholder="如：某市政务服务中心智能化系统工程" value="' + esc(wz.formName || "") + '"></div>'
+        + '<div class="bid-wiz-field"><label>招标模式</label>'
+        + '<select class="bid-wiz-input" data-wz-mode>'
+        + '<option value="明标"' + ((wz.formMode || "明标") === "明标" ? " selected" : "") + '>明标</option>'
+        + '<option value="暗标"' + (wz.formMode === "暗标" ? " selected" : "") + '>暗标</option>'
+        + "</select></div>"
+        + '<div class="bid-wiz-field"><label>投标截止日</label>'
+        + '<input class="bid-wiz-input" data-wz-deadline type="date" value="' + esc(wz.formDeadline || "") + '">'
+        + '<div class="bid-card-sub">已过的截止日创建时警告不阻断（契约 §1）</div></div>'
+        + '<div class="bid-wiz-field"><label>招标公告编号（可选）</label>'
+        + '<input class="bid-wiz-input" data-wz-notice type="text" placeholder="如：JLYHDH-2026-ZC122"></div>';
+    } else if (wz.step === "import") {
+      html +=
+        '<div class="bid-card-title">导入招标文件</div>'
+        + '<div class="bid-card-sub">支持 PDF / DOCX / XLSX；工作区外的文件会收编到 tender-src/ 再入库</div>'
+        + '<div class="bid-wiz-files">'
+        + wz.files.map((p, i) =>
+          '<div class="bid-wiz-file"><span class="bid-wiz-file-path" title="' + esc(p) + '">' + esc(p) + "</span>"
+          + '<button class="btn btn-sm" data-wz-remove="' + i + '">移除</button></div>'
+        ).join("")
+        + (wz.files.length ? "" : '<div class="bid-card-sub">尚无待导入文件</div>')
+        + "</div>"
+        + '<div class="bid-wiz-field"><label>添加路径（每行一个：绝对路径或工作区相对路径）</label>'
+        + '<textarea class="bid-wiz-input bid-wiz-textarea" data-wz-paths placeholder="C:\\Downloads\\招标文件.pdf&#10;tender-src\\补遗说明.docx"></textarea></div>';
+    }
+    if (wz.error) html += '<div class="bid-wiz-error" data-kind="error">' + esc(wz.error) + "</div>";
+    if (wz.info) html += '<div class="bid-wiz-info">' + wz.info + "</div>";
+    html += '<div class="bid-card-actions">';
+    if (wz.step === "create") {
+      html += '<button class="btn btn-primary" data-bid-act="wizard-create-submit"' + (wz.busy ? " disabled" : "") + ">" + (wz.busy ? "创建中…" : "创建项目") + "</button>";
+    } else if (wz.step === "import") {
+      html += '<button class="btn btn-primary" data-bid-act="wizard-import-submit"' + (wz.busy ? " disabled" : "") + ">" + (wz.busy ? "导入中…" : "导入 " + wz.files.length + " 个文件") + "</button>"
+        + '<button class="btn" data-bid-act="wizard-import-skip">稍后导入，先看项目</button>';
+    }
+    html += '<button class="btn" data-bid-act="wizard-cancel">取消</button></div></div></div>';
+    body.innerHTML = html;
+    bindBidViewActions(body);
+    // 向导本地交互（与审核门表单同款：data-* 锚点）
+    body.querySelectorAll("[data-wz-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.bidWizard.files.splice(Number(btn.dataset.wzRemove), 1);
+        renderBidViewIfVisible();
+      });
+    });
+    // 表单值随输入实时存回（防重渲丢字）
+    const nameEl = body.querySelector("[data-wz-name]");
+    const modeEl = body.querySelector("[data-wz-mode]");
+    const dlEl = body.querySelector("[data-wz-deadline]");
+    const ntEl = body.querySelector("[data-wz-notice]");
+    if (nameEl) nameEl.addEventListener("input", () => { state.bidWizard.formName = nameEl.value; });
+    if (modeEl) modeEl.addEventListener("change", () => { state.bidWizard.formMode = modeEl.value; });
+    if (dlEl) dlEl.addEventListener("input", () => { state.bidWizard.formDeadline = dlEl.value; });
+    if (ntEl) ntEl.addEventListener("input", () => { state.bidWizard.formNotice = ntEl.value; });
   }
   /** 「标书工作台」伪标签页骨架（数据由 renderBidWorkbenchPanes 就地补齐） */
   function renderBidWorkbenchView(tab, host) {
@@ -4365,6 +4511,73 @@
       // 台账 + 侧栏门审摘要同源刷新（agent_waivers/human_review_complete 两处都消费）
       ui.loadBidGates(true);
       ui.loadBid(true);
+    },
+    /** #19：新建标书项目（bid.create_project → 工具面 create_bid_project）。
+     *  成功 → 直接进入导入步骤（向导 step=import）；失败 → 表单内反馈
+     *  （E_STATE 引导文案，不弹错误横幅——用户视线在表单上）。 */
+    async createBidProject(name, mode, bidDeadline, noticeRef) {
+      const wz = state.bidWizard;
+      if (!name) { wz.error = "项目名称必填"; renderBidViewIfVisible(); return; }
+      if (!bidDeadline) { wz.error = "投标截止日必填（YYYY-MM-DD，契约 §1）"; renderBidViewIfVisible(); return; }
+      wz.busy = true; wz.error = ""; wz.info = "";
+      renderBidViewIfVisible();
+      try {
+        const args = { name: name, mode: mode, bid_deadline: bidDeadline };
+        if (noticeRef) args.tender_notice_ref = noticeRef;
+        const r = await ipc("bid.create_project", args, 3e4);
+        wz.busy = false;
+        const create = r && r.create || {};
+        const warn = (create.warnings && create.warnings.length)
+          ? "（警告：" + create.warnings.join("；") + "）"
+          : "";
+        wz.info = "项目已创建：" + esc(create.project_id || "") + " · 状态 " + esc(create.status || "DRAFT") + warn;
+        wz.step = "import"; // 一步到位进入导入（可跳过）
+        state.bid.status = "idle"; // 强制下轮重拉
+      } catch (err) {
+        wz.busy = false;
+        const code = err && err.code || "";
+        wz.error = code === "state"
+          ? "已有项目且状态不允许再建（" + esc(err.message || "") + "）——先用现有项目，或切换工作区后再试"
+          : (err && err.message || "bid.create_project 失败");
+      }
+      renderBidViewIfVisible();
+    },
+    /** #19：导入招标文件（bid.import_tender → 工具面 import_tender_files）。
+     *  去重后批量导入；E_PARTIAL 的逐件失败/警告在向导内回显（不静默）。
+     *  完成 → 向导收起 + 数据面刷新（detail 首屏）。 */
+    async importTenderFiles(paths) {
+      const wz = state.bidWizard;
+      const seen = /* @__PURE__ */ new Set();
+      const files = [];
+      for (const p of paths) if (!seen.has(p)) { seen.add(p); files.push(p); }
+      wz.busy = true; wz.error = ""; wz.info = "";
+      renderBidViewIfVisible();
+      try {
+        const r = await ipc("bid.import_tender", {
+          files: files.map((p) => ({ path: p }))
+        }, 12e4);
+        wz.busy = false;
+        const imp = r && r.import || {};
+        const totals = imp.totals || {};
+        const perFile = Array.isArray(imp.per_file) ? imp.per_file : [];
+        const fails = perFile.filter((f) => f.errors && f.errors.length);
+        let summary = "导入完成：共 " + (totals.files || files.length) + " 件";
+        if (totals.chunks) summary += " · " + totals.chunks + " 块";
+        if (totals.parse_failed) summary += " · " + totals.parse_failed + " 件解析失败";
+        wz.info = summary;
+        if (fails.length) {
+          wz.error = "失败件（修复后重传即可，成功件已落库）：\n"
+            + fails.map((f) => "· " + (f.filename || "") + "：" + (f.errors || []).join("；")).join("\n");
+        }
+        wz.step = ""; // 收起向导 → 进入 detail 首屏
+        state.bid.status = "idle"; // 强制下轮重拉（db.json 已变）
+        ui.loadBid(true);
+      } catch (err) {
+        wz.busy = false;
+        wz.error = (err && err.message || "bid.import_tender 失败")
+          + (err && err.detail ? "\n" + err.detail : "");
+        renderBidViewIfVisible();
+      }
     },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  批 C：panel 入参直达指定页签（"quality" = 自评——侧栏面板入口用） */

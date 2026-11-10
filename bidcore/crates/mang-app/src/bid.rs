@@ -945,6 +945,261 @@ fn lock(cache: &Mutex<Option<CachedService>>) -> MutexGuard<'_, Option<CachedSer
     cache.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+// ---------------------------------------------------------------- #19 建项/导入（写面）
+//
+// 认领 issue #19（#313 总纲审计 缺口-2）：此前项目创建/导入只能代理/CLI
+// 驱动——空工作区在 web-ui 无新建/导入入口（产品入口断裂）。两条 IPC
+// 写面全部经 `bid_mcp::dispatch_with` 走真实工具面（与 bid.state 等读面
+// 同源裁决）：
+//   * [`create_project`] —— 空工作区上「无中生有」：`BidService::open` 对
+//     无 db.json 的目录自动建空 store（服务面既有语义——**创建是显式
+//     意图**，db.json 落盘 = 项目存在；与读面的 not_found 前置检查不同：
+//     读不该留副作用，建的全部意义就是产生它）。成功后缓存显式清空
+//     （ensure_locked 靠 db.json 指纹也会自动失效——显式清空语义直白）。
+//   * [`import_tender`] —— 已建项目上收编导入：`dialog.openFile` 选中的
+//     工作区外绝对路径由壳拷入 `<root>/tender-src/`，以工作区相对路径
+//     喂工具面（#183/#189 围栏要求 upload_ref 落在受信根内——服务层
+//     fs_fence 持根复验，壳侧收编只决定**位置**，不豁免围栏；拷贝的
+//     信任边界 = 用户在文件对话框选中件，与 fs.stat / fs.read 的绝对
+//     路径面同级）。工作区内路径（相对或绝对）原地引用不拷贝。
+
+/// `bid.create_project` —— 新建标书项目（工具面 create_bid_project，
+/// 契约 §1：external_key 幂等、deadline 已过警告不阻断）。
+pub fn create_project(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let name = a.req_str("name")?.trim().to_string();
+    if name.is_empty() {
+        return Err(IpcError::bad_args("name 不能为空（去空白后）"));
+    }
+    let bid_deadline = a.req_str("bid_deadline")?.to_string();
+    let mode = a.req_str("mode")?.to_string();
+    let external_key = match a.str("external_key")? {
+        Some(k) if !k.trim().is_empty() => k.trim().to_string(),
+        // 幂等键缺省「shell::<工作区名>::<项目名>」：同工作区同名重复提交 =
+        // 同一项目（防 UI 手抖重复建）——键稳定可预测，与契约幂等语义同向。
+        _ => {
+            let ws_name = ws
+                .root_canonical()
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("workspace");
+            format!("shell::{ws_name}::{name}")
+        }
+    };
+    let mut args = json!({
+        "name": name,
+        "bid_deadline": bid_deadline,
+        "mode": mode,
+        "external_key": external_key,
+    });
+    if let Some(r) = a.str("tender_notice_ref")? {
+        if !r.trim().is_empty() {
+            args["tender_notice_ref"] = json!(r.trim());
+        }
+    }
+
+    // 空工作区上的显式创建：不走 ensure_locked（它要求 db.json 已在，
+    // 语义是「读不落副作用」；创建正相反）。open 对无 db 目录建空 store。
+    let root = ws.root_canonical().to_path_buf();
+    let mut svc = bid_tools::service::BidService::open(&root).map_err(map_store_err)?;
+    let reply = bid_mcp::dispatch_with(
+        &mut svc,
+        bid_mcp::ToolCall {
+            tool: "create_bid_project".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    // db.json 已落盘（工具面经服务层 auto_checkpoint）→ 缓存显式失效。
+    lock(cache).take();
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "create": tool_out,
+    }))
+}
+
+/// `bid.import_tender` —— 导入招标文件（工具面 import_tender_files）。
+///
+/// 壳侧收编（`admit_into_workspace`）：`files:[{path, filename?, kind?,
+/// expected_pages?}]` 的 path 允许工作区外绝对路径（文件对话框选中件），
+/// 拷入 `tender-src/` 后以相对路径喂工具面；工作区内路径原地引用。
+/// `..` 词法分量在壳侧预拒（与工具面 fs_fence 同口径，先于一切磁盘操作）。
+pub fn import_tender(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let files = a
+        .get("files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            IpcError::bad_args("files 缺失或非数组（[{path, filename?, kind?, expected_pages?}]）")
+        })?
+        .clone();
+    if files.is_empty() {
+        return Err(IpcError::bad_args("files 不能为空（空批次无导入语义）"));
+    }
+    let root = ws.root_canonical().to_path_buf();
+    let mut specs = Vec::with_capacity(files.len());
+    for (i, f) in files.iter().enumerate() {
+        let at = format!("files[{i}]");
+        let path = f
+            .get("path")
+            .and_then(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| IpcError::bad_args(format!("{at}: 缺 path（源文件路径）")))?;
+        let filename = match f.get("filename").and_then(Value::as_str) {
+            Some(n) if !n.trim().is_empty() => sanitize_filename(n)?,
+            _ => sanitize_filename(
+                std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| {
+                        IpcError::bad_args(format!("{at}: path 无文件名，须显式给 filename"))
+                    })?,
+            )?,
+        };
+        // `..` 词法分量预拒（工具面 fs_fence 同口径——先于一切磁盘操作，零副作用）
+        if std::path::Path::new(path)
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(IpcError::bad_args(format!("{at}: 路径含 .. 分量，拒绝")));
+        }
+        let upload_ref = admit_into_workspace(ws, &root, path, &filename, &at)?;
+        let mut spec = json!({ "upload_ref": upload_ref, "filename": filename });
+        if let Some(kind) = f.get("kind").and_then(Value::as_str) {
+            spec["kind"] = json!(kind);
+        }
+        if let Some(p) = f.get("expected_pages") {
+            spec["expected_pages"] = p.clone();
+        }
+        specs.push(spec);
+    }
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({ "project_id": project_id, "files": specs });
+    if let Some(v) = a.u64("project_version")? {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "import_tender_files".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    // 导入经服务层写后落盘，db.json 指纹变化 → ensure_locked 自动失效；
+    // 这里不额外清缓存（读面刷新会重开）。
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "import": tool_out,
+    }))
+}
+
+/// filename 净化：只取最后一段路径分量（防「a/../../b.txt」类目录入侵
+/// 或绝对路径注入），空/点文件名响亮拒（不静默改名）。
+fn sanitize_filename(raw: &str) -> Result<String, IpcError> {
+    let taken = std::path::Path::new(raw.trim())
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if taken.is_empty() || taken == "." || taken == ".." {
+        return Err(IpcError::bad_args(format!("filename 非法：{raw:?}")));
+    }
+    Ok(taken)
+}
+
+/// 收编单个导入件到工作区（返回工具面 upload_ref 应填的工作区相对路径）。
+///
+/// * 工作区内绝对路径 → `ws.rel_of` 原地引用（不拷贝）；
+/// * 工作区外绝对路径 → `std::fs::copy` 进 `<root>/tender-src/<filename>`
+///   （同名冲突自动 `-N` 后缀，不覆盖既有件）；
+/// * 相对路径 → 原样透传（工具面 fs_fence 按受信根 = 工作区锚定）。
+fn admit_into_workspace(
+    ws: &Workspace,
+    root: &std::path::Path,
+    raw: &str,
+    filename: &str,
+    at: &str,
+) -> Result<String, IpcError> {
+    let p = std::path::Path::new(raw);
+    if !p.is_absolute() {
+        return Ok(raw.to_string());
+    }
+    if let Some(rel) = ws.rel_of(p) {
+        return Ok(rel);
+    }
+    // 围栏外：用户对话框选中件 → 拷入工作区（信任边界同 fs.stat 绝对路径面）
+    let meta = std::fs::metadata(p).map_err(|e| paths::map_io(p, &e))?;
+    if meta.is_dir() {
+        return Err(IpcError::bad_args(format!(
+            "{at}: 是目录，导入需文件：{raw}"
+        )));
+    }
+    let dst_dir = root.join("tender-src");
+    std::fs::create_dir_all(&dst_dir)
+        .map_err(|e| IpcError::io(format!("建导入目录失败 {}：{e}", paths::display(&dst_dir))))?;
+    let dst = unique_dst(&dst_dir, filename);
+    std::fs::copy(p, &dst).map_err(|e| {
+        IpcError::io(format!(
+            "收编导入失败 {} → {}：{e}",
+            paths::display(p),
+            paths::display(&dst)
+        ))
+    })?;
+    Ok(format!("tender-src/{}", filename_display(&dst, filename)))
+}
+
+/// 同名不覆盖：`tender-src/<name>` 已存在 → `<stem>-2.<ext>`、`<stem>-3.<ext>`…
+fn unique_dst(dst_dir: &std::path::Path, filename: &str) -> std::path::PathBuf {
+    let direct = dst_dir.join(filename);
+    if !direct.exists() {
+        return direct;
+    }
+    let stem = std::path::Path::new(filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("tender");
+    let ext = std::path::Path::new(filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|e| format!(".{e}"))
+        .unwrap_or_default();
+    for n in 2..1000u32 {
+        let cand = dst_dir.join(format!("{stem}-{n}{ext}"));
+        if !cand.exists() {
+            return cand;
+        }
+    }
+    direct // 999 个同名件：退回直写（拷贝必然失败并响亮报错——不静默丢件）
+}
+
+/// 从最终落盘路径取显示名（unique_dst 可能加了 -N 后缀）。
+fn filename_display(dst: &std::path::Path, fallback: &str) -> String {
+    dst.file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
 // ---------------------------------------------------------------- 测试
 
 #[cfg(test)]
@@ -1720,4 +1975,172 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    // ================================ #19 建项/导入写面 ================================
+
+    /// 空工作区建项 → db.json 落盘 → 缓存失效（bid.state 立即可读）→
+    /// 缺省 external_key 同名重放幂等。全链经公开 IPC 面（Ctx.dispatch）。
+    #[test]
+    fn create_project_on_empty_workspace_then_state_present() {
+        let (dir, _ws) = tmp_ws("create-19");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // 前置：空工作区读面干净 not_found（不落副作用）
+        let frame = call(&ctx, "bid.state");
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+
+        // 建项（缺省 external_key = shell::<工作区名>::<项目名>）
+        let frame = call_args(
+            &ctx,
+            "bid.create_project",
+            json!({ "name": "演示水厂项目", "bid_deadline": "2030-01-01", "mode": "明标" }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let create = ok_of(&frame)["create"].clone();
+        assert!(create["project_id"].as_str().is_some(), "{create}");
+        assert!(dir.join("db.json").exists(), "db.json 必须落盘");
+
+        // 缓存显式失效：建项后读面立即可读（无需别的命令先踩一脚）
+        let frame = call(&ctx, "bid.state");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        assert_eq!(ok_of(&frame)["present"], json!(true), "{frame}");
+
+        // 同名重放 → 幂等（防 UI 手抖重复建）
+        let frame = call_args(
+            &ctx,
+            "bid.create_project",
+            json!({ "name": "演示水厂项目", "bid_deadline": "2030-01-02", "mode": "明标" }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        assert_eq!(
+            ok_of(&frame)["create"]["deduplicated"],
+            json!(true),
+            "{frame}"
+        );
+
+        // 防御面：空 name 拒（去空白后）
+        let frame = call_args(
+            &ctx,
+            "bid.create_project",
+            json!({ "name": "  ", "bid_deadline": "2030-01-01", "mode": "明标" }),
+        );
+        assert_eq!(frame["ok"], json!(false));
+        assert_eq!(err_code_of(&frame), "bad_args");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 导入收编链：工作区外真件（canonicalize 后字面无 `..`——同 #600 教训）
+    /// → tender-src/ 副本 → 工具面入库；工作区内件原地引用不拷贝；
+    /// `..` 词法预拒 / 非法 filename / 空批次 / 目录冒充文件响亮拒。
+    /// fixture 缺位 SKIP（同 coverage_reads_real_imported_file 守卫）。
+    #[test]
+    fn import_tender_admits_outside_file_and_rejects_hostile_paths() {
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../fixtures/corpus-A/files/A-招标文件.docx")
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("fixture 路径不存在或不可解析：{e}"));
+        if !fixture.is_file() {
+            eprintln!("SKIP：fixture 缺位（{}）——真件面留给 CI", fixture.display());
+            return;
+        }
+        let (dir, _ws) = tmp_ws("import-19");
+        seed_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // ① 工作区外真件收编：tender-src/ 副本 + 工具面入库
+        let frame = call_args(
+            &ctx,
+            "bid.import_tender",
+            json!({ "files": [{ "path": fixture.to_string_lossy(), "kind": "招标文件" }] }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let imp = ok_of(&frame)["import"].clone();
+        assert!(
+            imp["file_ids"]
+                .as_array()
+                .map(|a| !a.is_empty())
+                .unwrap_or(false),
+            "至少入库一件：{imp}"
+        );
+        let admitted = dir.join("tender-src").join("A-招标文件.docx");
+        assert!(
+            admitted.is_file(),
+            "收编副本必须落在 tender-src/：{}",
+            admitted.display()
+        );
+
+        // ② 工作区内相对路径：原地引用（不产生拷贝）
+        std::fs::write(dir.join("补遗说明.docx"), b"PK\x05\x06 placeholder").unwrap();
+        let frame = call_args(
+            &ctx,
+            "bid.import_tender",
+            json!({ "files": [{ "path": "补遗说明.docx", "kind": "补遗" }] }),
+        );
+        // 壳侧收编面不评价文件内容——入库/拒收语义全在工具面（E_PARTIAL 也算通路）
+        let in_ok = frame["ok"] == json!(true);
+        assert!(
+            in_ok || err_code_of(&frame) == "io",
+            "占位件要么入库要么 E_PARTIAL 响亮拒，不得静默：{frame}"
+        );
+        assert!(
+            !dir.join("tender-src").join("补遗说明.docx").exists(),
+            "工作区内件必须原地引用，不得拷贝"
+        );
+
+        // ③ `..` 词法分量预拒（零副作用——tender-src 无新件）
+        let frame = call_args(
+            &ctx,
+            "bid.import_tender",
+            json!({ "files": [{ "path": "../../etc/passwd", "filename": "x.txt" }] }),
+        );
+        assert_eq!(frame["ok"], json!(false));
+        assert_eq!(err_code_of(&frame), "bad_args", "{frame}");
+
+        // ④ 非法 filename（目录入侵/父级分量）拒
+        let frame = call_args(
+            &ctx,
+            "bid.import_tender",
+            json!({ "files": [{ "path": fixture.to_string_lossy(), "filename": ".." }] }),
+        );
+        assert_eq!(frame["ok"], json!(false));
+        assert_eq!(err_code_of(&frame), "bad_args", "{frame}");
+        // ④-b 目录入侵 filename 净化：`a/../../b.txt` → 最后段 `b.txt`
+        //（防路径注入：不管路径形态如何，落盘名只能是单段纯文件名）
+        let frame = call_args(
+            &ctx,
+            "bid.import_tender",
+            json!({ "files": [{ "path": fixture.to_string_lossy(), "filename": "a/../../b.txt" }] }),
+        );
+        assert!(
+            frame["ok"] == json!(true) || err_code_of(&frame) == "io",
+            "净化后的单段名应继续走导入链（入库或 E_PARTIAL 响亮拒）：{frame}"
+        );
+        assert!(
+            dir.join("tender-src").join("b.txt").is_file(),
+            "落盘名必须是净化后的 b.txt：{frame}"
+        );
+        assert!(
+            !dir.join("tender-src").join("a").exists(),
+            "不得出现按原 filename 的路径分量建目录：{frame}"
+        );
+
+        // ⑤ 空批次拒
+        let frame = call_args(&ctx, "bid.import_tender", json!({ "files": [] }));
+        assert_eq!(frame["ok"], json!(false));
+        assert_eq!(err_code_of(&frame), "bad_args");
+
+        // ⑥ 目录冒充文件拒
+        let frame = call_args(
+            &ctx,
+            "bid.import_tender",
+            json!({ "files": [{ "path": dir.to_string_lossy(), "filename": "d.txt" }] }),
+        );
+        assert_eq!(frame["ok"], json!(false));
+        assert_eq!(
+            err_code_of(&frame),
+            "bad_args",
+            "目录不得当文件导入：{frame}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
