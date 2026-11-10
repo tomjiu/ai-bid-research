@@ -478,6 +478,16 @@ impl Ctx {
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
+            // ── #20 治理出口三件（bid.rs——matrix_override 宿主签发 receipt
+            //    （#182 四重绑定签域）后走 set_matrix_override 工具面；
+            //    recover_state → recover_validating_state；
+            //    packages → list_packages 只读）──────────────────────
+            "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
+
+            "bid.recover_state" => crate::bid::recover_state(&ws, &self.bid, &a),
+
+            "bid.packages" => crate::bid::packages(&ws, &self.bid, &a),
+
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
 

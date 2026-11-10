@@ -939,6 +939,140 @@ pub fn coverage(
     }))
 }
 
+/// `bid.matrix_override` —— 矩阵行人工覆写（#20：#226 否决项死锁的人工出口）。
+///
+/// 与 [`gate_pass`] 同款宿主签发面（#182）：壳用服务态真源构造四重绑定
+/// 签域 `matrix_override:<project_id>:<requirement_id>:<status>:<理由摘要>`
+/// （`bid_mcp::matrix_override_scope`——项目/行/状态/理由换任何一项都换签），
+/// `issue_approval_receipt` 签发后经 `dispatch_with(set_matrix_override)`
+/// 走真实工具面验签落账 + 矩阵重建。status=NOT_APPLICABLE 时 deviation
+/// 必填（工具面裁决——不可审计的豁免不算豁免）。
+pub fn matrix_override(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let requirement_id = a.req_str("requirement_id")?.to_string();
+    let status = a.req_str("status")?.to_string();
+    let deviation = a.str("deviation")?.map(str::to_string);
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let scope = bid_mcp::matrix_override_scope(
+        &project_id,
+        &requirement_id,
+        &status,
+        deviation.as_deref().unwrap_or(""),
+    );
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "requirement_id": requirement_id,
+        "status": status,
+        "receipt": receipt,
+    });
+    if let Some(d) = deviation {
+        args["deviation"] = json!(d);
+    }
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "set_matrix_override".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "override": tool_out,
+    }))
+}
+
+/// `bid.recover_state` —— 历史异常态恢复（#20：#243 VALIDATING+缺章出口）。
+///
+/// 经 `dispatch_with(recover_validating_state)` 真实工具面：域层三重约束
+/// （仅 VALIDATING / 仅缺章 / 理由非空白）+ 审计账；非死锁态重复请求 →
+/// E_STATE 透传（`state` 码 → UI 引导卡）。无 receipt（恢复不是豁免动作）。
+pub fn recover_state(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let reason = a.req_str("reason")?.to_string();
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({ "project_id": project_id, "reason": reason });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "recover_validating_state".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "recover": tool_out,
+    }))
+}
+
+/// `bid.packages` —— 分包清单（#20：#316 多标段/多包识别，只读）。
+///
+/// 经 `dispatch_with(list_packages)` 真实工具面，工具输出原样放 `packages`
+/// 键。早期态（未导入/未识别包）→ E_STATE 透传 `state` 码（UI 引导卡）。
+pub fn packages(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "list_packages".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "packages": tool_out,
+    }))
+}
+
 
 /// 锁毒化不复位（与 ipc.rs `Ctx::ws` 同口径）。
 fn lock(cache: &Mutex<Option<CachedService>>) -> MutexGuard<'_, Option<CachedService>> {

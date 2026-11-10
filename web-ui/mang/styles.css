@@ -4201,3 +4201,47 @@ html[data-chrome="native"][data-maximized="1"] #app {
     max-width: 1100px;
   }
 }
+
+/* ---------- #20 治理出口：人工裁定 / 异常态恢复表单 ---------- */
+.bid-gov-form {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 14px;
+  align-items: center;
+  margin: 8px 0;
+}
+.bid-gov-form .bid-export-field {
+  display: contents;
+}
+.bid-gov-form .bid-export-field > span {
+  font-size: 12px;
+  color: var(--fg-muted);
+  text-align: right;
+}
+.bid-gov-form .bid-export-field > input,
+.bid-gov-form .bid-export-field > select {
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border, #444c56);
+  border-radius: 6px;
+  background: var(--bg, #22272e);
+  color: var(--fg, #e6edf3);
+}
+.bid-gov-form .bid-export-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .bid-gov-form {
+    grid-template-columns: 1fr;
+  }
+  .bid-gov-form .bid-export-field > span {
+    text-align: left;
+  }
+  .bid-gov-form .bid-export-actions {
+    grid-column: 1;
+  }
+}

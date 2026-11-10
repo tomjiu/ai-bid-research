@@ -504,5 +504,64 @@ check(
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- #20 治理出口三件：人工裁定 / 异常态恢复 / 分包视图 ----------
+check(
+  "#20 审核门页签·人工裁定卡（gov-override 表单 + NOT_APPLICABLE 必填说明）",
+  /data-bid-act="gov-override-submit"/.test(app) && /人工裁定（矩阵行覆写）/.test(app) && /不可审计的豁免不算豁免/.test(app),
+  "人工裁定出口被删或豁免审计语义缺失"
+);
+check(
+  "#20 审核门页签·异常态恢复卡（VALIDATING 态显示 gov-recover）",
+  /projStatus === "VALIDATING"/.test(app) && /data-bid-act="gov-recover-submit"/.test(app) && /异常态恢复/.test(app),
+  "恢复出口被删或不再按 VALIDATING 态分支"
+);
+check(
+  "#20 分包页签（data-bid-panel=packages）+ 侧栏入口",
+  /data-bid-panel="packages">分包/.test(app) && /data-bid-act="workbench-pkgs"/.test(app),
+  "分包视图页签或侧栏入口被删"
+);
+check(
+  "#20 bid.matrix_override IPC 调用（宿主签发 receipt 在壳侧，UI 只传行/状态/说明）",
+  /ipc\("bid\.matrix_override", body, 3e4\)/.test(app) && /requirement_id: req/.test(app),
+  "人工裁定写面接线被回退"
+);
+check(
+  "#20 bid.recover_state IPC 调用（reason 必填）",
+  /ipc\("bid\.recover_state", \{ reason: reason \}, 3e4\)/.test(app),
+  "恢复写面接线被回退"
+);
+check(
+  "#20 bid.packages IPC 调用（只读）",
+  /ipc\("bid\.packages", \{\}, 3e4\)/.test(app),
+  "分包只读面接线被回退"
+);
+check(
+  "#20 壳侧分发：ipc.rs 登记三命令",
+  /"bid\.matrix_override" => crate::bid::matrix_override\(&ws, &self\.bid, &a\)/.test(ipcRs)
+    && /"bid\.recover_state" => crate::bid::recover_state\(&ws, &self\.bid, &a\)/.test(ipcRs)
+    && /"bid\.packages" => crate::bid::packages\(&ws, &self\.bid, &a\)/.test(ipcRs),
+  "壳侧 IPC 分发缺命令——UI 调用会 unknown_cmd"
+);
+check(
+  "#20 bid.rs 走真实工具面（set_matrix_override / recover_validating_state / list_packages）",
+  /tool: "set_matrix_override"/.test(bidRs) && /tool: "recover_validating_state"/.test(bidRs) && /tool: "list_packages"/.test(bidRs),
+  "壳侧没经 bid_mcp 真实工具面"
+);
+check(
+  "#20 matrix_override 宿主签发面（四重绑定 scope + issue_approval_receipt——#182）",
+  /bid_mcp::matrix_override_scope\(/.test(bidRs) && /svc\.issue_approval_receipt\(&actor_id, &scope\)/.test(bidRs),
+  "receipt 签发面被回退——Agent 伪造 receipt 的口子会重新打开"
+);
+check(
+  "#20 契约文档登记 bid.matrix_override / bid.recover_state / bid.packages",
+  contract.includes("### bid.matrix_override") && contract.includes("### bid.recover_state") && contract.includes("### bid.packages"),
+  "治理三件命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "#20 治理表单样式（bid-gov-form）",
+  /\.bid-gov-form/.test(css),
+  "治理出口表单样式被删"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

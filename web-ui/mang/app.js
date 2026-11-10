@@ -663,6 +663,17 @@
     // #603 批 A：治理面（审核门台账 + 过门/追认写面）——与 bidQuality 同款
     // 生命周期（idle/loading/ready/error + code 分支引导卡）
     bidGates: { status: "idle", data: null, error: "", code: "", ts: 0, passing: false, passError: "", passInfo: "", formGate: "", formMode: "" },
+    // #20 治理出口三件：人工裁定（matrix_override）与异常态恢复
+    // （recover_state）都在审核门页签内，写面状态与 gates 分开记
+    bidGov: {
+      overOpen: false, overReq: "", overStatus: "NOT_APPLICABLE", overDeviation: "",
+      overriding: false, overError: "", overInfo: "", overCode: "",
+      recoverOpen: false, recoverReason: "", recovering: false,
+      recoverError: "", recoverInfo: "", recoverCode: "",
+    },
+    // #20 分包视图（bid.packages → list_packages 只读；选包提示走
+    // build_outline 的 package 参数——UI 只读不代庖）
+    bidPackages: { status: "idle", data: null, error: "", code: "", ts: 0 },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1158,6 +1169,13 @@
         else if (act === "workbench-gates") ui.openBidWorkbench("gates");
         else if (act === "refresh-quality") ui.loadBidQuality(true);
         else if (act === "refresh-gates") ui.loadBidGates(true);
+        // #20 治理出口：人工裁定 / 异常态恢复 / 分包视图
+        else if (act === "gov-override-toggle") { state.bidGov.overOpen = !state.bidGov.overOpen; state.bidGov.overError = ""; state.bidGov.overInfo = ""; renderBidWorkbenchIfOpen(); }
+        else if (act === "gov-override-submit") ui.runMatrixOverride();
+        else if (act === "gov-recover-toggle") { state.bidGov.recoverOpen = !state.bidGov.recoverOpen; state.bidGov.recoverError = ""; state.bidGov.recoverInfo = ""; renderBidWorkbenchIfOpen(); }
+        else if (act === "gov-recover-submit") ui.runRecoverState();
+        else if (act === "refresh-packages") ui.loadBidPackages(true);
+        else if (act === "workbench-pkgs") ui.openBidWorkbench("packages");
         else if (act === "workbench-cov") ui.openBidWorkbench("coverage");
 
       });
@@ -1219,6 +1237,7 @@
       + '<button class="bid-entry" data-bid-act="workbench-quality"><span class="bid-entry-icon">' + ICON.check + '</span><span class="bid-entry-main"><span class="bid-entry-name">自评</span><span class="bid-entry-sub">评分 · 质量摘要 · BLOCKER</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-gates"><span class="bid-entry-icon">' + ICON.shield + '</span><span class="bid-entry-main"><span class="bid-entry-name">审核门</span><span class="bid-entry-sub">五门台账 · 追认 · 人工过门</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-cov"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">覆盖报告</span><span class="bid-entry-sub">已判定 / 未判定 / ★条款</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + '<button class="bid-entry" data-bid-act="workbench-pkgs"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">分包</span><span class="bid-entry-sub">多标段识别 · 选包状态</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + "</div></div>";
     bindBidViewActions(body);
   }
@@ -1244,6 +1263,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="quality">自评</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="gates">审核门</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="packages">分包</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1345,6 +1365,8 @@
       if (activePanel === "quality") renderBidQualityPanel(host);
       // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
       if (activePanel === "gates") renderBidGatesPanel(host);
+      // #20：分包视图不依赖章节树（早期态 E_STATE → 引导卡）
+      if (activePanel === "packages") renderBidPackagesPanel(host);
       return;
     }
     const byId = {};
@@ -1397,6 +1419,11 @@
     }
     if (activePanel === "gates") {
       renderBidGatesPanel(host);
+      return;
+    }
+    if (activePanel === "packages") {
+      // #20：分包清单只读视图（多标段/多包识别与选包状态）
+      renderBidPackagesPanel(host);
       return;
     }
     if (activePanel === "matrix") {
@@ -1753,6 +1780,26 @@
     // 写面消息（成功/失败——域层拒绝原样透传，不假成功）
     if (gt.passInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(gt.passInfo) + "</div>";
     if (gt.passError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(gt.passError) + "</div>";
+    // ---- #20：异常态恢复（#243——VALIDATING+缺章死锁的受支持出口）----
+    const projStatus = (state.bid.data && state.bid.data.project && state.bid.data.project.status) || "";
+    if (projStatus === "VALIDATING") {
+      const gv = state.bidGov;
+      html +=
+        '<div class="bid-card" data-kind="gov-recover"><div class="bid-card-title">' + ICON.warning + " 异常态恢复（VALIDATING）</div>"
+        + '<div class="bid-card-sub">项目滞留在 VALIDATING——若存在未起草叶（旧版校验误推进），可回到 DRAFTING 解锁起草面。三重约束（仅 VALIDATING / 仅缺章 / 理由必填）由域层裁决，每次恢复落审计账。</div>';
+      if (!gv.recoverOpen) {
+        html += '<div class="bid-card-actions"><button class="btn btn-sm" data-bid-act="gov-recover-toggle">展开恢复表单</button></div>';
+      } else {
+        html +=
+          '<div class="bid-gov-form">'
+          + '<label class="bid-export-field"><span>恢复理由 *</span><input type="text" id="gov-recover-reason" value="' + esc(gv.recoverReason) + '" placeholder="如：旧版校验在缺章时误推进 VALIDATING" /></label>'
+          + '<div class="bid-export-actions"><button class="btn btn-primary" data-bid-act="gov-recover-submit"' + (gv.recovering ? " disabled" : ">") + (gv.recovering ? "正在恢复…" : "确认恢复到 DRAFTING") + "</button></div>"
+          + "</div>";
+      }
+      if (gv.recoverInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(gv.recoverInfo) + "</div>";
+      if (gv.recoverError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(gv.recoverError) + "</div>";
+      html += "</div>";
+    }
     // ① agent 豁免追认清单（#277——human_confirmed=false 的门）
     if (waivers.length) {
       html += '<div class="bid-card" data-kind="ratify"><div class="bid-card-title">' + ICON.warning + " Agent 声明过门待追认（" + waivers.length + "）</div>";
@@ -1799,6 +1846,29 @@
       html += "</div>";
     });
     html += "</div>";
+    // ---- #20：人工裁定（#226——否决项死锁的矩阵行覆写出口）----
+    {
+      const gv = state.bidGov;
+      html +=
+        '<div class="bid-card" data-kind="gov-override"><div class="bid-card-title">' + ICON.shield + " 人工裁定（矩阵行覆写）</div>"
+        + '<div class="bid-card-sub">#226 否决项死锁出口：把「本次招标不接受联合体」这类招标人规则说明标为 NOT_APPLICABLE。宿主签发 receipt（四重绑定：项目/行/状态/理由），覆写后矩阵立即重算。不可审计的豁免不算豁免——NOT_APPLICABLE 必填偏离说明。</div>';
+      if (!gv.overOpen) {
+        html += '<div class="bid-card-actions"><button class="btn btn-sm" data-bid-act="gov-override-toggle">展开裁定表单</button></div>';
+      } else {
+        html +=
+          '<div class="bid-gov-form">'
+          + '<label class="bid-export-field"><span>条款 ID *</span><input type="text" id="gov-override-req" value="' + esc(gv.overReq) + '" placeholder="REQ-0003" /></label>'
+          + '<label class="bid-export-field"><span>目标状态 *</span><select id="gov-override-status">'
+          + ["NOT_APPLICABLE", "RESPONDED", "PARTIAL", "NOT_RESPONDED"].map((s) => '<option' + (s === gv.overStatus ? " selected" : "") + ">" + s + "</option>").join("")
+          + "</select></label>"
+          + '<label class="bid-export-field"><span>偏离/不适用说明 *</span><input type="text" id="gov-override-deviation" value="' + esc(gv.overDeviation) + '" placeholder="招标公告第 4 条：本项目不接受联合体投标（规则性说明非响应项）" /></label>'
+          + '<div class="bid-export-actions"><button class="btn btn-primary" data-bid-act="gov-override-submit"' + (gv.overriding ? " disabled" : ">") + (gv.overriding ? "正在覆写…" : "确认覆写并重算矩阵") + "</button></div>"
+          + "</div>";
+      }
+      if (gv.overInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(gv.overInfo) + "</div>";
+      if (gv.overError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(gv.overError) + "</div>";
+      html += "</div>";
+    }
     // ③ 裁决历史（REV 记录——append-only 审计面）
     html += '<div class="bid-card"><div class="bid-card-title">裁决历史（' + reviews.length + "）</div>";
     if (!reviews.length) {
@@ -1874,6 +1944,87 @@
         });
       });
     });
+    // ---- #20：治理出口表单同步（重渲染不丢输入）----
+    const govReason = panel.querySelector("#gov-recover-reason");
+    if (govReason) govReason.addEventListener("input", () => { state.bidGov.recoverReason = govReason.value; });
+    const govReq = panel.querySelector("#gov-override-req");
+    const govStatus = panel.querySelector("#gov-override-status");
+    const govDev = panel.querySelector("#gov-override-deviation");
+    if (govReq) govReq.addEventListener("input", () => { state.bidGov.overReq = govReq.value.trim(); });
+    if (govStatus) govStatus.addEventListener("change", () => { state.bidGov.overStatus = govStatus.value; });
+    if (govDev) govDev.addEventListener("input", () => { state.bidGov.overDeviation = govDev.value; });
+  }
+
+  /** #20 分包视图（bid.packages → list_packages 只读）：多标段/多包识别
+   *  与选包状态。选包动作不代庖——usage 提示选包走 build_outline 的
+   *  package 参数（MCP 管线），UI 只读呈现。 */
+  function renderBidPackagesPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const pk = state.bidPackages;
+    if (pk.status === "idle") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取分包清单…</div></div>';
+      ui.loadBidPackages();
+      return;
+    }
+    if (pk.status === "loading") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取分包清单…</div></div>';
+      return;
+    }
+    if (pk.code === "not_found") {
+      panel.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">当前工作区不是标书项目</div><div>' + esc(pk.error || "无 db.json") + "</div></div>";
+      return;
+    }
+    if (pk.code === "state") {
+      panel.innerHTML =
+        '<div class="bid-gt"><div class="view-state"><div class="view-state-title">分包识别尚未开放</div>'
+        + "<div>" + esc(pk.error) + "</div>"
+        + '<div class="bid-qual-hint">分包识别在需求抽取后可用（单包项目同样可查——detected=1）。先经 MCP 管线导入招标件并抽取条款（extract_requirements）。</div>'
+        + '<button class="btn" data-bid-act="refresh-packages">重试</button></div></div>';
+      bindBidViewActions(panel);
+      return;
+    }
+    if (!pk.data) {
+      panel.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">分包清单读取失败</div><div>' + esc(pk.error || "未知错误") + '</div><button class="btn" data-bid-act="refresh-packages">重试</button></div>';
+      bindBidViewActions(panel);
+      return;
+    }
+    const d = pk.data;
+    const items = Array.isArray(d.items) ? d.items : [];
+    const sel = d.selected_package;
+    let html = '<div class="bid-gt">';
+    html +=
+      '<div class="bid-gt-head">'
+      + '<span class="bid-gt-badge" data-state="ok">' + ICON.grid + " 分包识别：" + fmtChars(d.detected) + " 包</span>"
+      + '<span class="bid-gt-sub">共用条款 ' + fmtChars(d.shared_req_count) + " · 条款总数 " + fmtChars(d.total_requirements) + " · " + (pk.ts ? timeAgo(pk.ts) : "—") + "</span>"
+      + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm" data-bid-act="refresh-packages" title="重新读取 bid.packages">' + ICON.refresh + "刷新</button>"
+      + "</div>";
+    if (sel) {
+      html += '<div class="bid-gt-msg ok">' + ICON.check + " 当前选包：" + esc(sel.label || sel.id) + (sel.number ? "（" + esc(sel.number) + "）" : "") + "</div>";
+    } else if (items.length > 1) {
+      html += '<div class="bid-gt-msg err">' + ICON.warning + " 尚未选包——多包项目需经 MCP 管线 build_outline 传 package 参数选定投哪个包（共用条款自动进纲）</div>";
+    }
+    if (!items.length) {
+      html += '<div class="bid-card"><div class="bid-card-sub">未识别到分包（单包项目正常态）——需求抽取后如检出多标段/多包会在此列出</div></div>';
+    } else {
+      html += '<div class="bid-card"><div class="bid-card-title">包清单（' + items.length + "）</div>";
+      html += '<div class="bid-gt-ratify-list">';
+      items.forEach((it) => {
+        html +=
+          '<div class="bid-gt-ratify-row">'
+          + '<span class="bid-gt-ratify-gate">' + esc(it.label || it.id) + (it.number ? " · " + esc(it.number) : "") + "</span>"
+          + '<span class="bid-gt-ratify-meta">' + esc(it.kind || "") + " · " + fmtChars(it.req_count) + " 条 · 来源 " + fmtChars(Array.isArray(it.sources) ? it.sources.length : 0) + " 件</span>"
+          + (it.selected ? '<span class="bid-gt-state" data-state="ok">已选包</span>' : '<span class="bid-gt-state" data-state="pending">未选</span>')
+          + "</div>";
+      });
+      html += "</div>";
+      if (d.usage) html += '<div class="bid-card-sub">' + esc(d.usage) + "</div>";
+      html += "</div>";
+    }
+    html += "</div>";
+    panel.innerHTML = html;
+    bindBidViewActions(panel);
   }
 
   // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
@@ -4365,6 +4516,96 @@
       // 台账 + 侧栏门审摘要同源刷新（agent_waivers/human_review_complete 两处都消费）
       ui.loadBidGates(true);
       ui.loadBid(true);
+    },
+    /** #20：矩阵行人工覆写（bid.matrix_override——宿主签发四重绑定 receipt
+     *  后走 set_matrix_override 工具面；矩阵立即重算，回显 blocking 行数）。 */
+    async runMatrixOverride() {
+      const g = state.bidGov;
+      if (!state.bridge || g.overriding) return;
+      const req = (g.overReq || "").trim();
+      const dev = (g.overDeviation || "").trim();
+      if (!req) {
+        g.overError = "条款 ID 不能为空（如 REQ-0003）";
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      if (g.overStatus === "NOT_APPLICABLE" && !dev) {
+        g.overError = "NOT_APPLICABLE 必填偏离/不适用说明——不可审计的豁免不算豁免（#226）";
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      g.overriding = true;
+      g.overError = "";
+      g.overInfo = "";
+      g.overCode = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const body = { requirement_id: req, status: g.overStatus };
+        if (dev) body.deviation = dev;
+        const r = await ipc("bid.matrix_override", body, 3e4);
+        const ov = (r && r.override) || {};
+        g.overInfo = "已覆写 " + req + " → " + g.overStatus
+          + (typeof ov.blocking === "number" ? "（矩阵 " + fmtChars(ov.rows) + " 行 · 阻断 " + fmtChars(ov.blocking) + " 行）" : "");
+        g.overOpen = false;
+        // 矩阵已重算：矩阵/自评面同源刷新
+        if (state.bid.matrix && state.bid.matrix.status !== "idle") ui.loadBidMatrix(true);
+      } catch (err) {
+        g.overCode = (err && err.code) || "";
+        g.overError = err && (err.message || err.code) || "bid.matrix_override 失败";
+      }
+      g.overriding = false;
+      renderBidWorkbenchIfOpen();
+    },
+    /** #20：异常态恢复（bid.recover_state → recover_validating_state——
+     *  域层三重约束裁决；成功后项目面/门台账/章节树同源刷新）。 */
+    async runRecoverState() {
+      const g = state.bidGov;
+      if (!state.bridge || g.recovering) return;
+      const reason = (g.recoverReason || "").trim();
+      if (!reason) {
+        g.recoverError = "恢复理由必填（不可审计的恢复不成恢复——#243）";
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      g.recovering = true;
+      g.recoverError = "";
+      g.recoverInfo = "";
+      g.recoverCode = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.recover_state", { reason: reason }, 3e4);
+        const rc = (r && r.recover) || {};
+        g.recoverInfo = "已恢复到 DRAFTING（" + (rc.project_version ? "project_version " + rc.project_version : "解锁起草面") + "）";
+        g.recoverOpen = false;
+        // 状态翻新：项目面 + 门台账 + 大纲树全量重拉
+        await ui.loadBid(true);
+        ui.loadBidGates(true);
+      } catch (err) {
+        g.recoverCode = (err && err.code) || "";
+        g.recoverError = err && (err.message || err.code) || "bid.recover_state 失败";
+      }
+      g.recovering = false;
+      renderBidWorkbenchIfOpen();
+    },
+    /** #20：分包清单（bid.packages → list_packages 只读）。 */
+    async loadBidPackages(force) {
+      if (!state.bridge) return;
+      if (state.bidPackages.status === "loading" && !force) return;
+      state.bidPackages.status = "loading";
+      state.bidPackages.error = "";
+      state.bidPackages.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.packages", {}, 3e4);
+        state.bidPackages.data = (r && r.packages) || null;
+      } catch (err) {
+        state.bidPackages.data = null;
+        state.bidPackages.code = (err && err.code) || "";
+        state.bidPackages.error = err && (err.message || err.code) || "bid.packages 失败";
+      }
+      state.bidPackages.status = "ready";
+      state.bidPackages.ts = Date.now();
+      renderBidWorkbenchIfOpen();
     },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  批 C：panel 入参直达指定页签（"quality" = 自评——侧栏面板入口用） */

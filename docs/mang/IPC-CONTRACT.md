@@ -670,6 +670,47 @@ UI 上报右上角三按钮占宽；标题栏右端这一段必须让位（不�
 → { "width": 138 }
 ```
 
+### bid.matrix_override  `{ requirement_id, status, deviation?, actor_id?, project_version? }` —— 矩阵行人工覆写（写面；#20——#226 否决项死锁出口）
+与 `bid.gate_pass` 同款宿主签发面（#182）：壳用服务态真源构造四重绑定签域
+`matrix_override:<project_id>:<requirement_id>:<status>:<sha256(deviation)>`
+（`bid_mcp::matrix_override_scope`——项目/行/状态/理由换任何一项都换签），
+`issue_approval_receipt` 签发后经 `dispatch_with(set_matrix_override)` 走真实
+工具面验签落账 + 矩阵立即重算。`status` 四枚举（RESPONDED / NOT_APPLICABLE /
+NOT_RESPONDED / PARTIAL）；NOT_APPLICABLE 时 `deviation` 必填（工具面裁决）。
+`receipt` 由壳签发，UI 不传。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "MATRIX_READY" },
+    "override": { …set_matrix_override 工具输出原样（rows / blocking /
+                  principal{actor_id,actor_type,authentication_method} /
+                  requirement{…覆写后的行} / project_version…） } }
+```
+拒绝面：REQ 不存在 / deviation 缺失 → `bad_args`；矩阵未构建 → `state`。
+
+### bid.recover_state  `{ reason, project_version? }` —— 历史异常态恢复（写面；#20——#243 VALIDATING+缺章出口）
+经 `dispatch_with(recover_validating_state)` 真实工具面：域层三重约束（仅
+VALIDATING / 仅缺章 / 理由非空白）+ 审计账（何时/为何/从哪到哪/缺哪些章）。
+非死锁态重复请求 → E_STATE 透传 `state` 码（UI 引导卡）。无 receipt（恢复
+不是豁免动作）。成功携带新 project_version（后续调用用新值）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "recover": { …recover_validating_state 工具输出原样（recovered_from /
+                 missing_sections[] / project_version / request_id…） } }
+```
+
+### bid.packages  `{}` —— 分包清单（只读；#20——#316 多标段/多包识别）
+经 `dispatch_with(list_packages)` 真实工具面，工具输出原样放 `packages` 键。
+只读呈现：选包动作走 MCP 管线 `build_outline` 的 `package` 参数（UI 不代庖）。
+早期态（未抽取条款）→ E_STATE 透传 `state` 码（UI「分包识别尚未开放」引导卡）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFT" },
+    "packages": { …list_packages 工具输出原样（detected / items[]{id,label,
+                  kind,number,req_count,sources,selected} / shared_req_count /
+                  total_requirements / selected_package / usage…） } }
+```
+
 
 ## 7. 事件（无 id）
 
