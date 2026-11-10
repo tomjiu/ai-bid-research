@@ -289,22 +289,27 @@ class ResearchPipeline:
         updated_count = 0
         recovered = 0
         with BidDatabase(self.db_path) as db:
+            # R62：单查询预取身份集合（消逐条 get_bid 的 N+1），
+            # 整批单事务（万条级源从万次 fsync 降为一次）
+            existing_ids = db.all_bid_ids()
             raw_ids = (
                 {row["bid_id"] for row in db.list_by_extract_status("raw")}
                 if resume_sweep
                 else set()
             )
-            for record in deduped.unique:
-                if db.get_bid(record.bid_id) is None:
-                    new_records.append(record)
-                    db.save_bid(record.to_bid_row())
-                    db.set_extract_status(record.bid_id, "raw")
-                elif record.bid_id in raw_ids:
-                    new_records.append(record)  # 崩溃残留补抽（R58）
-                    recovered += 1
-                else:
-                    db.save_bid(record.to_bid_row())  # 幂等覆盖（可能带新字段）
-                    updated_count += 1
+            with db.transaction():
+                for record in deduped.unique:
+                    if record.bid_id not in existing_ids:
+                        new_records.append(record)
+                        db.save_bid(record.to_bid_row())
+                        db.set_extract_status(record.bid_id, "raw")
+                        existing_ids.add(record.bid_id)
+                    elif record.bid_id in raw_ids:
+                        new_records.append(record)  # 崩溃残留补抽（R58）
+                        recovered += 1
+                    else:
+                        db.save_bid(record.to_bid_row())  # 幂等覆盖（可能带新字段）
+                        updated_count += 1
 
         stage = StageResult(
             name="collect",

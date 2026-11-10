@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -127,6 +128,50 @@ class BidDatabase:
         self._conn.executescript(_DB_SCHEMA)
         self._conn.commit()
         self._apply_migrations()
+        # R62：批量写事务深度标志（0 = 自动提交模式，行为同历史）
+        self._tx_depth = 0
+
+    # ------------------------------------------------------------------
+    # 批量写事务（R62）
+    # ------------------------------------------------------------------
+
+    @contextmanager
+    def transaction(self):
+        """批量写事务上下文——多条写合并单次 commit。
+
+        收益：万条级导入从「万次 fsync」降为一次（Windows 本地盘
+        与网络盘收益最显著；WAL 下亦减少 checkpoint 压力）。
+        语义：**原子**——块内任一异常整体回滚（历史逐条 commit
+        的部分落盘语义废止，文档同步）；支持嵌套（内层并入外层）。
+
+        用法::
+
+            with db.transaction():
+                for row in rows:
+                    db.save_bid(row)  # 块内不再逐条 commit
+        """
+        self._tx_depth += 1
+        try:
+            yield
+        except BaseException:
+            # 异常路径：最外层负责回滚整批（内层并入外层，不单独动）
+            if self._tx_depth == 1:
+                self._conn.rollback()
+            raise
+        finally:
+            self._tx_depth -= 1
+        # 成功路径：深度归零才提交（yield 正常返回时 finally 已减完）
+        if self._tx_depth == 0:
+            try:
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
+
+    def _maybe_commit(self) -> None:
+        """写方法收尾：自动提交模式下才 commit（事务内由外层收口）。"""
+        if self._tx_depth == 0:
+            self._conn.commit()
 
     # ------------------------------------------------------------------
     # Schema 版本与迁移（R56）
@@ -177,7 +222,7 @@ class BidDatabase:
             "UPDATE bids SET extract_status = ? WHERE bid_id = ?",
             (status, str(bid_id)),
         )
-        self._conn.commit()
+        self._maybe_commit()
 
     def extract_status_of(self, bid_id: str) -> Optional[str]:
         """读取单条记录的抽取状态（缺行/未标记 → None）。"""
@@ -211,7 +256,7 @@ class BidDatabase:
             " WHERE bid_id = ? AND status = 'pending'",
             (str(bid_id),),
         )
-        self._conn.commit()
+        self._maybe_commit()
         return cursor.rowcount
 
     # ------------------------------------------------------------------
@@ -253,22 +298,33 @@ class BidDatabase:
             f"ON CONFLICT(bid_id) DO UPDATE SET {updates}",
             [row[key] for key in _BID_COLUMNS],
         )
-        self._conn.commit()
+        self._maybe_commit()
         return cursor.rowcount
 
     def import_bids(self, bids: List[Dict[str, Any]]) -> int:
-        """批量导入项目记录。
+        """批量导入项目记录（R62：单事务原子化）。
 
         Args:
             bids: 项目数据字典列表。
 
         Returns:
             成功保存的条数。
+
+        Note:
+            **原子语义**：任一行失败整体回滚（此前逐条 commit
+            的部分落盘语义已废止——批量导入要么全成要么全无，
+            调用方无需自行清理半成品）。
         """
         saved = 0
-        for bid in bids:
-            saved += self.save_bid(bid)
+        with self.transaction():
+            for bid in bids:
+                saved += self.save_bid(bid)
         return saved
+
+    def all_bid_ids(self) -> set:
+        """全库 bid_id 集合（批量去重的单查询面，R62——消 N+1）。"""
+        rows = self._conn.execute("SELECT bid_id FROM bids").fetchall()
+        return {row[0] for row in rows}
 
     # ------------------------------------------------------------------
     # 查询
@@ -431,7 +487,7 @@ class BidDatabase:
                 status,
             ),
         )
-        self._conn.commit()
+        self._maybe_commit()
         return cursor.rowcount
 
     def list_pending(
@@ -510,7 +566,7 @@ class BidDatabase:
             """,
             (status, error, str(fingerprint)),
         )
-        self._conn.commit()
+        self._maybe_commit()
         return cursor.rowcount
 
     def pending_stats(self) -> Dict[str, Any]:
