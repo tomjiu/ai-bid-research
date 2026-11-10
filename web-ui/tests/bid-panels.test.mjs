@@ -635,5 +635,32 @@ check(
   "分账样式缺失"
 );
 
+// ---------- R4（#47）：向导完成态首屏 + 会话态生命周期 ----------
+check(
+  "R4 UI：switchWorkspace 重置向导会话态（result 不跨工作区泄漏）",
+  /async switchWorkspace\(p0\) \{[\s\S]{0,3000}state\.bidWizard = \{/.test(app),
+  "旧工作区导入现场（result/sel/files）泄漏到新工作区——「文件已入库」错挂新项目"
+);
+check(
+  "R4 UI：完成态卡渲染函数 renderBidWizardDone（重开工作区场景）",
+  /function renderBidWizardDone\(/.test(app),
+  "重开工作区后右面板无完成态首屏"
+);
+check(
+  "R4 UI：完成态卡数据面 = bid.state quick_stats 同源（files/requirements/evidence/pages_estimate）",
+  /q\.files \|\| 0/.test(app) && /q\.requirements \|\| 0/.test(app) && /q\.pages_estimate \|\| 0/.test(app) && /q\.evidence \|\| 0/.test(app),
+  "完成态卡造数或字段漂移（quick_stats 是唯一真源）"
+);
+check(
+  "R4 UI：已导入未建纲分支（q19.files > 0 && 无向导现场 → 完成态卡）",
+  /\} else if \(q19\.files > 0\) \{[\s\S]{0,600}renderBidWizardDone\(panelEl19, b\)/.test(app),
+  "重开工作区回到泛泛「大纲未建立」占位（完成态分支被删）"
+);
+check(
+  "R4 UI：完成态优先级——刚导入现场（result）仍走逐件表",
+  /else if \(state\.bidWizard\.result\) \{[\s\S]{0,500}renderBidWizardResult\(panelEl19, state\.bidWizard\.result\)/.test(app),
+  "完成态卡盖掉刚导入的逐件结果（现场信息降级）"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1406,6 +1406,13 @@
         treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>';
         const panelEl19 = host.querySelector("#bid-panel");
         if (panelEl19) renderBidWizardResult(panelEl19, state.bidWizard.result);
+      } else if (q19.files > 0) {
+        // R4（#47）：向导完成态首屏——重开工作区场景（无进行中向导）：
+        // 已导入未建纲，树区给 quick_stats 驱动的「已入库」引导，右面板
+        // 完成态卡（不再是泛泛「大纲未建立」占位——数据同源 bid.state）
+        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库（' + (q19.files || 0) + " 件）</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>";
+        const panelEl19 = host.querySelector("#bid-panel");
+        if (panelEl19 && activePanel === "detail") renderBidWizardDone(panelEl19, b);
       } else {
         treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
       }
@@ -1649,6 +1656,31 @@
       + (integrity.length ? '<div class="bid-cov-next" data-state="warn"><span>输入完整性</span>' + integrity.map((f) => esc(f.name + "：" + (f.reason || ""))).join("；") + "</div>" : "")
       + (warns.length ? '<details class="bid-wiz-warns"><summary>' + warns.length + " 条告警</summary>" + warns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
       + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草</div>'
+      + "</div>";
+  }
+
+  /** R4（#47）：向导完成态卡（右面板）——重开工作区场景：quick_stats
+   * 驱动的项目就绪面（文件/条款/证据/页数估计），下一步引导对齐
+   * bid.coverage next 语言。刚导入的现场（result 在场）仍走
+   * renderBidWizardResult（逐件表更详细）；本卡是无现场时的同源降级。 */
+  function renderBidWizardDone(panelEl, b) {
+    const p = (b.data && b.data.project) || {};
+    const q = (b.data && b.data.quick_stats) || {};
+    panelEl.innerHTML =
+      '<div class="bid-panel-card">'
+      + '<div class="bid-panel-title">导入完成 · 项目就绪</div>'
+      + '<div class="bid-wiz-summary" data-state="ok">'
+      + "<span>文件 " + (q.files || 0) + " 件</span>"
+      + "<span>需求条款 " + fmtChars(q.requirements || 0) + " 条</span>"
+      + "<span>证据 " + fmtChars(q.evidence || 0) + "</span>"
+      + "<span>约 " + fmtChars(q.pages_estimate || 0) + " 页</span>"
+      + "</div>"
+      + '<table class="bid-table"><tbody>'
+      + "<tr><td>项目</td><td>" + esc(p.name || "未命名项目") + "</td></tr>"
+      + "<tr><td>模式</td><td>" + esc(p.mode || "—") + "</td></tr>"
+      + "<tr><td>状态</td><td>" + esc(bidProjectStatusZh(p.status || "")) + "</td></tr>"
+      + "</tbody></table>"
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草——建纲后左侧显示章节树与本面板详情</div>'
       + "</div>";
   }
 
@@ -4358,6 +4390,14 @@
       state.bidQuality = { status: "idle", quality: null, score: null, error: "", code: "", scoreError: "", ts: 0 };
       // #603 批 A：治理面同理随根失效（门台账/表单态/写面消息全清）
       state.bidGates = { status: "idle", data: null, error: "", code: "", ts: 0, passing: false, passError: "", passInfo: "", formGate: "", formMode: "" };
+      // R4（#47）：向导会话态同理随根失效——result/sel/files 是旧工作区的
+      // 导入现场，泄漏到新工作区会把「文件已入库」+ 旧结果表错挂到新项目
+      // （与上面 bid/bidQuality/bidGates 同列，漏列即跨根泄漏）
+      state.bidWizard = {
+        createBusy: false, createError: "",
+        treeStatus: "idle", treeError: "", files: [], sel: {},
+        importBusy: false, importError: "", result: null
+      };
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
