@@ -57,6 +57,8 @@ EXPECTED_KEYS = {
     # 批 L 增量（R80/R82）：十六/十七节的数据面
     "duplicates",
     "semantic_health",
+    # 批 N 增量（R95）：十八节响应窗口的数据面
+    "response_windows",
 }
 
 

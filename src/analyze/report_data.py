@@ -21,6 +21,7 @@ from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
 from src.analyze.duplicates import find_duplicate_clusters, render_duplicates_markdown
 from src.analyze.quality import field_quality, semantic_health, render_semantic_health_markdown
+from src.analyze.windows import response_windows
 from src.analyze.keywords import (
     common_bigrams,
     keyword_frequency,
@@ -77,6 +78,7 @@ def build_analysis_payload(
         "concentration_trend": concentration_trend(dataset),
         "duplicates": find_duplicate_clusters(dataset),
         "semantic_health": semantic_health(dataset),
+        "response_windows": response_windows(dataset),
     }
 
 
@@ -571,6 +573,61 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             render_semantic_health_markdown(
                 semantic, ordinal="十七"
             ).rstrip("\n"),
+            "",
+        ]
+
+    # 第十八节：响应窗口（发布→截止）——deadline 字段首次进分析面
+    windows = payload.get("response_windows") or {}
+    if windows.get("sample_count"):
+        line = windows["short_window_days"]
+        rows = [
+            ["有效样本 / 缺日期 / 倒挂", (
+                f"{windows['sample_count']} / {windows['missing_count']}"
+                f" / {windows['invalid_count']}"
+            )],
+            ["中位（天）", str(windows["median_days"])],
+            ["P25 / P75（天）", (
+                f"{windows['p25_days']} / {windows['p75_days']}"
+            )],
+            ["最短 / 最长（天）", (
+                f"{windows['min_days']} / {windows['max_days']}"
+            )],
+            [f"短窗（< {line} 日）", (
+                f"{windows['short_window_count']} 条"
+                f"（占有效样本 {_fmt_pct(windows['short_window_rate'])}）"
+            )],
+        ]
+        sections += [
+            "## 十八、响应窗口期（发布→截止，天）",
+            "",
+            _render_table(["指标", "值"], rows),
+            "",
+        ]
+        if windows.get("short_window_examples"):
+            example_rows = [
+                [
+                    example["project_name"],
+                    str(example["window_days"]),
+                    example["region"] or "——",
+                    example["publish_date"],
+                    example["deadline"],
+                ]
+                for example in windows["short_window_examples"]
+            ]
+            sections += [
+                f"### 最紧迫短窗 Top {len(example_rows)}（供人工复核）",
+                "",
+                _render_table(
+                    ["项目", "窗口(天)", "区域", "发布日", "截止日"],
+                    example_rows,
+                ),
+                "",
+            ]
+        sections += [
+            "注：短窗是**研究提示非违规认定**——法定最短 20 日的起算点是",
+            "「招标文件开始发出之日」，本节以公告发布日近似（**偏短估计**）；",
+            "竞争性磋商/询价等采购方式法定期限更短。截止早于发布的倒挂",
+            "记录是数据问题（十七节揭示），不进本节分布。",
             "",
         ]
 
