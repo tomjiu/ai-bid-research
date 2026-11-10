@@ -331,6 +331,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="输出库结构状态（schema 版本 + 各表行数 + PRAGMA）",
     )
     db.add_argument(
+        "--diff",
+        nargs=2,
+        type=Path,
+        metavar=("OLD", "NEW"),
+        help=(
+            "对比两份 JSON 研究快照（db export 产物）："
+            "新增/移除/字段变更明细（配合 --out 落机器可读 JSON）"
+        ),
+    )
+    db.add_argument(
         "--query",
         help="按关键词查询项目记录（可选，配合 --days）",
     )
@@ -887,6 +897,44 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_snapshot_diff(args: argparse.Namespace) -> int:
+    """db --diff OLD NEW：研究快照对比（R60）。"""
+    from src.storage.snapshot_diff import (
+        diff_snapshots,
+        render_diff_summary,
+    )
+
+    old_path, new_path = args.diff
+    for path in (old_path, new_path):
+        if not path.is_file():
+            print(f"错误：快照文件不存在: {path}", file=sys.stderr)
+            return 2
+    try:
+        old_rows = json.loads(old_path.read_text(encoding="utf-8"))
+        new_rows = json.loads(new_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        print(f"错误：快照 JSON 解析失败: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(old_rows, list) or not isinstance(new_rows, list):
+        print("错误：快照顶层须为 JSON 数组（db export 产物）", file=sys.stderr)
+        return 2
+
+    result = diff_snapshots(old_rows, new_rows)
+    print(render_diff_summary(result))
+    if args.out is not None:
+        try:
+            ensure_writable_path(args.out)
+            write_text_lf(
+                args.out,
+                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+            )
+        except OSError as exc:
+            print(f"错误：diff JSON 导出失败: {exc}", file=sys.stderr)
+            return 2
+        print(f"diff JSON 已导出: {args.out}")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
     """执行 db 子命令：导入/查询/统计/导出。
 
@@ -898,6 +946,8 @@ def run_db(args: argparse.Namespace) -> int:
     """
     db_path: Path = args.db
     creating = args.import_file is not None
+    if args.diff is not None:
+        return _run_snapshot_diff(args)
     if not creating and not db_path.exists():
         print(f"错误：数据库不存在: {db_path}", file=sys.stderr)
         return 2
