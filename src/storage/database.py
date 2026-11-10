@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from src.storage.pragmas import configure_pragmas
+
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS bids (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,6 +106,12 @@ class BidDatabase:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(db_path))
         self._conn.row_factory = sqlite3.Row
+        # R42：平台安全 PRAGMA——WAL 探测-回退（Windows 网络盘/旧 FAT
+        # 切不上时保持 delete+FULL，不静默谎报并发能力）
+        if str(db_path) != ":memory:":
+            self.pragmas = configure_pragmas(self._conn)
+        else:
+            self.pragmas = {"journal_mode": "memory", "synchronous": "n/a"}
         self._conn.executescript(_DB_SCHEMA)
         self._conn.commit()
 
