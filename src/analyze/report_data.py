@@ -109,6 +109,58 @@ def _render_table(headers: List[str], rows: List[List[str]]) -> str:
     return "\n".join(lines)
 
 
+def _slugify_heading(heading: str) -> str:
+    """Markdown 锚点 slug（GitHub 风格近似——中文保留、空白折叠）。
+
+    GitHub 锚点规则对中文报告：小写 ASCII、去标点、空白→连字符、
+    中文原样保留。研究面 HTML 导出（export_html）自建锚点，
+    此 slug 仅服务 GitHub/兼容渲染器预览。
+    """
+    slug = []
+    for ch in heading.strip().lower():
+        if ch.isalnum() or "\u4e00" <= ch <= "\u9fff":
+            slug.append(ch)
+        elif ch.isspace():
+            slug.append("-")
+        # 标点丢弃
+    return "".join(slug) or "section"
+
+
+def build_toc(markdown_text: str, *, max_depth: int = 3) -> str:
+    """从已渲染 Markdown 提取标题生成目录（R63）。
+
+    Args:
+        markdown_text: 完整报告 Markdown。
+        max_depth: 收录标题层级（缺省 3——## 节 + ### 子节；
+            报告面最深即 ###）。
+
+    Returns:
+        目录块（``## 目录`` + 锚点列表）；无标题返回空串。
+    """
+    entries = []
+    in_code_block = False
+    for line in markdown_text.splitlines():
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        stripped = line.lstrip()
+        if not stripped.startswith("#"):
+            continue
+        level = len(stripped) - len(stripped.lstrip("#"))
+        if level < 2 or level > max_depth:
+            continue
+        title = stripped[level:].strip()
+        if title == "目录":
+            continue  # 防 TOC 自引用
+        indent = "  " * (level - 2)
+        entries.append(f"{indent}- [{title}](#{_slugify_heading(title)})")
+    if not entries:
+        return ""
+    return "\n".join(["## 目录", "", *entries, ""])
+
+
 def render_analysis_markdown(payload: Dict[str, Any]) -> str:
     """把分析 payload 渲染为 Markdown（纯数据报告）。
 
@@ -508,4 +560,17 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
         "- 预算单位统一为万元（采集/抽取面归一口径）。",
         "",
     ]
-    return "\n".join(sections)
+    body = "\n".join(sections)
+    # R63：目录注入（标题块后）——15 节长报告可导航
+    toc = build_toc(body)
+    if toc:
+        lines = body.split("\n")
+        # 标题元信息块（# 标题 + 空行 + 摘要列表）后、首个 ## 节前插入
+        first_section = next(
+            (i for i, ln in enumerate(lines) if ln.startswith("## ")), None
+        )
+        if first_section:
+            lines.insert(first_section, toc.rstrip("\n"))
+            lines.insert(first_section + 1, "")
+            body = "\n".join(lines)
+    return body
