@@ -729,6 +729,7 @@ try{window.__ipcEvent&&window.__ipcEvent({…});}catch(e){}
   "ts": 1793260341382 }
 ```
 - 工作区内的文件才出现在 `within`；外部的只进 `paths`（UI 用 `file.fromPath` 归一）。
+- **向导联动（R7，#47）**：导入向导第二步（导入卡）在场时，UI 优先用 `within` 的 `rel` 把白名单件（docx/xlsx/pdf/doc/ods）勾选进导入清单（kind 启发式预选）——拖进来的是招标输入不是预览件，不开文档 Tab；外部件与非白名单件回退 `openPath`。`within` 是壳侧算好的 rel 真源，UI 不自算（防口径分叉）。
 - 必须 `DragFinish`（已做），否则系统资源泄漏。
 - 回调在 UI 线程，只做“入队 + 唤醒”，真正注入由事件循环统一做。
 - 自测：`mang-app.exe --inject-drop "D:\a.docx;D:\b.xlsx"` 会在启动 1.5s 后推一条同样的 drop 事件（已验证能直接开出两个 Tab）。

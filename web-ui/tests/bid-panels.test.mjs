@@ -709,5 +709,37 @@ check(
   "四面板统一口径没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- R7（#47）：拖拽导入——drop 事件直通向导第二步 ----------
+check(
+  "R7 事件面：drop 分发把 within 传给 onDrop（rel 真源不自算）",
+  /ui\.onDrop\(Array\.isArray\(ev\.paths\) \? ev\.paths : \[\], Array\.isArray\(ev\.within\) \? ev\.within : \[\]\)/.test(app),
+  "within（围栏内 rel）被丢弃——拖拽勾选无从谈起"
+);
+check(
+  "R7 UI：onDrop 双参签名 + 导入卡在场判据（DRAFT 未导入无大纲——与渲染分支同源）",
+  /onDrop\(paths, within\) \{[\s\S]{0,600}=== "DRAFT"[\s\S]{0,120}!\(q19\.files > 0\)/.test(app),
+  "拖拽导入判据与导入卡渲染分支脱钩（状态错配风险）"
+);
+check(
+  "R7 UI：within 白名单件勾选进 sel（kind 启发式预选 + 幂等不覆盖）",
+  /relByPath\.get\(p\)[\s\S]{0,300}BID_IMPORT_EXTS\.test\(baseName\(rel\)\)[\s\S]{0,500}state\.bidWizard\.sel\[rel\] = guessBidFileKind/.test(app),
+  "拖进来的招标输入被开成文档 Tab（或勾选丢 kind 预选）"
+);
+check(
+  "R7 UI：外部件/非白名单件回退 openPath（围栏外语义不变）",
+  /openables\.forEach\(\(p0\) => ui\.openPath\(p0\)\)/.test(app),
+  "回退路径被删（外部拖拽件丢失）"
+);
+check(
+  "R7 UI：勾选后 toast 引导（确认角色后导入）",
+  /已勾选 " \+ importable\.length \+ " 件待导入文件/.test(app),
+  "拖拽勾选无反馈（用户不知道发生了什么）"
+);
+check(
+  "R7 契约：drop 节登记向导联动（within rel 真源 + 白名单勾选）",
+  contract.includes("向导联动（R7，#47）") && contract.includes("不开文档 Tab"),
+  "拖拽导入语义没进契约"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

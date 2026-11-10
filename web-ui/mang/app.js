@@ -782,7 +782,9 @@
       return;
     }
     if (ev.ev === "drop") {
-      ui.onDrop(Array.isArray(ev.paths) ? ev.paths : []);
+      // R7（#47）：within（围栏内 [{path, rel}]）一并传给 onDrop——向导
+      // 导入卡的拖拽勾选依赖 rel 真源（壳侧已算好，UI 不自算防口径分叉）
+      ui.onDrop(Array.isArray(ev.paths) ? ev.paths : [], Array.isArray(ev.within) ? ev.within : []);
       return;
     }
     // #76：LLM 连接测试的异步回执（后台线程 HTTP 完成后由壳推送）
@@ -5135,7 +5137,41 @@
      * 不依赖 JS 先布防 —— 否则 JS 一出错窗口就拖不动。
      * 这里只在按下位置【不在】菜单栏空白区时临时关掉，避免把侧栏/正文的空白当成拖动。
      */
-    onDrop(paths) {
+    onDrop(paths, within) {
+      // R7（#47）：向导第二步（导入卡）在场时，拖进来的工作区内白名单件
+      // → 勾选进导入清单（kind 启发式预选，导入前可改）——拖进来的是
+      // 招标输入不是预览件，不再开文档 Tab；外部件/非白名单件回退 openPath。
+      // 判据与 renderBidWorkbench 的导入卡分支同源（DRAFT 且未导入且无大纲）。
+      const b = state.bid.data;
+      const p19 = (b && b.data && b.data.project) || {};
+      const q19 = (b && b.data && b.data.quick_stats) || {};
+      const wizardImportVisible = !!(state.bridge
+        && !bidOutlineNodes().length
+        && (p19.status || "") === "DRAFT"
+        && !(q19.files > 0));
+      if (wizardImportVisible && Array.isArray(within) && within.length) {
+        const relByPath = new Map(within.map((x) => [x.path, x.rel]));
+        const importable = [];
+        const openables = [];
+        paths.forEach((p) => {
+          const rel = relByPath.get(p);
+          if (rel && BID_IMPORT_EXTS.test(baseName(rel))) importable.push(rel);
+          else openables.push(p);
+        });
+        if (importable.length) {
+          let newly = 0;
+          importable.forEach((rel) => {
+            if (!Object.prototype.hasOwnProperty.call(state.bidWizard.sel, rel)) {
+              state.bidWizard.sel[rel] = guessBidFileKind(baseName(rel));
+              newly += 1;
+            }
+          });
+          renderBidWorkbenchIfOpen();
+          ui.toast("ok", "已勾选 " + importable.length + " 件待导入文件" + (newly < importable.length ? "（" + (importable.length - newly) + " 件已在清单）" : "") + "——在导入卡确认角色后点导入");
+        }
+        if (openables.length) openables.forEach((p0) => ui.openPath(p0));
+        return;
+      }
       paths.forEach((p0) => ui.openPath(p0));
     },
     onDroppedFiles(files) {
