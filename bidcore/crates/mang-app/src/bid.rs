@@ -70,7 +70,9 @@ fn map_tool_err(e: bid_mcp::ToolError) -> IpcError {
         bid_mcp::ToolError::ENotFound { what } => IpcError::not_found(what),
         bid_mcp::ToolError::EState { what } => IpcError::state(what),
         bid_mcp::ToolError::EUnprocessable { what } => IpcError::bad_args(what),
-        bid_mcp::ToolError::EState { what } => IpcError::new("state", what),
+        // #18：乐观并发冲突独立成码（此前落 io 兜底——UI 无法区分「并发
+        // 过期，刷新重试」与「工作区真故障」；conflict 码供前端引导）
+        bid_mcp::ToolError::EConflict { what } => IpcError::new("conflict", what),
         other => IpcError::io(format!("工具面应答失败：{other}")),
     }
 }
@@ -767,6 +769,155 @@ pub fn gate_pass(
         "workspace": ws.root_display(),
         "project": project,
         "gate_pass": tool_out,
+    }))
+}
+
+/// `bid.validate` —— 标书校验（#18 缺口-1：validate_bid_document 透传面）。
+///
+/// 只读诊断 + VALIDATING 推进（工具面语义）——壳不做业务判断，经
+/// `bid_mcp::dispatch_with` 走真实工具面（与 bid-mcp-stdio 同源裁决：
+/// 状态窗 Drafting+ / 章节树非空 / 乐观并发）。工具输出原样放 `validate`
+/// 键（ok / errors / warnings / findings / counts / categories /
+/// submission_readiness / project_version——#80 校验推进版本后必须回传）。
+///
+/// 参数：`scope`（all | sections，缺省 all）、`section_ids`（scope=sections
+/// 时必填）、`rules_profile`（standard | dark_bid）、`project_version`
+/// （可选 CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；早态（Drafting 前）→ 工具面 E_STATE
+/// 透传为 `state` 码（UI 据此显示「先建纲/先起草」引导卡）。
+pub fn validate(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let scope = a.str("scope")?.map(str::to_string);
+    let rules_profile = a.str("rules_profile")?.map(str::to_string);
+    let project_version = a.u64("project_version")?;
+    let section_ids: Option<Vec<String>> = match a.get("section_ids") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(arr)) => Some(
+            arr.iter()
+                .map(|v| {
+                    v.as_str().map(str::to_string).ok_or_else(|| {
+                        IpcError::bad_args("section_ids 数组元素须为字符串（章节 id）")
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        Some(other) => {
+            let kind = match other {
+                Value::String(_) => "string",
+                Value::Number(_) => "number",
+                Value::Bool(_) => "bool",
+                Value::Object(_) => "object",
+                _ => "other",
+            };
+            return Err(IpcError::bad_args(format!(
+                "section_ids 须为字符串数组，实际类型：{kind}"
+            )));
+        }
+    };
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({ "project_id": project_id });
+    if let Some(s) = scope {
+        args["scope"] = json!(s);
+    }
+    if let Some(ids) = section_ids {
+        args["section_ids"] = json!(ids);
+    }
+    if let Some(rp) = rules_profile {
+        args["rules_profile"] = json!(rp);
+    }
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "validate_bid_document".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "validate": tool_out,
+    }))
+}
+
+/// `bid.export` —— 标书导出（#18 缺口-1：export_bid_document 写面）。
+///
+/// 经 `bid_mcp::dispatch_with` 走真实工具面（双前置门 + 写作验收门 +
+/// 占位证据门 + 路径围栏全在工具/域层，壳不复制裁决）。工具输出原样放
+/// `export` 键（artifact{url,sha256,size} / chapters_written / total_chars /
+/// warnings / project_status——EXPORTED 推进）。
+///
+/// 参数：`format`（docx | pdf——pdf 需 Word/LibreOffice，缺失响亮拒）、
+/// `output_path`（**工作区相对路径**，工具面拒绝对路径/../ 逃逸）、
+/// `dark_bid` + `bidder_name`（暗标脱敏对）、`bid_open_date`（可选 ISO
+/// 日期——开标日时效裁决）、`project_version`（可选 CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；三门未全过 → 工具面 E_STATE 透传为
+/// `state` 码（UI 引导「去审核门过门」）；路径逃逸/format 非法 → `bad_args`。
+pub fn export(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let format = a.req_str("format")?.to_string();
+    let output_path = a.req_str("output_path")?.to_string();
+    let dark_bid = a.bool("dark_bid")?;
+    let bidder_name = a.str("bidder_name")?.map(str::to_string);
+    let bid_open_date = a.str("bid_open_date")?.map(str::to_string);
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut profile = json!({});
+    if let Some(d) = dark_bid {
+        profile["dark_bid"] = json!(d);
+    }
+    if let Some(n) = bidder_name {
+        profile["bidder_name"] = json!(n);
+    }
+    let mut args = json!({
+        "project_id": project_id,
+        "format": format,
+        "output_path": output_path,
+        "profile": profile,
+    });
+    if let Some(d) = bid_open_date {
+        args["bid_open_date"] = json!(d);
+    }
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "export_bid_document".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "export": tool_out,
     }))
 }
 
@@ -1720,4 +1871,302 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    // ================================================================
+    // #18 导出与校验闭环（bid.validate / bid.export）
+    // ================================================================
+
+    /// #18 种子：起草完成态——MatrixReady→EvidenceBound→Drafting 链式推进
+    /// + 全叶 Drafted 带正文（正文实写 = 矩阵 RESPONDED 派生 → blocking 自清；
+    /// #241 裁定）。非评分类 REQ——绕开评分叶 80% 篇幅门，聚焦导出链本身。
+    /// 起草正文（>目标篇幅——写作验收门 E_CHARS_BELOW_MIN 只打评分叶，
+    /// 这里冗余满足以防口径收紧）。
+    fn seed_drafted_project(dir: &std::path::Path) {
+        let mut svc = bid_tools::service::BidService::open(dir).unwrap();
+        svc.create_project("导出链项目", "PRJ-EXP", "明标", "ext-18-a")
+            .unwrap();
+        {
+            let store = svc.store_mut();
+            store
+                .advance_project_status(ProjectStatus::FilesImported)
+                .unwrap();
+            store
+                .set_requirements(vec![
+                    req("REQ-0001", "技术参数", "投标人须提供 2000 路并发能力"),
+                    req("REQ-0002", "技术参数", "投标人须提供 7×24 运维服务承诺"),
+                ])
+                .unwrap();
+        }
+        svc.prepare_outline_and_matrix(bid_domain::outline::OutlineSpec {
+            target_total_chars: 400,
+            max_reqs_per_leaf: 2,
+        })
+        .unwrap();
+        // 链式推进到 Drafting（MatrixReady→EvidenceBound→Drafting——
+        // 状态机无跳级边，逐级走）
+        {
+            let store = svc.store_mut();
+            store
+                .advance_project_status(ProjectStatus::EvidenceBound)
+                .unwrap();
+            store
+                .advance_project_status(ProjectStatus::Drafting)
+                .unwrap();
+            // 全叶起草到 Drafted（叶 = 无子节点者）
+            let parents: std::collections::HashSet<String> = store
+                .sections()
+                .iter()
+                .filter_map(|n| n.parent_id.clone())
+                .collect();
+            let leaf_ids: Vec<String> = store
+                .sections()
+                .iter()
+                .filter(|n| !parents.contains(&n.id))
+                .map(|n| n.id.clone())
+                .collect();
+            assert!(!leaf_ids.is_empty(), "种子必须产出至少 1 个叶章节");
+            // 正文 ≥ 800 字：过总篇幅门（E_TOTAL_CHARS_BELOW_MIN 的 BLOCKER
+            // 面在「全稿 < 档位目标」时触发——单叶项目全稿 = 叶正文；档位
+            // 地板 500，冗余写到 800 防口径收紧）+ 叶 80% 容差面冗余满足。
+            let base = "本节对招标文件技术参数逐项应答：系统采用双活架构，支持 2000 路并发，\n并提供 7×24 运维服务承诺，故障恢复时间不超过 30 分钟，全年可用率不低于 99.9%。\n项目团队配置项目经理 1 名、系统架构师 2 名、驻场工程师 4 名，实施周期 90 天。";
+            let filler = "具体实施方案、人员到岗计划、备品备件清单与质量保障措施逐项应答如下：按招标文件第三章技术规范要求逐条对应，确保响应完整、参数达标、承诺可核查。";
+            let body = format!("{base}\n{}", format!("{filler}\n").repeat(12));
+            assert!(body.chars().count() >= 800, "种子正文必须过总篇幅门");
+            for id in &leaf_ids {
+                for to in [SectionStatus::Outlining, SectionStatus::Drafting] {
+                    store.advance_section_status(id, to).unwrap();
+                }
+                store.set_section_content(id, body.clone()).unwrap();
+                store
+                    .advance_section_status(id, SectionStatus::Drafted)
+                    .unwrap();
+            }
+        }
+        svc.checkpoint().unwrap();
+        // 导出面读 ChapterRecord（chapters/ 已提交内容——export 绝不静默跳章），
+        // 与 MCP 写路径同源：经 ChapterAssembler::commit_section 落记录。
+        let mut asm = bid_tools::assembly::ChapterAssembler::open(dir).unwrap();
+        {
+            let store = svc.store();
+            let parents: std::collections::HashSet<String> = store
+                .sections()
+                .iter()
+                .filter_map(|n| n.parent_id.clone())
+                .collect();
+            for n in store.sections().iter().filter(|n| !parents.contains(&n.id)) {
+                let content = n.content.clone().unwrap_or_default();
+                asm.commit_section(&n.id, &content, vec![]).unwrap();
+            }
+        }
+    }
+
+    /// 无 db.json：两命令干净 not_found + 零副作用（与批 A~D 同口径）。
+    /// validate 可裸调（全可选参）；export 必带合法入参再断 not_found
+    /// （format/output_path 是壳侧必填——空参在壳层早拒，到不了工作区路由）。
+    #[test]
+    fn validate_and_export_clean_not_found_without_db() {
+        let (dir, _ws) = tmp_ws("nodb-18");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.validate");
+        assert_eq!(
+            frame["ok"],
+            json!(false),
+            "无 db.json 应干净 not_found：{frame}"
+        );
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("db.json"),
+            "文案要指向缺 db.json：{frame}"
+        );
+        // 写面同款（合法入参也 not_found——不落副作用）
+        let frame = call_args(
+            &ctx,
+            "bid.export",
+            json!({ "format": "docx", "output_path": "exports/x.docx" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(!dir.join(".mang").exists(), "校验/导出不得在工作区留副作用");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 早态（REQUIREMENTS_EXTRACTED——Drafting 前）：validate 被状态窗拒，
+    /// 透传为 `state` 码（UI 据此显示引导卡，不是故障横幅）。
+    #[test]
+    fn validate_rejects_early_state_with_state_code() {
+        let (dir, _ws) = tmp_ws("early-18");
+        seed_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.validate");
+        assert_eq!(frame["ok"], json!(false), "早态校验应拒：{frame}");
+        assert_eq!(
+            err_code_of(&frame),
+            "state",
+            "E_STATE 透传为 state 码：{frame}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 起草完成后：validate 真跑（counts/categories/submission_readiness 三面
+    /// 在场）+ VALIDATING 推进 + 版本回传（#80——推进后旧版本号必须失效）。
+    #[test]
+    fn validate_reports_and_advances_validating() {
+        let (dir, _ws) = tmp_ws("drafted-18");
+        seed_drafted_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        let frame = call(&ctx, "bid.validate");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let v = ok_of(&frame).clone();
+        assert_eq!(v["present"], json!(true));
+        assert_eq!(v["project"]["name"], "导出链项目");
+        let t = &v["validate"];
+        // 工具输出原样透传：Lead 形状 {ok, errors, warnings, findings, counts, categories}
+        assert!(t["counts"].is_object(), "counts 恒在：{t}");
+        assert!(t["categories"].is_object(), "#187 四桶分类在场：{t}");
+        assert!(
+            t["submission_readiness"].is_object(),
+            "#241 两分账在场：{t}"
+        );
+        assert!(
+            t["sections_checked"].as_u64().unwrap_or(0) >= 1,
+            "全叶都查：{t}"
+        );
+        assert!(t["errors"].is_array() && t["warnings"].is_array());
+        // VALIDATING 推进（工具面语义——校验即进入校验态）
+        assert_eq!(
+            t["project_status"],
+            json!("VALIDATING"),
+            "validate 推进 VALIDATING：{t}"
+        );
+        let v1 = t["project_version"].as_u64().expect("版本必须回传（#80）");
+        assert!(v1 >= 1);
+
+        // 旧版本号 CAS → E_CONFLICT（#18：独立 conflict 码；推进真实生效的证明）
+        let frame = call_args(&ctx, "bid.validate", json!({ "project_version": v1 - 1 }));
+        assert_eq!(frame["ok"], json!(false), "过期 CAS 必须拒：{frame}");
+        assert_eq!(
+            err_code_of(&frame),
+            "conflict",
+            "E_CONFLICT 独立成码：{frame}"
+        );
+
+        // scope 入参校验（壳直通工具面裁决）
+        let frame = call_args(&ctx, "bid.validate", json!({ "scope": "sections" }));
+        assert_eq!(
+            frame["ok"],
+            json!(false),
+            "scope=sections 缺 section_ids 应拒：{frame}"
+        );
+        assert_eq!(err_code_of(&frame), "bad_args");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// 导出全链（#18 产品闭环 e2e——后端面）：
+    /// 未过门 → state 码引导；三门经 `bid.gate_pass`（宿主签发 receipt）后
+    /// → docx 落盘（artifact.sha256 + size>0 + chapters_written≥1）；
+    /// 幂等重放 deduplicated；EXPORTED 推进；路径逃逸响亮拒。
+    #[test]
+    fn export_docx_full_chain_after_gates() {
+        let (dir, _ws) = tmp_ws("export-18");
+        seed_drafted_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // ① 三门未过 → 工具面 E_STATE（缺门）透传为 state 码（UI 引导去审核门）
+        let frame = call_args(
+            &ctx,
+            "bid.export",
+            json!({ "format": "docx", "output_path": "exports/技术标.docx" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "未过门导出应拒：{frame}");
+        assert_eq!(
+            err_code_of(&frame),
+            "state",
+            "缺门 E_STATE → state 码：{frame}"
+        );
+
+        // ② 路径逃逸响亮拒（工作区围栏——工具面 E_UNPROCESSABLE → bad_args）
+        for bad_path in ["../逃逸.docx", "/tmp/abs.docx"] {
+            let frame = call_args(
+                &ctx,
+                "bid.export",
+                json!({ "format": "docx", "output_path": bad_path }),
+            );
+            assert_eq!(
+                frame["ok"],
+                json!(false),
+                "逃逸路径 {bad_path} 应拒：{frame}"
+            );
+            assert_eq!(err_code_of(&frame), "bad_args", "围栏拒：{frame}");
+        }
+        // ③ format 非法响亮拒
+        let frame = call_args(
+            &ctx,
+            "bid.export",
+            json!({ "format": "txt", "output_path": "exports/x.txt" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args");
+
+        // ④ 三门全过（走既有 bid.gate_pass——宿主签发面，与 UI 同一条路）
+        for gate in ["matrix_approval", "outline_approval", "pre_export_confirm"] {
+            let frame = call_args(
+                &ctx,
+                "bid.gate_pass",
+                json!({ "gate": gate, "decision": "APPROVED", "actor_id": "reviewer-18" }),
+            );
+            assert_eq!(frame["ok"], json!(true), "过门 {gate}：{frame}");
+        }
+
+        // ⑤ 导出成功：docx 落盘 + artifact 对账字段
+        let out_rel = "exports/技术标-PRJ-EXP.docx";
+        let frame = call_args(
+            &ctx,
+            "bid.export",
+            json!({ "format": "docx", "output_path": out_rel }),
+        );
+        assert_eq!(frame["ok"], json!(true), "过门后导出应成功：{frame}");
+        let e = ok_of(&frame).clone();
+        let t = &e["export"];
+        let artifact = &t["artifact"];
+        let abs = artifact["url"]
+            .as_str()
+            .expect("artifact.url 恒在")
+            .to_string();
+        assert!(abs.ends_with(out_rel), "产物落工作区内：{artifact}");
+        assert!(
+            artifact["size"].as_u64().unwrap_or(0) > 100,
+            "docx 产物非空（>100B）：{artifact}"
+        );
+        assert!(
+            !artifact["sha256"].as_str().unwrap_or("").is_empty(),
+            "sha256 对账字段在场：{artifact}"
+        );
+        assert!(
+            t["chapters_written"].as_u64().unwrap_or(0) >= 1,
+            "章节写盘计数：{t}"
+        );
+        assert!(std::path::Path::new(&abs).is_file(), "产物真实落盘：{abs}");
+        assert_eq!(
+            t["project_status"],
+            json!("EXPORTED"),
+            "导出推进 EXPORTED：{t}"
+        );
+
+        // ⑥ 重导：EXPORTED 态允许重导（状态表注释语义）。幂等缓存键含
+        // content_version（每次导出推进版本）——dedup 面是工具层契约
+        //（bid-mcp 单测覆盖），壳层只断言重导可用 + 产物仍在。
+        let frame = call_args(
+            &ctx,
+            "bid.export",
+            json!({ "format": "docx", "output_path": out_rel }),
+        );
+        assert_eq!(frame["ok"], json!(true), "EXPORTED 态允许重导：{frame}");
+        assert_eq!(
+            ok_of(&frame)["export"]["project_status"],
+            json!("EXPORTED"),
+            "重导后状态稳定"
+        );
+        assert!(std::path::Path::new(&abs).is_file(), "产物持续在盘：{abs}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

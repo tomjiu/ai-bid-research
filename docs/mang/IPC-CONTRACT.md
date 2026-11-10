@@ -107,6 +107,7 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `too_large` | 超过该命令的体积上限 | 50MB 的 pdf 用 `fs.read` |
 | `io` | 其它系统 IO 失败 | 磁盘满、权限 |
 | `state` | 工具面 E_STATE 透传：当前项目状态不允许该操作（#313 批 C/D）——UI 应分支「尚未开放」引导卡而非错误横幅 | DRAFT 态项目调 `bid.coverage`（未导入文件） |
+| `conflict` | 工具面 E_CONFLICT 透传：乐观并发过期（project_version 落后）——UI 引导刷新重试，非故障（#18 起独立成码，此前落 io） | 校验推进版本后带旧 `project_version` 再调 `bid.validate` / `bid.export` |
 
 ---
 
@@ -563,6 +564,52 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
                          "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
 ```
 
+### bid.validate `{ scope?, section_ids?, rules_profile?, project_version? }` —— 标书校验（诊断 + VALIDATING 推进；#18 缺口-1）
+主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面（与
+bid-mcp-stdio 同源裁决），工具输出原样放 `validate` 键（契约 §7 Lead 形状：
+ok / errors[]（BLOCKER+MAJOR——必须处理）/ warnings[]（MINOR——告知）/
+findings[]（全量）/ counts{blocker,major,minor,deterministic,model} /
+categories（#187 四桶：structural / semantic / evidence / compliance——
+「没做」显式 not_performed，不伪装 passed）/ sections_checked /
+submission_readiness（#241 两分账：导出可过而提交未就绪是合法状态）/
+project_version（#80——校验推进版本后必须回传，供后续 CAS））。
+语义：**全稿校验（scope=all）通过（ok=true）才推进 VALIDATING**（#243——
+失败留在原态可修订重试）；scope=sections 是章节级复核，不推进。
+无 db.json → `not_found`；Drafting 前的早态工具面 E_STATE 透传为 `state`
+错误码（UI 分支「先建纲/先起草」引导卡）；`project_version` 过期 →
+`conflict`（#18 起 E_CONFLICT 独立成码，见错误码表）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "validate": { …validate_bid_document 工具输出原样（ok/errors/warnings/
+                   findings/counts/categories/sections_checked/
+                   submission_readiness/project_status/project_version…） } }
+```
+
+### bid.export `{ format, output_path, dark_bid?, bidder_name?, bid_open_date?, project_version? }` —— 标书导出（写面；#18 缺口-1）
+主体经 `bid_mcp::dispatch_with(export_bid_document)` 走真实工具面（双前置
+门：矩阵 blocking 行清零 + 审核 BLOCKER findings 清零；写作验收门与占位
+证据门独立复算，不消费记审面——全部在工具/域层，壳不复制裁决），工具
+输出原样放 `export` 键（契约 §8：artifact{url,sha256,size} /
+chapters_written / total_chars / toc_field_present / dark_bid 脱敏报告 /
+agent_waivers / human_review_complete / warnings / project_status——EXPORTED
+推进）。UI 两段式：先 `bid.validate` 出报告，确认后导出（工作台「校验并
+导出」按钮）。
+路径围栏：`output_path` **必须为工作区相对路径**（绝对路径 / `..` →
+`bad_args` 响亮拒）；pdf 需 Word / LibreOffice（均缺 → `bad_args` 带安装
+指引，docx 通道不受影响）。三门未全过 → 工具面 E_STATE 透传为 `state`
+码（UI 引导「去审核门过门」）；无 db.json → `not_found`；`project_version`
+过期 → `conflict`。EXPORTED 态允许重导（幂等键含 content_version——dedup
+面属工具层契约）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "EXPORTED" },
+    "export": { …export_bid_document 工具输出原样（artifact{url,sha256,size}/
+                 chapters_written/total_chars/toc_field_present/precheck/
+                 agent_waivers/human_review_complete/warnings/
+                 project_status…） } }
+```
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
@@ -742,7 +789,7 @@ mang-app.exe [DIR] [选项]
 bidcore\target\release\mang-app.exe --selftest
 ```
 
-无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ bid.coverage（#313 批 D：无 db.json→not_found / 未导入件诚实口径 total_blocks=0+next 引导）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
+无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ bid.coverage（#313 批 D：无 db.json→not_found / 未导入件诚实口径 total_blocks=0+next 引导）/ bid.validate+bid.export（#18：无 db.json→not_found 零副作用 / 早态→state 码 / 起草完成→validate 报告+VALIDATING 推进+旧版本 conflict / 三门过→docx 落盘 artifact 对账 / 路径逃逸与非法 format→bad_args / EXPORTED 重导）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
 
 窗口内 IPC 冒烟（真实 WebView2，走 CDP）：
 ```

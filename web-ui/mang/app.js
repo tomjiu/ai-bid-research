@@ -25,7 +25,8 @@
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.2 8.4 3 3 6.6-6.8"/></svg>',
     shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 13.4 3.8v3.4c0 3.2-2.2 5.6-5.4 6.9-3.2-1.3-5.4-3.7-5.4-6.9V3.8z"/><path d="m5.7 7.9 1.6 1.6 3-3.1"/></svg>',
     outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h2.2M4 12h2.2M4 18.5h2.2"/><path d="M10 5.5h10M10 12h7.5M10 18.5h9"/></svg>',
-    bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>'
+    bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>',
+    export: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2v7.6"/><path d="m5.2 7.2 2.8 2.8 2.8-2.8"/><path d="M2.8 11.2v1.4a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.4"/></svg>'
   };
   var KIND_ICON = { docx: "docx", xlsx: "xlsx", pdf: "pdf", md: "md", text: "text", dir: "folder", bidwork: "bid" };
   function fmtBytes(n) {
@@ -458,6 +459,38 @@
           { id: "REV-0002", gate: "outline_approval", decision: "APPROVED", reviewer: "agent:agent-01", actor: { actor_id: "agent-01", actor_type: "agent", authentication_method: "hmac_receipt_v2" }, findings: [], at: Math.floor(now / 1000) - 86400, reviewed_content_digest: "demo-digest" },
           { id: "REV-0001", gate: "matrix_approval", decision: "APPROVED", reviewer: "agent:agent-01", actor: { actor_id: "agent-01", actor_type: "agent", authentication_method: "hmac_receipt_v2" }, findings: [], at: Math.floor(now / 1000) - 86400 * 2, reviewed_content_digest: "demo-digest" }
         ]
+      },
+      // #18 导出与校验闭环：校验报告演示面（与真实 bid.validate 响应同形——
+      // 工具输出原样透传到 validate 键；演示态 = 通过但有 1 MAJOR + 2 MINOR
+      // 待处理项，恰好展示「带告警可导出」的两段式交互）
+      validate: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+        validate: {
+          ok: true,
+          errors: [],
+          warnings: [
+            "招标文件未发现格式条款——导出将按工程基线（仿宋_GB2312/12pt/1.5 倍行距）执行，请人工确认形式评审要求",
+            "「1.1 技术参数」正文 4,120 字低于目标的 −20% 容差下限——篇幅不强制，内容完整即可"
+          ],
+          findings: [
+            { rule_code: "W_CHARS_BELOW_MIN", kind: "DETERMINISTIC", severity: "MAJOR", section_id: "SEC-0002", requirement_id: null, message: "「1.1 技术参数」正文 4,120 字低于目标的 −20% 容差下限（#253：篇幅不强制，内容完整即可——补写可提升评审阅读体验）" },
+            { rule_code: "W_FORMAT_BASELINE", kind: "DETERMINISTIC", severity: "MINOR", section_id: null, requirement_id: null, message: "招标文件未发现格式条款——导出将按工程基线执行，请人工确认形式评审要求" },
+            { rule_code: "W_ORG_DUPLICATE", kind: "DETERMINISTIC", severity: "MINOR", section_id: "SEC-0005", requirement_id: null, message: "「3.2 售后服务承诺」与「5.1 运维方案」存在重复承诺表述，建议合并" }
+          ],
+          counts: { blocker: 0, major: 1, minor: 2, deterministic: 3, model: 0 },
+          categories: {
+            structural: { status: "passed" },
+            semantic: { status: "not_performed", reason: "no model configured" },
+            evidence: { status: "passed" },
+            compliance: { status: "failed", findings: [{ rule_code: "W_FORMAT_BASELINE", kind: "DETERMINISTIC", severity: "MINOR", section_id: null, requirement_id: null, message: "招标文件未发现格式条款——导出将按工程基线执行" }] }
+          },
+          sections_checked: 12,
+          project_status: "VALIDATING",
+          project_version: 12,
+          submission_readiness: { ready: true, blockers: 0, evidence_missing: [], evidence_missing_count: 0, unresponded: [], unresponded_count: 0, not_built: false }
+        }
       }
     };
     // #603 批 A：演示桥的治理面可变态（gate_pass 会真改台账——与真实壳
@@ -533,6 +566,35 @@
               return demoGatePass(m);
             case "bid.coverage":
               return respond(m.id, DEMO_BID.coverage);
+            // #18 导出与校验闭环：演示桥同形透传（export 按 m.output_path
+            // 现算产物路径——与真实壳「工作区相对路径拼工作区根」同语义）
+            case "bid.validate":
+              return respond(m.id, DEMO_BID.validate);
+            case "bid.export": {
+              const rel = String(m.output_path || "exports/技术标.docx");
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "EXPORTED" },
+                export: {
+                  artifact: {
+                    url: root + "\\" + rel.replace(/[/\\]+/g, "\\"),
+                    sha256: "a3f8c2e91d4b76" + String(Date.now()).slice(-8) + "0b5e7c1a92f0d3846",
+                    size: 486_512
+                  },
+                  chapters_written: 12,
+                  total_chars: 48_120,
+                  toc_field_present: true,
+                  content_version_snapshot: 13,
+                  project_status: "EXPORTED",
+                  precheck: { blockers: 0, waived: [] },
+                  agent_waivers: [],
+                  human_review_complete: true,
+                  warnings: m.dark_bid ? ["暗标模式演示——脱敏报告面未展开（真实壳见 dark_bid 块）"] : [],
+                  request_id: "req-demo"
+                }
+              });
+            }
 
             case "fs.tree":
               return respond(m.id, tree);
@@ -1233,6 +1295,7 @@
       + '<span class="bid-wb-project" id="bid-wb-project"></span>'
       + '<span class="bid-wb-status" id="bid-wb-status"></span>'
       + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm btn-primary" data-bid-act="export" title="先校验（validate_bid_document）后导出（export_bid_document）——两段式确认，产物落工作区">' + ICON.export + "校验并导出</button>"
       + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix / bid.coverage / 自评数据">刷新</button>'
       + "</header>"
       + '<div class="bid-wb-body">'
@@ -1250,6 +1313,10 @@
     host.appendChild(wrap);
     wrap.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-bid-act]");
+      if (btn && btn.dataset.bidAct === "export") {
+        // #18：导出与校验闭环——两段式模态（先校验报告后确认导出）
+        ui.openBidExportDialog();
+      }
       if (btn && btn.dataset.bidAct === "refresh") {
         ui.loadBid(true);
         if (state.bidQuality.status !== "idle") ui.loadBidQuality(true);
@@ -1682,6 +1749,29 @@
   };
   /** 三主门可人工过/拒审；两补遗门的写面走 record_addendum_waiver（批 C） */
   var BID_GT_MAIN = ["matrix_approval", "outline_approval", "pre_export_confirm"];
+  // ============ #18 导出与校验闭环：两段式模态的会话态 ============
+  // phase: idle → validating → validated（报告在场）/ error；export 面同理
+  // （done = 最近一次成功产物——成功后仍允许改参数重导）。
+  var BID_EXP = { phase: "idle", report: null, error: "", code: "", busy: false, done: null, expBusy: false, expError: "", expCode: "" };
+  /** 校验严重度的中文与色档（与后端 severity 字面量对齐） */
+  var BID_EXP_SEV = { BLOCKER: ["阻断", "err"], MAJOR: ["重大", "warn"], MINOR: ["次要", "dim"] };
+  /** 校验报告 → 摘要行（counts 四档 + semantic not_performed 提示） */
+  function bidExpCountsLine(r) {
+    const c = (r && r.counts) || {};
+    const sem = r && r.categories && r.categories.semantic && r.categories.semantic.status === "not_performed";
+    return "BLOCKER " + (c.blocker || 0) + " · 重大 " + (c.major || 0) + " · 次要 " + (c.minor || 0)
+      + " · 已查章节 " + (r && r.sections_checked || 0)
+      + (sem ? " · 语义桶未配置模型（没做 ≠ 做对了）" : "");
+  }
+  /** state 码错误 → 引导文案（与 IPC-CONTRACT §109 口径一致：引导卡而非故障横幅） */
+  function bidExpStateHint(msg) {
+    const m = String(msg || "");
+    if (m.indexOf("前置门") >= 0 || m.indexOf("审核") >= 0 || m.indexOf("门") >= 0)
+      return "审核门未全过——去「审核门」页签过门后重试（matrix → outline → pre_export 顺序）";
+    if (m.indexOf("章节") >= 0 || m.indexOf("建纲") >= 0 || m.indexOf("起草") >= 0)
+      return "项目尚未到可校验/导出阶段——先完成建纲与章节起草";
+    return "当前项目状态不允许该操作——先完成前置阶段";
+  }
   function bidGtTitle(g) {
     return BID_GT_TITLES[g] || g;
   }
@@ -4334,6 +4424,186 @@
     /** #603 批 A：人工过门/追认/拒审（bid.gate_pass——宿主签发 receipt（#182）
      *  后经真实工具面 record_review_gate 落账）。壳侧不校验门序/状态窗——
      *  域层裁决原样透传（state/bad_args 码 → 引导文案，不假成功）。 */
+    /** #18 导出与校验闭环：两段式模态（先校验报告 → 再确认导出）。
+     *  真实链：bid.validate（validate_bid_document 透传）→ 报告渲染 →
+     *  bid.export（export_bid_document 写面）→ 产物路径回显 + explorer.reveal。
+     *  state 码走引导文案（IPC-CONTRACT §109 口径），不弹故障横幅。 */
+    async openBidExportDialog() {
+      if (!state.bridge) return;
+      BID_EXP.phase = "idle";
+      BID_EXP.report = null;
+      BID_EXP.error = "";
+      BID_EXP.code = "";
+      BID_EXP.busy = false;
+      BID_EXP.done = null;
+      BID_EXP.expBusy = false;
+      BID_EXP.expError = "";
+      BID_EXP.expCode = "";
+      const proj = state.bid && state.bid.data && state.bid.data.project;
+      const defaultName = "技术标-" + ((proj && proj.name) || "标书") + ".docx";
+      const m = openModal("校验并导出", "");
+      const body = m.body;
+      const rerender = () => { body.innerHTML = bidExpModalHtml(defaultName); bindBidExpModal(m, defaultName); };
+      const bidExpModalHtml = (defName) => {
+        let html = '<div class="bid-exp">';
+        // ---- 第一段：校验 ----
+        if (BID_EXP.phase === "idle") {
+          html += '<div class="bid-card"><div class="bid-card-title">' + ICON.shield + ' 第一步 · 标书校验</div>'
+            + '<div class="bid-card-sub">validate_bid_document——结构性 / 语义 / 证据 / 合规四桶诊断；BLOCKER 清零才可过导出前确认门</div>'
+            + '<div class="bid-card-actions"><button class="btn btn-primary" data-exp-validate>' + ICON.check + '开始校验</button></div></div>';
+        } else if (BID_EXP.phase === "validating") {
+          html += '<div class="bid-card"><div class="view-state"><div class="view-spinner"></div><div>正在校验（逐章节四桶诊断）…</div></div></div>';
+        } else if (BID_EXP.phase === "error") {
+          html += '<div class="bid-card"><div class="view-state" data-kind="error"><div class="view-state-title">校验未执行</div><div>'
+            + esc(BID_EXP.error) + '</div>'
+            + (BID_EXP.code === "state" ? '<div class="bid-exp-hint">' + ICON.info + ' ' + esc(bidExpStateHint(BID_EXP.error)) + '</div>' : '')
+            + '</div><div><button class="btn" data-exp-validate>重试</button></div></div></div>';
+        } else if (BID_EXP.phase === "validated" && BID_EXP.report) {
+          const r = BID_EXP.report;
+          const counts = r.counts || {};
+          html += '<div class="bid-card"><div class="bid-card-title">' + ICON.check + ' 校验完成'
+            + ' <span class="bid-exp-badge" data-state="' + (r.ok ? "ok" : "err") + '">' + (r.ok ? "零 BLOCKER" : "有阻断项") + '</span></div>'
+            + '<div class="bid-card-sub">' + esc(bidExpCountsLine(r)) + '</div>';
+          const errors = Array.isArray(r.errors) ? r.errors : [];
+          const warns = Array.isArray(r.warnings) ? r.warnings : [];
+          if (errors.length) {
+            html += '<div class="bid-exp-sev-title" data-state="err">必须处理（' + errors.length + '）</div><div class="bid-exp-list">';
+            errors.forEach((f) => {
+              html += '<div class="bid-exp-row"><span class="bid-exp-sev" data-state="' + (BID_EXP_SEV[f.severity] || ["?", "dim"])[1] + '">'
+                + esc((BID_EXP_SEV[f.severity] || [f.severity, "dim"])[0]) + '</span>'
+                + '<span class="bid-exp-code">' + esc(f.rule_code || "") + '</span>'
+                + (f.section_id ? '<button class="btn btn-sm" data-exp-jump="' + esc(f.section_id) + '">跳转 ' + esc(f.section_id) + '</button>' : "")
+                + '<span class="bid-exp-msg">' + esc(f.message || "") + '</span></div>';
+            });
+            html += '</div>';
+          }
+          if (warns.length) {
+            html += '<div class="bid-exp-sev-title" data-state="warn">告知项（' + warns.length + '）</div><div class="bid-exp-list">';
+            warns.slice(0, 12).forEach((w) => { html += '<div class="bid-exp-row"><span class="bid-exp-sev" data-state="dim">次要</span><span class="bid-exp-msg">' + esc(String(w)) + '</span></div>'; });
+            if (warns.length > 12) html += '<div class="bid-exp-row"><span class="bid-exp-msg">…另有 ' + (warns.length - 12) + ' 条</span></div>';
+            html += '</div>';
+          }
+          const sr = r.submission_readiness;
+          if (sr && sr.ready === false) {
+            html += '<div class="bid-exp-hint">' + ICON.warning + ' 提交就绪面另有缺口：'
+              + '证据缺失 ' + (sr.evidence_missing_count || 0) + ' · 未响应 ' + (sr.unresponded_count || 0)
+              + '（导出可过而提交未就绪是合法状态——两分账）</div>';
+          }
+          html += '<div class="bid-card-actions"><button class="btn btn-sm" data-exp-validate>' + ICON.refresh + '重新校验</button></div></div>';
+        }
+        // ---- 第二段：导出（校验完成后开放） ----
+        if (BID_EXP.phase === "validated") {
+          html += '<div class="bid-card"><div class="bid-card-title">' + ICON.export + ' 第二步 · 导出设置</div>'
+            + '<div class="bid-exp-form">'
+            + '<label class="bid-exp-field"><span>格式</span>'
+            + '<select data-exp-format><option value="docx">docx（Word 文档）</option><option value="pdf">pdf（需 Word / LibreOffice）</option></select></label>'
+            + '<label class="bid-exp-field"><span>文件名（工作区内相对路径）</span>'
+            + '<input type="text" data-exp-path value="' + esc(defName) + '" spellcheck="false"></label>'
+            + '<label class="bid-exp-field"><span>开标日（可选，YYYY-MM-DD——按开标日裁决证据时效）</span>'
+            + '<input type="text" data-exp-date placeholder="留空 = 按当前登记状态导出" spellcheck="false"></label>'
+            + '<label class="bid-exp-field bid-exp-inline"><input type="checkbox" data-exp-dark><span>暗标模式（导出时脱敏投标人名）</span></label>'
+            + '<label class="bid-exp-field" data-exp-name-row style="display:none"><span>投标人名（暗标脱敏目标）</span>'
+            + '<input type="text" data-exp-bidder placeholder="如：XX科技有限公司" spellcheck="false"></label>'
+            + '</div>';
+          if (BID_EXP.expError) {
+            html += '<div class="bid-exp-msg err">' + ICON.warning + ' ' + esc(BID_EXP.expError) + '</div>'
+              + (BID_EXP.expCode === "state" ? '<div class="bid-exp-hint">' + ICON.info + ' ' + esc(bidExpStateHint(BID_EXP.expError)) + '</div>' : '');
+          }
+          if (BID_EXP.done) {
+            const a = BID_EXP.done.artifact || {};
+            html += '<div class="bid-exp-done"><div>' + ICON.check + ' 已导出到工作区：<code>' + esc(a.url || "") + '</code>'
+              + '（' + fmtBytes(a.size) + ' · sha256 ' + esc(String(a.sha256 || "").slice(0, 12)) + '…）</div>'
+              + '<div class="bid-card-actions"><button class="btn btn-sm" data-exp-reveal="' + esc(BID_EXP.done.relPath || "") + '">' + ICON.folderOpen + '在工作区中显示</button></div></div>';
+          }
+          html += '<div class="bid-card-actions"><button class="btn btn-primary" data-exp-do' + (BID_EXP.expBusy ? " disabled" : "") + '>' + ICON.export + (BID_EXP.expBusy ? "导出中…" : "导出到工作区") + '</button></div></div>';
+        }
+        html += '</div>';
+        return html;
+      };
+      const bindBidExpModal = (modal, defName) => {
+        const b = modal.body;
+        const valBtn = b.querySelector("[data-exp-validate]");
+        if (valBtn) valBtn.addEventListener("click", async () => {
+          BID_EXP.phase = "validating";
+          BID_EXP.busy = true;
+          BID_EXP.error = "";
+          rerender();
+          try {
+            const r = await ipc("bid.validate", {}, 6e4);
+            BID_EXP.report = (r && r.validate) || null;
+            BID_EXP.phase = "validated";
+            ui.loadBid(true);
+          } catch (err) {
+            BID_EXP.phase = "error";
+            BID_EXP.error = err && (err.message || err.code) || "bid.validate 失败";
+            BID_EXP.code = err && err.code || "";
+          }
+          BID_EXP.busy = false;
+          rerender();
+        });
+        b.querySelectorAll("[data-exp-jump]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const sid = btn.dataset.expJump;
+            modal.close();
+            const t = bidWorkbenchTab();
+            if (t) {
+              t.meta.panel = "detail";
+              t.meta.selected = sid;
+              renderBidWorkbenchIfOpen();
+            }
+          });
+        });
+        const darkBox = b.querySelector("[data-exp-dark]");
+        const nameRow = b.querySelector("[data-exp-name-row]");
+        if (darkBox && nameRow) darkBox.addEventListener("change", () => { nameRow.style.display = darkBox.checked ? "" : "none"; });
+        const doBtn = b.querySelector("[data-exp-do]");
+        if (doBtn) doBtn.addEventListener("click", async () => {
+          if (BID_EXP.expBusy) return;
+          const fmtSel = b.querySelector("[data-exp-format]");
+          const pathEl = b.querySelector("[data-exp-path]");
+          const dateEl = b.querySelector("[data-exp-date]");
+          const bidderEl = b.querySelector("[data-exp-bidder]");
+          let rel = String((pathEl && pathEl.value) || "").trim();
+          const fmt = (fmtSel && fmtSel.value) || "docx";
+          if (!rel) { BID_EXP.expError = "文件名不能为空"; BID_EXP.expCode = ""; rerender(); return; }
+          if (rel !== "exports/" + rel.split(/[\\/]/).pop() && rel.indexOf("/") < 0 && rel.indexOf("\\") < 0) {
+            rel = "exports/" + rel; // 裸文件名 → exports/ 前缀（防误落工作区根）
+          }
+          if (rel.indexOf("..") >= 0) { BID_EXP.expError = "路径不得包含 ..（工作区围栏）"; BID_EXP.expCode = ""; rerender(); return; }
+          if (!new RegExp("\\." + fmt + "$", "i").test(rel)) rel = rel.replace(/\.[a-z0-9]+$/i, "") + "." + fmt;
+          const body2 = { format: fmt, output_path: rel };
+          const d = String((dateEl && dateEl.value) || "").trim();
+          if (d) body2.bid_open_date = d;
+          if (darkBox && darkBox.checked) {
+            body2.dark_bid = true;
+            const bn = String((bidderEl && bidderEl.value) || "").trim();
+            if (bn) body2.bidder_name = bn;
+          }
+          BID_EXP.expBusy = true;
+          BID_EXP.expError = "";
+          rerender();
+          try {
+            const r = await ipc("bid.export", body2, 12e4);
+            BID_EXP.done = { artifact: (r && r.export && r.export.artifact) || {}, relPath: rel };
+            BID_EXP.expCode = "";
+            ui.toast("ok", "已导出：" + rel);
+            ui.loadBid(true);
+          } catch (err) {
+            BID_EXP.expError = err && (err.message || err.code) || "bid.export 失败";
+            BID_EXP.expCode = err && err.code || "";
+          }
+          BID_EXP.expBusy = false;
+          rerender();
+        });
+        b.querySelectorAll("[data-exp-reveal]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const p = btn.dataset.expReveal;
+            if (p) ipc("explorer.reveal", { path: p }, 8e3).catch((e) => ui.toast("error", "无法在资源管理器中显示：" + e.message));
+          });
+        });
+      };
+      rerender();
+    },
     async passBidGate(gate, decision, opts) {
       if (!state.bridge || state.bidGates.passing) return;
       const o = opts || {};

@@ -478,6 +478,13 @@ impl Ctx {
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
+            // ── #18 导出与校验闭环：validate / export 均经 bid_mcp 真实
+            //    工具面（validate_bid_document / export_bid_document——
+            //    双前置门与写作验收门全在域层，壳不复制裁决）──────────
+            "bid.validate" => crate::bid::validate(&ws, &self.bid, &a),
+
+            "bid.export" => crate::bid::export(&ws, &self.bid, &a),
+
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
 

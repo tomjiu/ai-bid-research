@@ -264,7 +264,7 @@ check(
 );
 check(
   "工具面 E_STATE 透传壳侧 state 码（批 C/D 契约 §3.3）",
-  /ToolError::EState \{ what \} => IpcError::new\("state", what\)/.test(bidRs),
+  /ToolError::EState \{ what \} => IpcError::state\(what\)/.test(bidRs),
   "早态项目错误码被吞成 io"
 );
 check(
@@ -502,6 +502,64 @@ check(
   "契约文档登记 bid.gates / bid.gate_pass（#603 批 A）",
   contract.includes("### bid.gates") && contract.includes("### bid.gate_pass"),
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+
+// ---------- #18 导出与校验闭环（bid.validate / bid.export + 两段式模态） ----------
+check(
+  "壳侧分发 bid.validate / bid.export（#18）",
+  ipcRs.includes('"bid.validate" => crate::bid::validate') && ipcRs.includes('"bid.export" => crate::bid::export'),
+  "IPC 分发缺 #18 两命令"
+);
+check(
+  "bid.rs 提供 validate / export 命令面且经真实工具面（#18）",
+  bidRs.includes("pub fn validate(") && bidRs.includes("pub fn export(")
+    && bidRs.includes('"validate_bid_document".to_string()') && bidRs.includes('"export_bid_document".to_string()'),
+  "命令面没走 dispatch_with 真实工具面"
+);
+check(
+  "E_CONFLICT 独立成 conflict 码（#18——此前落 io 兜底）",
+  bidRs.includes('bid_mcp::ToolError::EConflict { what } => IpcError::new("conflict", what)'),
+  "conflict 码被回退"
+);
+check(
+  "工作台头部「校验并导出」主按钮（data-bid-act=export）",
+  /data-bid-act="export"/.test(app) && /校验并导出/.test(app),
+  "导出入口被删"
+);
+check(
+  "两段式模态接线（openBidExportDialog + validate→export 流）",
+  /openBidExportDialog\(\)/.test(app) && /ipc\("bid\.validate"/.test(app) && /ipc\("bid\.export"/.test(app),
+  "两段式交互被回退"
+);
+check(
+  "导出产物回显 + explorer.reveal 定位（#18 产品闭环出口）",
+  /data-exp-reveal/.test(app) && /explorer\.reveal/.test(app) && /sha256/.test(app),
+  "产物回显/定位链断了"
+);
+check(
+  "state 码 → 引导文案（不弹故障横幅——IPC-CONTRACT §109 口径）",
+  /bidExpStateHint/.test(app) && /先完成建纲与章节起草/.test(app),
+  "state 引导被删"
+);
+check(
+  "演示桥覆盖 bid.validate / bid.export（#18）",
+  /case "bid\.validate":/.test(app) && /case "bid\.export":/.test(app) && /DEMO_BID\.validate/.test(app),
+  "演示模式断链"
+);
+check(
+  "styles.css 提供 .bid-exp* 模态样式（#18）",
+  [".bid-exp ", ".bid-exp-badge", ".bid-exp-row", ".bid-exp-form", ".bid-exp-done"].every((s) => css.includes(s)),
+  "模态样式被删"
+);
+check(
+  "契约文档登记 bid.validate / bid.export（#18）",
+  contract.includes("### bid.validate") && contract.includes("### bid.export"),
+  "导出闭环命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "契约错误码表登记 conflict（#18）",
+  /\| `conflict` \| 工具面 E_CONFLICT 透传/.test(contract),
+  "conflict 错误码没进 §3.3 错误码表"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
