@@ -998,8 +998,8 @@ check(
 
 // ---------- R11（#47 平台区分④）：大小写不敏感同名去重 ----------
 check(
-  "R11 壳侧：occupied 闭包 CI 占位判定（精确名快路径 + read_dir 变体扫描）",
-  /let occupied = \|want: &str\| -> Option<\(std::path::PathBuf, bool\)> \{[\s\S]{0,500}to_lowercase\(\) == lower/.test(bidRs),
+  "R11 壳侧：occupied 闭包 CI 占位判定（精确名快路径 + read_dir 变体扫描；R13 增强为 NFC+CI 键）",
+  /let occupied = \|want: &str\| -> Option<\(std::path::PathBuf, bool\)> \{[\s\S]{0,600}to_lowercase\(\) == lower/.test(bidRs),
   "落位判定退回精确名匹配（大小写变体放行——拷 Windows 互覆）"
 );
 check(
@@ -1053,6 +1053,38 @@ check(
   "R12 契约：MAX_PATH 口径登记（双平台同拒 + 分账/bad_args 分野）",
   contract.includes("MAX_PATH 预检（R12") && contract.includes("LongPathsEnabled"),
   "MAX_PATH 口径没进契约"
+);
+
+// ---------- R13（#47 平台区分⑥）：NFC 归一（macOS NFD 互操作） ----------
+check(
+  "R13 壳侧：paths::nfc 助手 + 占位键 nfc 先于 lowercase（双形态同占位）",
+  /pub fn nfc\(s: &str\) -> String \{[\s\S]{0,200}UnicodeNormalization/.test(pathsRs) && /crate::paths::nfc\(want\)\.to_lowercase\(\)/.test(bidRs) && /crate::paths::nfc\(&e\.file_name\(\)\.to_string_lossy\(\)\)\.to_lowercase\(\)/.test(bidRs),
+  "占位键未 NFC 化（NFD/NFC 视觉同名两份——占位与幂等键错位）"
+);
+check(
+  "R13 壳侧：ingest 落位名归一（净化后、守卫前——单一口径）",
+  /let name = paths::nfc\(&raw_name\);/.test(bidRs),
+  "落位名保留 NFD 形态（拷 Windows 后与 NFC 重名成幽灵重复）"
+);
+check(
+  "R13 壳侧：import_files filename 归一 / upload_ref 原样（定位键不动）",
+  /let filename = paths::nfc\(&filename\);/.test(bidRs) && /upload_ref 是\*\*定位键\*\*/.test(bidRs),
+  "filename 显示名未归一（台账/检索分裂）或 upload_ref 被错误归一（找不到文件）"
+);
+check(
+  "R13 测试：NFD→NFC 落位 + NFC 重拖占位幂等 + filename 归一集成",
+  /fn ingest_drop_nfc_normalization/.test(bidRs) && /fn nfc_normalization_forms/.test(pathsRs),
+  "NFC 回归门被删"
+);
+check(
+  "R13 selftest：NFD 落位归一 + NFC 重拖幂等双项在场",
+  selftestRs.includes("bid.ingest_drop(NFD 落位归一 NFC)") && selftestRs.includes("bid.ingest_drop(NFC 重拖占位幂等)"),
+  "集成自检项缺失"
+);
+check(
+  "R13 契约：NFC 归一口径登记（落位/占位键 NFC + upload_ref 原样的分野）",
+  contract.includes("NFC 归一（R13") && contract.includes("定位键"),
+  "NFC 口径没进契约"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);

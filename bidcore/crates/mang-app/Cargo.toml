@@ -30,6 +30,9 @@ serde_json = "1"
 # 均在既有依赖图中（bid-domain/bid-tools 已带），此处提为直接依赖零新增。
 sha2 = { workspace = true }
 hex = { workspace = true }
+# #47 R13（平台区分⑥）：ingest_drop 落位名 NFC 归一 + 占位键 NFC+CI
+#（macOS NFD 形态互操作）。workspace 既有依赖，零新增取数。
+unicode-normalization = { workspace = true }
 # #76 diag.rs：llm.json 的 serde 读/写面（derive）。已在既有依赖图中
 # （serde_json/bid-tools 均带），此处只是提为直接依赖，零新增三方取数。
 serde = { version = "1", features = ["derive"] }

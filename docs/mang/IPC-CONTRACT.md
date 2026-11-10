@@ -639,7 +639,15 @@ Linux 合法的 `CON.docx` 落库后拷到 Windows 即失效）；② 非法字�
 基名）超 259 → 批次分账 `path_too_long`（缩短文件名/层级，或 Windows 启用
 `LongPathsEnabled`）；`bid.import_files` 的 `upload_ref` 估算长度超 259 → 请求级 `bad_args`
 （绝对形态取本体、相对形态取 根+1+rel）。双平台同拒（Linux 能落但项目库拷 Windows 创建
-即失败——与 R10 保留名同一可迁移性口径）。后续 R13+ 做行尾/编码（NFC/NFD 归一）。
+即失败——与 R10 保留名同一可迁移性口径）。
+
+**NFC 归一（R13，#47 平台区分⑥——macOS NFD 互操作）**：`paths::nfc`——macOS（HFS+/
+Finder）文件名是 **NFD 分解形态**（é = e + U+0301），与 NFC 合成形态是不同字节串（NTFS/
+ext4 字节精确）——不归一会「视觉同名两份」且占位/幂等键错位。口径：**落位名与占位键
+统一 NFC**（占位键 = `nfc(name).to_lowercase()`——归一先于大小写折叠，双形态同占位；
+CJK/ASCII 两形态字节相同零影响）；`bid.import_files` 的 `filename`（显示名/元数据）归一
+NFC，**`upload_ref`（定位键）原样保留**——必须与磁盘真实文件名逐字节匹配，归一反而找
+不到文件。后续 R14+ 做混合分隔符测试矩阵 / 日期时区口径。
 
 ```jsonc
 → { "present": true,

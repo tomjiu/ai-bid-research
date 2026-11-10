@@ -266,6 +266,19 @@ pub fn guard_portable_basename(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 字符串 NFC 归一（R13，#47 平台区分⑥——macOS NFD 互操作）。
+///
+/// macOS（HFS+ 时代/Finder 默认）文件名是 **NFD 分解形态**（é = e +
+/// U+0301 组合符）；Linux/NTFS 字节精确存储。同一文件名两种形态是
+/// **不同字节串**：落位/占位/幂等键直接比对会「视觉同名却两份」。
+/// 落位名与占位键统一 **NFC**（合成形态——Windows 生态主流；CJK 与
+/// ASCII 两种形态字节相同，不受影响）。**引用键（upload_ref）不归一**——
+/// 它要匹配磁盘上的真实文件名，归一后反而找不到（文件本体是 NFD 存的）。
+pub fn nfc(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    s.nfc().collect()
+}
+
 /// Windows MAX_PATH 预检（R12，#47 平台区分⑤）。
 ///
 /// 传统 Win32 路径上限 260 字符（含 NUL 终止——字符串本体最长 259）。
@@ -441,6 +454,23 @@ mod tests {
         for bad in ["REPORT.", "报告 .docx ", ""] {
             assert!(guard_portable_basename(bad).is_err(), "形态漏拒：{bad:?}");
         }
+    }
+
+    /// R13（#47 平台区分⑥）：NFC 归一——NFD→NFC 幂等；CJK/ASCII 不动；
+    /// 占位键（nfc + lowercase）双形态同键
+    #[test]
+    fn nfc_normalization_forms() {
+        let nfc_e: String = "\u{00e9}".to_string();                 // é 单码点（合成）
+        let nfd_e: String = "\u{0065}\u{0301}".to_string();        // e + 组合锐音符
+        assert_ne!(nfc_e, nfd_e, "前提：两形态字节不同（同一文件名两串）");
+        assert_eq!(nfc(&nfd_e), nfc_e, "NFD 输入归一到 NFC");
+        assert_eq!(nfc(&nfc_e), nfc_e, "NFC 输入幂等");
+        assert_eq!(nfc("招标文件.docx"), "招标文件.docx", "CJK 不受影响");
+        assert_eq!(nfc("plain-ASCII.docx"), "plain-ASCII.docx", "ASCII 不受影响");
+        // 占位键：NFC 大写 vs NFD 小写 → 同键（NFC 先归一再 lowercase）
+        let key_a = format!("{}", nfc(&nfd_e).to_lowercase());
+        let key_b = format!("{}", nfc(&"\u{00c9}".to_string()).to_lowercase());
+        assert_eq!(key_a, key_b, "占位键 = nfc(name).to_lowercase()——双形态同键");
     }
 
     /// R12（#47 平台区分⑤）：MAX_PATH 边界——259 过 / 260 拒
