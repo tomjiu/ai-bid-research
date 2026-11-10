@@ -776,6 +776,35 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ci2["skipped"][0]["detail"].as_str().unwrap_or("").contains("招标文件"),
         format!("detail={}", ci2["skipped"][0]["detail"].as_str().unwrap_or("?")),
     );
+    // ---- #47 R12（平台区分⑤）：MAX_PATH 预检——深目录工作区（40 层真
+    //      目录 ~280 字符根）+ 合法基名 → 落位总长 > 259 → path_too_long
+    //      分账（Linux 能落但拷 Windows 创建即失败，预演同拒）。测完切回
+    //      原工作区（后续 #603 段依赖本 scratch 的 db.json）。
+    let deep_ws = scratch_dir();
+    let mut deep_cur = deep_ws.clone();
+    for i in 0..40 {
+        deep_cur = deep_cur.join(format!("d{i:02}xx"));
+    }
+    std::fs::create_dir_all(&deep_cur).unwrap();
+    let mp_src = scratch_dir().join("标书.docx");
+    std::fs::write(&mp_src, b"PK\x03\x04selftest-maxpath").unwrap();
+    let resp = call(&ctx, json!({"id":"t-ws-deep","cmd":"workspace.open","path": deep_cur.to_string_lossy()}));
+    let resp = call(&ctx, json!({"id":"t-bid-mp","cmd":"bid.ingest_drop","paths":[mp_src.to_string_lossy()]}));
+    let mp = result(&resp);
+    r.check(
+        "bid.ingest_drop(MAX_PATH 预检)",
+        resp["ok"] == json!(true)
+            && mp["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && mp["skipped"][0]["reason"].as_str() == Some("path_too_long"),
+        format!("skipped={}", mp["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    // 切回原工作区（#603 段的 db.json 在这）
+    let resp = call(&ctx, json!({"id":"t-ws-back","cmd":"workspace.open","path": ws.root_display()}));
+    r.check(
+        "workspace.open(切回原根)",
+        resp["ok"] == json!(true),
+        format!("{}", ws.root_display()),
+    );
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));

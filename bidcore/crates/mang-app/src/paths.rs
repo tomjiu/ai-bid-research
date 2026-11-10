@@ -266,6 +266,28 @@ pub fn guard_portable_basename(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Windows MAX_PATH 预检（R12，#47 平台区分⑤）。
+///
+/// 传统 Win32 路径上限 260 字符（含 NUL 终止——字符串本体最长 259）。
+/// 超限路径在未启用 `LongPathsEnabled`（注册表，默认关）+ 清单未声明
+/// `longPathAware` 的进程里**创建即失败**（ERROR_PATH_NOT_FOUND）。
+/// 壳侧在**写路径**（ingest_drop 落位 / import_files 记录 upload_ref）
+/// 预检：Linux 上虽能创建超长路径，但项目库拷到 Windows 即失效——
+/// 与 R10 保留名守卫同一跨平台可迁移性口径（双平台同拒，非 cfg）。
+///
+/// 边界：`len() > 259` 拒（260 含 NUL）；`\\?\` 前缀形态（>32K 上限）
+/// 由宿主对话框直出时天然绕开本守卫的常规形态——壳侧拼接的路径永远
+/// 是常规形态。
+pub fn guard_windows_max_path(full: &str) -> Result<(), String> {
+    if full.chars().count() > 259 {
+        return Err(format!(
+            "路径超 Windows MAX_PATH（{} 字符 > 259）：{full}…——缩短文件名/目录层级，或在 Windows 启用 LongPathsEnabled",
+            full.chars().count()
+        ));
+    }
+    Ok(())
+}
+
 /// a 是否在 b 之内（按路径组件比较，大小写不敏感——Windows 语义）
 pub fn is_inside(a: &Path, b: &Path) -> bool {
     let norm = |p: &Path| -> Vec<String> {
@@ -419,5 +441,24 @@ mod tests {
         for bad in ["REPORT.", "报告 .docx ", ""] {
             assert!(guard_portable_basename(bad).is_err(), "形态漏拒：{bad:?}");
         }
+    }
+
+    /// R12（#47 平台区分⑤）：MAX_PATH 边界——259 过 / 260 拒
+    /// （260 含 NUL 终止，字符串本体上限 259）
+    #[test]
+    fn guard_windows_max_path_boundary() {
+        let ok: String = "a".repeat(259);
+        assert!(guard_windows_max_path(&ok).is_ok(), "259 字符恰在上限内");
+        let bad: String = "a".repeat(260);
+        let e = guard_windows_max_path(&bad).unwrap_err();
+        assert!(e.contains("MAX_PATH"), "错误文案带原因：{e}");
+        assert!(guard_windows_max_path("").is_ok());
+        // CJK 计字符不计字节（Windows 路径上限是 UTF-16 码元——CJK 每
+        // 字符占 1 码元，与 chars().count() 一致；代理对场景忽略——
+        // 域内文件名不含增补平面字符，实测口径以字符数为准）
+        let cjk_ok: String = "标".repeat(259);
+        assert!(guard_windows_max_path(&cjk_ok).is_ok(), "259 个 CJK 字符同样在限内");
+        let cjk_bad: String = "标".repeat(260);
+        assert!(guard_windows_max_path(&cjk_bad).is_err());
     }
 }

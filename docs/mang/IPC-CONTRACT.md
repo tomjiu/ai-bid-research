@@ -635,7 +635,14 @@ Linux 合法的 `CON.docx` 落库后拷到 Windows 即失效）；② 非法字�
 `A.docx` 在场时 `a.docx`/`A.DOCX` 视作**同一占位**（NTFS upcase 折叠；Linux 精确名匹配
 会放走变体，两文件共存拷到 Windows 互覆）。同内容变体 → `already_present`（detail
 指明实际在场的占位名——用户拖 `a.docx` 而在场的是 `A.docx` 时说清楚）；异内容变体 →
-走 `-2` 后缀占位，**后缀空位同样 CI 判定**。后续 R12+ 做 MAX_PATH。
+走 `-2` 后缀占位，**后缀空位同样 CI 判定**。
+
+**MAX_PATH 预检（R12，#47 平台区分⑤）**：`paths::guard_windows_max_path`——传统 Win32
+路径上限 260 字符（含 NUL，字符串本体 259）。`bid.ingest_drop` 落位路径（根 + 分隔符 +
+基名）超 259 → 批次分账 `path_too_long`（缩短文件名/层级，或 Windows 启用
+`LongPathsEnabled`）；`bid.import_files` 的 `upload_ref` 估算长度超 259 → 请求级 `bad_args`
+（绝对形态取本体、相对形态取 根+1+rel）。双平台同拒（Linux 能落但项目库拷 Windows 创建
+即失败——与 R10 保留名同一可迁移性口径）。后续 R13+ 做行尾/编码（NFC/NFD 归一）。
 
 ```jsonc
 → { "present": true,
