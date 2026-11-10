@@ -767,6 +767,39 @@ check(
   "openBidWorkbench 双定义（JS 后定义静默覆盖前定义——单一真源违背，merge 冲突残留）"
 );
 
+
+// ---------- R8（#47 / #19 拖拽导入）：drop 事件接入向导第二步 ----------
+check(
+  "R8 壳侧：bid.ingest_drop 注册（ipc.rs 分发——UI 调用不经 unknown_cmd）",
+  /"bid\.ingest_drop" => crate::bid::ingest_drop\(&ws, &self\.bid, &a\)/.test(ipcRs),
+  "拖拽落位命令没进壳侧分发表——UI ingestDroppedBidFiles 调用必 unknown_cmd"
+);
+check(
+  "R8 壳侧：ingest_drop 幂等 + 冲突后缀 + 白名单守卫（单测在场）",
+  /fn ingest_drop_copies_idempotent_and_guards\(\)[\s\S]{0,2600}already_present[\s\S]{0,800}招标文件-2\.docx/.test(bidRs),
+  "拖拽落位单测缺失（幂等/后缀/守卫回归无门）"
+);
+check(
+  "R8 UI：onDrop 向导半完成态接住拖入招标文件（BID_IMPORT_EXTS 分拣 + ingestDroppedBidFiles）",
+  /onDrop\(paths\) \{[\s\S]{0,700}BID_IMPORT_EXTS\.test\(base\(x\)\)[\s\S]{0,200}ui\.ingestDroppedBidFiles\(bidPaths\)/.test(app),
+  "壳拖入的招标文件在半完成态仍走 openPath 打开为 tab（拖拽导入接线断裂）"
+);
+check(
+  "R8 UI：ingestDroppedBidFiles 落位后重拉列表 + 新落位件自动勾选 + toast 分账",
+  /async ingestDroppedBidFiles\(paths\) \{[\s\S]{0,700}ipc\("bid\.ingest_drop"[\s\S]{0,500}state\.bidWizard\.sel\[c\.rel\] = guessBidFileKind\(c\.rel\)[\s\S]{0,300}已落位/.test(app),
+  "落位后不重拉列表/不自动勾选/静默吞 skipped（拖到落位断链）"
+);
+check(
+  "R8 UI：浏览器 drop（无源路径）诚实引导——不装作导入成功",
+  /浏览器拖放拿不到文件源路径——把 " \+ f\.name/.test(app),
+  "浏览器 drop 的招标文件被静默吞掉或装作导入成功（拿不到路径的事实没说清）"
+);
+check(
+  "R8 契约：bid.ingest_drop 登记（IPC-CONTRACT 唯一权威）",
+  contract.includes("### bid.ingest_drop") && /already_present/.test(contract),
+  "拖拽落位命令没进契约（落位规则/幂等口径无登记）"
+);
+
 // ---------- #18 出口闭环：校验报告 + 确认导出 ----------
 check(
   "#18 工作台头部「校验并导出」按钮（validate-export 动作）",

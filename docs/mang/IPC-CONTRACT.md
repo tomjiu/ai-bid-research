@@ -610,6 +610,22 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
 // 部分失败 → 顶层加 "partial": true, "partial_what": "…", "item_errors": [ … ]
 ```
 
+### bid.ingest_drop  `{ paths:[绝对路径…] }` （写面：复制进工作区；#47 R8 / #19 拖拽导入）
+
+壳 drop 事件（`WM_DROPFILES` / webview `drop`）的绝对路径**复制进工作区根**——只复制不
+导入（导入仍走 `bid.import_files`，向导第二步用户确认 kind）。**不依赖 db.json**（先拖
+文件再建项合法——不碰 DomainStore）。落位规则：同名且 sha256 相同 → `skipped:
+already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找空位。白名单与
+`BID_IMPORT_EXTS` 同源（docx/xlsx/pdf/doc/ods）；目录拖入明拒（`is_dir`——R17+ 递归导
+入）；不存在的路径 `not_found`。R9-R16 平台硬化专列在此基础做 Win 保留名 / 大小写不
+敏感去重 / 分隔符统一。
+
+```jsonc
+→ { "present": true,
+    "copied":  [ { "rel": "招标文件.docx", "name": "招标文件.docx", "size": 12345 } ],
+    "skipped": [ { "path": "/home/u/笔记.txt", "reason": "ext_blocked", "detail": "…" } ] }
+```
+
 ### bid.packages —— 分包清单（只读；#20/#316——多标段/多包识别面）
 `{}`（project_id 由壳从当前项目路由）
 

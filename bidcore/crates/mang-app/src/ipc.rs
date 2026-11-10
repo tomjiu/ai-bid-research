@@ -486,6 +486,11 @@ impl Ctx {
             "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
 
             "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+
+            // #47 R8（#19 拖拽导入）：壳 drop 事件路径 → 复制进工作区根
+            // （不碰 DomainStore——先拖文件再建项合法；导入仍走
+            // bid.import_files 向导确认 kind）
+            "bid.ingest_drop" => crate::bid::ingest_drop(&ws, &self.bid, &a),
             // ── #18 出口闭环（bid.rs——validate / export 均经 bid_mcp 真实
             //    工具面 validate_bid_document / export_bid_document；
             //    E_STATE 透传 `state` 码 → UI 引导卡）──────────────────
