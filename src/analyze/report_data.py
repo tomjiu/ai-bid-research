@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
 from src.analyze.buyers import buyer_profiles
+from src.analyze.outliers import budget_outliers
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
 from src.analyze.quality import field_quality
@@ -61,6 +62,7 @@ def build_analysis_payload(
         "field_quality": field_quality(dataset),
         "buyer_profiles": buyer_profiles(dataset),
         "supplier_profiles": supplier_profiles(dataset),
+        "budget_outliers": budget_outliers(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
@@ -351,6 +353,37 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
  "",
             "注：预算为**项目预算口径**（库内无中标合同额字段）；未定标/流标记录不参与本节；买方数 = 所中项目采购人去重数。",
+            "",
+        ]
+
+    outliers = payload.get("budget_outliers") or {}
+    if outliers and not outliers.get("skipped_reason"):
+        rows = [
+            ["疑似高价（超上围栏）", o["project_name"], _fmt_money(o["budget"])]
+            for o in outliers["high"]
+        ] + [
+            ["疑似低价（低于下围栏）", o["project_name"], _fmt_money(o["budget"])]
+            for o in outliers["low"]
+        ]
+        fence = (
+            f"样本 {outliers['sample_count']} 个；"
+            f"Q1={_fmt_money(outliers['q1'])} / 中位={_fmt_money(outliers['median'])} / "
+            f"Q3={_fmt_money(outliers['q3'])}；"
+            f"围栏 [{_fmt_money(outliers['lower_fence'])}, "
+            f"{_fmt_money(outliers['upper_fence'])}]"
+        )
+        sections += [
+            "## 十三、预算离群标记（IQR）",
+            "",
+            fence,
+            "",
+            (
+                _render_table(["类别", "项目", "预算(万)"], rows)
+                if rows
+                else "本口径下无离群样本。"
+            ),
+            "",
+            "注：离群是**统计标记**不是数据错误；低价离群常见于万元/元口径混录，高价离群常见于打包标，均需人工复核。",
             "",
         ]
 
