@@ -50,7 +50,11 @@ from typing import Any, Optional, Sequence
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
-from src.platform import configure_console_safe, write_text_lf
+from src.platform import (
+    configure_console_safe,
+    ensure_writable_path,
+    write_text_lf,
+)
 from src.report.generator import ReportGenerator
 from src.storage.database import _BID_COLUMNS, BidDatabase
 
@@ -231,6 +235,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--compare",
         default=None,
         help="领域对照模式：逗号分隔 ≥2 个关键词（如 --compare 智慧城市,政务云）",
+    )
+    analyze.add_argument(
+        "--json",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "同时导出机器可读 JSON（完整分析 payload；"
+            "缺省不导出。'-' = stdout）"
+        ),
     )
     analyze.add_argument(
         "--output-dir",
@@ -641,6 +655,30 @@ async def _retry_with_client(db_path, client, limit):
         await client.close()
 
 
+def _export_analysis_json(payload: Dict[str, Any], target: Path) -> int:
+    """分析 payload 的 JSON 导出（R54）。
+
+    - ``-``：stdout（紧凑，ensure_ascii=False——中文原文直出）；
+    - 文件：indent=2 + LF 行尾（R45 字节契约）+ 长路径防护（R44）。
+    """
+    import json as _json
+
+    if str(target) == "-":
+        sys.stdout.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+        return 0
+    try:
+        ensure_writable_path(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        write_text_lf(
+            target, _json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        )
+    except OSError as exc:
+        print(f"错误：JSON 导出失败：{exc}", file=sys.stderr)
+        return 2
+    print(f"分析 JSON 已导出: {target}")
+    return 0
+
+
 def run_analyze(args: argparse.Namespace) -> int:
     """执行 analyze 子命令：数据集 → 分析面 → 纯数据报告。
 
@@ -691,6 +729,12 @@ def run_analyze(args: argparse.Namespace) -> int:
         print(f"密度：{density['density_level']}"
               f"（{density['monthly_rate'] and round(density['monthly_rate'], 1)} 条/月，"
               f"定标率 {density['award_rate'] and round(density['award_rate'] * 100, 1) or 0}%）")
+
+    # R54：机器可读导出面——完整 payload 原样落盘（上下游程序消费）
+    if args.json is not None:
+        rc = _export_analysis_json(payload, args.json)
+        if rc != 0:
+            return rc
 
     generator = ReportGenerator(output_dir=args.output_dir)
     report_path = generator.generate_analysis_report(payload)
