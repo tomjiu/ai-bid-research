@@ -830,6 +830,8 @@ check(
   "契约文档登记 bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm（#603 批 C）",
   contract.includes("### bid.addenda") && contract.includes("### bid.addendum_waiver") && contract.includes("### bid.no_addendum_confirm"),
   "补遗面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+
 // ---------- #21 e2e 骨架（静态面）：漏参防御 + 套件纳入 ----------
 check(
   "#21 矩阵页签分发双参调用（漏传 panel = 运行时 TypeError——e2e 首跑捕获的存量 bug 形态）",
