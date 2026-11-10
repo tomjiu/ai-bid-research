@@ -17,7 +17,6 @@ Windows ``msvcrt.locking`` 只锁从当前位置起的 N 字节，故先
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 from contextlib import contextmanager

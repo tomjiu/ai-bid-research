@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
-import pytest
 
 from src.storage.database import BidDatabase
 from src.storage.pragmas import configure_pragmas, journal_mode_of, wal_available

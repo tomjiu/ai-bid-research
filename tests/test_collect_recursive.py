@@ -131,8 +131,6 @@ class TestWindowsCaseFold:
         (tmp_path / "Data").mkdir()
         _write_jsonl(tmp_path / "Data" / "a.jsonl", "W1")
 
-        real_walk = os.walk
-
         def doubled_walk(top, topdown=True, **kw):
             # 模拟不敏感卷：同一目录以两种大小写出现
             yield str(top), ["Data"], []
@@ -145,16 +143,11 @@ class TestWindowsCaseFold:
 
     def test_case_sensitive_linux_keeps_both(self, tmp_path, monkeypatch):
         monkeypatch.setattr(sys, "platform", "linux")
-        real_walk = os.walk
 
         def doubled_walk(top, topdown=True, **kw):
             yield str(top), ["Data", "data"], []
 
-        monkeypatch.setattr(
-            os,
-            "walk",
-            lambda top, **kw: doubled_walk(top, **kw),
-        )
+        monkeypatch.setattr(os, "walk", doubled_walk)
         # Linux 上两个大小写不同的目录键不同——walk 各自下钻
         from src.platform import normalize_path_key
 

@@ -68,7 +68,7 @@ class TestAnalyzeCLI:
     def test_empty_db_renders_gap(self, tmp_path, capsys):
         """空库：仍退出 0，报告含数据缺口说明。"""
         db_path = tmp_path / "empty.db"
-        with BidDatabase(db_path) as db:  # 建空库（只有表结构）
+        with BidDatabase(db_path):  # 建空库（只有表结构）
             pass
         code = cli.main(
             [

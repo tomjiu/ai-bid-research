@@ -11,7 +11,6 @@ from src.extract import (
     AnnouncementExtractor,
     REASON_LLM_ERROR,
     REASON_REJECTED,
-    STATUS_PENDING,
     STATUS_RESOLVED,
     build_replay_payload,
     park_raw_failure,
@@ -229,7 +228,7 @@ class TestRetryPending:
             park_record_failure(db, record, REASON_LLM_ERROR)
             db._conn.execute(
                 "UPDATE pending_announcements SET payload = '{broken'"
-                f" WHERE bid_id = 'T-3'"
+                " WHERE bid_id = 'T-3'"
             )
             db._conn.commit()
             extractor = _mock_extractor({"bid_id": "T-3"})

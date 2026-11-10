@@ -46,7 +46,7 @@ import logging
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from src.colors import ColorPrinter
 from src.exit_codes import EXIT_CODE_TABLE, EXIT_DATA

@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional
 from src.collect.records import AnnouncementRecord
 from src.extract.extractor import AnnouncementExtractor
 from src.extract.store import (
-    STATUS_REJECTED,
     STATUS_STORED,
     apply_extraction,
     apply_extraction_from_raw,

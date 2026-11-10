@@ -179,7 +179,7 @@ class ReportGenerator:
         Returns:
             已保存的 Markdown 报告文件路径。
         """
-        data_source = f"通用行业知识（未接入本地数据库）"
+        data_source = "通用行业知识（未接入本地数据库）"
         if self.db is not None:
             bid_rows = self.db.query_bids(keyword=keyword, days=days)  # type: ignore[union-attr]
             data_source = f"本地数据库 {len(bid_rows)} 条项目记录"

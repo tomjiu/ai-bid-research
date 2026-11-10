@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from src.analyze.dataset import AnalysisDataset
 from src.analyze.report_data import build_analysis_payload
 
 

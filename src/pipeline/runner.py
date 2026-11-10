@@ -35,7 +35,6 @@ from src.extract import (
     park_record_failure,
 )
 from src.analyze import build_analysis_payload, load_dataset
-from src.collect.sources import SourceError
 from src.report.generator import ReportGenerator
 from src.storage.database import BidDatabase
 

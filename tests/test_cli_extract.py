@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 import main as cli
-from src.llm.client import LLMClient
 from src.storage.database import BidDatabase
 
 

@@ -5,7 +5,6 @@ fixture 为**合成脱敏**数据（非真实语料），覆盖：中文别名�
 同件重复、原文流、坏行、坏文件、缺必填、多形态金额日期。
 """
 
-import json
 from pathlib import Path
 
 import pytest

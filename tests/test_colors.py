@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 
 from src.colors import (
-    GREEN,
     RED,
     ColorPrinter,
     colorize,
@@ -74,7 +73,7 @@ class TestSupportsColor:
 
 class TestColorize:
     def test_wraps_when_enabled(self):
-        assert colorize("错", RED, enabled=True) == f"\033[31m错\033[0m"
+        assert colorize("错", RED, enabled=True) == "\033[31m错\033[0m"
 
     def test_plain_when_disabled(self):
         assert colorize("错", RED, enabled=False) == "错"
@@ -89,7 +88,7 @@ class TestColorPrinter:
         assert cp.enabled is True
         cp.err("数据库不存在")
         # print 分两次 write（文本 + 换行）
-        assert stream.written[0] == f"\033[31m数据库不存在\033[0m"
+        assert stream.written[0] == "\033[31m数据库不存在\033[0m"
         assert stream.written[1] == "\n"
 
     def test_plain_when_no_color(self, monkeypatch):
@@ -102,7 +101,7 @@ class TestColorPrinter:
         stream = _Stream(tty=True)
         cp = ColorPrinter(stream, env={})
         cp.ok("已入库 12 条")
-        assert stream.written[0].startswith(f"\033[32m已入库")
+        assert stream.written[0].startswith("\033[32m已入库")
 
 
 class TestMainWiring:

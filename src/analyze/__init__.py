@@ -6,12 +6,15 @@
 
 from src.analyze.dataset import AnalysisDataset, load_dataset
 from src.analyze.buyers import buyer_profiles
-from src.analyze.density import competition_density, concentration_trend
-from src.analyze.keywords import (
-    common_bigrams,
-    keyword_frequency,
-    keyword_monthly_trend,
-)
+from src.analyze import density as _density
+from src.analyze import keywords as _keywords
+from src.analyze.density import competition_density
+from src.analyze.keywords import common_bigrams, keyword_frequency
+
+#: re-export（pyflakes 面经模块属性显式转发——`from x import y as y`
+#: 别名形式此版本不豁免）
+concentration_trend = _density.concentration_trend
+keyword_monthly_trend = _keywords.keyword_monthly_trend
 from src.analyze.compare import (
     build_comparison_payload,
     render_comparison_markdown,

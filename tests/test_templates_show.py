@@ -1,6 +1,5 @@
 """templates --show 渲染面测试（#601 R69）。"""
 
-import pytest
 
 import main as main_mod
 

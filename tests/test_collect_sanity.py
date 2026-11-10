@@ -8,7 +8,6 @@ import pytest
 
 from src.collect import AnnouncementRecord, load_records
 from src.collect.sanity import (
-    MAX_WINDOW_DAYS,
     apply_sanity_checks,
     sanity_warnings,
 )

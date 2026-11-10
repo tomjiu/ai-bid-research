@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 import pytest
 
 from src.platform import (
-    _stream_can_encode_chinese,
     configure_console_safe,
     console_encoding_safe,
     filesystem_case_sensitive,

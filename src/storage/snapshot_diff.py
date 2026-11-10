@@ -15,7 +15,7 @@ R60：两次 ``db export`` JSON 快照的**结构化差异**——数据集演�
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 def _normalize(value: Any) -> Any:

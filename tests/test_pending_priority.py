@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import pytest
 
 from src.extract import AnnouncementExtractor
 from src.extract.pending import park_raw_failure
