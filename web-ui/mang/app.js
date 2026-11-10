@@ -213,7 +213,8 @@
             { name: "\u62DB\u6807\u6587\u4EF6.docx", rel: String.raw`项目A\招标文件.docx`, kind: "file", size: 58320, mtimeMs: now - 2592e5 },
             { name: "\u6280\u672F\u6807.md", rel: String.raw`项目A\技术标.md`, kind: "file", size: 1620, mtimeMs: now - 36e5 },
             { name: "\u62A5\u4EF7\u5355.xlsx", rel: String.raw`项目A\报价单.xlsx`, kind: "file", size: 18320, mtimeMs: now - 36e5 },
-            { name: "\u8D44\u8D28\u8BC1\u660E.pdf", rel: String.raw`项目A\资质证明.pdf`, kind: "file", size: 120232, mtimeMs: now - 1728e5 }
+            { name: "\u8D44\u8D28\u8BC1\u660E.pdf", rel: String.raw`项目A\资质证明.pdf`, kind: "file", size: 120232, mtimeMs: now - 1728e5 },
+            { name: "\u635F\u574F\u4EF6.pdf", rel: String.raw`项目A\损坏件.pdf`, kind: "file", size: 65536, mtimeMs: now - 864e5 }
           ]
         },
         {
@@ -538,19 +539,33 @@
               return respond(m.id, { present: true, project_id: "PRJ-DEMO-19", status: "DRAFT", warnings: [] });
             case "bid.import_files": {
               // #19：演示桥——向导第二步（per_file / totals / 就绪面同形；
-              // 依据请求 files 数组装回显，验证参数面与真实壳一致）
-              const fl = (m.files || []).map((f, i) => ({
-                file_id: "TF-00" + (i + 1), filename: f.filename || f.upload_ref, kind: f.kind || "附件",
-                sha256: "demo", pages: 12, tables: 3, chunks: 48, ocr_tier: "text",
-                parse_status: "ok", deduplicated: false
-              }));
-              return respond(m.id, {
+              // 依据请求 files 数组装回显，验证参数面与真实壳一致）。
+              // R3（#47）：补部分成功教学面——「损坏件」按真实 E_PARTIAL
+              // 转换后的同形态回 partial:true + item_errors + FAILED 行
+              // （成功件照常入库——与真实壳口径一字不差）。
+              const fl = (m.files || []).map((f, i) => {
+                const broken = /损坏件/.test(String(f.filename || f.upload_ref || ""));
+                return {
+                  file_id: "TF-00" + (i + 1), filename: f.filename || f.upload_ref, kind: f.kind || "附件",
+                  sha256: broken ? "demo-broken" : "demo", pages: broken ? 0 : 12, tables: broken ? 0 : 3,
+                  chunks: broken ? 0 : 48, ocr_tier: broken ? "none" : "text",
+                  parse_status: broken ? "failed" : "ok", deduplicated: false
+                };
+              });
+              const brokenFl = fl.filter((f) => f.parse_status === "failed");
+              const out = {
                 present: true, file_ids: fl.map((f) => f.file_id), per_file: fl,
-                totals: { files: fl.length, chunks: fl.length * 48, parse_failed: 0, partial: 0 },
+                totals: { files: fl.length, chunks: fl.reduce((s, f) => s + f.chunks, 0), parse_failed: brokenFl.length, partial: brokenFl.length },
                 addendum_readiness: { total: 0, ready: 0, not_ready: [] },
                 input_integrity: { complete: true, restricted: false, unready: [], waived_unready: [] },
                 status: "FILES_IMPORTED", warnings: []
-              });
+              };
+              if (brokenFl.length) {
+                out.partial = true;
+                out.partial_what = "import_tender_files：" + brokenFl.length + " 件解析失败（演示桥教学面）";
+                out.item_errors = brokenFl.map((f) => f.filename + "：parse FAILED（0 页 0 块——损坏件全程禁引）");
+              }
+              return respond(m.id, out);
             }
 
             case "fs.tree":
@@ -1583,7 +1598,10 @@
     }
   }
 
-  /** 导入结果（右面板）：per_file 逐件表 + totals + 告警 + 补遗就绪/输入完整性 */
+  /** 导入结果（右面板，R3 #47 分账明细）：摘要计数条 + per_file 逐件表 +
+   * 失败清单（全程禁引口径）+ totals + 告警 + 补遗就绪/输入完整性。
+   * partial 判据三源合取（壳侧 partial 标记 / per_file FAILED 行 /
+   * totals.parse_failed）——演示桥与真实壳任一形态都能点亮部分成功面。 */
   function renderBidWizardResult(panelEl, r) {
     const perFile = r.per_file || [];
     const totals = r.totals || {};
@@ -1599,13 +1617,35 @@
     }
     const warns = r.warnings || [];
     const integrity = (r.input_integrity && r.input_integrity.unready) || [];
-    const partial = !!r.partial;
+    // R3（#47）：分账计数 + partial 三源合取（壳侧标记 / FAILED 行 / totals）
+    const failedRows = perFile.filter((f) => String(f.parse_status || "").toLowerCase() === "failed");
+    const okCount = perFile.length - failedRows.length;
+    const dedupedCount = perFile.filter((f) => f.deduplicated).length;
+    const itemErrors = (r.item_errors || []).map(String);
+    const partial = !!r.partial || failedRows.length > 0 || (totals.parse_failed || 0) > 0;
+    // R3（#47）：摘要计数条——成功/失败/已存在 + 部分成功口径一频位
+    const summary =
+      '<div class="bid-wiz-summary" data-state="' + (partial ? "warn" : "ok") + '">'
+      + "<span>成功 " + okCount + " 件</span><span>失败 " + failedRows.length + " 件</span><span>已存在 " + dedupedCount + " 件</span>"
+      + (partial
+        ? '<span class="bid-wiz-summary-note">部分成功不是故障——成功件照常入库不回滚，失败件全程禁引</span>'
+        : '<span class="bid-wiz-summary-note">全部入库</span>')
+      + "</div>";
+    // R3（#47）：失败清单结构化（取代 R1 的单行拼接）——每条独立行 +
+    // 修复引导（失败件不阻断后续步骤，修好重新导入即可）
+    const fails = itemErrors.length
+      ? '<details class="bid-wiz-fails" open><summary>' + itemErrors.length + " 件失败（全程禁引——补遗/条款抽取/评分都不会引用；修复文件后重新导入即可，成功件不回滚）</summary>"
+        + (r.partial_what ? '<div class="bid-wiz-fail-what">' + esc(r.partial_what) + "</div>" : "")
+        + itemErrors.map((e) => '<div class="bid-wiz-fail-row">' + esc(e) + "</div>").join("")
+        + "</details>"
+      : "";
     panelEl.innerHTML =
       '<div class="bid-panel-card">'
       + '<div class="bid-panel-title">导入结果' + (partial ? '（部分成功）' : "") + "</div>"
-      + (partial ? '<div class="bid-wiz-error" data-state="error">' + esc(r.partial_what || "部分文件导入失败") + (r.item_errors && r.item_errors.length ? "<br>" + r.item_errors.map(esc).join("<br>") : "") + "</div>" : "")
+      + summary
       + '<table class="bid-table"><thead><tr><th>文件</th><th>角色</th><th>页</th><th>表</th><th>块</th><th>解析</th><th>幂等</th></tr></thead><tbody>' + rows + "</tbody></table>"
       + '<div class="bid-wiz-total">共 ' + (totals.files || perFile.length) + " 件 · " + (totals.chunks || 0) + " 块 · 解析失败 " + (totals.parse_failed || 0) + " 件</div>"
+      + fails
       + (integrity.length ? '<div class="bid-cov-next" data-state="warn"><span>输入完整性</span>' + integrity.map((f) => esc(f.name + "：" + (f.reason || ""))).join("；") + "</div>" : "")
       + (warns.length ? '<details class="bid-wiz-warns"><summary>' + warns.length + " 条告警</summary>" + warns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
       + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草</div>'

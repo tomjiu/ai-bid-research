@@ -598,5 +598,42 @@ check(
   "files 计数没进契约样例"
 );
 
+// ---------- R3（#47）：导入结果反馈面——partial 分账明细 ----------
+check(
+  "R3 UI：partial 三源合取（壳侧标记 / FAILED 行 / totals.parse_failed）",
+  /const partial = !!r\.partial \|\| failedRows\.length > 0 \|\| \(totals\.parse_failed \|\| 0\) > 0;/.test(app),
+  "部分成功判据回退到单一来源（演示桥/真实壳任一形态点不亮）"
+);
+check(
+  "R3 UI：摘要计数条（成功/失败/已存在 + 部分成功口径）",
+  /bid-wiz-summary/.test(app) && /成功 " \+ okCount \+ " 件/.test(app) && /失败 " \+ failedRows\.length \+ " 件/.test(app),
+  "分账计数条被删（R1 的 item_errors 单行拼接回归）"
+);
+check(
+  "R3 UI：失败清单结构化（bid-wiz-fails 逐条独立行 + 全程禁引口径）",
+  /bid-wiz-fails/.test(app) && /全程禁引——补遗\/条款抽取\/评分都不会引用/.test(app) && /bid-wiz-fail-row/.test(app),
+  "失败清单退回 <br> 拼接或口径文案丢失"
+);
+check(
+  "R3 UI：部分成功不是故障——成功件不回滚口径在场",
+  app.includes("部分成功不是故障——成功件照常入库不回滚，失败件全程禁引"),
+  "口径文案漂移（向导会把部分成功当故障渲染）"
+);
+check(
+  "R3 演示桥：损坏件教学面（partial:true + item_errors + FAILED 行同形）",
+  /\/损坏件\/\.test/.test(app) && /out\.partial = true;/.test(app) && /out\.item_errors = brokenFl\.map/.test(app),
+  "演示桥无法教学部分成功面（真实壳 partial 形态无演示对照）"
+);
+check(
+  "R3 演示桥：损坏件失败行 0 页 0 块（成功面不被失败件污染计数）",
+  /pages: broken \? 0 : 12/.test(app) && /chunks: broken \? 0 : 48/.test(app) && /chunks: fl\.reduce\(\(s, f\) => s \+ f\.chunks, 0\)/.test(app),
+  "totals 计数被失败件污染（chunks 虚高）"
+);
+check(
+  "R3 样式：bid-wiz-summary / bid-wiz-fails 提供 ok|warn 双态",
+  /\.bid-wiz-summary\[data-state="warn"\]/.test(css) && /\.bid-wiz-fails summary/.test(css),
+  "分账样式缺失"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

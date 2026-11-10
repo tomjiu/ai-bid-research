@@ -4327,6 +4327,33 @@ html[data-chrome="native"][data-maximized="1"] #app {
 .bid-wiz-warns { font-size: 12px; margin-top: 6px; }
 .bid-wiz-warns summary { cursor: pointer; color: #a0762a; }
 .bid-wiz-warns div { padding: 3px 0 3px 12px; color: var(--ink-dim, #7b8494); line-height: 1.6; }
+/* R3（#47）：导入结果摘要计数条——成功/失败/已存在 + 部分成功口径 */
+.bid-wiz-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  margin: 8px 0 2px;
+}
+.bid-wiz-summary[data-state="ok"] { border: 1px solid #bfe0c0; background: #f0f8f0; color: #2f7a35; }
+.bid-wiz-summary[data-state="warn"] { border: 1px solid #e2cfa2; background: #fbf5e6; color: #a0762a; }
+.bid-wiz-summary-note { color: inherit; opacity: 0.85; }
+/* R3（#47）：失败清单结构化——逐条独立行（取代 R1 的 <br> 拼接） */
+.bid-wiz-fails {
+  border: 1px solid #e2a2a2;
+  background: #fbeeee;
+  color: #a04040;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+.bid-wiz-fails summary { cursor: pointer; color: #a04040; }
+.bid-wiz-fail-what { padding: 4px 0 2px; opacity: 0.8; }
+.bid-wiz-fail-row { padding: 3px 0 3px 12px; line-height: 1.6; }
 
 /* 导入结果面（右面板） */
 .bid-panel-card {
