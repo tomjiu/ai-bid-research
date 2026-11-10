@@ -682,10 +682,11 @@ function readRunFmt(rPr: Element): RunFmt {
         if (v === 'superscript' || v === 'subscript') f.vertAlign = v;
         break;
       }
-      // #24：`none` 是「明确无高亮」的合法枚举值，归一为不设置。
-      // 真实招标 DOCX 实测 3940 处 w:highlight 中 3938 处是 val="none"——
-      // 旧实现把 'none' 当真值存下来，下游解析不了就兑底黄色，整页发黄。
       case 'highlight': {
+        // Word 会在大量 run 上显式写 <w:highlight w:val="none"/> 表示「无高亮」。
+        // 旧实现把 "none" 也当有效值存下来，渲染时查不到映射就兜底成黄色——
+        // 真实文件里 3938/3940 处 none 全被涂黄（整页背景发黄的真因）。
+        // 这里把 none 归一为「不设置」（不透传给下游）。
         const hv = (val ?? '').trim().toLowerCase();
         if (hv && hv !== 'none') f.highlight = hv;
         break;
@@ -754,6 +755,9 @@ function highlightColor(name: string): string {
     black: '#000000',
     white: '#ffffff',
   };
+  // 未知枚举：返回空串（= 不上色），绝不兜底成黄色。
+  // 兜底成黄色会把「解析不到的颜色」和「用户真的标了黄」混为一谈——
+  // 旧实现正是因此把 w:val="none" 渲染成整页黄底。
   return table[name] ?? '';
 }
 
@@ -819,7 +823,6 @@ function wrapFmt(doc: Document, inner: Node, fmt: RunFmt, measureOnly: boolean):
   if (fmt.halfPoints !== null) css.push('font-size:' + halfPointsToPx(fmt.halfPoints).toFixed(1) + 'px');
   if (fmt.color) css.push('color:' + fmt.color);
   if (fmt.font) css.push('font-family:' + quoteFamily(fmt.font));
-  // #24：未知高亮色解析为空串——不再兑底黄色，空色不上样式。
   if (fmt.highlight) {
     const hl = highlightColor(fmt.highlight);
     if (hl) css.push('background-color:' + hl);
