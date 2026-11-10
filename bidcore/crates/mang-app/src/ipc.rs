@@ -503,6 +503,16 @@ impl Ctx {
 
             "bid.recover_state" => crate::bid::recover_state(&ws, &self.bid, &a),
 
+            // ── #603 批 C：补遗豁免（addenda 为 DomainStore+readiness 直读
+            //    台账；两写面走 record_addendum_waiver 工具面——逐件免责
+            //    与全局无补遗确认语义分账，#379）──────────
+            "bid.addenda" => crate::bid::addenda(&ws, &self.bid, &a),
+
+            "bid.addendum_waiver" => crate::bid::addendum_waiver(&ws, &self.bid, &a),
+
+            "bid.no_addendum_confirm" => crate::bid::no_addendum_confirm(&ws, &self.bid, &a),
+
+
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
