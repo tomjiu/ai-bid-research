@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
+from src.analyze.agencies import agency_profiles
 from src.analyze.buyers import buyer_profiles
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
@@ -79,6 +80,7 @@ def build_analysis_payload(
         "duplicates": find_duplicate_clusters(dataset),
         "semantic_health": semantic_health(dataset),
         "response_windows": response_windows(dataset),
+        "agency_profiles": agency_profiles(dataset),
     }
 
 
@@ -628,6 +630,33 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             "「招标文件开始发出之日」，本节以公告发布日近似（**偏短估计**）；",
             "竞争性磋商/询价等采购方式法定期限更短。截止早于发布的倒挂",
             "记录是数据问题（十七节揭示），不进本节分布。",
+            "",
+        ]
+
+    # 第十九节：代理机构画像（agency 字段首次进分析面——与八节
+    # 采购人/十二节供应商三位对偶）
+    agencies = payload.get("agency_profiles") or []
+    if agencies:
+        rows = [
+            [
+                profile["agency"],
+                str(profile["project_count"]),
+                _fmt_money(profile["budget_total"]),
+                _fmt_money(profile["budget_mean"]),
+                str(profile["purchaser_count"]),
+                "、".join(profile["categories"]) or "——",
+            ]
+            for profile in agencies
+        ]
+        sections += [
+            "## 十九、代理机构画像（代理项目数 Top）",
+            "",
+            _render_table(
+                ["代理机构", "项目数", "代理项目预算合计(万)", "平均预算(万)", "合作采购人数", "领域"],
+                rows,
+            ),
+            "",
+            "注：无代理记录（采购人自采等）不参与聚合；预算口径只计有值样本（样本数见 payload budget_sample_count），缺失不折零。",
             "",
         ]
 
