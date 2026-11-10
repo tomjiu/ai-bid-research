@@ -35,7 +35,16 @@ libc = "0.2"
 ureq = { version = "2", default-features = true }
 # #68 阶段 3：导出图片嵌入的格式验证/转 PNG/尺寸面（已在依赖图中——
 # docx-rs 0.4 default feature "image" 直依赖，此处提为直接依赖零新增）。
-image = "0.25"
+#
+# issue #35：关默认特性（默认含 avif → ravif → rav1e，AV1 视频编码器
+# 编译期内存开销极大——4GB cgroup 环境直接 OOM，实测连 wrapper 一起被杀）。
+# 但**不能只留 png**：export.rs build_pic 的契约是「PNG 直传 / 其他格式
+# 转 PNG」——标书 md 里 ![](target) 引用的是任意图片文件（截图 jpg、
+# 扫描件 bmp/tiff、动图 gif、webp 保存图）。只留 png 会让 load_from_memory
+# 对非 PNG 全部报「不是可识别的图片格式」，静默砍掉转换能力（测试只造
+# PNG 所以照样绿——假绿）。显式声明常用六格式；rav1e/exr 等重依赖
+# 仍然排除在外。
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp"] }
 
 # B4（issue #11 任务 3）：zip / quick-xml / calamine / memchr 工作区条目已删——
 # docx/xlsx 解析收敛引擎（bid-engine → mdc-office-io），workspace 成员不再
