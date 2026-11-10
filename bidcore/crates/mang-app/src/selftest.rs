@@ -758,6 +758,24 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
         format!("code={}", err_code(&resp)),
     );
+    // ---- #47 R11（平台区分④）：大小写不敏感同名去重——Windows FS 占位
+    //      语义预演（招标文件.docx 在场，拖 招标文件.DOCX 同内容 →
+    //      CI 占位幂等，不放行第二份——拷到 Windows 不互覆）
+    let ci_src = scratch_dir().join("招标文件.docx");
+    std::fs::write(&ci_src, b"PK\x03\x04selftest-ci-same").unwrap();
+    let ci_var = scratch_dir().join("招标文件.DOCX");
+    std::fs::copy(&ci_src, &ci_var).unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ci1","cmd":"bid.ingest_drop","paths":[ci_src.to_string_lossy()]}));
+    let resp = call(&ctx, json!({"id":"t-bid-ci2","cmd":"bid.ingest_drop","paths":[ci_var.to_string_lossy()]}));
+    let ci2 = result(&resp);
+    r.check(
+        "bid.ingest_drop(大小写变体幂等)",
+        resp["ok"] == json!(true)
+            && ci2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ci2["skipped"][0]["reason"].as_str() == Some("already_present")
+            && ci2["skipped"][0]["detail"].as_str().unwrap_or("").contains("招标文件"),
+        format!("detail={}", ci2["skipped"][0]["detail"].as_str().unwrap_or("?")),
+    );
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));

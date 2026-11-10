@@ -629,8 +629,13 @@ Linux 合法的 `CON.docx` 落库后拷到 Windows 即失效）；② 非法字�
 ③ 尾部空格/点（Windows 剥掉后落位名与记录键错位）。`bid.ingest_drop` 按**批次分账**
 （`skipped: name_not_portable`，一件非法不毁整批——与 `ext_blocked` 同口径）；
 `bid.import_files` 对 `upload_ref` 基名与显式 `filename` **双查、请求级 `bad_args`**
-（输入规范错误与 mode 校验同款先例：零副作用早拒，改名重试）。后续 R11+ 在此基础做
-大小写不敏感去重 / MAX_PATH。
+（输入规范错误与 mode 校验同款先例：零副作用早拒，改名重试）。
+
+**大小写不敏感占位（R11，#47 平台区分④）**：落位判定按 Windows FS 占位语义预演——
+`A.docx` 在场时 `a.docx`/`A.DOCX` 视作**同一占位**（NTFS upcase 折叠；Linux 精确名匹配
+会放走变体，两文件共存拷到 Windows 互覆）。同内容变体 → `already_present`（detail
+指明实际在场的占位名——用户拖 `a.docx` 而在场的是 `A.docx` 时说清楚）；异内容变体 →
+走 `-2` 后缀占位，**后缀空位同样 CI 判定**。后续 R12+ 做 MAX_PATH。
 
 ```jsonc
 → { "present": true,
