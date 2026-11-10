@@ -1526,10 +1526,20 @@ pub fn import_files(
 
     let mut specs: Vec<Value> = Vec::with_capacity(files.len());
     for (i, f) in files.iter().enumerate() {
-        let upload_ref = f
+        let upload_ref_raw = f
             .get("upload_ref")
             .and_then(Value::as_str)
             .ok_or_else(|| IpcError::bad_args(format!("files[{i}].upload_ref 缺失")))?;
+        // R9（#47 跨平台硬化①）：upload_ref 分隔符归一（壳侧入口形态归一——
+        // 单一真源）：Windows `\` → `/`、压缩空段与 `.` 段（`a//b`、`a/./b`
+        // → `a/b`）。**`..` 段原样保留**（穿越裁决在域层 fs_fence——归一
+        // 不得吞 `..`，否则 `a/../b` 被错误归一成 `a/b` 开洞）；绝对路径
+        // （Unix `/x` / Windows 盘符 `C:/x`）只换分隔符不压缩（压缩会破坏
+        // 绝对语义）。归一动机：Windows 形态 `子\文件.docx` 在 Linux 壳上
+        // 被当单文件名（找不到真文件）；两形态 rel 不一致 → sha 幂等去重
+        // 失效（同一文件双入库）。
+        let upload_ref = normalize_upload_ref(upload_ref_raw);
+        let upload_ref = upload_ref.as_str();
         let filename = f
             .get("filename")
             .and_then(Value::as_str)
@@ -1829,6 +1839,27 @@ fn resolve_ingest_dst(
     Err(format!("{name} 同名冲突超过 999 个变体（请整理工作区）"))
 }
 
+/// R9（#47 跨平台硬化①）：`upload_ref` 分隔符归一——壳侧入口形态归一
+/// （单一真源）。规则：`\` → `/`；相对路径压缩空段与 `.` 段（`a//b`、
+/// `a/./b` → `a/b`）；**`..` 段原样保留**（穿越裁决在域层 `fs_fence`——
+/// 归一吞 `..` 会把 `a/../b` 错误归一成 `a/b` 开洞）；绝对路径（Unix
+/// `/x` / Windows 盘符 `C:/x`）只换分隔符不压缩（压缩破坏绝对语义——
+/// `/etc/x` 会错指工作区内 `etc/x`）。
+fn normalize_upload_ref(raw: &str) -> String {
+    let s = raw.replace('\\', "/");
+    let bytes = s.as_bytes();
+    let is_unix_abs = s.starts_with('/');
+    let is_win_drive = bytes.len() >= 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':';
+    if is_unix_abs || is_win_drive {
+        return s;
+    }
+    s.split('/')
+        .filter(|seg| !seg.is_empty() && *seg != ".")
+        .collect::<Vec<_>>()
+        .join("/")
+}
 
 /// 写面服务获取（#19 专用）：无 db.json → `BidService::open` 空态起步
 /// （副作用即目的——approval.key 生成属正常建项流程）；有 db.json → 走
@@ -2896,24 +2927,36 @@ mod tests {
         // CON.docx（真实文件在场、白名单后缀也过），但落位会被守卫分账
         // 拒绝（name_not_portable——项目库跨 Windows 迁移即失效）。
         // 拖拽批次一件非法不毁整批：与合法件混拖时合法件照常落位。
+        // 平台门（AGENTS.md §13.1）：Windows 上 CreateFile("CON.docx")
+        // 映射到控制台设备——write 不报错但**没有真文件**（is_file 探测
+        // 揭穿）。种不出真源文件 → SKIP 横幅显式可见，不伪造环境。
         let con_src = src_dir.join("CON.docx");
-        std::fs::write(&con_src, b"PK\x03\x04reserved-name-payload").unwrap();
-        let ok_src = src_dir.join("补遗说明.docx");
-        std::fs::write(&ok_src, b"PK\x03\x04ok-name-payload").unwrap();
-        let r = call_args(&ctx, "bid.ingest_drop", json!({
-            "paths": [con_src.to_string_lossy(), ok_src.to_string_lossy()]
-        }));
-        assert_eq!(r["ok"], json!(true), "混拖批次整体成功（分账不按错误回）：{r}");
-        let out = r["result"].clone();
-        let skipped = out["skipped"].as_array().unwrap();
-        assert_eq!(skipped.len(), 1, "保留名一件分账：{out}");
-        assert_eq!(skipped[0]["reason"], json!("name_not_portable"), "保留名 reason：{out}");
-        assert!(skipped[0]["detail"].as_str().unwrap_or("").contains("保留设备名"));
-        let copied = out["copied"].as_array().unwrap();
-        assert_eq!(copied.len(), 1, "合法件照常落位：{out}");
-        assert_eq!(copied[0]["rel"], json!("补遗说明.docx"));
-        assert!(dir.join("补遗说明.docx").is_file());
-        assert!(!dir.join("CON.docx").exists(), "保留名不落位");
+        let con_seed_ok = std::fs::write(&con_src, b"PK\x03\x04reserved-name-payload")
+            .map(|_| con_src.is_file())
+            .unwrap_or(false);
+        if !con_seed_ok {
+            eprintln!(
+                "SKIP [R10 ⑥ 保留名落位守卫]：本平台种不出真 CON.docx 源文件\
+                 （Windows 设备名映射/创建即拒）——该断言面在 Linux 跑"
+            );
+        } else {
+            let ok_src = src_dir.join("补遗说明.docx");
+            std::fs::write(&ok_src, b"PK\x03\x04ok-name-payload").unwrap();
+            let r = call_args(&ctx, "bid.ingest_drop", json!({
+                "paths": [con_src.to_string_lossy(), ok_src.to_string_lossy()]
+            }));
+            assert_eq!(r["ok"], json!(true), "混拖批次整体成功（分账不按错误回）：{r}");
+            let out = r["result"].clone();
+            let skipped = out["skipped"].as_array().unwrap();
+            assert_eq!(skipped.len(), 1, "保留名一件分账：{out}");
+            assert_eq!(skipped[0]["reason"], json!("name_not_portable"), "保留名 reason：{out}");
+            assert!(skipped[0]["detail"].as_str().unwrap_or("").contains("保留设备名"));
+            let copied = out["copied"].as_array().unwrap();
+            assert_eq!(copied.len(), 1, "合法件照常落位：{out}");
+            assert_eq!(copied[0]["rel"], json!("补遗说明.docx"));
+            assert!(dir.join("补遗说明.docx").is_file());
+            assert!(!dir.join("CON.docx").exists(), "保留名不落位");
+        }
 
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
@@ -3006,8 +3049,10 @@ mod tests {
         }));
         assert_eq!(r["ok"], json!(true), "{r}");
         // Linux 上真实创建 CON.docx（文件在场——守卫拦的不是文件存在性，
-        // 是基名可移植性）
-        std::fs::write(dir.join("CON.docx"), b"PK\x03\x04whatever").unwrap();
+        // 是基名可移植性）。Windows 上该名字映射到控制台设备（写不报错
+        // 但无真文件）——种不出也不影响断言（守卫是纯字符串判定，先于
+        // 任何文件访问），非致命写。
+        let _ = std::fs::write(dir.join("CON.docx"), b"PK\x03\x04whatever");
         std::fs::write(dir.join("正常件.docx"), b"PK\x03\x04normal").unwrap();
 
         // ① upload_ref 基名保留名 → bad_args（零副作用：不导入任何件）
@@ -3031,8 +3076,102 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(dir);
     }
-    // ── #603 批 C：补遗豁免面 ──
 
+    /// R9（#47 跨平台硬化①）：upload_ref 分隔符归一——Windows 形态 `\` 在
+    /// Linux 壳上归一成 `/` 找到同一文件；两形态同 sha 幂等（不双入库）；
+    /// `..` 段保留（域层围栏照拦）；绝对路径只换分隔符不压缩。
+    #[test]
+    fn upload_ref_separator_normalized_and_idempotent() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("sep9");
+        // 建项（导入需要项目在场——project_id 由壳侧注入）
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("分隔符归一项目", "PRJ-SEP9", "明标", "ext-sep9")
+                .unwrap();
+        }
+        // 种真实文件（/ 形态目录——与 fs.tree 的 rel 形态一致）
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("子目录")).unwrap();
+        std::fs::write(dir.join("子目录").join("招标文件.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        // ① Windows 形态 `子目录\招标文件.docx` ——归一成 `/` 找到同一文件
+        //    （归一前在 Linux 壳上被当单文件名 → 找不到文件 item failure）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "子目录\\招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "Windows 形态 upload_ref 归一后应导入成功：{r}");
+        assert_eq!(
+            r["result"]["totals"]["files"], json!(1),
+            "归一后 1 件入库：{r}"
+        );
+
+        // ② `/` 形态重复导入同一文件 → 同 sha 幂等（域层 no-op：原 file_id
+        //    + deduplicated 标记——归一后两形态同 rel 同 sha，不双入库）
+        let first_id = r["result"]["file_ids"][0].clone();
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "子目录/招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "幂等重放不是错误：{r}");
+        assert_eq!(
+            r["result"]["per_file"][0]["deduplicated"], json!(true),
+            "同 sha 同文件（归一后同 rel）→ 域层 no-op 幂等标记：{r}"
+        );
+        assert_eq!(
+            r["result"]["file_ids"][0], first_id,
+            "幂等重放返回原 file_id（不建新条目）：{r}"
+        );
+        // 全量文件计数仍 1（bid.state 同源——两形态不双入库）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(
+            r["result"]["quick_stats"]["files"], json!(1),
+            "两形态导入后库内仍只 1 件：{r}"
+        );
+
+        // ③ `..` 段保留：`../x.docx` 不被归一吞段——域层围栏照拦（not_found
+        //    之外的安全语义不变）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "../escape.docx", "kind": "招标文件" }]
+        }));
+        // 围栏内词法预拒 → 逐件失败登记（E_PARTIAL 成功面）或壳侧错误——
+        // 关键断言：不因归一把 `..` 吞掉而「成功」
+        let ok = r["ok"] == json!(true);
+        if ok {
+            let totals = &r["result"]["totals"];
+            assert_ne!(
+                totals["files"], json!(1),
+                "`..` 段被归一吞掉会开穿越洞（错误归一）：{r}"
+            );
+        }
+
+        // ④ 归一形态断言：`a//b`、`a/./b` → `a/b`（纯函数面）
+        assert_eq!(normalize_upload_ref("a//b.docx"), "a/b.docx");
+        assert_eq!(normalize_upload_ref("a/./b.docx"), "a/b.docx");
+        assert_eq!(normalize_upload_ref(".\\a\\b.docx"), "a/b.docx");
+        // `..` 保留 / 绝对路径只换分隔符不压缩
+        assert_eq!(normalize_upload_ref("a/../b.docx"), "a/../b.docx");
+        assert_eq!(normalize_upload_ref("/etc/x.docx"), "/etc/x.docx");
+        assert_eq!(normalize_upload_ref("C:\\ws\\x.docx"), "C:/ws/x.docx");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // ── #603 批 C：补遗豁免面 ──
+    // （假绿修复：replay 拼接（e8acc3e）丢了 #[test] 属性——两函数在 main 上
+    //  从未运行（dead_code 警告是唯一线索）。原提交 20dd6a1 有属性与文档注释，
+    //  此处按原样恢复——测试门重新生效。）
+
+    /// 无 db.json → 三命令干净 not_found（读/写同款——不落副作用）。
+#[test]
     fn addendum_faces_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb-603c");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
@@ -3057,6 +3196,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// 补遗豁免全流程：无补遗件读面（total=0）→ 全局确认（human 签域）→
+    /// gates 过门对账 → #379 拆门（全局确认不写逐件台账）→ 拒绝面（幽灵件 /
+    /// 空白理由早拒）。
+    #[test]
     fn no_addendum_confirm_full_flow() {
         let (dir, _ws) = tmp_ws("flow-603c");
         seed_matrix_ready_project(&dir);

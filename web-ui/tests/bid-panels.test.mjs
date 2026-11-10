@@ -804,6 +804,31 @@ check(
   "拖拽落位命令没进契约（落位规则/幂等口径无登记）"
 );
 
+
+// ---------- R9（#47 跨平台硬化①）：upload_ref 分隔符归一（壳侧入口单一真源） ----------
+check(
+  "R9 壳侧：import_files 入口归一（normalize_upload_ref 接入 + 空段/· 段过滤）",
+  /fn normalize_upload_ref\(raw: &str\) -> String[\s\S]{0,700}seg != "\."[\s\S]{0,300}\.join\("\/"\)/.test(bidRs)
+  && /let upload_ref = normalize_upload_ref\(upload_ref_raw\);/.test(bidRs),
+  "Windows 形态 upload_ref 在 Linux 壳被当单文件名（找不到真文件）；两形态 rel 不一致 → sha 幂等去重失效双入库"
+);
+check(
+  "R9 壳侧：归一不吞 .. 段（穿越裁决仍在域层 fs_fence）+ 绝对路径不压缩",
+  /normalize_upload_ref\("a\/\.\.\/b\.docx"\), "a\/\.\.\/b\.docx"/.test(bidRs)
+  && /normalize_upload_ref\("C:\\\\ws\\\\x\.docx"\), "C:\/ws\/x\.docx"/.test(bidRs),
+  "归一吞 .. 会把 a/../b 错误归一成 a/b（开穿越洞）；绝对路径压缩会破坏绝对语义"
+);
+check(
+  "R9 壳侧：两形态同 sha 幂等单测在场（\ 导入 + / 重放不双入库）",
+  /fn upload_ref_separator_normalized_and_idempotent[\s\S]{0,2000}deduplicated[\s\S]{0,600}库内仍只 1 件/.test(bidRs),
+  "分隔符归一幂等回归无门（两形态双入库回退无拦）"
+);
+check(
+  "R9 契约：import_files 分隔符归一口径登记",
+  /分隔符归一（#47 R9 跨平台硬化①，壳侧入口单一真源）/.test(contract),
+  "归一规则没进契约（调用方无从知道两形态等价）"
+);
+
 // ---------- #18 出口闭环：校验报告 + 确认导出 ----------
 check(
   "#18 工作台头部「校验并导出」按钮（validate-export 动作）",
