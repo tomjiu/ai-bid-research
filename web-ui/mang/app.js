@@ -5031,32 +5031,6 @@
     /** #313 批 A/B/D：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  panel（"detail" | "matrix" | "coverage"）——面板直开（侧栏面板入口用） */
 
-    async openBidWorkbench(panel) {
-      const existing = bidWorkbenchTab();
-      if (existing) {
-        if (panel && existing.meta.panel !== panel) existing.meta.panel = panel;
-        await ui.activateTab(existing.id);
-        renderBidWorkbenchIfOpen();
-        return;
-      }
-      const tab = {
-        id: "t" + ++tabSeq,
-        path: "mang://bid-workbench",
-        name: "标书工作台",
-        kind: "bidwork",
-        dirty: false,
-        state: "loading",
-        error: "",
-        meta: { selectedId: "", panel: panel || "detail" },
-        dispose: null
-      };
-      state.tabs.push(tab);
-      state.activeTabId = tab.id;
-      renderTabs();
-      renderEmpty();
-      renderStatusBar();
-      await ui.loadTab(tab);
-    },
     /** #19：向导文件面——fs.tree 拉工作区文件（白名单过滤 + 勾选集清洗） */
     async loadBidWizardTree(force) {
       if (!state.bridge) return;
@@ -5392,6 +5366,18 @@
       const existing = bidWorkbenchTab();
       if (existing) {
         if (panel && existing.meta.panel !== panel) existing.meta.panel = panel;
+        // R7（#47）：向导重入新鲜度——半完成态（DRAFT 0 文件）重开工作台时
+        // 两源重拉：bid.state 强制刷新（quick_stats 判据可能过期——壳外
+        // Agent 已导过文件的话判据翻转，向导该让位完成态）+ 文件列表重置
+        // idle（渲染时自动 loadBidWizardTree——用户在壳外放的招标文件
+        // 立即可见，不靠手点刷新）。只重置 ready 态（loading/error 不打断）
+        const bR7 = state.bid;
+        const pR7 = (bR7.data && bR7.data.project) || {};
+        const qR7 = (bR7.data && bR7.data.quick_stats) || {};
+        if (bR7.status === "ready" && pR7.status === "DRAFT" && !(qR7.files > 0)) {
+          if (state.bidWizard.treeStatus === "ready") state.bidWizard.treeStatus = "idle";
+          ui.loadBid(true);
+        }
         await ui.activateTab(existing.id);
         renderBidWorkbenchIfOpen();
         return;

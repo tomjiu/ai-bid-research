@@ -750,6 +750,23 @@ check(
   "契约 §3.4 面板清单漏 export 面（merge main 新增面板未纳入约定）"
 );
 
+// ---------- R7（#47）：向导重入——半完成态（DRAFT 0 文件）重开工作台的新鲜度 ----------
+check(
+  "R7 UI：重开工作台半完成态 → 双源重拉（bid.state 强制 + 文件列表重置 idle 自动重拉）",
+  /bR7\.status === "ready" && pR7\.status === "DRAFT" && !\(qR7\.files > 0\)[\s\S]{0,250}state\.bidWizard\.treeStatus = "idle"[\s\S]{0,120}ui\.loadBid\(true\)/.test(app),
+  "重开工作台沿用旧文件列表（壳外新放的招标文件不可见——重入语义缺失，只能手点刷新）"
+);
+check(
+  "R7 UI：文件列表重置只动 ready 态（loading/error 不打断）",
+  /if \(state\.bidWizard\.treeStatus === "ready"\) state\.bidWizard\.treeStatus = "idle";/.test(app),
+  "重置不分态——进行中拉取被误清白跑 / error 提示丢失"
+);
+check(
+  "R7 merge 热修：openBidWorkbench 单一定义（merge main 双版本收编）",
+  (app.match(/async openBidWorkbench\(panel\) \{/g) || []).length === 1,
+  "openBidWorkbench 双定义（JS 后定义静默覆盖前定义——单一真源违背，merge 冲突残留）"
+);
+
 // ---------- #18 出口闭环：校验报告 + 确认导出 ----------
 check(
   "#18 工作台头部「校验并导出」按钮（validate-export 动作）",
