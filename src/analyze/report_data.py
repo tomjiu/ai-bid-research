@@ -19,6 +19,7 @@ from src.analyze.relationships import purchaser_supplier_pairs
 from src.analyze.rolling import rolling_comparison
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
+from src.analyze.duplicates import find_duplicate_clusters, render_duplicates_markdown
 from src.analyze.quality import field_quality
 from src.analyze.keywords import (
     common_bigrams,
@@ -74,6 +75,7 @@ def build_analysis_payload(
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
+        "duplicates": find_duplicate_clusters(dataset),
     }
 
 
@@ -549,6 +551,15 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
                 f"无法定位省级 {province['unknown_count']} 条"
                 "（裸市名/空区域不猜数，不计入本节）。"
             ),
+            "",
+        ]
+
+    # 第十六节：近重复（有簇才有行动面；无簇一句带过也保留节——
+    # 研究者需要看到「查过了且干净」的明示，而非留白猜测）
+    duplicates = payload.get("duplicates") or {}
+    if count >= 2 and duplicates.get("total"):
+        sections += [
+            render_duplicates_markdown(duplicates, ordinal="十六").rstrip("\n"),
             "",
         ]
 

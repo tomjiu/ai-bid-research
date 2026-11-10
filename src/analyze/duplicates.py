@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import unicodedata
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.analyze.dataset import AnalysisDataset
 
@@ -360,12 +360,22 @@ def find_duplicate_clusters(
     }
 
 
-def render_duplicates_markdown(payload: Dict[str, Any]) -> str:
+def render_duplicates_markdown(
+    payload: Dict[str, Any], *, ordinal: Optional[str] = None
+) -> str:
     """近重复节 Markdown（analyze 报告第十六节）。
+
+    Args:
+        payload: :func:`find_duplicate_clusters` 产物。
+        ordinal: 节序号（如 ``"十六"``）——嵌入标题保持报告
+            节序一致；缺省为独立渲染（无编号）。
 
     超预算时首行如实声明（对比不完整，结论保守），不静默吞。
     """
-    lines: List[str] = ["## 近重复公告检测", ""]
+    title = (
+        f"## {ordinal}、近重复公告检测" if ordinal else "## 近重复公告检测"
+    )
+    lines: List[str] = [title, ""]
     total = payload.get("total", 0)
     if not payload.get("clusters"):
         lines.append(
