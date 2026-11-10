@@ -996,5 +996,32 @@ check(
   "守卫口径没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- R11（#47 平台区分④）：大小写不敏感同名去重 ----------
+check(
+  "R11 壳侧：occupied 闭包 CI 占位判定（精确名快路径 + read_dir 变体扫描）",
+  /let occupied = \|want: &str\| -> Option<\(std::path::PathBuf, bool\)> \{[\s\S]{0,500}to_lowercase\(\) == lower/.test(bidRs),
+  "落位判定退回精确名匹配（大小写变体放行——拷 Windows 互覆）"
+);
+check(
+  "R11 壳侧：IngestSlot 枚举携带实际占位（Dup 指名不猜请求名）",
+  /enum IngestSlot \{[\s\S]{0,120}Free\(std::path::PathBuf\),[\s\S]{0,120}Dup\(std::path::PathBuf\),/.test(bidRs) && /Ok\(IngestSlot::Dup\(slot\)\) => \{[\s\S]{0,600}占位 \{present_name\}/.test(bidRs),
+  "already_present 回显指错占位（用请求名猜变体）"
+);
+check(
+  "R11 测试：CI 去重集成（变体幂等不放行 + 异内容后缀占位 + 后缀位 CI）",
+  /fn ingest_drop_case_insensitive_dedupe/.test(bidRs) && /招标文件-2\.DOCX/.test(bidRs),
+  "CI 去重回归门被删"
+);
+check(
+  "R11 selftest：大小写变体幂等项在场",
+  selftestRs.includes("bid.ingest_drop(大小写变体幂等)"),
+  "集成自检项缺失"
+);
+check(
+  "R11 契约：大小写不敏感占位口径登记（Windows FS 语义预演）",
+  contract.includes("大小写不敏感占位（R11") && contract.includes("NTFS upcase 折叠"),
+  "CI 占位口径没进契约"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

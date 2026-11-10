@@ -1694,7 +1694,7 @@ pub fn ingest_drop(
         }
         // 同名幂等/冲突后缀
         match resolve_ingest_dst(&root, &name, src) {
-            Ok(Some(dst)) => {
+            Ok(IngestSlot::Free(dst)) => {
                 // rel = 实际落位名（冲突后缀形态——原名只作入口键）
                 let landed = dst
                     .file_name()
@@ -1710,11 +1710,26 @@ pub fn ingest_drop(
                     })),
                 }
             }
-            // 目标已存在且内容相同——幂等跳过（不是错误）
-            Ok(None) => skipped.push(json!({
-                "path": raw, "reason": "already_present",
-                "detail": "同名同内容文件已在工作区（幂等跳过）"
-            })),
+            // 目标已存在且内容相同——幂等跳过（不是错误）。
+            // R11（#47 平台区分④）：Dup 携带实际命中的占位——CI 变体或
+            // 后缀占位都指名（用户拖 a.docx，同内容的在场件可能是
+            // A.docx 或 原名-2.docx——说清楚，不猜）
+            Ok(IngestSlot::Dup(slot)) => {
+                let present_name = slot
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| name.clone());
+                let is_variant = present_name != name;
+                let detail = if is_variant {
+                    format!("同内容文件已在工作区（占位 {present_name}——Windows 大小写同占位/后缀位，幂等跳过）")
+                } else {
+                    "同名同内容文件已在工作区（幂等跳过）".to_string()
+                };
+                skipped.push(json!({
+                    "path": raw, "reason": "already_present",
+                    "detail": detail
+                }));
+            }
             Err(detail) => skipped.push(json!({
                 "path": raw, "reason": "io", "detail": detail
             })),
@@ -1727,14 +1742,21 @@ pub fn ingest_drop(
     }))
 }
 
-/// 拖入落位解析：目标不存在 → 直落；已存在且 sha256 相同 → `None`
+/// R11（#47 平台区分④）：落位解析结果——Free(落位路径) / Dup(同内容
+/// 已在的**实际占位**路径——回显指名用，不猜请求名)。
+enum IngestSlot {
+    Free(std::path::PathBuf),
+    Dup(std::path::PathBuf),
+}
+
+/// 拖入落位解析：目标不存在 → 直落；已存在且 sha256 相同 → Dup(占位)
 /// （幂等跳过）；内容不同 → `{stem}-2/-3/…{ext}` 找空位（同后缀同内容
 /// 的跳位件同样幂等跳过）。
 fn resolve_ingest_dst(
     root: &std::path::Path,
     name: &str,
     src: &std::path::Path,
-) -> Result<Option<std::path::PathBuf>, String> {
+) -> Result<IngestSlot, String> {
     fn sha_of(p: &std::path::Path) -> Result<String, std::io::Error> {
         use sha2::{Digest, Sha256};
         use std::io::Read;
@@ -1759,31 +1781,54 @@ fn resolve_ingest_dst(
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
-    // 直落名：空位直落；同内容幂等跳过
-    let mut cand = root.join(name);
-    if !cand.is_file() {
-        return Ok(Some(cand));
-    }
-    match sha_of(&cand) {
-        Ok(sha) if sha == src_sha => return Ok(None),
-        Ok(_) => {}
-        Err(e) => return Err(format!("读目标失败：{e}")),
+    // R11（#47 平台区分④）：大小写不敏感占位判定——Windows FS 不分
+    // 大小写（NTFS upcase 折叠），`A.docx` 在场时 `a.docx` 是同一占位；
+    // Linux 精确名匹配会放走变体（两文件共存，拷到 Windows 互覆）。
+    // 落位判定按「占位已占」语义：精确名优先（O(1) 快路径），未占再
+    // 扫根目录一层做 CI 变体匹配（落位只在根，扫描面收敛）。返回
+    // (占位路径, 变体标志)——占位是否被变体占用决定后续文案。
+    let occupied = |want: &str| -> Option<(std::path::PathBuf, bool)> {
+        let exact = root.join(want);
+        if exact.is_file() {
+            return Some((exact, false));
+        }
+        let lower = want.to_lowercase();
+        let hit = std::fs::read_dir(root)
+            .ok()?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.file_type().map(|t| t.is_file()).unwrap_or(false)
+                    && e.file_name().to_string_lossy().to_lowercase() == lower
+            })?;
+        Some((hit.path(), true))
+    };
+    // 直落名：空位直落；同内容幂等跳过（变体占位同样幂等——Dup 携带
+    // 实际命中的占位路径，调用方回显指名不猜）
+    match occupied(name) {
+        None => return Ok(IngestSlot::Free(root.join(name))),
+        Some((slot, _variant)) => match sha_of(&slot) {
+            Ok(sha) if sha == src_sha => return Ok(IngestSlot::Dup(slot)),
+            Ok(_) => {}
+            Err(e) => return Err(format!("读目标失败：{e}")),
+        },
     }
     // 直落名冲突（异内容）：-2..-999（原名是第一份——第二份从 -2 起，
-    // 不出 -1 形态；同后缀同内容的跳位件同样幂等跳过）
+    // 不出 -1 形态；同后缀同内容的跳位件同样幂等跳过；后缀空位同样
+    // CI 判定——`A-2.docx` 与 `a-2.DOCX` 是同一占位）
     for n in 2u32..1000 {
-        cand = root.join(format!("{stem}-{n}{ext}"));
-        if !cand.is_file() {
-            return Ok(Some(cand));
-        }
-        match sha_of(&cand) {
-            Ok(sha) if sha == src_sha => return Ok(None),
-            Ok(_) => continue,
-            Err(e) => return Err(format!("读目标失败：{e}")),
+        let want = format!("{stem}-{n}{ext}");
+        match occupied(&want) {
+            None => return Ok(IngestSlot::Free(root.join(want))),
+            Some((slot, _variant)) => match sha_of(&slot) {
+                Ok(sha) if sha == src_sha => return Ok(IngestSlot::Dup(slot)),
+                Ok(_) => continue,
+                Err(e) => return Err(format!("读目标失败：{e}")),
+            },
         }
     }
     Err(format!("{name} 同名冲突超过 999 个变体（请整理工作区）"))
 }
+
 
 /// 写面服务获取（#19 专用）：无 db.json → `BidService::open` 空态起步
 /// （副作用即目的——approval.key 生成属正常建项流程）；有 db.json → 走
@@ -2869,6 +2914,79 @@ mod tests {
         assert_eq!(copied[0]["rel"], json!("补遗说明.docx"));
         assert!(dir.join("补遗说明.docx").is_file());
         assert!(!dir.join("CON.docx").exists(), "保留名不落位");
+
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R11（#47 平台区分④）：大小写不敏感同名去重——Windows FS 占位
+    /// 语义预演（NTFS upcase 折叠）。Linux 上 `A.docx` 与 `a.docx` 是
+    /// 两个文件；壳侧落位按 CI 占位判定后，变体不再放行（拷到 Windows
+    /// 不互覆）。
+    #[test]
+    fn ingest_drop_case_insensitive_dedupe() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ing-ci");
+        let src_dir = std::env::temp_dir().join(format!("mang-ing-ci-src-{}", std::process::id()));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        // ① 精确同名同内容 → already_present（既有行为不回归）
+        let a_src = src_dir.join("招标文件.docx");
+        std::fs::write(&a_src, b"PK\x03\x04ci-payload").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [a_src.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "{r}");
+        assert_eq!(r["result"]["copied"].as_array().unwrap().len(), 1);
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [a_src.to_string_lossy()]
+        }));
+        assert_eq!(r["result"]["skipped"][0]["reason"], json!("already_present"), "{r}");
+
+        // ② 大小写变体同内容 → already_present（CI 占位命中——不放行
+        //    第二个文件；detail 回显在场的精确占位名）
+        let upper_src = src_dir.join("招标文件.DOCX");
+        std::fs::copy(&a_src, &upper_src).unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [upper_src.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "变体幂等不是错误：{r}");
+        let out = r["result"].clone();
+        assert!(
+            out["copied"].as_array().unwrap().is_empty(),
+            "CI 占位不放行第二份（拷到 Windows 会互覆）：{out}"
+        );
+        let sk = &out["skipped"][0];
+        assert_eq!(sk["reason"], json!("already_present"), "{out}");
+        assert!(
+            sk["detail"].as_str().unwrap_or("").contains("招标文件.docx"),
+            "回显在场占位名（用户拖 .DOCX，在场的是 .docx）：{out}"
+        );
+        assert!(
+            !dir.join("招标文件.DOCX").exists(),
+            "Linux 上也不该落变体第二份"
+        );
+
+        // ③ 大小写变体异内容 → 后缀占位（-2），且后缀空位同样 CI 判定
+        let diff_src = src_dir.join("招标文件.DOCX");
+        std::fs::write(&diff_src, b"PK\x03\x04ci-different").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [diff_src.to_string_lossy()]
+        }));
+        let out = r["result"].clone();
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "变体异内容走后缀：{out}");
+        assert_eq!(copied[0]["rel"], json!("招标文件-2.DOCX"), "后缀占位：{out}");
+        assert!(dir.join("招标文件-2.DOCX").is_file());
+
+        // ④ 后缀占位的变体同内容 → already_present（-2 占位 CI 命中）
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [diff_src.to_string_lossy()]
+        }));
+        let out = r["result"].clone();
+        assert!(out["copied"].as_array().unwrap().is_empty(), "后缀占位幂等：{out}");
+        assert_eq!(out["skipped"][0]["reason"], json!("already_present"), "{out}");
 
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
