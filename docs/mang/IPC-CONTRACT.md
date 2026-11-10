@@ -108,6 +108,19 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `io` | 其它系统 IO 失败 | 磁盘满、权限 |
 | `state` | 工具面 E_STATE 透传：当前项目状态不允许该操作（#313 批 C/D）——UI 应分支「尚未开放」引导卡而非错误横幅 | DRAFT 态项目调 `bid.coverage`（未导入文件） |
 
+### 3.4 引导卡约定（E_NOTFOUND / E_STATE 的 UI 呈现规范；#47 R6 / #19 任务 3）
+
+全部 `bid.*` 读面板（detail / matrix / quality / gates / coverage / export）收到壳侧 `not_found` / `state` 码时，**渲染引导卡而非错误横幅**——空态与早态是用户主路径不是故障，`data-kind="error"` 横幅只留给真故障（`io` / `bad_json` 等）。
+
+| 码 | 卡面标题 | 主行动（`data-bid-guide-cta`） | 次行动（`data-bid-guide-retry`） |
+|---|---|---|---|
+| `not_found`（无 db.json） | 还没有标书项目 | 去新建标书项目 → 切 detail 页签（向导第一步） | 重新检查（重发原命令） |
+| `state`（状态窗未到） | XX 尚未开放（XX = 面板名） | 去导入招标文件 → 切 detail 页签（向导第二步） | 重新检查（重发原命令） |
+
+- 卡尾一律带 `bid-cov-next`（`data-state="ok"`）「下一步」条：写明到达状态窗的后继管线动作（extract_requirements → build_outline → prepare_outline_and_matrix 等）。
+- 单一真源在 `code` 不在文案：`state` 码时 E_STATE 原文（含状态与前置说明）原样进卡，不吞不译。
+- 实现锚点：`renderBidEarlyGuide`（`web-ui/mang/app.js` 共享工厂——coverage R5 首创，R6 收编 matrix / quality / gates 并统一锚点）。
+
 ---
 
 ## 4. 大响应（> 1.5 MB）

@@ -663,25 +663,108 @@ check(
 );
 
 // ---------- R5（#47 / #19 任务 2）：coverage 早态引导对齐向导交互语言 ----------
+// R6（#47 / #19 任务 3）：coverage 两分支收编共享工厂 renderBidEarlyGuide 后，
+// 断言改写为收编形态（强度不减：not_found / state 双卡 + CTA 文案 + 切页签
+// + next 条，锚点统一为工厂的 data-bid-guide-cta / -retry）。
 check(
   "R5 UI：coverage E_NOTFOUND 引导卡（空工作区不再走错误横幅）",
-  /cv\.code === "not_found"[\s\S]{0,700}去新建标书项目/.test(app),
+  /cv\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}code: "not_found"[\s\S]{0,400}还没有标书项目/.test(app),
   "空工作区（无 db.json）被渲染成「覆盖报告读取失败」——正常空态当故障（§109 口径违背）"
 );
 check(
-  "R5 UI：coverage E_STATE 卡主行动「去导入招标文件」（直通向导第二步）",
-  /cv\.code === "state"[\s\S]{0,700}data-cov-go-wizard>去导入招标文件/.test(app),
+  "R5 UI：coverage E_STATE 引导卡主行动「去导入招标文件」（直通向导第二步）",
+  /cv\.code === "state"[\s\S]{0,500}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}覆盖报告尚未开放/.test(app),
   "早态卡只有「重新检查」死文案（#19 任务 2 的对齐目标缺失）"
 );
 check(
   "R5 UI：去导入/去建项按钮切回 detail 页签（向导所在页）",
-  /data-cov-go-wizard[\s\S]{0,400}t\.meta\.panel = "detail";[\s\S]{0,120}renderBidWorkbenchPanes\(host\)/.test(app),
+  /data-bid-guide-cta[\s\S]{0,400}t\.meta\.panel = "detail";[\s\S]{0,120}renderBidWorkbenchPanes\(host\)/.test(app),
   "CTA 按钮不切页签（用户找不到向导入口）"
 );
 check(
   "R5 UI：早态卡带 bid-cov-next「下一步」条（与结果面同款交互语言）",
-  /cv\.code === "state"[\s\S]{0,900}bid-cov-next" data-state="ok"><span>下一步<\/span>导入招标文件（向导第二步）/.test(app),
+  /o\.next \? '<div class="bid-cov-next" data-state="ok"><span>下一步<\/span>' \+ o\.next/.test(app),
   "早态引导缺「下一步」条（交互语言未对齐）"
+);
+
+// ---------- R6（#47 / #19 任务 3）：E_NOTFOUND/E_STATE 引导卡约定统一 + IPC-CONTRACT 登记 ----------
+check(
+  "R6 UI：共享引导卡工厂在场（CTA 文案按 code 推导——单一真源）",
+  /function renderBidEarlyGuide\(host, panel, opts\)[\s\S]{0,600}const cta = isNotFound \? "去新建标书项目" : "去导入招标文件";/.test(app),
+  "各面板手写引导卡（文案漂移无单源——约定未统一）"
+);
+check(
+  "R6 UI：工厂卡片不带 data-kind=error（空态不是故障）+ 次「重新检查」锚点统一",
+  /data-bid-guide-cta>' \+ cta \+ '<\/button> <button class="btn" data-bid-guide-retry>重新检查<\/button>/.test(app)
+  && !/data-kind="error"[\s\S]{0,300}data-bid-guide-cta/.test(app),
+  "引导卡带错误横幅样式（空态渲染成故障——契约 §3.4 违背）"
+);
+check(
+  "R6 UI：matrix 记错误码（对齐 coverage/gates——面板才能分支引导卡）",
+  /state\.bid\.matrix\.code = \(err && err\.code\) \|\| ""/.test(app)
+  && /matrix: \{ status: "idle", data: null, error: "", code: "" \}/.test(app),
+  "loadBidMatrix 只记 message（mx.code 恒空——not_found/state 永远一把抓成故障横幅）"
+);
+check(
+  "R6 UI：matrix 面板 E_NOTFOUND/E_STATE 双分支引导卡（不再一把抓错误横幅）",
+  /mx\.code === "not_found" \|\| mx\.code === "state"[\s\S]{0,700}renderBidEarlyGuide/.test(app),
+  "矩阵未建（DRAFT 主路径）与真故障（io）共用「矩阵读取失败」横幅"
+);
+check(
+  "R6 UI：quality 面板 not_found 分支收编引导卡（原「不是标书项目」错误横幅退役）",
+  /q\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide/.test(app),
+  "自评面板空工作区仍走 data-kind=error 横幅（§109 引导卡约定违背）"
+);
+check(
+  "R6 UI：quality 面板 state 分支收编引导卡（E_STATE 原文 + hint 进卡不吞）",
+  /q\.code === "state"[\s\S]{0,500}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,400}MATRIX_READY[\s\S]{0,300}prepare_outline_and_matrix/.test(app),
+  "自评早态卡丢「矩阵就绪后显示什么」与后继管线信息"
+);
+check(
+  "R6 UI：gates 面板 not_found 分支引导卡（注释口径「只在无 db.json 分支引导」落地）",
+  /gt\.code === "not_found" \|\| gt\.code === "state"[\s\S]{0,700}renderBidEarlyGuide/.test(app),
+  "门台账注释说分支引导、代码一把抓 error 横幅（注释与实现背离）"
+);
+check(
+  "R6 契约：IPC-CONTRACT §3.4 引导卡约定登记（锚点 + 工厂 + 双码口径）",
+  /### 3\.4 引导卡约定（E_NOTFOUND \/ E_STATE 的 UI 呈现规范；#47 R6 \/ #19 任务 3）/.test(contract)
+  && /data-bid-guide-cta/.test(contract) && /renderBidEarlyGuide/.test(contract)
+  && /去新建标书项目/.test(contract) && /去导入招标文件/.test(contract),
+  "引导卡约定散在 §109 表格一行 + 注释里，契约文档无正式登记（改代码无同步锚点）"
+);
+
+// ---------- R6 merge main（#47 / #19 任务 3 收编 export 面）：#18 出口闭环面板引导卡统一 ----------
+check(
+  "R6 收编：export 面（#18）not_found 分支进共享工厂（原错误横幅退役）",
+  /x\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide/.test(app),
+  "#18 校验面板空工作区仍走 data-kind=error 横幅（契约 §3.4 面板清单违背）"
+);
+check(
+  "R6 收编：export 面（#18）state 分支进共享工厂（E_STATE 原文 + 双前置门 hint 进卡）",
+  /x\.code === "state"[\s\S]{0,600}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}pre_export_confirm[\s\S]{0,200}校验并导出成品/.test(app),
+  "#18 校验早态卡丢双前置门说明或后继管线信息"
+);
+check(
+  "R6 契约：§3.4 面板清单含 export（merge main 后 #18 面板纳入约定）",
+  /detail \/ matrix \/ quality \/ gates \/ coverage \/ export/.test(contract),
+  "契约 §3.4 面板清单漏 export 面（merge main 新增面板未纳入约定）"
+);
+
+// ---------- R7（#47）：向导重入——半完成态（DRAFT 0 文件）重开工作台的新鲜度 ----------
+check(
+  "R7 UI：重开工作台半完成态 → 双源重拉（bid.state 强制 + 文件列表重置 idle 自动重拉）",
+  /bR7\.status === "ready" && pR7\.status === "DRAFT" && !\(qR7\.files > 0\)[\s\S]{0,250}state\.bidWizard\.treeStatus = "idle"[\s\S]{0,120}ui\.loadBid\(true\)/.test(app),
+  "重开工作台沿用旧文件列表（壳外新放的招标文件不可见——重入语义缺失，只能手点刷新）"
+);
+check(
+  "R7 UI：文件列表重置只动 ready 态（loading/error 不打断）",
+  /if \(state\.bidWizard\.treeStatus === "ready"\) state\.bidWizard\.treeStatus = "idle";/.test(app),
+  "重置不分态——进行中拉取被误清白跑 / error 提示丢失"
+);
+check(
+  "R7 merge 热修：openBidWorkbench 单一定义（merge main 双版本收编）",
+  (app.match(/async openBidWorkbench\(panel\) \{/g) || []).length === 1,
+  "openBidWorkbench 双定义（JS 后定义静默覆盖前定义——单一真源违背，merge 冲突残留）"
 );
 
 // ---------- #18 出口闭环：校验报告 + 确认导出 ----------
