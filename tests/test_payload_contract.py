@@ -57,9 +57,10 @@ EXPECTED_KEYS = {
     # 批 L 增量（R80/R82）：十六/十七节的数据面
     "duplicates",
     "semantic_health",
-    # 批 N 增量（R95/R96）：十八/十九节的数据面
+    # 批 N 增量（R95/R96/R97）：十八/十九/二十节的数据面
     "response_windows",
     "agency_profiles",
+    "category_distribution",
 }
 
 

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from src.analyze.dataset import AnalysisDataset
 from src.analyze.agencies import agency_profiles
 from src.analyze.buyers import buyer_profiles
+from src.analyze.categories import category_distribution
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
 from src.analyze.regions import province_distribution
@@ -81,6 +82,7 @@ def build_analysis_payload(
         "semantic_health": semantic_health(dataset),
         "response_windows": response_windows(dataset),
         "agency_profiles": agency_profiles(dataset),
+        "category_distribution": category_distribution(dataset),
     }
 
 
@@ -657,6 +659,39 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
             "注：无代理记录（采购人自采等）不参与聚合；预算口径只计有值样本（样本数见 payload budget_sample_count），缺失不折零。",
+            "",
+        ]
+
+    # 第二十节：品类分布（category 字段首次进分析面——抽取面
+    # 自由文本，精确匹配归并不做词表归一）
+    categories = payload.get("category_distribution") or {}
+    if categories.get("filled_count"):
+        cat_rows = [
+            [
+                entry["category"],
+                str(entry["count"]),
+                _fmt_money(entry["budget_total"]),
+                _fmt_money(entry["budget_mean"]),
+                str(entry["budget_sample_count"]),
+                str(entry["awarded_count"]),
+            ]
+            for entry in categories["categories"]
+        ]
+        distinct = categories["distinct_count"]
+        shown = len(categories["categories"])
+        overflow = f"（仅列 Top {shown} / 共 {distinct} 类）" if shown < distinct else ""
+        # filled_count>0 保证 filled_rate 非 None（分母非零）
+        missing_rate = 1 - categories["filled_rate"]
+        sections += [
+            "## 二十、品类分布",
+            "",
+            _render_table(
+                ["品类", "项目数", "预算合计(万)", "平均预算(万)", "预算样本数", "定标数"],
+                cat_rows,
+            ),
+            "",
+            f"注：品类为抽取面自由文本，清洗后**精确匹配**归并（近义不折叠——映射由研究者判断）；"
+            f"填充 {_fmt_pct(categories['filled_rate'])}（缺 {_fmt_pct(missing_rate)}，七节填充率已揭示）{overflow}。",
             "",
         ]
 
