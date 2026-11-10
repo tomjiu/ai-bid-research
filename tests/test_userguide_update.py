@@ -69,3 +69,44 @@ class TestBatchMDocs:
         assert marker in boundary or marker in guide, (
             f"[{feature}] 标记 [{marker}] 未见于任何文档"
         )
+
+
+class TestBatchNDocs:
+    """批 N 文档增量契约（R95-R99：沉睡字段唤醒）。"""
+
+    @pytest.mark.parametrize(
+        "feature,marker",
+        [
+            ("响应窗口边界声明", "windows.py"),
+            ("代理机构画像登记", "agencies.py"),
+            ("品类分布登记", "categories.py"),
+            ("平台来源登记", "platforms.py"),
+            ("短窗提示口径", "研究提示非违规认定"),
+            ("品类精确匹配口径", "精确匹配"),
+            ("跨平台转发信号", "跨平台转发信号"),
+            ("节序十八", "十八"),
+            ("节序二十一", "二十一"),
+        ],
+    )
+    def test_boundary_and_guide_updated(self, feature, marker):
+        root = Path(__file__).resolve().parent.parent
+        boundary = (root / "docs" / "PYTHON-BOUNDARY.md").read_text(
+            encoding="utf-8"
+        )
+        guide = (root / "docs" / "USER-GUIDE.md").read_text(encoding="utf-8")
+        assert marker in boundary or marker in guide, (
+            f"[{feature}] 标记 [{marker}] 未见于任何文档"
+        )
+
+    def test_batch_n_modules_in_boundary_table(self):
+        """四模块成行登记（§2 表——边界声明的唯一真源）。"""
+        root = Path(__file__).resolve().parent.parent
+        boundary = (root / "docs" / "PYTHON-BOUNDARY.md").read_text(
+            encoding="utf-8"
+        )
+        # 批 N 四模块同行登记（行首 `src/analyze/windows.py`，其余随行）
+        assert "`src/analyze/windows.py` / `agencies.py`" in boundary, (
+            "批 N 模块行未登记于 PYTHON-BOUNDARY §2"
+        )
+        for module in ("agencies.py", "categories.py", "platforms.py"):
+            assert f"`{module}`" in boundary, f"[{module}] 未见于边界表"
