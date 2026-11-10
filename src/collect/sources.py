@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -71,14 +72,26 @@ class LoadResult:
 # 路径解析
 # ----------------------------------------------------------------------
 
-def resolve_source_files(source: Union[str, Path]) -> List[Path]:
+def resolve_source_files(
+    source: Union[str, Path],
+    *,
+    recursive: bool = False,
+) -> List[Path]:
     """把源路径解析为待读文件清单。
 
     Args:
         source: 文件或目录路径。
+        recursive: ``True`` 时目录源深度遍历子目录
+            （``os.walk``），并做**路径键去重**：
+
+            - 符号链接环防护（已访问目录键不再下钻）；
+            - Windows 大小写不敏感卷上 ``Data/`` 与 ``data/``
+              经 :func:`src.platform.normalize_path_key` 折叠为同键，
+              重复入口只读一次（Linux 大小写敏感卷保持原样）。
 
     Returns:
-        排序后的文件路径列表（目录源按文件名排序保证确定性）。
+        排序后的文件路径列表（目录源按文件名排序保证确定性；
+        递归模式按相对路径排序）。
 
     Raises:
         SourceError: 路径不存在，或目录内无受支持扩展名
@@ -90,6 +103,8 @@ def resolve_source_files(source: Union[str, Path]) -> List[Path]:
         raise SourceError(f"源路径不存在: {path}")
     suffixes = supported_suffixes()
     if path.is_dir():
+        if recursive:
+            return _walk_directory(path, suffixes)
         files = sorted(
             p for p in path.iterdir() if p.suffix.lower() in suffixes
         )
@@ -104,6 +119,34 @@ def resolve_source_files(source: Union[str, Path]) -> List[Path]:
             f"（支持 {'/'.join(suffixes)}）"
         )
     return [path]
+
+
+def _walk_directory(root: Path, suffixes: set) -> List[Path]:
+    """递归遍历目录收集源文件（R43）。
+
+    - ``os.walk(topdown=True)`` + 已访问目录键集合防符号链接环；
+    - 目录键经 :func:`src.platform.normalize_path_key` 折叠——
+      Windows 大小写不敏感卷上重复入口只读一次；
+    - 结果按相对路径排序，保证跨平台/跨次运行确定性。
+    """
+    from src.platform import normalize_path_key
+
+    visited: set = set()
+    found: List[Path] = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        dir_key = normalize_path_key(dirpath)
+        if dir_key in visited:
+            continue
+        visited.add(dir_key)
+        for name in filenames:
+            if Path(name).suffix.lower() in suffixes:
+                found.append(Path(dirpath) / name)
+    if not found:
+        raise SourceError(
+            f"目录（含子目录）无 {'/'.join(sorted(suffixes))} 源文件: {root}"
+        )
+    root_key = str(root)
+    return sorted(found, key=lambda p: str(p.relative_to(root_key)))
 
 
 # ----------------------------------------------------------------------
@@ -275,6 +318,7 @@ def load_records(
     skip_invalid: bool = True,
     since: Optional[float] = None,
     today: Union[None, str, date] = None,
+    recursive: bool = False,
 ) -> LoadResult:
     """从本地源装载公告记录（规范化入口：raw → AnnouncementRecord）。
 
@@ -288,6 +332,9 @@ def load_records(
             不是错误——「无新文件」是增量的正常结局）。
         today: 健全性检查的「今天」基准（``date`` / ``YYYY-MM-DD`` /
             ``None``=系统当前日期，R33）——注入以保证测试确定性。
+        recursive: 目录源深度遍历子目录（R43）——路径键去重
+            （符号链接环 / Windows 大小写）见
+            :func:`resolve_source_files`。
 
     Returns:
         装载结果（成功记录——含健全性告警 warnings——+ 失败明细 + 文件数）。
@@ -297,7 +344,7 @@ def load_records(
         ValueError / RecordValidationError: skip_invalid=False 时的
             首个载荷/记录错误。
     """
-    files = resolve_source_files(source)
+    files = resolve_source_files(source, recursive=recursive)
     if since is not None:
         # 增量水位：只读新文件（mtime 严格晚于水位）
         files = [p for p in files if p.stat().st_mtime > since]

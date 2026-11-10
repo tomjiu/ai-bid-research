@@ -129,8 +129,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help=(
-            "公告源路径：.json/.jsonl 文件，或包含它们的目录"
+            "公告源路径：.json/.jsonl/.csv 文件，或包含它们的目录"
             "（目录源按文件名排序装载）"
+        ),
+    )
+    collect.add_argument(
+        "--recursive",
+        action="store_true",
+        help=(
+            "目录源深度遍历子目录（含符号链接环防护与"
+            " Windows 大小写路径去重）"
         ),
     )
     collect.add_argument(
@@ -439,7 +447,11 @@ def run_collect(args: argparse.Namespace) -> int:
         进程退出码（0 正常；2 源不可读/严格模式下遇到坏数据）。
     """
     try:
-        loaded = load_records(args.source, skip_invalid=not args.strict)
+        loaded = load_records(
+            args.source,
+            skip_invalid=not args.strict,
+            recursive=getattr(args, "recursive", False),
+        )
     except (SourceError, ValueError) as exc:
         print(f"错误：{exc}", file=sys.stderr)
         return 2

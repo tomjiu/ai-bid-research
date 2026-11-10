@@ -14,7 +14,7 @@ report 各层复用；测试通过 monkeypatch ``sys.platform`` 覆盖两平台�
 from __future__ import annotations
 
 import sys
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Final
 
 #: Windows 默认 MAX_PATH（含终止符 260；长路径注册表开关不在此判定内）
@@ -92,13 +92,18 @@ def normalize_path_key(path: Path | str) -> str:
     用途：同一路径在不同来源（CLI 参数/配置文件/注册表）可能
     写成 ``Data\\Bids.DB`` 或 ``data/bids.db``——在不敏感平台上
     两者指向同一文件，去重键必须折叠；敏感平台保持原样。
+
+    规则：
+    - Windows 进程内：一律小写（本机 FS 大小写不敏感是业务缺省）；
+    - 其他平台：仅盘符样式路径（``C:/...``，跨平台配置迁移场景）
+      折叠，POSIX 路径保持原样（大小写敏感）。
     """
-    text = str(path)
-    if is_windows() or PureWindowsPath(text).is_absolute():
-        # 仅对 Windows 语义路径折叠大小写与反斜杠
-        if "\\" in text or PureWindowsPath(text).is_absolute():
-            return text.replace("\\", "/").lower()
-    return text.replace("\\", "/")
+    text = str(path).replace("\\", "/")
+    if is_windows():
+        return text.lower()
+    if len(text) >= 2 and text[0].isalpha() and text[1] == ":":
+        return text.lower()
+    return text
 
 
 def console_encoding_safe() -> bool:

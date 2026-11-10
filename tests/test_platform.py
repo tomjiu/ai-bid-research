@@ -84,6 +84,8 @@ class TestCaseSensitivity:
     def test_linux_key_preserves_case(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "linux")
         assert normalize_path_key("Data/Bids.DB") == "Data/Bids.DB"
+        # 盘符样式路径（Windows 配置迁移）仍折叠
+        assert normalize_path_key("C:/Data/Bids.DB") == "c:/data/bids.db"
 
 
 class TestConsoleEncoding:
