@@ -597,6 +597,56 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
 // 部分失败 → 顶层加 "partial": true, "partial_what": "…", "item_errors": [ … ]
 ```
 
+### bid.packages —— 分包清单（只读；#20/#316——多标段/多包识别面）
+`{}`（project_id 由壳从当前项目路由）
+
+经 `bid_mcp::dispatch_with(list_packages)` 走真实工具面（#316 识别结果
++ 逐包条款数 + 选包状态 + 共用条款），只读不裁决。**选包动作不在本
+命令**——选包 = `build_outline` 传 package 参数（管线动作走 MCP）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "packages": { "detected": 2,
+                  "items": [ { "id": "PKG-A", "label": "一标段：设备采购", "kind": "标段",
+                               "number": "1", "req_count": 42, "sources": ["A-招标文件.docx"],
+                               "selected": true } ],
+                  "shared_req_count": 6, "total_requirements": 60,
+                  "selected_package": { "id": "PKG-A", "label": "一标段：设备采购" },
+                  "usage": "build_outline 传 package=<id|label|number> 选定投哪个包…" } }
+```
+
+### bid.matrix_override —— 否决项死锁人工裁定（写面；#20/#226）
+`{ requirement_id, status, deviation?, actor_id?, project_version? }`
+
+#182 宿主签发面（**不进 MCP 工具表，Agent 拿不到**）：壳用服务态密钥对
+`matrix_override:<project_id>:<requirement_id>:<status>:<sha256(deviation)>`
+四重绑定签域签 receipt（换任何一项都要换签），经
+`bid_mcp::dispatch_with(set_matrix_override)` 走真实工具面——覆写后矩阵
+立即重算。status ∈ RESPONDED|NOT_APPLICABLE|NOT_RESPONDED|PARTIAL；
+NOT_APPLICABLE 的 deviation 必填（不可审计的豁免不算豁免——壳透传空串
+会被域层响亮拒）。每次裁定落审计记录（操作者/理由/时间，不可抹除）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "override": { "requirement_id": "REQ-0003", "status": "NOT_APPLICABLE",
+                  "from_status": "NOT_RESPONDED", "blocking_after": 2,
+                  "audit": { "actor_id": "shell-operator", "method": "human_receipt" } } }
+```
+
+### bid.recover_state —— VALIDATING+缺章异常态恢复（写面；#20/#243）
+`{ reason, project_version? }`
+
+经 `bid_mcp::dispatch_with(recover_validating_state)` 走真实工具面——
+三重域层约束（仅 VALIDATING / 仅缺章 / 理由非空白）+ 审计账（何时/为何/
+从哪到哪/缺哪些章）。**不是任意状态写入**：非死锁态按「恢复」会被
+E_STATE 响亮拒（UI 引导卡语义）。恢复后携带新 project_version。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "recover": { "from_status": "VALIDATING", "to_status": "DRAFTING",
+                 "recovered_sections": ["SEC-T03"], "audit_reason": "旧版校验误推进" } }
+```
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
