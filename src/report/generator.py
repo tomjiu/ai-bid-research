@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
-from src.platform import ensure_writable_path, write_text_lf
+from src.platform import ensure_writable_path, sanitize_filename, write_text_lf
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期导入，避免运行时强耦合
     from src.storage.database import BidDatabase
@@ -351,7 +351,9 @@ class ReportGenerator:
         Returns:
             保存的文件路径，形如 ``<prefix>_<YYYYMMDD_HHMMSS>.md``。
         """
-        safe_prefix = _UNSAFE_FILENAME_RE.sub("_", prefix).strip("_") or "report"
+        # R46：平台清洗面（非法字符/保留名/尾点）——\w 类正则不拦
+        # Windows 保留名与尾点空格，统一走 sanitize_filename
+        safe_prefix = sanitize_filename(prefix) or "report"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self.output_dir / f"{safe_prefix}_{timestamp}.md"
         ensure_writable_path(path)

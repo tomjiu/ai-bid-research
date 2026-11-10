@@ -226,3 +226,50 @@ def read_text_universal(path: Path | str, *, encoding: str = "utf-8") -> str:
     if "\r" in text:
         text = text.replace("\r", "\n")
     return text
+
+
+#: Windows 文件名非法字符（Linux 仅 / 与 \0，从严处理两平台通吃）
+_ILLEGAL_FS_CHARS = '<>:"/\\|?*'
+#: Windows 保留设备名（大小写不敏感；带扩展名也不能用）
+_WINDOWS_RESERVED = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+#: 单文件名分量长度上限（两平台文件系统通用安全值）
+_MAX_COMPONENT_LEN = 200
+
+
+def sanitize_filename(name: str, *, max_length: int = _MAX_COMPONENT_LEN) -> str:
+    """清洗为两平台合法文件名分量（#601 R46）。
+
+    处理顺序（每步结果供下一步，最终恒非空）：
+
+    1. 非法字符 ``< > : " / \\ | ? *`` → ``_``
+       （现有 ``\\w`` 类清洗已覆盖大部分，此处**显式**列出——
+       Linux 合法的 ``:`` 在 Windows 盘符语义下致命）；
+    2. 控制字符（``\\x00-\\x1f``）与空白（空格/制表——shell
+       引号友好的历史契约）→ ``_``；
+    3. 去尾部点与下划线（Windows 静默剥离尾点/尾空格导致
+       「看起来创建了实则换了名」的历史坑；空格已在第 2 步
+       折叠为 ``_``）；
+    4. Windows 保留设备名（``CON``/``NUL``/``COM1``…）：尾部加
+       ``_``（``CON`` → ``CON_``，语义保真且立即可用）；
+    5. 长度截断（保尾不保头——扩展名语义在尾部），空结果兜底
+       ``sanitized``。
+    """
+    out = name
+    for ch in _ILLEGAL_FS_CHARS:
+        out = out.replace(ch, "_")
+    # 原文层先剥尾点/尾空格（Windows 磁盘静默剥离规则）——
+    # 必须先于空白折叠，否则折叠出的 _ 挡住剥离
+    out = out.rstrip(". ")
+    out = "".join(
+        "_" if ord(c) < 0x20 or c.isspace() else c for c in out
+    )
+    stem = out.split(".")[0] if "." in out else out
+    if stem.upper() in _WINDOWS_RESERVED:
+        out = out + "_"
+    if len(out) > max_length:
+        out = out[-max_length:]
+    return out or "sanitized"

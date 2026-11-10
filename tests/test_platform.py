@@ -317,3 +317,58 @@ class TestLineEndingContract:
             p1.stem.encode(), b""
         ) == p2.read_bytes().replace(p2.stem.encode(), b"")
         assert b"\r" not in p1.read_bytes()
+
+
+class TestSanitizeFilename:
+    def test_illegal_chars_replaced(self):
+        from src.platform import sanitize_filename
+
+        # : / ? * " < > | 共 8 个非法字符各换一个 _
+        assert sanitize_filename('智慧:城市/报告?*"<>|') == "智慧_城市_报告______"
+
+    def test_windows_reserved_names(self):
+        from src.platform import sanitize_filename
+
+        assert sanitize_filename("CON") == "CON_"
+        assert sanitize_filename("con.md") == "con.md_"
+        assert sanitize_filename("nul") == "nul_"
+        # 非精确保留名（com1_备份）本身合法——不动
+        assert sanitize_filename("com1_备份") == "com1_备份"
+
+    def test_normal_names_untouched(self):
+        from src.platform import sanitize_filename
+
+        assert sanitize_filename("智慧城市_20260110") == "智慧城市_20260110"
+        assert sanitize_filename("report-1.md") == "report-1.md"
+
+    def test_trailing_dots_spaces_stripped(self):
+        from src.platform import sanitize_filename
+
+        assert sanitize_filename("报告 . ") == "报告"
+        assert sanitize_filename("draft...") == "draft"
+
+    def test_control_chars_replaced(self):
+        from src.platform import sanitize_filename
+
+        assert sanitize_filename("a\x00b\x1fc") == "a_b_c"
+
+    def test_length_cap_keeps_tail(self):
+        from src.platform import sanitize_filename
+
+        long = "x" * 300 + ".md"
+        out = sanitize_filename(long, max_length=50)
+        assert len(out) == 50
+        assert out.endswith(".md")
+
+    def test_all_bad_falls_back(self):
+        from src.platform import sanitize_filename
+
+        assert sanitize_filename("... ") == "sanitized"
+
+    def test_report_prefix_uses_platform_sanitizer(self, tmp_path):
+        """接线验证：报告文件名经平台清洗面（保留名不再原样落盘）。"""
+        from src.report.generator import ReportGenerator
+
+        gen = ReportGenerator(output_dir=tmp_path)
+        path = gen._save_report("# c\n正文", "CON")
+        assert path.stem.startswith("CON_")
