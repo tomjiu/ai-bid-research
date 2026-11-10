@@ -2950,7 +2950,12 @@ mod tests {
     }
 
     // ── #603 批 C：补遗豁免面 ──
+    // （假绿修复：replay 拼接（e8acc3e）丢了 #[test] 属性——两函数在 main 上
+    //  从未运行（dead_code 警告是唯一线索）。原提交 20dd6a1 有属性与文档注释，
+    //  此处按原样恢复——测试门重新生效。）
 
+    /// 无 db.json → 三命令干净 not_found（读/写同款——不落副作用）。
+#[test]
     fn addendum_faces_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb-603c");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
@@ -2975,6 +2980,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// 补遗豁免全流程：无补遗件读面（total=0）→ 全局确认（human 签域）→
+    /// gates 过门对账 → #379 拆门（全局确认不写逐件台账）→ 拒绝面（幽灵件 /
+    /// 空白理由早拒）。
+    #[test]
     fn no_addendum_confirm_full_flow() {
         let (dir, _ws) = tmp_ws("flow-603c");
         seed_matrix_ready_project(&dir);
