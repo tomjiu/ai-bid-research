@@ -1552,6 +1552,22 @@ pub fn import_files(
                 )));
             }
         }
+        // R12（#47 平台区分⑤）：记录的 upload_ref 在 Windows 上也要能
+        // 解析——工作区根 + rel 的估算长度超 259 拒（估算口径：绝对形态
+        // 取本体、相对形态取 root + 1 + rel；早拒零副作用与基名守卫同款）
+        {
+            let rel_len = upload_ref.chars().count();
+            let est = if upload_ref.starts_with('\\') || std::path::Path::new(upload_ref).is_absolute() {
+                rel_len
+            } else {
+                ws.root_canonical().to_string_lossy().chars().count() + 1 + rel_len
+            };
+            if est > 259 {
+                return Err(IpcError::bad_args(format!(
+                    "files[{i}] upload_ref 路径长 {est} 字符超 Windows MAX_PATH（259）——缩短目录层级或文件名（项目库需跨平台迁移）"
+                )));
+            }
+        }
         let mut spec = json!({ "upload_ref": upload_ref, "filename": filename });
         if let Some(k) = f.get("kind").and_then(Value::as_str) {
             spec["kind"] = json!(k);
@@ -1691,6 +1707,20 @@ pub fn ingest_drop(
                 "detail": why
             }));
             continue;
+        }
+        // R12（#47 平台区分⑤）：MAX_PATH 预检——落位路径（root + 分隔符 +
+        // 基名）超 259 字符在未开 LongPathsEnabled 的 Windows 上创建即
+        // 失败；Linux 能落但项目库拷 Win 即失效（同 R10 可迁移性口径，
+        // 双平台同拒）
+        {
+            let full_len = root.to_string_lossy().chars().count() + 1 + name.chars().count();
+            if full_len > 259 {
+                skipped.push(json!({
+                    "path": raw, "reason": "path_too_long",
+                    "detail": format!("落位路径 {full_len} 字符超 Windows MAX_PATH（259）——缩短文件名或工作区层级")
+                }));
+                continue;
+            }
         }
         // 同名幂等/冲突后缀
         match resolve_ingest_dst(&root, &name, src) {
@@ -2989,6 +3019,57 @@ mod tests {
         assert_eq!(out["skipped"][0]["reason"], json!("already_present"), "{out}");
 
         let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R12（#47 平台区分⑤）：MAX_PATH 预检——ingest_drop 落位路径超 259
+    /// 字符 → path_too_long 分账（Linux 能落但项目库拷 Windows 创建即
+    /// 失败）；import_files 记录的 rel 估算超限 → 请求级 bad_args。
+    /// 深嵌套工作区用真目录驱动（不是 mock 长度）。
+    #[test]
+    fn ingest_drop_maxpath_guard() {
+        let _g = workspace_files_guard();
+        // 深工作区：40 层 × 6 字符 ≈ 240 + 根 ~40 = ~280 字符根——必然超限
+        let deep = std::env::temp_dir().join(format!("mang-maxpath-{}", std::process::id()));
+        let mut cur = deep.clone();
+        for i in 0..40 {
+            cur = cur.join(format!("d{i:02}xx"));
+        }
+        std::fs::create_dir_all(&cur).unwrap();
+        let ws = Workspace::new(&cur).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let src_dir = std::env::temp_dir().join(format!("mang-maxpath-src-{}", std::process::id()));
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        let src = src_dir.join("招标文件.docx");
+        std::fs::write(&src, b"PK\x03\x04maxpath-payload").unwrap();
+
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [src.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "超长路径分账不按错误回：{r}");
+        assert_eq!(
+            r["result"]["skipped"][0]["reason"], json!("path_too_long"),
+            "落位路径超 MAX_PATH → path_too_long：{}", r["result"]
+        );
+
+        // import_files：深根 + rel 估算超限 → bad_args（建项先行——
+        // db.json 基名短，创建本身在限内）
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "深目录项目", "bid_deadline": "2099-12-31", "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "建项不受影响：{r}");
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "a/招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(false), "超限 rel 应拒：{r}");
+        assert_eq!(r["code"], json!("bad_args"));
+        assert!(
+            r["error"]["message"].as_str().unwrap_or("").contains("MAX_PATH"),
+            "文案带原因：{r}"
+        );
+
+        let _ = std::fs::remove_dir_all(deep);
         let _ = std::fs::remove_dir_all(src_dir);
     }
 

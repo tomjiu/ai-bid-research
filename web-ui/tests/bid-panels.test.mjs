@@ -1023,5 +1023,37 @@ check(
   "CI 占位口径没进契约"
 );
 
+// ---------- R12（#47 平台区分⑤）：MAX_PATH 长路径预检 ----------
+check(
+  "R12 壳侧：guard_windows_max_path 边界（>259 拒，CJK 按字符计）",
+  /pub fn guard_windows_max_path\(full: &str\) -> Result<\(\), String> \{[\s\S]{0,400}chars\(\)\.count\(\) > 259/.test(pathsRs) && /fn guard_windows_max_path_boundary/.test(pathsRs),
+  "MAX_PATH 守卫被删或边界漂移"
+);
+check(
+  "R12 壳侧：ingest_drop 落位预检（path_too_long 批次分账）",
+  /reason": "path_too_long"/.test(bidRs),
+  "超长落位路径被当错误整批回（或直接落位）"
+);
+check(
+  "R12 壳侧：import_files rel 估算预检（请求级 bad_args——绝对取本体/相对取根+1+rel）",
+  /upload_ref\.chars\(\)\.count\(\);[\s\S]{0,500}est > 259/.test(bidRs),
+  "upload_ref 长度预检缺角（记录的 rel 在 Windows 解析失败）"
+);
+check(
+  "R12 测试：深目录真驱动集成（40 层嵌套根 + import bad_args）",
+  /fn ingest_drop_maxpath_guard/.test(bidRs) && /mang-maxpath/.test(bidRs),
+  "MAX_PATH 回归门被删"
+);
+check(
+  "R12 selftest：MAX_PATH 预检项在场",
+  selftestRs.includes("bid.ingest_drop(MAX_PATH 预检)"),
+  "集成自检项缺失"
+);
+check(
+  "R12 契约：MAX_PATH 口径登记（双平台同拒 + 分账/bad_args 分野）",
+  contract.includes("MAX_PATH 预检（R12") && contract.includes("LongPathsEnabled"),
+  "MAX_PATH 口径没进契约"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);
