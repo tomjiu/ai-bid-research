@@ -660,6 +660,84 @@ E_STATE 响亮拒（UI 引导卡语义）。恢复后携带新 project_version�
                  "recovered_sections": ["SEC-T03"], "audit_reason": "旧版校验误推进" } }
 ```
 
+### bid.addenda —— 补遗件台账（只读；#603 批 C——治理面）
+DomainStore + readiness 直读（`bid.gates` 同款纪律——MCP 工具面无此整面
+视图，`addendum_statuses` / `addendum_waivers` 同源）：补遗就绪度
+（`readiness::{total, ready, not_ready[]}`——not_ready 元素
+`{file_id, name, readiness, waived, reason}`，**已确认件保留在场**
+（waived=true——审计面不因放行而消失））+ 逐件确认台账（`waivers[]`：
+file_id/reason/at/principal）。读面无状态窗：total=0（未发现补遗）是
+NotProvided 阻塞的素材，不是故障。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "DRAFTING" },
+    "readiness": { "total": 2, "ready": 1,
+                   "not_ready": [ { "file_id": "TF-0003", "name": "补遗-01（扫描件）",
+                                    "readiness": "OCR_PENDING", "waived": false,
+                                    "reason": "OCR 未完成…" } ] },
+    "waivers": [ { "file_id": "TF-0004", "reason": "…", "at": 1790000000,
+                   "principal": "human:operator-li" } ] }
+```
+拒绝面：无 db.json → `not_found`。
+
+### bid.addendum_waiver —— 补遗逐件确认（写面；#603 批 C）
+`{ file_id, reason, actor_id?, project_version? }`
+
+#184 补遗分级阻塞的人工出口（UI 接线）：某补遗/输入件不处 READY
+（FAILED/OCR_PENDING）时起草被拒——人工逐件免责（file_id 级绑定）后放行，
+起草标 RESTRICTED（受限起草，不静默当完整输入）。流程（#182 宿主签发面，
+与 bid.gate_pass 同款）：壳签 receipt（签域 `addendum_waiver:{file_id}`——
+TF-0003 的 receipt 免不了 TF-0004）→ 经
+`dispatch_with(record_addendum_waiver)` 走真实工具面（状态窗 FILES_IMPORTED+ /
+幽灵件拒 / 空白理由拒全在域层裁决）→ 工具输出原样放 `addendum_waiver` 键
+（recorded 回执 / actor / addendum_waivers / addendum_readiness /
+agent_waivers / human_review_complete）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "DRAFTING" },
+    "addendum_waiver": { "recorded": { "file_id": "TF-0003", "reason": "…",
+                             "at": 1790000000, "principal": "human:operator-li",
+                             "actor": { "actor_id": "operator-li", "actor_type": "human",
+                                        "authentication_method": "hmac_receipt_v2" } },
+                    "addendum_waivers": [ …逐件台账… ],
+                    "addendum_readiness": { "total": 2, "ready": 1, "not_ready": [ … ] },
+                    "agent_waivers": [ … ], "human_review_complete": true,
+                    "status": "DRAFTING", "project_version": 6 } }
+```
+拒绝面：无 db.json → `not_found`；幽灵 file_id → **`not_found`**（对不存在
+的件做确认 = 凭空免责）；空白理由 → **`bad_args`**（壳侧早拒 + 域层兜底）。
+
+### bid.no_addendum_confirm —— 「本项目无补遗」全局确认（写面；#603 批 C）
+`{ reason, actor_id?, project_version? }`
+
+#379 拆门的独立写面：NotProvided 阻塞（未发现补遗/澄清件）的唯一人工
+出口。与逐件免责是**两种语义**——壳层结构性隔离为两条命令（互斥校验在
+工具面：confirm_no_addendum=true 时携带 file_id 响亮拒）。流程（#182 宿主
+签发面）：壳签 receipt（独立签域 `no_addendum_confirmed`——A 门 receipt
+免不了 B 门）→ 经 `dispatch_with(record_addendum_waiver,
+confirm_no_addendum=true)` 走真实工具面（域前置裁决：项目已有补遗件时
+响亮拒——「确认无补遗」与事实矛盾，正确出口是逐件确认或修复重传）→
+工具输出原样放 `no_addendum_confirm` 键（confirmed_no_addendum 回执（含
+#277 过门方式 method 与 human_confirmed）/ addendum_waivers /
+addendum_readiness / agent_waivers / human_review_complete）。确认即过
+no_addendum_confirmed 门 + 审计留痕（REV 记录）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "DRAFTING" },
+    "no_addendum_confirm": {
+                    "confirmed_no_addendum": { "review_id": "REV-0004",
+                             "gate": "no_addendum_confirmed", "reason": "…",
+                             "at": 1790000000,
+                             "actor": { "actor_id": "operator-zhao", "actor_type": "human",
+                                        "authentication_method": "hmac_receipt_v2" },
+                             "method": "human_receipt", "human_confirmed": true },
+                    "addendum_waivers": [], "addendum_readiness": { "total": 0, "ready": 0, "not_ready": [] },
+                    "agent_waivers": [], "human_review_complete": true,
+                    "status": "DRAFTING", "project_version": 6 } }
+```
+拒绝面：无 db.json → `not_found`；项目已有补遗件 / 空白理由 →
+**`bad_args`**（域层 E_UNPROCESSABLE 原文——给出正确出口指引）。
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc
