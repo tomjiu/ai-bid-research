@@ -47,6 +47,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+from src.colors import ColorPrinter
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
@@ -59,6 +60,17 @@ from src.report.generator import ReportGenerator
 from src.storage.database import _BID_COLUMNS, BidDatabase
 
 logger = logging.getLogger("ai-bid-research")
+
+#: stderr 颜色助手（main() 入口初始化；import 期无色直印）
+_STDERR_PRINTER: Optional[ColorPrinter] = None
+
+
+def _err(message: str) -> None:
+    """错误输出（R65：支持色时红显）。"""
+    if _STDERR_PRINTER is not None:
+        _STDERR_PRINTER.err(message)
+    else:
+        print(message, file=sys.stderr)
 
 #: 默认数据库路径（存在时 report 子命令自动接入）
 DEFAULT_DB_PATH = Path("data/bids.db")
@@ -490,7 +502,7 @@ def run_collect(args: argparse.Namespace) -> int:
             recursive=getattr(args, "recursive", False),
         )
     except (SourceError, ValueError) as exc:
-        print(f"错误：{exc}", file=sys.stderr)
+        _err(f"错误：{exc}")
         return 2
 
     deduped = dedupe_records(loaded.records)
@@ -970,7 +982,7 @@ def run_db(args: argparse.Namespace) -> int:
     if args.diff is not None:
         return _run_snapshot_diff(args)
     if not creating and not db_path.exists():
-        print(f"错误：数据库不存在: {db_path}", file=sys.stderr)
+        _err(f"错误：数据库不存在: {db_path}")
         return 2
 
     with BidDatabase(db_path) as db:
@@ -1095,6 +1107,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # 报告符号（█▏）不再崩溃，坏字符降级为 ?
     for action in configure_console_safe():
         logging.getLogger(__name__).debug("console hardened: %s", action)
+    # R65：stderr 颜色助手（NO_COLOR/非 tty/Win VT 判定收敛）
+    global _STDERR_PRINTER
+    _STDERR_PRINTER = ColorPrinter(sys.stderr)
 
     parser = build_parser()
     args = parser.parse_args(argv)
