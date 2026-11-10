@@ -452,7 +452,19 @@ pub fn matrix(
         );
     }
 
-    Ok(json!({
+        // #603 批 B：overrides 直读面（DomainStore——bid.outline / bid.gates
+    // 直读先例）。工具面 get_compliance_matrix 行内无覆写标记，本面补
+    // 「哪些行被人工豁免过、谁豁免的、何时、为何」的审计素材（UI 徽章
+    // + 追溯 tooltip）；行状态本身仍是工具面派生真源（override > 证据+
+    // 章节），两处不重复判定。
+    let overrides: serde_json::Map<String, Value> = svc
+        .store()
+        .matrix_overrides()
+        .iter()
+        .map(|(k, o)| (k.clone(), matrix_override_json(o)))
+        .collect();
+
+Ok(json!({
         "present": true,
         "workspace": ws.root_display(),
         "project": {
@@ -470,6 +482,7 @@ pub fn matrix(
             "evidence_missing": evidence_missing,
         },
         "star_summary": star_summary,
+        "overrides": Value::Object(overrides),
         "warnings": warnings,
         "project_version": project_version,
         "fetched_pages": pages,
@@ -914,6 +927,232 @@ pub fn recover_state(
         "recover": tool_out,
     }))
 }
+
+// ───────────────────────────────── #603 批 C：补遗豁免面
+
+fn matrix_override_json(o: &bid_domain::matrix::MatrixOverride) -> Value {
+    json!({
+        "status": o.status.as_str(),
+        "deviation": o.deviation,
+        "principal": o.principal,
+        "actor": o.trusted.as_ref().map(|p| json!({
+            "actor_id": p.actor_id,
+            "actor_type": p.actor_type.as_str(),
+            "authentication_method": p.authentication_method,
+        })),
+        "at": o.at,
+    })
+}
+
+/// `bid.addenda` —— 补遗件台账（只读；#603 批 C）。
+///
+/// DomainStore + readiness 直读（bid.gates 同款纪律——MCP 工具面无此
+/// 整面视图）：补遗就绪度（`readiness::{total, ready, not_ready[]}`——
+/// not_ready 含**已确认**件（waived=true——审计面不因放行而消失，
+/// Agent/用户据此知道哪些件是带确认放行的））+ 逐件确认台账
+/// （`waivers`：file_id/reason/at/principal）。读面**无状态窗**：早期态
+/// 「无补遗件」（total=0）本身是有效信息——它是「未发现补遗」
+/// NotProvided 阻塞的素材（全局确认门的输入），不是故障。
+pub fn addenda(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let store = svc.store();
+    let project = store.project().map_err(map_domain_err)?;
+    let statuses = bid_tools::readiness::addendum_statuses(store);
+    let ready = statuses
+        .iter()
+        .filter(|s| s.readiness == bid_tools::readiness::AddendumReadiness::Ready)
+        .count();
+    let not_ready: Vec<Value> = statuses
+        .iter()
+        .filter(|s| s.readiness != bid_tools::readiness::AddendumReadiness::Ready)
+        .map(|s| {
+            json!({
+                "file_id": s.file_id,
+                "name": s.name,
+                "readiness": s.readiness.as_str(),
+                "waived": s.waived,
+                "reason": s.reason,
+            })
+        })
+        .collect();
+    let waivers: Vec<Value> = store
+        .addendum_waivers()
+        .iter()
+        .map(|w| {
+            json!({
+                "file_id": w.file_id,
+                "reason": w.reason,
+                "at": w.at,
+                "principal": w.principal,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "status": project.status.as_str(),
+        },
+        "readiness": {
+            "total": statuses.len(),
+            "ready": ready,
+            "not_ready": not_ready,
+        },
+        "waivers": waivers,
+    }))
+}
+
+/// `bid.addendum_waiver` —— 补遗逐件确认（写面；#603 批 C）。
+///
+/// #184 补遗分级阻塞的人工出口（UI 接线）：某补遗/输入件不处 READY
+/// （FAILED/OCR_PENDING）时起草被拒——人工逐件免责（file_id 级绑定）后
+/// 放行，起草标 RESTRICTED（受限起草，不静默当完整输入）。
+/// 流程（#182 宿主签发面，与 [`gate_pass`] / [`matrix_override`] 同款）：
+/// 壳内真人经 UI 确认（件/理由）→ 壳签 receipt（签域 `addendum_waiver:
+/// {file_id}`——TF-0003 的 receipt 免不了 TF-0004）→ 经
+/// `dispatch_with(record_addendum_waiver)` 走真实工具面（状态窗
+/// FILES_IMPORTED+ / 幽灵件拒 / 空白理由拒全在域层裁决）→ 工具输出原样
+/// 放 `addendum_waiver` 键（recorded 回执 / actor / addendum_readiness /
+/// agent_waivers / human_review_complete）。
+///
+/// 参数：`file_id`、`reason`（必填——不可审计的确认不成确认，壳侧早拒
+/// 空白）、`actor_id`（缺省 `shell-operator`）、`project_version`（CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；幽灵 file_id → `not_found`
+/// （对不存在的件做确认 = 凭空免责）；空白理由 → `bad_args`。
+pub fn addendum_waiver(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let file_id = a.req_str("file_id")?.to_string();
+    let reason = a.req_str("reason")?.to_string();
+    // 壳侧早拒（域层同款口径——不可审计的确认不成确认）
+    if reason.trim().is_empty() {
+        return Err(IpcError::bad_args(
+            "reason 必填——确认理由不得为空白（不可审计的确认不成确认）",
+        ));
+    }
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发面：签域绑本件（TF-0003 的 receipt 免不了 TF-0004）。
+    let scope = bid_mcp::addendum_waiver_scope(&file_id);
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "file_id": file_id,
+        "reason": reason,
+        "receipt": receipt,
+    });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "record_addendum_waiver".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "addendum_waiver": tool_out,
+    }))
+}
+
+/// `bid.no_addendum_confirm` —— 「本项目无补遗」全局确认（写面；#603 批 C）。
+///
+/// #379 拆门的独立写面：NotProvided 阻塞（未发现补遗/澄清件）的唯一
+/// 人工出口。与逐件免责是**两种语义**（坏件带病放行 vs 全项目无补遗
+/// 声明）——壳层结构性隔离为两条命令（互斥校验在工具面：混调用响亮拒）。
+/// 流程（#182 宿主签发面）：壳签 receipt（签域 `no_addendum_confirmed`）
+/// → 经 `dispatch_with(record_addendum_waiver, confirm_no_addendum=true)`
+/// 走真实工具面（域前置裁决：项目已有补遗件时响亮拒——「确认无补遗」
+/// 与事实矛盾，正确出口是逐件确认或修复重传）→ 工具输出原样放
+/// `no_addendum_confirm` 键（confirmed_no_addendum 回执（含 #277 过门
+/// 方式与 human_confirmed）/ addendum_waivers / addendum_readiness /
+/// agent_waivers / human_review_complete）。
+///
+/// 参数：`reason`（必填）、`actor_id`（缺省 `shell-operator`）、
+/// `project_version`（CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；项目已有补遗件 / 空白理由 →
+/// `bad_args`（域层 E_UNPROCESSABLE 原文——给出正确出口指引）。
+pub fn no_addendum_confirm(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let reason = a.req_str("reason")?.to_string();
+    // 壳侧早拒（域层同款口径——全局确认与逐件 waiver 同构）
+    if reason.trim().is_empty() {
+        return Err(IpcError::bad_args(
+            "reason 必填——确认理由不得为空白（不可审计的确认不成确认）",
+        ));
+    }
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发面：全局确认独立签域（与逐件签域分离——A 门 receipt
+    // 免不了 B 门）。
+    let scope = bid_tools::service::no_addendum_confirmed_scope();
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "reason": reason,
+        "confirm_no_addendum": true,
+        "receipt": receipt,
+    });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "record_addendum_waiver".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "no_addendum_confirm": tool_out,
+    }))
+}
+
 
 /// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
 /// 借用面：先取后放，`dispatch_with` 要 `&mut BidService`。
@@ -2324,4 +2563,109 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    // ── #603 批 C：补遗豁免面 ──
+
+    fn addendum_faces_clean_not_found_without_db() {
+        let (dir, _ws) = tmp_ws("nodb-603c");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.addenda");
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        let frame = call_args(
+            &ctx,
+            "bid.addendum_waiver",
+            json!({ "file_id": "TF-0001", "reason": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        let frame = call_args(
+            &ctx,
+            "bid.no_addendum_confirm",
+            json!({ "reason": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(!dir.join(".mang").exists(), "补遗面不得在工作区留副作用");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn no_addendum_confirm_full_flow() {
+        let (dir, _ws) = tmp_ws("flow-603c");
+        seed_matrix_ready_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // ① 读面：无补遗件（total=0——早期态有效信息，不是故障）
+        let frame = call(&ctx, "bid.addenda");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let ad = ok_of(&frame).clone();
+        assert_eq!(ad["readiness"]["total"], json!(0), "无补遗件：{ad:#?}");
+        assert_eq!(ad["readiness"]["not_ready"].as_array().map(Vec::len), Some(0));
+        assert_eq!(ad["waivers"].as_array().map(Vec::len), Some(0));
+
+        // ② 写面：全局确认（宿主签发 receipt——human 路径）
+        let frame = call_args(
+            &ctx,
+            "bid.no_addendum_confirm",
+            json!({
+                "reason": "已核对招标文件全册与答疑纪要，本项目无补遗/澄清件",
+                "actor_id": "operator-zhao"
+            }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let nc = ok_of(&frame)["no_addendum_confirm"].clone();
+        assert_eq!(
+            nc["confirmed_no_addendum"]["gate"],
+            "no_addendum_confirmed",
+            "全局确认回执：{nc:#?}"
+        );
+        assert_eq!(nc["confirmed_no_addendum"]["actor"]["actor_type"], "human");
+        assert_eq!(nc["confirmed_no_addendum"]["actor"]["actor_id"], "operator-zhao");
+        assert_eq!(nc["confirmed_no_addendum"]["human_confirmed"], json!(true), "#182 人类签域验签路径：{nc:#?}");
+
+        // ③ gates 读面对账：no_addendum_confirmed 门已过（最新一条 human）
+        let frame = call(&ctx, "bid.gates");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g = ok_of(&frame).clone();
+        let gates = g["gates"].as_array().unwrap().clone();
+        assert_eq!(gates[4]["gate"], "no_addendum_confirmed");
+        assert_eq!(gates[4]["approved"], json!(true), "过门审计账同源：{gates:#?}");
+        assert_eq!(gates[4]["latest_pass"]["actor"], "operator-zhao");
+        assert_eq!(gates[4]["latest_pass"]["method"], "human_receipt");
+        assert_eq!(gates[3]["approved"], json!(false), "逐件门不受全局确认波及（#379 拆门）");
+
+        // ④ #379 拆门对账：全局确认不写逐件台账（waivers 仍空）
+        let frame = call(&ctx, "bid.addenda");
+        let ad = ok_of(&frame).clone();
+        assert_eq!(
+            ad["waivers"].as_array().map(Vec::len),
+            Some(0),
+            "全局确认 ≠ 逐件免责——台账分账：{ad:#?}"
+        );
+
+        // ⑤ 幽灵件 → 域层 ENotFound → not_found（凭空免责拒）
+        let frame = call_args(
+            &ctx,
+            "bid.addendum_waiver",
+            json!({ "file_id": "TF-9999", "reason": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("不存在"),
+            "拒绝文案要指向凭空免责：{frame}"
+        );
+
+        // ⑥ 空白理由 → 壳侧早拒（不进工具面）
+        for (cmd, body) in [
+            ("bid.addendum_waiver", json!({ "file_id": "TF-0001", "reason": "  " })),
+            ("bid.no_addendum_confirm", json!({ "reason": "" })),
+        ] {
+            let frame = call_args(&ctx, cmd, body);
+            assert_eq!(frame["ok"], json!(false), "{cmd} 空白理由应早拒：{frame}");
+            assert_eq!(err_code_of(&frame), "bad_args");
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
 }

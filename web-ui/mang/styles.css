@@ -4454,3 +4454,63 @@ html[data-chrome="native"][data-maximized="1"] #app {
     grid-column: 1;
   }
 }
+
+/* ============ #603 批 C：补遗豁免面（逐件列表 + 全局确认表单） ============ */
+.bid-gt-aw {
+  margin: 6px 0 2px 17px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border, #d1d5db) 60%, transparent);
+  background: color-mix(in srgb, var(--fg-muted, #888) 5%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bid-gt-aw-row {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--border, #d1d5db) 45%, transparent);
+  background: var(--bg, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bid-gt-aw-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bid-gt-aw-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+.bid-gt-aw-meta {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.bid-gt-aw-waived {
+  color: var(--ok);
+  font-weight: 600;
+}
+.bid-gt-aw-reason {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+.bid-gt-aw-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.bid-gt-aw-actions .bid-gt-input {
+  flex: 1;
+  min-width: 0;
+}
+.bid-gt-aw-audit {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--ok, #16a34a) 40%, transparent);
+}
