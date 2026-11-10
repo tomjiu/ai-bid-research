@@ -424,6 +424,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="pending 面统计（按状态/原因分组）",
     )
 
+    # data-quality 子命令（R82：轻量审计——不跑全分析面，秒级）
+    dq = sub.add_parser(
+        "data-quality",
+        help="数据质量审计（字段填充率 + 语义健康分，不跑全分析）",
+    )
+    dq.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    dq.add_argument(
+        "--keyword",
+        default=None,
+        help="限定审计范围的关键词命中记录（缺省全量）",
+    )
+    dq.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="限定审计范围的时间窗口天数（缺省不限）",
+    )
+    dq.add_argument(
+        "--json",
+        action="store_true",
+        help="机器可读 JSON 输出（供 CI 门槛/外部审计消费）",
+    )
+
     # templates 子命令
     templates_cmd = sub.add_parser(
         "templates", help="列出可用的提示词模板"
@@ -1198,6 +1226,76 @@ def run_templates(args: Optional[argparse.Namespace] = None) -> int:
     return 0
 
 
+def run_data_quality(args: argparse.Namespace) -> int:
+    """执行 data-quality 子命令：填充率 + 语义健康审计。
+
+    与 ``analyze`` 的分工：analyze 跑全部分析面（含质量两节），
+    data-quality 只做质量面——秒级返回，适合入库后例行巡检、
+    CI 门槛（``--json`` + 健康分阈值）。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常——发现问题也 0，审计的职责是揭示而非拦截；
+        2 = 库不存在）。
+    """
+    from src.analyze import load_dataset
+    from src.analyze.quality import (
+        field_quality,
+        render_semantic_health_markdown,
+        semantic_health,
+    )
+
+    if not args.db.exists():
+        _err(f"错误：数据库不存在: {args.db}")
+        return EXIT_DATA
+
+    dataset = load_dataset(args.db, keyword=args.keyword, days=args.days)
+    scope = f"「{args.keyword}」" if args.keyword else "全量"
+    if args.days:
+        scope += f"（近 {args.days} 天）"
+
+    semantic = semantic_health(dataset)
+    filled = field_quality(dataset)
+
+    if args.json:
+        import json as json_mod
+
+        print(
+            json_mod.dumps(
+                {
+                    "scope": scope,
+                    "records": len(dataset),
+                    "field_quality": filled,
+                    "semantic_health": semantic,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    print(f"数据质量审计：{scope} {len(dataset)} 条记录")
+    print("")
+    # 语义面（Markdown 表直出——与报告第十七节同源单点）
+    print(render_semantic_health_markdown(semantic).rstrip("\n"))
+    print("")
+    # 填充率摘要（全表见 analyze 报告七节，这里只给行动面 Top5）
+    if filled["most_missing"]:
+        print("最缺字段（填充率——下一步补采行动面）：")
+        for name in filled["most_missing"]:
+            rate = filled["fields"][name]["rate"]
+            print(f"  {name}: {rate * 100:.1f}%")
+    else:
+        print("字段填充率：无缺口（12 字段全满）。")
+    print(
+        f"整体字段填充率："
+        f"{(filled['overall'] or 0) * 100:.1f}%"
+    )
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """命令行入口。
 
@@ -1264,6 +1362,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return run_pipeline(args)
     if args.command == "db":
         return run_db(args)
+    if args.command == "data-quality":
+        return run_data_quality(args)
     if args.command == "templates":
         return run_templates(args)
     parser.print_help()

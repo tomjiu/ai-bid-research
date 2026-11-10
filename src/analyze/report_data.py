@@ -20,7 +20,7 @@ from src.analyze.rolling import rolling_comparison
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
 from src.analyze.duplicates import find_duplicate_clusters, render_duplicates_markdown
-from src.analyze.quality import field_quality
+from src.analyze.quality import field_quality, semantic_health, render_semantic_health_markdown
 from src.analyze.keywords import (
     common_bigrams,
     keyword_frequency,
@@ -76,6 +76,7 @@ def build_analysis_payload(
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
         "duplicates": find_duplicate_clusters(dataset),
+        "semantic_health": semantic_health(dataset),
     }
 
 
@@ -560,6 +561,16 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
     if count >= 2 and duplicates.get("total"):
         sections += [
             render_duplicates_markdown(duplicates, ordinal="十六").rstrip("\n"),
+            "",
+        ]
+
+    # 第十七节：语义质量（clean 与否统一走 render——单点文案防漂移）
+    semantic = payload.get("semantic_health") or {}
+    if count and semantic.get("records"):
+        sections += [
+            render_semantic_health_markdown(
+                semantic, ordinal="十七"
+            ).rstrip("\n"),
             "",
         ]
 
