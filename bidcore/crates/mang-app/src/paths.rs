@@ -309,4 +309,26 @@ mod tests {
         assert!(p.ends_with("file.md"));
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    /// R2（#47 平台区分①）：盘符形态（`C:/…`）的平台归类——两侧都断言
+    /// 「本平台的正确语义」，不是把一侧放宽成另一侧的期望：
+    ///   · Windows：`C:/x` 是绝对路径 → 越界 `outside_workspace`
+    ///   · Unix：`C:` 是普通目录名 → 围栏内相对解析（落在 ws/C:/x）
+    /// 与 selftest「盘符形态平台语义」项同口径（单测面 + 集成面）。
+    #[test]
+    fn drive_letter_form_platform_semantics() {
+        let (dir, ws) = tmpws("drive-form");
+        if cfg!(windows) {
+            let e = ws.resolve("C:/Windows/win.ini", true).unwrap_err();
+            assert_eq!(e.code, "outside_workspace");
+        } else {
+            let p = ws.resolve("C:/Windows/win.ini", true).unwrap();
+            assert!(
+                p.starts_with(dir.join("C:")),
+                "Unix 上 C: 应按普通目录名围栏内解析，实际：{}",
+                display(&p)
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
