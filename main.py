@@ -326,6 +326,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--stats", action="store_true", help="输出数据库统计概览"
     )
     db.add_argument(
+        "--status",
+        action="store_true",
+        help="输出库结构状态（schema 版本 + 各表行数 + PRAGMA）",
+    )
+    db.add_argument(
         "--query",
         help="按关键词查询项目记录（可选，配合 --days）",
     )
@@ -897,6 +902,15 @@ def run_db(args: argparse.Namespace) -> int:
         return 2
 
     with BidDatabase(db_path) as db:
+        if args.status:
+            info = db.schema_info()
+            print(f"schema 版本：v{info['user_version']}")
+            print("表行数：")
+            for table, count in info["tables"].items():
+                print(f"  {table}: {count}")
+            print(f"PRAGMA 生效：{db.pragmas}")
+            return 0
+
         if args.export:
             return _export_bids(db, args)
 

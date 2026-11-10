@@ -68,6 +68,14 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started ON pipeline_runs(started_at DESC);
 """
 
+#: 目标版本 → 迁移脚本（R56 迁移框架）。
+#: v2 = 当前结构（bids/pending_announcements/pipeline_runs 全量建表
+#: 由 _DB_SCHEMA IF NOT EXISTS 幂等覆盖，故 v2 迁移为空跑——
+#: 只钉 user_version 标记位）。未来 schema 变更在此追加。
+_MIGRATIONS: Dict[int, str] = {
+    2: "-- v2：基线标记（结构由 _DB_SCHEMA 幂等保证）",
+}
+
 # 允许写入 bids 表的业务字段（requirements 以 JSON 文本存储）
 _BID_COLUMNS = (
     "bid_id",
@@ -114,6 +122,45 @@ class BidDatabase:
             self.pragmas = {"journal_mode": "memory", "synchronous": "n/a"}
         self._conn.executescript(_DB_SCHEMA)
         self._conn.commit()
+        self._apply_migrations()
+
+    # ------------------------------------------------------------------
+    # Schema 版本与迁移（R56）
+    # ------------------------------------------------------------------
+
+    def _apply_migrations(self) -> None:
+        """按序应用迁移至最新版本（PRAGMA user_version 记录当前位）。
+
+        迁移表 :data:`_MIGRATIONS` 以目标版本号 → SQL 脚本映射；
+        未来加列/加表时追加条目，旧库自动逐级升级（研究库小，
+        全程同步完成）。
+        """
+        current = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        for version in sorted(_MIGRATIONS):
+            if version > current:
+                self._conn.executescript(_MIGRATIONS[version])
+                self._conn.execute(f"PRAGMA user_version = {version}")
+                self._conn.commit()
+
+    def schema_info(self) -> dict:
+        """库结构状态面（db status 消费）。
+
+        Returns:
+            ``{"user_version": n, "tables": {表名: 行数}}``。
+        """
+        version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        tables: Dict[str, int] = {}
+        rows = self._conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+            " AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).fetchall()
+        for row in rows:
+            name = row[0]
+            count = self._conn.execute(
+                f"SELECT COUNT(*) FROM {name}"  # noqa: S608——表名来自 sqlite_master 白名单
+            ).fetchone()[0]
+            tables[name] = count
+        return {"user_version": version, "tables": tables}
 
     # ------------------------------------------------------------------
     # 写入

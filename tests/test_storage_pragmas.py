@@ -84,3 +84,83 @@ class TestBidDatabaseWiring:
             writer._conn.execute("ROLLBACK")
         finally:
             writer.close()
+
+
+class TestSchemaVersioning:
+    """R56：PRAGMA user_version 迁移框架 + 状态面。"""
+
+    def test_fresh_db_gets_latest_version(self, tmp_path):
+        db = BidDatabase(tmp_path / "v.db")
+        try:
+            info = db.schema_info()
+            assert info["user_version"] == 2
+            assert set(info["tables"]) >= {
+                "bids", "pending_announcements", "pipeline_runs",
+            }
+            assert all(count == 0 for count in info["tables"].values())
+        finally:
+            db.close()
+
+    def test_migration_runs_once_idempotent(self, tmp_path):
+        db = BidDatabase(tmp_path / "i.db")
+        try:
+            assert db.schema_info()["user_version"] == 2
+            # 重复初始化（旧实例关闭重开）不重复迁移、版本不漂
+            db.close()
+            db2 = BidDatabase(tmp_path / "i.db")
+            assert db2.schema_info()["user_version"] == 2
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+            try:
+                db2.close()
+            except Exception:
+                pass
+
+    def test_legacy_db_upgraded(self, tmp_path):
+        """伪造 user_version=0 的旧库（bids 表结构与现版一致，
+        缺 pending/pipeline_runs 两表）→ 打开后自动补齐到 v2。"""
+        import sqlite3
+
+        legacy = tmp_path / "legacy.db"
+        conn = sqlite3.connect(str(legacy))
+        conn.execute(
+            "CREATE TABLE bids ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " bid_id TEXT UNIQUE NOT NULL,"
+            " project_name TEXT NOT NULL,"
+            " region TEXT, budget REAL, publish_date TEXT,"
+            " deadline TEXT, category TEXT, purchaser TEXT,"
+            " agency TEXT, winner TEXT, source_url TEXT,"
+            " requirements TEXT,"
+            " created_at TEXT NOT NULL DEFAULT"
+            " (datetime('now', 'localtime')))"
+        )
+        conn.execute("PRAGMA user_version = 0")
+        conn.commit()
+        conn.close()
+        db = BidDatabase(legacy)
+        try:
+            info = db.schema_info()
+            assert info["user_version"] == 2
+            # 补齐的表已可见
+            assert "pending_announcements" in info["tables"]
+            assert "pipeline_runs" in info["tables"]
+        finally:
+            db.close()
+
+    def test_cli_status_output(self, tmp_path, capsys):
+        import main as main_mod
+
+        db = BidDatabase(tmp_path / "s.db")
+        db.close()  # status 需库已存在（与 --stats 同口径）
+        rc = main_mod.main(
+            ["db", "--db", str(tmp_path / "s.db"), "--status"]
+        )
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "schema 版本：v2" in out
+        assert "bids: 0" in out
+        assert "PRAGMA 生效" in out
