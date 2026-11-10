@@ -49,6 +49,14 @@ const ROOT_CLASS = 'mang-pdf'; // 宿主根类名（所有样式作用域前缀�
 const ERROR_CLASS = 'mang-pdf-error'; // 错误面板（外部测试/调试用选择器）
 const STYLE_ID = 'mang-pdf-style';
 
+// 照搬 pdfjs-dist 的 PixelsPerInch（src/display/display_utils.js）：
+//   class PixelsPerInch { static CSS = 96.0; static PDF = 72.0;
+//                         static PDF_TO_CSS_UNITS = this.CSS / this.PDF; }
+// pdf.js 的 getViewport({scale}) 产出的是 PDF 点（pt），要变成 CSS 像素必须
+// 乘这个系数。本模块之前漏了这一步，导致 scale=1 时 A4 只有 595px（应为
+// 794px）——比 DOCX 侧按 mm 排的纸面小 25%，两个格式看起来不一样大。
+const PDF_TO_CSS_UNITS = 96 / 72;
+
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
 const ZOOM_STEP = 1.25;
@@ -299,6 +307,13 @@ const CSS_TEXT = `
 .mang-pdf .mang-pdf-page {
   position: relative; margin: 0 auto 14px; overflow: hidden; background: #fff;
   box-shadow: var(--mang-pdf-page-shadow); filter: var(--mang-pdf-page-filter);
+  /* #34：视口外的页不参与布局。65 页 PDF 全量布局在标签切换（display:none
+     翻转）时一次性重排，实测 88-150ms——正好卡在用户感知阈值上。
+     content-visibility 让布局成本从 65 页降到视口 2-3 页。
+     页面尺寸由 JS 精确设置（style.width/height），intrinsic-size 只是
+     content-visibility 生效期间的占位声明，不影响最终布局。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 794px;
 }
 /* 未渲染占位（浅灰骨架）；渲染完成后 canvas 覆盖它 */
 .mang-pdf .mang-pdf-page::after { content: ''; position: absolute; inset: 0; background: #fbfbfc; }
@@ -728,10 +743,13 @@ class PdfRenderer {
     const swap = this.rotation % 180 !== 0;
     for (const st of this.pages) {
       const { style } = st.el;
-      style.width = Math.round((swap ? st.baseH : st.baseW) * this.scale) + 'px';
-      style.height = Math.round((swap ? st.baseW : st.baseH) * this.scale) + 'px';
+      // baseW/baseH 是 PDF 点（pt）；CSS 像素 = pt × PDF_TO_CSS_UNITS × scale
+      const cssScale = this.scale * PDF_TO_CSS_UNITS;
+      style.width = Math.round((swap ? st.baseH : st.baseW) * cssScale) + 'px';
+      style.height = Math.round((swap ? st.baseW : st.baseH) * cssScale) + 'px';
       // pdf.js 视图层尺寸解析基准（TextLayer 的 --total-scale-factor）
-      style.setProperty('--total-scale-factor', String(this.scale));
+      // 同样要吃 pt→px 系数，否则文本层宽度与 canvas 对不上。
+      style.setProperty('--total-scale-factor', String(cssScale));
       style.setProperty('--scale-round-x', '1px');
       style.setProperty('--scale-round-y', '1px');
     }
@@ -741,7 +759,12 @@ class PdfRenderer {
   private pageViewport(st: PageState): PageViewport | null {
     if (!st.proxy) return null;
     try {
-      return st.proxy.getViewport({ scale: this.scale, rotation: this.rotation });
+      // getViewport 的入参 scale 以 PDF 点为单位；乘 PDF_TO_CSS_UNITS 后
+      // 产出的 width/height 才是 CSS 像素（与 setAllPageSize 同一口径）。
+      return st.proxy.getViewport({
+        scale: this.scale * PDF_TO_CSS_UNITS,
+        rotation: this.rotation,
+      });
     } catch {
       return null;
     }
@@ -758,6 +781,13 @@ class PdfRenderer {
     if (this.pages.length === 0) return;
     try {
       this.io = new IntersectionObserver((entries) => {
+        // #34：pane 隐藏（display:none）时 scroller 尺寸归零，IO 会对全部页报
+        // not-intersecting，isFarFromView 的 margin 也变 0 → 每页都被
+        // releasePage（canvas 清零 + 文本层清空）；切回时全部页重新入队重栅格
+        // 化——每次切换整窗重画一遍，反复切换的 canvas 分配/释放 + GC 压力
+        // 就是「越切越卡」的主因。隐藏时直接忽略回调：不释放、不取消，
+        // 页面保持已渲染状态，切回时零成本恢复。
+        if (this.scroller.clientWidth === 0) return;
         for (const entry of entries) {
           const st = this.pageOf(entry.target);
           if (!st) continue;
@@ -808,6 +838,12 @@ class PdfRenderer {
     this.rafId = requestAnimationFrame(() => {
       this.rafId = 0;
       if (this.disposed) return;
+      // #34：pane 隐藏（display:none）时 host 尺寸归零，ResizeObserver 会
+      // 触发本路径——此时 isFarFromView 的视口/margin 全是 0，所有页都被
+      // 判「远」→ clearFarCanvases 全部释放；切回时 65 页全部重新栅格化
+      // （实测每页 50-100ms），这就是 DOCX→PDF 方向卡顿的真因。
+      // 隐藏时不评估可见性：既不重画也不释放，保持现场。
+      if (this.scroller.clientWidth === 0) return;
       for (const st of this.pages) if (!this.isFarFromView(st)) this.enqueue(st);
       this.clearFarCanvases();
     });
@@ -897,6 +933,8 @@ class PdfRenderer {
   }
 
   private clearFarCanvases(): void {
+    // #34：隐藏时视口为 0，一切页都「远」——此时释放 = 切回时全量重画。
+    if (this.scroller.clientWidth === 0) return;
     for (const st of this.pages) if (this.isFarFromView(st)) this.releasePage(st);
   }
 
@@ -1101,7 +1139,13 @@ class PdfRenderer {
     }
     const availW = Math.max(80, this.scroller.clientWidth - PAGE_GUTTER * 2);
     const availH = Math.max(80, this.scroller.clientHeight - PAGE_GAP * 2);
-    let next = this.fitMode === 'fit-page' ? Math.min(availW / maxW, availH / maxH) : availW / maxW;
+    // maxW/maxH 是 PDF 点；availW/availH 是 CSS 像素。直接相除会把 fit 比例
+    // 放大 1.333 倍（页会溢出视口），必须先换算到同一单位。
+    const maxWpx = maxW * PDF_TO_CSS_UNITS;
+    const maxHpx = maxH * PDF_TO_CSS_UNITS;
+    let next = this.fitMode === 'fit-page'
+      ? Math.min(availW / maxWpx, availH / maxHpx)
+      : availW / maxWpx;
     // fit-width 就只按宽度（单页也铺满宽），否则字号会随窗口高度被压小、看起来发虚。
     if (!Number.isFinite(next) || next <= 0) next = 1;
     this.applyScale(clamp(next, ZOOM_MIN, ZOOM_MAX));
