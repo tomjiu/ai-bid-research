@@ -418,6 +418,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     db.add_argument(
+        "--dedupe",
+        action="store_true",
+        help=(
+            "配合 --export：近重复感知去重（改包重发/多平台转发"
+            "簇内保留首条，剔除明细走 stderr；库不动）"
+        ),
+    )
+    db.add_argument(
         "--pending",
         action="store_true",
         help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
@@ -958,12 +966,42 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dedupe_rows(rows):
+    """近重复感知去重（R88）——簇内保留首条，其余剔除。
+
+    统计分析前改包重发/多平台转发双计会污染口径；导出面
+    一键收编（原始库不动——快照是研究视图不是库操作）。
+    剔除明细走 stderr 分账，快照本体保持纯数组（--diff 消费方
+    不变）。
+
+    Args:
+        rows: query_bids 命中行。
+
+    Returns:
+        (去重后行, 剔除的 bid_id 集合, 预算耗尽标志)。
+    """
+    from src.analyze.dataset import AnalysisDataset
+    from src.analyze.duplicates import find_duplicate_clusters
+
+    payload = find_duplicate_clusters(AnalysisDataset(records=rows))
+    drop_ids = set()
+    for cluster in payload["clusters"]:
+        # 簇内保留首条（成员已按库序稳定排序），其余剔除
+        for member in cluster["members"][1:]:
+            if member["bid_id"] is not None:
+                drop_ids.add(str(member["bid_id"]))
+    kept = [
+        r for r in rows if str(r.get("bid_id")) not in drop_ids
+    ]
+    return kept, drop_ids, payload.get("budget_exhausted", False)
+
+
 def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
     """导出项目记录为研究快照（CSV/JSON，#601 R34）。
 
     Args:
         db: 已打开的数据库。
-        args: 命令行参数（--export/--out/--limit/--query/--days）。
+        args: 命令行参数（--export/--out/--limit/--query/--days/--dedupe）。
 
     Returns:
         进程退出码（0 正常；2 目标路径不可写）。
@@ -975,6 +1013,23 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
     total = db.count_bids(keyword=keyword, days=days)
     limit = args.limit if args.limit is not None else max(total, 1)
     rows = db.query_bids(keyword=keyword, days=days, limit=limit)
+
+    if getattr(args, "dedupe", False):
+        rows, drop_ids, exhausted = _dedupe_rows(rows)
+        if drop_ids:
+            _err(
+                f"近重复去重：剔除 {len(drop_ids)} 条"
+                f"（簇代表保留；剔除 bid_id: "
+                + ", ".join(sorted(drop_ids)[:10])
+                + ("…" if len(drop_ids) > 10 else "")
+                + "）"
+            )
+        else:
+            _err("近重复去重：无剔除（未检出近重复）")
+        if exhausted:
+            _err(
+                "注意：检测对比预算耗尽，去重结论保守（详见 analyze 报告十六节）"
+            )
 
     # 只导业务列（id/created_at 是库内账面，不入研究快照）
     columns = list(_BID_COLUMNS)
