@@ -15,6 +15,7 @@ from src.analyze.buyers import buyer_profiles
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
 from src.analyze.regions import province_distribution
+from src.analyze.rolling import rolling_comparison
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
 from src.analyze.quality import field_quality
@@ -67,6 +68,7 @@ def build_analysis_payload(
         "budget_outliers": budget_outliers(dataset),
         "keyword_cooccurrence": keyword_cooccurrence(dataset),
         "province_distribution": province_distribution(dataset),
+        "rolling_comparison": rolling_comparison(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
@@ -78,6 +80,13 @@ def _fmt_money(value: Optional[float]) -> str:
     if value is None:
         return "——"
     return f"{value:,.1f}"
+
+
+def _signed(value: Optional[float]) -> str:
+    """带符号数值渲染（环比差专用）：None → ——，正数显式 +。"""
+    if value is None:
+        return "——"
+    return f"{value:+g}"
 
 
 def _fmt_pct(value: Optional[float]) -> str:
@@ -175,6 +184,45 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
         ]
+        rolling = payload.get("rolling_comparison") or {}
+        if rolling and not rolling.get("skipped_reason"):
+            cur, prev, delta = (
+                rolling["current"],
+                rolling["previous"],
+                rolling["delta"],
+            )
+            sections += [
+                "### 窗口对照（近 "
+                + str(len(cur["months"]))
+                + " 个月 vs 再前同宽）",
+                "",
+                _render_table(
+                    ["指标", "当前窗口", "前一窗口", "环比差"],
+                    [
+                        [
+                            "项目数",
+                            str(cur["project_count"]),
+                            str(prev["project_count"]),
+                            _signed(delta["project_count"]),
+                        ],
+                        [
+                            "平均预算(万)",
+                            _fmt_money(cur["budget_mean"]),
+                            _fmt_money(prev["budget_mean"]),
+                            _signed(delta["budget_mean"]),
+                        ],
+                        [
+                            "定标数",
+                            str(cur["awarded_count"]),
+                            str(prev["awarded_count"]),
+                            _signed(delta["awarded_count"]),
+                        ],
+                    ],
+                ),
+                "",
+                "注：环比差 = 当前 − 前值；预算均值只计有值样本；月份不足两倍窗口时本块不展示。",
+                "",
+            ]
 
     keywords = payload["keywords"]
     if keywords:
