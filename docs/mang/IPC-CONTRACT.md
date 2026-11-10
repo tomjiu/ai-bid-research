@@ -599,6 +599,10 @@ E_UNPROCESSABLE（壳侧仍是形态检查先行——10 字符数字，分层�
 日期换算仍走 `civil_from_days` 单一算术真源（`ymd_at_utc_offset` 纯函数锁边界瞬点，
 本地/UTC 至多差 1 天健全性）。ISO 定宽字典序 == 时间序（截止日比较仍是字符串比较）。
 
+> **平台区分全矩阵**：R2/R9-R15 各面的行为口径、实现真源、测试锚与平台运行面，
+> 见 `docs/mang/PLATFORM-MATRIX.md`（#47 R16 收口）——防漂移契约门
+> `web-ui/tests/platform-matrix.test.mjs` 保证清单与实现/测试不脱钩。
+
 ```jsonc
 → { "present": true, "workspace": "D:\\项目B", "db": "D:\\项目B\\db.json",
     "project_id": "PRJ-0001", "status": "DRAFT", "warnings": [] }
