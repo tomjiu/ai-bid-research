@@ -31,13 +31,13 @@ bid-parse = { path = "../bid-parse" }
 #   pretty-printed XML 的误拒修复（E3）——此前被拒的合法件现在能读（差分归
 #   EXPECTED_DIFF，方向 = 覆盖面扩大）。
 # 私有仓凭据：本机 ~/.gitconfig insteadOf 注入（PAT 不入仓、不入 CI 日志——issue #2 §3.1）。
-mdc-office-io = { git = "https://github.com/mmqz/mdcore", rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b", package = "mdc-office-io" }
+mdc-office-io = { git = "https://git.mingjiu.store/sandbox/mdcore", rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b", package = "mdc-office-io" }
 # #110 任务 2：mdcore 核心包（pagination 分页预估 + word_count 口径面）——与 office-io
 # 同 rev 钉住（单源纪律：两包不同 rev = 跨包语义漂移面）。
-mdcore = { git = "https://github.com/mmqz/mdcore", rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b", package = "mdcore" }
+mdcore = { git = "https://git.mingjiu.store/sandbox/mdcore", rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b", package = "mdcore" }
 # B3-5：pdf 文本通道（engine-pdfium 特性——pdfium 动态库 env MDC_PDFIUM_LIB 或编译期候选；
 # 无 pdfium 环境走 SKIP 语义，测试不伪装失败——issue #9 口径）
-mdc-pdf = { git = "https://github.com/mmqz/mdcore", rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b", package = "mdc-pdf", features = ["engine-pdfium"] }
+mdc-pdf = { git = "https://git.mingjiu.store/sandbox/mdcore", rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b", package = "mdc-pdf", features = ["engine-pdfium"] }
 sha2 = "0.10"
 hex = "0.4"
 # calamine 0.36 与引擎 mdc-office-io 同版（Data/Range/Dimensions 类型面——读侧零语义，仅字段搬运）

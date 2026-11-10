@@ -9,7 +9,7 @@
 //! ## 本脚本把纪律变成编译期硬约束
 //!
 //! - lib.rs 常量改 `env!("BID_MDCORE_REV")` 取值——**手改字面量的漂移面从此不存在**；
-//! - 解析本 crate Cargo.toml 的 mdcore git 依赖（`mmqz/mdcore`）：
+//! - 解析本 crate Cargo.toml 的 mdcore git 依赖（`mingjiu.store/sandbox/mdcore`）：
 //!   · 任一 mdcore 依赖缺 `rev`（浮动）→ `panic!`（编译失败）；
 //!   · 多包 rev 不一致 → `panic!`（issue #2 §3.1 单源纪律：mdc-office-io /
 //!     mdcore / mdc-pdf 三包必须同 rev）；
@@ -36,7 +36,7 @@ fn main() {
     let mut floating: Vec<usize> = Vec::new();
     for (idx, raw) in text.lines().enumerate() {
         let line = raw.trim();
-        if line.starts_with('#') || !line.contains("mmqz/mdcore") {
+        if line.starts_with('#') || !line.contains("mingjiu.store/sandbox/mdcore") {
             continue;
         }
         match extract_rev(line) {
@@ -56,7 +56,7 @@ fn main() {
     }
     if pinned.is_empty() {
         panic!(
-            "#327 build.rs: Cargo.toml 中找不到 mmqz/mdcore git 依赖——MDCORE_REV \
+            "#327 build.rs: Cargo.toml 中找不到 mingjiu.store/sandbox/mdcore git 依赖——MDCORE_REV \
              的单一真源消失（本 crate 不再接引擎？）。若为架构变更，请同步处理 \
              lib.rs 的 MDCORE_REV 与本脚本。"
         );

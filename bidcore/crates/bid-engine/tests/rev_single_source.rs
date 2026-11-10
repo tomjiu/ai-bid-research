@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 
 /// 解析本 crate Cargo.toml 里 mdcore git 依赖实钉的 rev 集合。
-/// 与 build.rs 同一判据：含 `mmqz/mdcore` 的非注释行、单行 TOML 表格式。
+/// 与 build.rs 同一判据：含 `mingjiu.store/sandbox/mdcore` 的非注释行、单行 TOML 表格式。
 fn pinned_mdcore_revs() -> (BTreeSet<String>, Vec<usize>) {
     let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
     let text = std::fs::read_to_string(&manifest).expect("读 Cargo.toml 失败");
@@ -15,7 +15,7 @@ fn pinned_mdcore_revs() -> (BTreeSet<String>, Vec<usize>) {
     let mut floating = Vec::new();
     for (idx, raw) in text.lines().enumerate() {
         let line = raw.trim();
-        if line.starts_with('#') || !line.contains("mmqz/mdcore") {
+        if line.starts_with('#') || !line.contains("mingjiu.store/sandbox/mdcore") {
             continue;
         }
         match line.split_once("rev = \"").map(|(_, r)| {
@@ -41,7 +41,7 @@ fn mdcore_rev_constant_matches_cargo_toml_pin() {
     );
     assert!(
         !revs.is_empty(),
-        "Cargo.toml 找不到 mmqz/mdcore git 依赖——MDCORE_REV 单一真源消失"
+        "Cargo.toml 找不到 mingjiu.store/sandbox/mdcore git 依赖——MDCORE_REV 单一真源消失"
     );
     assert_eq!(
         revs.len(),
