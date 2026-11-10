@@ -184,3 +184,90 @@ class TestRenderMarkdown:
     def test_empty_copy(self):
         md = render_semantic_health_markdown({"records": 0})
         assert "无可审计内容" in md
+
+
+class TestBudgetUnitSuspects:
+    """R89：预算单位错位群体对照（中位数相对证据）。"""
+
+    def test_skipped_on_small_sample(self):
+        from src.analyze.quality import budget_unit_suspects
+
+        ds = _ds([_rec(budget=100.0), _rec(bid_id="Q-2", budget=1_000_000.0)])
+        payload = budget_unit_suspects(ds)
+        assert "skipped_reason" in payload
+        assert payload["suspects"] == []
+
+    def test_ten_thousand_x_outlier_detected(self):
+        from src.analyze.quality import budget_unit_suspects
+
+        # 6 条正常量级（10-100 万）+ 1 条 1000 万万元（元当万元导入）
+        records = [
+            _rec(bid_id=f"N-{i}", budget=10.0 + i * 10) for i in range(6)
+        ]
+        records.append(_rec(bid_id="BAD-1", budget=2_000_000.0))
+        payload = budget_unit_suspects(_ds(records))
+        assert payload["count"] == 1
+        assert payload["suspects"][0]["ref"] == "BAD-1"
+        # 中位数约 35 → 200 万 / 35 ≈ 5.7 万倍 ≥ 1 万？不——200万/35=57143 ≥ 10000 ✓
+        assert payload["suspects"][0]["vs_median"] >= 10_000
+
+    def test_reverse_direction_small_value(self):
+        from src.analyze.quality import budget_unit_suspects
+
+        # 反向：万元当元导入 → 个别值是群体的 1/10000
+        records = [
+            _rec(bid_id=f"M-{i}", budget=50_000.0 + i * 1000)
+            for i in range(6)
+        ]
+        records.append(_rec(bid_id="TINY-1", budget=3.0))
+        payload = budget_unit_suspects(_ds(records))
+        assert payload["count"] == 1
+        assert payload["suspects"][0]["ref"] == "TINY-1"
+
+    def test_uniform_data_no_suspects(self):
+        from src.analyze.quality import budget_unit_suspects
+
+        records = [
+            _rec(bid_id=f"U-{i}", budget=100.0 + i * 5) for i in range(8)
+        ]
+        payload = budget_unit_suspects(_ds(records))
+        assert payload["count"] == 0
+
+    def test_zero_negative_excluded_from_median(self):
+        from src.analyze.quality import budget_unit_suspects
+
+        # 零/负不参与中位数（否则拉偏对照基准）
+        records = [
+            _rec(bid_id=f"Z-{i}", budget=100.0 + i * 10) for i in range(6)
+        ]
+        records.append(_rec(bid_id="Z-NEG", budget=-1.0))
+        records.append(_rec(bid_id="Z-ZERO", budget=0))
+        payload = budget_unit_suspects(_ds(records))
+        assert payload["count"] == 0
+
+    def test_integrated_into_semantic_health(self):
+        records = [
+            _rec(bid_id=f"S-{i}", budget=20.0 + i * 10) for i in range(6)
+        ]
+        records.append(_rec(bid_id="S-BAD", budget=900_000.0))
+        payload = semantic_health(_ds(records), today="2026-11-10")
+        slot = payload["issues"]["budget_unit_suspect"]
+        assert slot["count"] == 1
+        assert "中位数" in slot["items"][0]["detail"]
+        assert "倍" in slot["items"][0]["detail"]
+
+    def test_render_label(self):
+        md = render_semantic_health_markdown(
+            {
+                "records": 7,
+                "issues": {
+                    "budget_unit_suspect": {
+                        "count": 1,
+                        "items": [{"ref": "X", "detail": "…倍"}],
+                    }
+                },
+                "health_score": 90,
+                "clean": False,
+            }
+        )
+        assert "预算量级离群" in md

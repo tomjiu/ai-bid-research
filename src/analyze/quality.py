@@ -82,6 +82,56 @@ _ANCIENT_CUTOVER = "2015-01-01"
 _ISSUE_DETAIL_LIMIT = 5
 
 
+def budget_unit_suspects(
+    dataset: AnalysisDataset, *, ratio: float = 10_000.0, min_samples: int = 5
+) -> Dict[str, Any]:
+    """预算单位错位**群体对照**信号（R89）。
+
+    单条 50 亿线（``budget_oversized``）是绝对启发；群体对照给
+    **相对证据**：预算偏离库内中位数 ``ratio`` 倍以上（元↔万元
+    错位恰为 1 万倍）——当库内多数记录量级一致时，个别离群者
+    的单位错位嫌疑从「可能很大」升级为「很可能错了」。
+
+    小样本（有效预算 < ``min_samples`` 条）中位数不稳——如实
+    返回 skipped，不硬猜。
+
+    Returns:
+        ``{"skipped_reason" | "median", "suspects": [...], "count"}``。
+    """
+    values = []
+    for r in dataset.records:
+        budget = r.get("budget")
+        if budget is None:
+            continue
+        try:
+            v = float(budget)
+        except (TypeError, ValueError):
+            continue
+        if v > 0:  # 零/负已被单条语义面覆盖，不参与中位数
+            values.append((v, r))
+    if len(values) < min_samples:
+        return {
+            "skipped_reason": (
+                f"有效预算样本不足（{len(values)} < {min_samples}）"
+                "——中位数不稳，群体对照不硬猜"
+            ),
+            "suspects": [],
+            "count": 0,
+        }
+    nums = sorted(v for v, _ in values)
+    mid = len(nums) // 2
+    median = (
+        (nums[mid - 1] + nums[mid]) / 2 if len(nums) % 2 == 0 else nums[mid]
+    )
+    suspects = [
+        {"ref": _first_issue_key(r), "budget": v,
+         "vs_median": round(v / median, 1)}
+        for v, r in values
+        if v / median >= ratio or median / v >= ratio
+    ]
+    return {"median": median, "suspects": suspects, "count": len(suspects)}
+
+
 def _first_issue_key(record: Dict[str, Any]) -> str:
     """问题明细的定位键（bid_id 缺失时退化为名称摘要）。"""
     bid = record.get("bid_id")
@@ -176,6 +226,30 @@ def semantic_health(dataset: AnalysisDataset, *, today: str = "") -> Dict[str, A
             if deadline and len(deadline) == 10 and publish > deadline:
                 _add("publish_after_deadline", r, f"{publish} > {deadline}")
 
+    # R89：预算单位错位群体对照（独立于单条 50 亿线的相对证据）
+    unit_check = budget_unit_suspects(dataset)
+    if unit_check.get("suspects"):
+        slot = base["issues"].setdefault(
+            "budget_unit_suspect", {"count": 0, "items": []}
+        )
+        for suspect in unit_check["suspects"][:_ISSUE_DETAIL_LIMIT]:
+            slot["count"] += 1
+            slot["items"].append(
+                {
+                    "ref": suspect["ref"],
+                    "detail": (
+                        f"{suspect['budget']:,.0f} 万"
+                        f"（中位数 {unit_check['median']:,.1f} 的"
+                        f" {suspect['vs_median']:.0f} 倍）"
+                    ),
+                }
+            )
+        overflow = unit_check["count"] - _ISSUE_DETAIL_LIMIT
+        if overflow > 0:
+            slot["items"].append(
+                {"ref": f"…另有 {overflow} 条", "detail": ""}
+            )
+
     for bid, cnt in id_counter.items():
         if cnt > 1:
             slot = base["issues"].setdefault(
@@ -196,6 +270,7 @@ def semantic_health(dataset: AnalysisDataset, *, today: str = "") -> Dict[str, A
         "budget_negative": 0.15,
         "budget_oversized": 0.15,
         "budget_invalid": 0.15,
+        "budget_unit_suspect": 0.10,
         "budget_zero": 0.05,
     }
     penalty = 0.0
@@ -249,6 +324,7 @@ def render_semantic_health_markdown(
         "budget_zero": "零预算",
         "budget_oversized": "预算超大（疑单位错位）",
         "budget_invalid": "预算非数值",
+        "budget_unit_suspect": "预算量级离群（疑单位错位）",
     }
     for kind in sorted(issues, key=lambda k: -issues[k]["count"]):
         slot = issues[kind]
