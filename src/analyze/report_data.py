@@ -15,6 +15,7 @@ from src.analyze.buyers import buyer_profiles
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
 from src.analyze.regions import province_distribution
+from src.analyze.relationships import purchaser_supplier_pairs
 from src.analyze.rolling import rolling_comparison
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
@@ -69,6 +70,7 @@ def build_analysis_payload(
         "keyword_cooccurrence": keyword_cooccurrence(dataset),
         "province_distribution": province_distribution(dataset),
         "rolling_comparison": rolling_comparison(dataset),
+        "purchaser_supplier_pairs": purchaser_supplier_pairs(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
@@ -407,6 +409,29 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             "注：预算为**项目预算口径**（库内无中标合同额字段）；未定标/流标记录不参与本节；买方数 = 所中项目采购人去重数。",
             "",
         ]
+        pairs = payload.get("purchaser_supplier_pairs") or []
+        if pairs:
+            pair_rows = [
+                [
+                    p["purchaser"],
+                    p["winner"],
+                    str(p["repeat_count"]),
+                    _fmt_money(p["budget_total"]),
+                    "、".join(p["months"]),
+                ]
+                for p in pairs
+            ]
+            sections += [
+                "### 重复合作关系（同采购人 × 同供应商 ≥ 2 次）",
+                "",
+                _render_table(
+                    ["采购人", "供应商", "合作次数", "预算合计(万)", "合作月份"],
+                    pair_rows,
+                ),
+                "",
+                "注：重复中标是**合作信号**不是违规认定；单次合作对不展示；月份为公告月口径。",
+                "",
+            ]
 
     outliers = payload.get("budget_outliers") or {}
     if outliers and not outliers.get("skipped_reason"):
