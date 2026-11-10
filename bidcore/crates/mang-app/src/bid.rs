@@ -1562,6 +1562,11 @@ pub fn import_files(
                 )));
             }
         }
+        // R13（#47 平台区分⑥）：filename 是**显示名/元数据**（不定位
+        // 磁盘文件）——NFC 归一（NFD 形态视觉同名却异串，台账/检索会
+        // 分裂）。upload_ref 是**定位键**（必须与磁盘真实文件名逐字节
+        // 匹配）——原样保留，归一反而找不到文件。
+        let filename = paths::nfc(&filename);
         // R12（#47 平台区分⑤）：记录的 upload_ref 在 Windows 上也要能
         // 解析——工作区根 + rel 的估算长度超 259 拒（估算口径：绝对形态
         // 取本体、相对形态取 root + 1 + rel；早拒零副作用与基名守卫同款）
@@ -1684,7 +1689,7 @@ pub fn ingest_drop(
         }
         // 文件名净化：file_name() 去掉路径部分（目录穿越形态在源侧天然
         // 失效——目标永远是根下的纯文件名）；空名/点名拒
-        let name = match src
+        let raw_name = match src
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
         {
@@ -1696,6 +1701,12 @@ pub fn ingest_drop(
                 continue;
             }
         };
+        // R13（#47 平台区分⑥）：落位名 NFC 归一——macOS NFD 形态
+        // （é = e + U+0301）与 NFC 是不同字节串，不归一会出现「视觉
+        // 同名两份」且占位/幂等键错位。归一发生在守卫/白名单/落位
+        // **之前**（守卫与占位键看到的都是 NFC 形态——单一口径）。
+        // CJK/ASCII 两形态字节相同，零影响。
+        let name = paths::nfc(&raw_name);
         // 后缀白名单（与 UI 的 BID_IMPORT_EXTS 同源口径：docx/xlsx/pdf/doc/ods）
         let lower = name.to_lowercase();
         if ![".docx", ".xlsx", ".pdf", ".doc", ".ods"]
@@ -1832,13 +1843,16 @@ fn resolve_ingest_dst(
         if exact.is_file() {
             return Some((exact, false));
         }
-        let lower = want.to_lowercase();
+        // R13（#47 平台区分⑥）：占位键 = nfc(name).to_lowercase()——
+        // NFC 归一先于大小写折叠（NFD 在场文件与 NFC 请求同占位；
+        // macOS 拖入历史遗留的 NFD 落位件同样被吸收）
+        let lower = crate::paths::nfc(want).to_lowercase();
         let hit = std::fs::read_dir(root)
             .ok()?
             .filter_map(|e| e.ok())
             .find(|e| {
                 e.file_type().map(|t| t.is_file()).unwrap_or(false)
-                    && e.file_name().to_string_lossy().to_lowercase() == lower
+                    && crate::paths::nfc(&e.file_name().to_string_lossy()).to_lowercase() == lower
             })?;
         Some((hit.path(), true))
     };
@@ -3113,6 +3127,63 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(deep);
+        let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R13（#47 平台区分⑥）：NFC 归一——macOS NFD 互操作。NFD 形态
+    /// （é = e + U+0301）拖入落位为 NFC；NFC 形态重拖同内容 → CI 占位
+    /// 幂等（占位键 nfc+lowercase 吸收双形态）；import_files 的 filename
+    /// 归一 / upload_ref 原样（定位键不动）。
+    #[test]
+    fn ingest_drop_nfc_normalization() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ing-nfc");
+        let src_dir = std::env::temp_dir().join(format!("mang-ing-nfc-src-{}", std::process::id()));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        let nfc_name = "caf\u{00e9}招标.docx";                 // é 合成形态
+        let nfd_name = "cafe\u{0301}招标.docx";                 // e + 组合符（分解）
+        assert_ne!(nfc_name, nfd_name, "前提：两形态不同字节串");
+
+        // ① NFD 源拖入 → 落位名是 NFC（归一在守卫/落位之前）
+        let nfd_src = src_dir.join(nfd_name);
+        std::fs::write(&nfd_src, b"PK\x03\x04nfc-payload").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [nfd_src.to_string_lossy()]
+        }));
+        let out = r["result"].clone();
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "NFD 落位：{out}");
+        assert_eq!(copied[0]["rel"], json!(nfc_name), "落位名归一到 NFC：{out}");
+        assert!(dir.join(nfc_name).is_file(), "磁盘上是 NFC 形态");
+        assert!(!dir.join(nfd_name).exists(), "NFD 形态不落（归一吸收）");
+
+        // ② NFC 形态重拖同内容 → already_present（占位键双形态同键）
+        let nfc_src = src_dir.join(nfc_name);
+        std::fs::write(&nfc_src, b"PK\x03\x04nfc-payload").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [nfc_src.to_string_lossy()]
+        }));
+        let out = r["result"].clone();
+        assert!(out["copied"].as_array().unwrap().is_empty(), "NFC 重拖幂等：{out}");
+        assert_eq!(out["skipped"][0]["reason"], json!("already_present"), "{out}");
+
+        // ③ import_files：filename NFD → 库里 NFC；upload_ref 原样
+        //（定位键匹配磁盘真实名——先建项再导入落位的 NFC 文件）
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "NFC 项目", "bid_deadline": "2099-12-31", "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "{r}");
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": nfc_name, "filename": nfd_name, "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "导入落位件：{r}");
+        // per_file 的 filename 字段应为 NFC（显示名归一）
+        let pf = r["result"]["per_file"].as_array().unwrap();
+        assert_eq!(pf[0]["filename"], json!(nfc_name), "filename 归一 NFC：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
     }
 

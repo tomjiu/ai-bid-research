@@ -805,6 +805,31 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         resp["ok"] == json!(true),
         format!("{}", ws.root_display()),
     );
+    // ---- #47 R13（平台区分⑥）：NFC 归一——NFD 源（é = e + U+0301）
+    //      拖入落位为 NFC；NFC 重拖同内容占位幂等（双形态同键）
+    let nfd_src = scratch_dir().join("cafe\u{0301}招标.docx");
+    std::fs::write(&nfd_src, b"PK\x03\x04selftest-nfc").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-nfc1","cmd":"bid.ingest_drop","paths":[nfd_src.to_string_lossy()]}));
+    let n1 = result(&resp);
+    let nfc_rel = n1["copied"][0]["rel"].as_str().unwrap_or("?").to_string();
+    r.check(
+        "bid.ingest_drop(NFD 落位归一 NFC)",
+        resp["ok"] == json!(true)
+            && nfc_rel == "caf\u{00e9}招标.docx"
+            && !nfc_rel.contains('\u{0301}'),
+        format!("rel={nfc_rel}"),
+    );
+    let nfc_src = scratch_dir().join("caf\u{00e9}招标.docx");
+    std::fs::write(&nfc_src, b"PK\x03\x04selftest-nfc").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-nfc2","cmd":"bid.ingest_drop","paths":[nfc_src.to_string_lossy()]}));
+    let n2 = result(&resp);
+    r.check(
+        "bid.ingest_drop(NFC 重拖占位幂等)",
+        resp["ok"] == json!(true)
+            && n2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && n2["skipped"][0]["reason"].as_str() == Some("already_present"),
+        format!("skipped={}", n2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));
