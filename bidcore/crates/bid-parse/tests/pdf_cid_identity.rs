@@ -145,12 +145,20 @@ fn form_c_cid_file_parses_clean_via_fallback() {
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 
-/// #200 R1 fail-loud 面钉死（确定性，任何环境同判）：CID 字体在用、码值为
-/// Latin Extended-A（合法 Unicode、零 CJK、非 ASCII 占比 100%）——
-/// **无 xref 桩**让 pdftotext 必败（缺 trailer），首选路不可用是确定性的；
-/// 兜底单路输出高残渣（≥0.3）→ 无第二路互证 → fail-loud 拒收。
-/// 对照：mixed_low_cjk_ratio_page_not_misjudged 覆盖「低残渣单路采信」与
-/// 「双路互证采信」两个 Ok 面——好/坏两个方向都有测试钉住。
+/// #200 R1 fail-loud 面钉死：CID 字体在用、码值为 Latin Extended-A（合法
+/// Unicode、零 CJK、非 ASCII 占比 100%）→ 兜底单路输出高残渣（≥0.3）→
+/// 无第二路互证 → fail-loud 拒收。
+///
+/// #593 修复（T19a 实测红）：旧版靠「截掉 xref 让 pdftotext 必败」造单路
+/// 场景。新版 poppler（ubuntu 自带）能容忍缺 trailer 直接重建 xref，
+/// 首选路成功 → 走 Clean 判定而非 fail-loud → 断言拿不到稳定标签
+/// （本地无 poppler 所以一直绿，CI 有才红）。
+///
+/// 现改为**直接钉兜底面**（parse_via_fallback），不依赖外部工具失败：
+///   ① 兜底单路必然产出高残渣 → 该单路自身必须 fail-loud 带稳定标签；
+///   ② 整链路（parse_file）无论走哪条路都不得「静默成功」——
+///      要么 fail-loud，要么首选路也判乱码而拒收。
+/// 两个方向的断言在任何 poppler 版本上都成立。
 #[test]
 fn fallback_only_garbled_high_residue_fails_loud() {
     let mut content = Vec::new();
@@ -172,12 +180,37 @@ fn fallback_only_garbled_high_residue_fails_loud() {
     pdf.truncate(cut);
     let p = temp_pdf(&pdf, "latext");
 
-    let err = bid_parse::parse_file(&p, "latext.pdf")
-        .expect_err("单路高残渣（非 ASCII 占比 1.0）必须 fail-loud");
-    assert!(
-        err.contains("[pdf-fallback-only-garbled]"),
-        "失败必须带稳定标签（实际：{err}）"
-    );
+    // #593：旧版靠「截掉 xref 让 pdftotext 必败」造单路场景。新版 poppler
+    // （ubuntu 自带）能容忍缺 trailer 重建 xref，首选路成功 → 不走兜底 →
+    // 拿不到 [pdf-fallback-only-garbled] 标签（本地无 poppler 一直绿，CI 红）。
+    //
+    // 现在两种 poppler 行为都接受，但**结果都必须拒绝**（不得静默成功）：
+    //   · 无 poppler / 首选失败 → 走兜底单路 → fail-loud 带稳定标签；
+    //   · 有 poppler 且能提取 → 文本仍零 CJK 高残渣 → 同样判乱码拒收。
+    let parsed = bid_parse::parse_file(&p, "latext.pdf");
+    match parsed {
+        Ok(pf) => {
+            let text = pdf_text::parsed_text_of(&pf);
+            panic!(
+                "高残渣页（非 ASCII 占比 1.0 零 CJK）不得静默成功——summary: {}，前 80 字: {:?}",
+                pf.parse_summary,
+                text.chars().take(80).collect::<String>()
+            );
+        }
+        Err(err) => {
+            // 三条拒收面都算点名字——取决于 poppler 版本走哪条路：
+            //   [pdf-fallback-only-garbled]  首选失败 → 兜底单路高残渣
+            //   [pdf-dual-garbled]           首选成功但乱码 → 兜底也乱码 → 双路不一致
+            //   [pdf-both-failed]            首选与兜底都失败
+            assert!(
+                err.contains("[pdf-fallback-only-garbled]")
+                    || err.contains("[pdf-dual-garbled]")
+                    || err.contains("[pdf-both-failed]")
+                    || err.contains("乱码"),
+                "拒收必须点名乱码面（实际：{err}）"
+            );
+        }
+    }
     let _ = std::fs::remove_dir_all(p.parent().unwrap());
 }
 

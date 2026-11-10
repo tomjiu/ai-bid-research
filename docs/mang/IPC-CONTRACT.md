@@ -106,6 +106,20 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `outside_workspace` | 解析后不在工作区内（`../` 穿越、盘符外绝对路径） | 安全拦截 |
 | `too_large` | 超过该命令的体积上限 | 50MB 的 pdf 用 `fs.read` |
 | `io` | 其它系统 IO 失败 | 磁盘满、权限 |
+| `state` | 工具面 E_STATE 透传：当前项目状态不允许该操作（#313 批 C/D）——UI 应分支「尚未开放」引导卡而非错误横幅 | DRAFT 态项目调 `bid.coverage`（未导入文件） |
+
+### 3.4 引导卡约定（E_NOTFOUND / E_STATE 的 UI 呈现规范；#47 R6 / #19 任务 3）
+
+全部 `bid.*` 读面板（detail / matrix / quality / gates / coverage / export）收到壳侧 `not_found` / `state` 码时，**渲染引导卡而非错误横幅**——空态与早态是用户主路径不是故障，`data-kind="error"` 横幅只留给真故障（`io` / `bad_json` 等）。
+
+| 码 | 卡面标题 | 主行动（`data-bid-guide-cta`） | 次行动（`data-bid-guide-retry`） |
+|---|---|---|---|
+| `not_found`（无 db.json） | 还没有标书项目 | 去新建标书项目 → 切 detail 页签（向导第一步） | 重新检查（重发原命令） |
+| `state`（状态窗未到） | XX 尚未开放（XX = 面板名） | 去导入招标文件 → 切 detail 页签（向导第二步） | 重新检查（重发原命令） |
+
+- 卡尾一律带 `bid-cov-next`（`data-state="ok"`）「下一步」条：写明到达状态窗的后继管线动作（extract_requirements → build_outline → prepare_outline_and_matrix 等）。
+- 单一真源在 `code` 不在文案：`state` 码时 E_STATE 原文（含状态与前置说明）原样进卡，不吞不译。
+- 实现锚点：`renderBidEarlyGuide`（`web-ui/mang/app.js` 共享工厂——coverage R5 首创，R6 收编 matrix / quality / gates 并统一锚点）。
 
 ---
 
@@ -150,6 +164,8 @@ const full = await (await fetch(url)).json();  // 与内联时那个帧完全一
 5. 结果必须位于 canonical 工作区根之下 → 否则 `outside_workspace`。
 
 **比较按路径组件、大小写不敏感**（Windows 语义）：`C:\ws2` 不会被当成 `C:\ws` 的子目录；`C:\WS\x` 在 `C:\ws` 内。
+
+**绝对路径的判定是平台语义**（R2，#47 平台区分①）：盘符形态 `C:/…` 在 Windows 是绝对路径（→ 越界 `outside_workspace`）；在 Unix 是**合法相对路径**（`C:` 只是普通目录名，围栏内解析，目标不存在 → `not_found`）。两端行为不同且**都正确**——前端不要在 Unix 上把 `C:/` 形态当越界报错渲染，也不要在 Windows 上把它当相对路径拼接。
 
 写权限：`fs.writeBytes` **只允许写工作区内的 `.mang/`**（历史快照/导出中间件）。正文保存要另开命令并带显式授权——不要顺手放宽这条。
 
@@ -352,6 +368,7 @@ const full = await (await fetch(url)).json();  // 与内联时那个帧完全一
                agent_waivers / human_review_complete）… },
     "quick_stats": {
       "requirements": 1120, "evidence": 13, "evidence_bindings": 46,
+      "files": 4,                        // #19：导入文件计数（向导判「DRAFT 且未导入」用）
       "sections": 26, "sections_leaf": 20, "sections_drafted": 12,
       "sections_accepted": 3, "sections_failed": 1, "sections_dirty": 2,
       "target_total_chars": 150000, "actual_total_chars": 81200,
@@ -458,6 +475,316 @@ mappings【#224 双向追溯】、unmapped_scoring_items、notes、sections_scor
 ```
 拒绝面与 `bid.quality` 同：`not_found` / `state`。
 
+### bid.gates —— 审核门台账（只读；#603 批 A——治理面）
+DomainStore 直读（`bid.outline` 先例——MCP 工具面无此整面视图，单一真源
+`gate_approved` / `latest_gate_pass` / `agent_gate_passes` /
+`human_review_complete` / `reviews`）：五门（matrix_approval / outline_approval /
+pre_export_confirm / addendum_waiver / no_addendum_confirmed）approved 状态、
+每门最新过门记录（method=human_receipt|agent_declared、human_confirmed——追认后
+最新条翻 human 的判据位）、agent 豁免清单（human_confirmed=false 的门——导出
+警告与追认清单素材）、human_review_complete（空账本或全 human → true）、
+reviews 裁决历史（倒序，REV 记录含 #182 可信身份回显与 #180 内容绑定摘要）。
+**读面无状态窗**：早期态「三门全未过」也是有效数据（写面才有域层状态窗裁决）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "gates": [ { "gate": "matrix_approval", "title": "矩阵定稿门",
+                 "note": "门序第一：…", "approved": true,
+                 "latest_pass": { "gate": "matrix_approval", "actor": "agent-01",
+                                  "actor_type": "agent", "method": "agent_declared",
+                                  "human_confirmed": false, "at": 1790000000,
+                                  "reason": "…" } }, … 共 5 门 … ],
+    "human_review_complete": false,
+    "agent_waivers": [ …每门最新一条 human_confirmed=false 的过门记录… ],
+    "reviews": [ { "id": "REV-0002", "gate": "outline_approval", "decision": "APPROVED",
+                   "reviewer": "agent:agent-01",
+                   "actor": { "actor_id": "agent-01", "actor_type": "agent",
+                              "authentication_method": "hmac_receipt_v2" },
+                   "findings": [], "at": 1790000000,
+                   "reviewed_content_digest": "…" } ] }
+```
+拒绝面：无 db.json → `not_found`（不落副作用）。
+
+### bid.gate_pass —— 人工过门（写面；#603 批 A——治理面写面首发）
+`{ gate, decision, findings?, reason?, actor_id?, project_version? }`
+
+流程（#182 宿主签发面——**不进 MCP 工具表，Agent 拿不到**）：壳内真人经 UI
+确认后，壳用服务态密钥签 receipt（scope 绑本门——A 门 receipt 过不了 B 门；
+#323 内容绑定当前章节树摘要——签发后章节被改 → 域层 ContentDrifted 拒），
+经 `bid_mcp::dispatch_with(record_review_gate)` 走真实工具面落账，工具输出
+原样放 `gate_pass` 键（receipt 回执 / gates_approved / agent_waivers /
+human_review_complete / status）。门序（矩阵→大纲→导出确认）/ 状态窗
+（matrix 门 MATRIX_READY+）/ 幂等 / 追认 / BLOCKER 强制派生 RT 全在域层裁决
+——壳侧零重实现，拒绝文案原样透传（不假成功）。
+
+参数：`gate` = matrix_approval|outline_approval|pre_export_confirm|addendum_waiver
+（no_addendum_confirmed 走 record_addendum_waiver 的 confirm_no_addendum 路径，
+#603 批 C 接线）；`decision` = APPROVED|REJECTED；`findings` =
+`[{severity, code, message, section_id?}]`（Rejected 必须含 ≥1 BLOCKER）；
+`reason`（human 路径可空）；`actor_id`（宿主身份命名，缺省 `shell-operator`）；
+`project_version`（可选 CAS）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "gate_pass": { "receipt": { "review_id": "REV-0003", "gate": "matrix_approval",
+                    "decision": "APPROVED", "reviewer": "human:shell-operator",
+                    "actor": { "actor_id": "shell-operator", "actor_type": "human",
+                               "authentication_method": "hmac_receipt_v2" },
+                    "method": "human_receipt", "human_confirmed": true,
+                    "finding_ids": [], "spawned_rt_ids": [],
+                    "reviewed_content_digest": "…" },
+                   "gates_approved": ["matrix_approval"],
+                   "agent_waivers": [], "human_review_complete": true,
+                   "status": "MATRIX_READY", "project_version": 4 } }
+```
+拒绝面：无 db.json → `not_found`；状态窗未到 / 门序未满足 → **`state`**（域层
+E_STATE 原文，如「当前状态 REQUIREMENTS_EXTRACTED 不允许调用
+record_review(matrix_approval)」）；Rejected 无 BLOCKER / 非法门名 / receipt
+过期漂移 → **`bad_args`**（E_UNPROCESSABLE 原文）。
+
+
+### bid.coverage —— 覆盖报告 + ★条款覆盖（只读；#313 批 D）
+主体经 `bid_mcp::dispatch_with(get_coverage_report)` 走真实工具面（与
+bid-mcp-stdio 同源裁决，方案 A 直链），工具输出原样放 `coverage` 键（字段见
+契约 §19：complete / total_blocks / covered_blocks / uncovered_range_count /
+unjudged_blocks / files[]（含逐文件 uncovered_ranges——每文件至多 50 段）/
+next——建纲门引导）。壳侧 `summary` 在工具输出上现算**三态分账**（#244——
+每块必居其一）：`judged_blocks`（A 已判定 = covered − Σ excluded；
+covered 是 A+B 合计）、`excluded_blocks`（B 已排除 = Σ files[].excluded_blocks）、
+`unjudged_blocks`（C 未判定，原样）——三者和恒等于 total_blocks；
+`by_verdict` 逐文件聚合（requirement / review_table / noise / rule）。
+★条款覆盖循 `get_star_coverage`（#285 逐文件只读面）对 `coverage.files[]`
+聚合进 `star`——**只取计数**（star_truth / star_captured / star_missing /
+declarations；口径恒等式 truth = captured + missing），逐块明细走 bid-mcp
+工具面不进本响应。无 db.json → `not_found`；DRAFT 态（未导入文件）工具面
+E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "coverage": { …get_coverage_report 工具输出原样（complete/total_blocks/
+                  covered_blocks/uncovered_range_count/unjudged_blocks/
+                  files[]{file_id,total_blocks,covered_blocks,complete,
+                  uncovered_ranges[](≤50 段),uncovered_range_count,
+                  excluded_blocks,unjudged_blocks,by_verdict}/next… },
+    "summary": { "total_blocks": 1240, "judged_blocks": 1120,        // A：已判定为要求
+                 "excluded_blocks": 40,                              // B：noise/rule 排除
+                 "unjudged_blocks": 80,                              // C：没标记——建纲门阻断
+                 "uncovered_range_count": 2, "complete": false,
+                 "by_verdict": { "requirement": 1080, "review_table": 40, "noise": 40 } },
+    "star": { "files": [ { "file_id": "TF-0001", "file_name": "A-招标文件.docx",
+                            "star_total": 50, "declarations": 2,    // 样板句★（声明不计条款）
+                            "star_truth": 48, "star_captured": 45, "star_missing": 3,
+                            "next": "有★漏标——…" } ],
+              "total": { "star_total": 50, "declarations": 2,
+                         "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
+```
+
+### bid.create_project `{ name, bid_deadline, mode, tender_notice_ref? }`  （写面；#19 导入向导第一步）
+
+空工作区起步（无 db.json 不再 `not_found`——`ensure_or_open` 空态 + `.mang/approval.key`，
+副作用即目的）；经 `bid_mcp::dispatch_with(create_bid_project)` 真实工具面，幂等/越级裁决
+在工具面（同 key 重放 → 静默幂等；异 key 再建 → `state` 码，UI 分支引导卡，§109 同口径）。
+`external_key` **壳侧隐式注入 = 工作区 canonical 路径**（一个工作区一个项目——UI 重试/
+重复提交不建第二个项目）；`mode`（明标|暗标）与 `bid_deadline`（YYYY-MM-DD 粗形）壳侧
+前置校验（校验失败零副作用）。
+
+```jsonc
+→ { "present": true, "workspace": "D:\\项目B", "db": "D:\\项目B\\db.json",
+    "project_id": "PRJ-0001", "status": "DRAFT", "warnings": [] }
+// 幂等重放 → deduplicated:true + 原 project_id（#19：向导重复提交的主路径）
+```
+
+### bid.import_files `{ files:[{ upload_ref, filename?, kind? }] }`  （写面；#19 导入向导第二步）
+
+`project_id` **壳侧注入服务态真源**（UI 不自报，防串项目）；`upload_ref` = 工作区相对
+路径（fs.tree 的 rel）或围栏内绝对路径（围栏锚定在工具面 `fs_fence::resolve_read`）；
+**分隔符归一（#47 R9 跨平台硬化①，壳侧入口单一真源）**：`\` → `/`、压缩空段与 `.` 段
+（`a//b`、`a/./b` → `a/b`）；`..` 段原样保留（穿越裁决在域层围栏——归一不吞 `..`）；
+绝对路径只换分隔符不压缩；
+`filename` 缺省取基名、`kind` 缺省「附件」（契约 §2 同款）。**E_PARTIAL 不按错误回**：
+壳侧组装 `partial:true` + `item_errors` 的成功响应（工具面 `data` 携带成功面——失败件
+禁引、成功件照常入库不回滚），向导同屏分账呈现。
+
+```jsonc
+→ { "present": true, "file_ids": ["TF-0001"], "per_file": [ … 契约 §2 同形 … ],
+    "totals": { "files": 1, "chunks": 48, "parse_failed": 0, "partial": 0 },
+    "addendum_readiness": { … }, "input_integrity": { … },
+    "status": "FILES_IMPORTED", "warnings": [] }
+// 部分失败 → 顶层加 "partial": true, "partial_what": "…", "item_errors": [ … ]
+```
+
+### bid.ingest_drop  `{ paths:[绝对路径…] }` （写面：复制进工作区；#47 R8 / #19 拖拽导入）
+
+壳 drop 事件（`WM_DROPFILES` / webview `drop`）的绝对路径**复制进工作区根**——只复制不
+导入（导入仍走 `bid.import_files`，向导第二步用户确认 kind）。**不依赖 db.json**（先拖
+文件再建项合法——不碰 DomainStore）。落位规则：同名且 sha256 相同 → `skipped:
+already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找空位。白名单与
+`BID_IMPORT_EXTS` 同源（docx/xlsx/pdf/doc/ods）；目录拖入明拒（`is_dir`——R17+ 递归导
+入）；不存在的路径 `not_found`。
+
+**基名跨平台守卫（R10，#47 平台区分③——R8 注释预留硬化项落地）**：`paths::guard_portable_basename`
+在壳侧入口拦截不可跨 Windows 迁移的基名，**双平台同拒**（不是 cfg 分支）——
+① Windows 保留设备名（`CON/PRN/AUX/NUL/COM1-9/LPT1-9`，不分大小写、带扩展同样保留：
+Linux 合法的 `CON.docx` 落库后拷到 Windows 即失效）；② 非法字符 `<>:"|?*/\` 与控制符；
+③ 尾部空格/点（Windows 剥掉后落位名与记录键错位）。`bid.ingest_drop` 按**批次分账**
+（`skipped: name_not_portable`，一件非法不毁整批——与 `ext_blocked` 同口径）；
+`bid.import_files` 对 `upload_ref` 基名与显式 `filename` **双查、请求级 `bad_args`**
+（输入规范错误与 mode 校验同款先例：零副作用早拒，改名重试）。
+
+**大小写不敏感占位（R11，#47 平台区分④）**：落位判定按 Windows FS 占位语义预演——
+`A.docx` 在场时 `a.docx`/`A.DOCX` 视作**同一占位**（NTFS upcase 折叠；Linux 精确名匹配
+会放走变体，两文件共存拷到 Windows 互覆）。同内容变体 → `already_present`（detail
+指明实际在场的占位名——用户拖 `a.docx` 而在场的是 `A.docx` 时说清楚）；异内容变体 →
+走 `-2` 后缀占位，**后缀空位同样 CI 判定**。
+
+**MAX_PATH 预检（R12，#47 平台区分⑤）**：`paths::guard_windows_max_path`——传统 Win32
+路径上限 260 字符（含 NUL，字符串本体 259）。`bid.ingest_drop` 落位路径（根 + 分隔符 +
+基名）超 259 → 批次分账 `path_too_long`（缩短文件名/层级，或 Windows 启用
+`LongPathsEnabled`）；`bid.import_files` 的 `upload_ref` 估算长度超 259 → 请求级 `bad_args`
+（绝对形态取本体、相对形态取 根+1+rel）。双平台同拒（Linux 能落但项目库拷 Windows 创建
+即失败——与 R10 保留名同一可迁移性口径）。
+
+**NFC 归一（R13，#47 平台区分⑥——macOS NFD 互操作）**：`paths::nfc`——macOS（HFS+/
+Finder）文件名是 **NFD 分解形态**（é = e + U+0301），与 NFC 合成形态是不同字节串（NTFS/
+ext4 字节精确）——不归一会「视觉同名两份」且占位/幂等键错位。口径：**落位名与占位键
+统一 NFC**（占位键 = `nfc(name).to_lowercase()`——归一先于大小写折叠，双形态同占位；
+CJK/ASCII 两形态字节相同零影响）；`bid.import_files` 的 `filename`（显示名/元数据）归一
+NFC，**`upload_ref`（定位键）原样保留**——必须与磁盘真实文件名逐字节匹配，归一反而找
+不到文件。后续 R14+ 做混合分隔符测试矩阵 / 日期时区口径。
+
+```jsonc
+→ { "present": true,
+    "copied":  [ { "rel": "招标文件.docx", "name": "招标文件.docx", "size": 12345 } ],
+    "skipped": [ { "path": "/home/u/笔记.txt", "reason": "ext_blocked", "detail": "…" } ] }
+```
+
+### bid.packages —— 分包清单（只读；#20/#316——多标段/多包识别面）
+`{}`（project_id 由壳从当前项目路由）
+
+经 `bid_mcp::dispatch_with(list_packages)` 走真实工具面（#316 识别结果
++ 逐包条款数 + 选包状态 + 共用条款），只读不裁决。**选包动作不在本
+命令**——选包 = `build_outline` 传 package 参数（管线动作走 MCP）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "packages": { "detected": 2,
+                  "items": [ { "id": "PKG-A", "label": "一标段：设备采购", "kind": "标段",
+                               "number": "1", "req_count": 42, "sources": ["A-招标文件.docx"],
+                               "selected": true } ],
+                  "shared_req_count": 6, "total_requirements": 60,
+                  "selected_package": { "id": "PKG-A", "label": "一标段：设备采购" },
+                  "usage": "build_outline 传 package=<id|label|number> 选定投哪个包…" } }
+```
+
+### bid.matrix_override —— 否决项死锁人工裁定（写面；#20/#226）
+`{ requirement_id, status, deviation?, actor_id?, project_version? }`
+
+#182 宿主签发面（**不进 MCP 工具表，Agent 拿不到**）：壳用服务态密钥对
+`matrix_override:<project_id>:<requirement_id>:<status>:<sha256(deviation)>`
+四重绑定签域签 receipt（换任何一项都要换签），经
+`bid_mcp::dispatch_with(set_matrix_override)` 走真实工具面——覆写后矩阵
+立即重算。status ∈ RESPONDED|NOT_APPLICABLE|NOT_RESPONDED|PARTIAL；
+NOT_APPLICABLE 的 deviation 必填（不可审计的豁免不算豁免——壳透传空串
+会被域层响亮拒）。每次裁定落审计记录（操作者/理由/时间，不可抹除）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "override": { "requirement_id": "REQ-0003", "status": "NOT_APPLICABLE",
+                  "from_status": "NOT_RESPONDED", "blocking_after": 2,
+                  "audit": { "actor_id": "shell-operator", "method": "human_receipt" } } }
+```
+
+### bid.recover_state —— VALIDATING+缺章异常态恢复（写面；#20/#243）
+`{ reason, project_version? }`
+
+经 `bid_mcp::dispatch_with(recover_validating_state)` 走真实工具面——
+三重域层约束（仅 VALIDATING / 仅缺章 / 理由非空白）+ 审计账（何时/为何/
+从哪到哪/缺哪些章）。**不是任意状态写入**：非死锁态按「恢复」会被
+E_STATE 响亮拒（UI 引导卡语义）。恢复后携带新 project_version。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "recover": { "from_status": "VALIDATING", "to_status": "DRAFTING",
+                 "recovered_sections": ["SEC-T03"], "audit_reason": "旧版校验误推进" } }
+```
+
+### bid.addenda —— 补遗件台账（只读；#603 批 C——治理面）
+DomainStore + readiness 直读（`bid.gates` 同款纪律——MCP 工具面无此整面
+视图，`addendum_statuses` / `addendum_waivers` 同源）：补遗就绪度
+（`readiness::{total, ready, not_ready[]}`——not_ready 元素
+`{file_id, name, readiness, waived, reason}`，**已确认件保留在场**
+（waived=true——审计面不因放行而消失））+ 逐件确认台账（`waivers[]`：
+file_id/reason/at/principal）。读面无状态窗：total=0（未发现补遗）是
+NotProvided 阻塞的素材，不是故障。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "DRAFTING" },
+    "readiness": { "total": 2, "ready": 1,
+                   "not_ready": [ { "file_id": "TF-0003", "name": "补遗-01（扫描件）",
+                                    "readiness": "OCR_PENDING", "waived": false,
+                                    "reason": "OCR 未完成…" } ] },
+    "waivers": [ { "file_id": "TF-0004", "reason": "…", "at": 1790000000,
+                   "principal": "human:operator-li" } ] }
+```
+拒绝面：无 db.json → `not_found`。
+
+### bid.addendum_waiver —— 补遗逐件确认（写面；#603 批 C）
+`{ file_id, reason, actor_id?, project_version? }`
+
+#184 补遗分级阻塞的人工出口（UI 接线）：某补遗/输入件不处 READY
+（FAILED/OCR_PENDING）时起草被拒——人工逐件免责（file_id 级绑定）后放行，
+起草标 RESTRICTED（受限起草，不静默当完整输入）。流程（#182 宿主签发面，
+与 bid.gate_pass 同款）：壳签 receipt（签域 `addendum_waiver:{file_id}`——
+TF-0003 的 receipt 免不了 TF-0004）→ 经
+`dispatch_with(record_addendum_waiver)` 走真实工具面（状态窗 FILES_IMPORTED+ /
+幽灵件拒 / 空白理由拒全在域层裁决）→ 工具输出原样放 `addendum_waiver` 键
+（recorded 回执 / actor / addendum_waivers / addendum_readiness /
+agent_waivers / human_review_complete）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "DRAFTING" },
+    "addendum_waiver": { "recorded": { "file_id": "TF-0003", "reason": "…",
+                             "at": 1790000000, "principal": "human:operator-li",
+                             "actor": { "actor_id": "operator-li", "actor_type": "human",
+                                        "authentication_method": "hmac_receipt_v2" } },
+                    "addendum_waivers": [ …逐件台账… ],
+                    "addendum_readiness": { "total": 2, "ready": 1, "not_ready": [ … ] },
+                    "agent_waivers": [ … ], "human_review_complete": true,
+                    "status": "DRAFTING", "project_version": 6 } }
+```
+拒绝面：无 db.json → `not_found`；幽灵 file_id → **`not_found`**（对不存在
+的件做确认 = 凭空免责）；空白理由 → **`bad_args`**（壳侧早拒 + 域层兜底）。
+
+### bid.no_addendum_confirm —— 「本项目无补遗」全局确认（写面；#603 批 C）
+`{ reason, actor_id?, project_version? }`
+
+#379 拆门的独立写面：NotProvided 阻塞（未发现补遗/澄清件）的唯一人工
+出口。与逐件免责是**两种语义**——壳层结构性隔离为两条命令（互斥校验在
+工具面：confirm_no_addendum=true 时携带 file_id 响亮拒）。流程（#182 宿主
+签发面）：壳签 receipt（独立签域 `no_addendum_confirmed`——A 门 receipt
+免不了 B 门）→ 经 `dispatch_with(record_addendum_waiver,
+confirm_no_addendum=true)` 走真实工具面（域前置裁决：项目已有补遗件时
+响亮拒——「确认无补遗」与事实矛盾，正确出口是逐件确认或修复重传）→
+工具输出原样放 `no_addendum_confirm` 键（confirmed_no_addendum 回执（含
+#277 过门方式 method 与 human_confirmed）/ addendum_waivers /
+addendum_readiness / agent_waivers / human_review_complete）。确认即过
+no_addendum_confirmed 门 + 审计留痕（REV 记录）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "DRAFTING" },
+    "no_addendum_confirm": {
+                    "confirmed_no_addendum": { "review_id": "REV-0004",
+                             "gate": "no_addendum_confirmed", "reason": "…",
+                             "at": 1790000000,
+                             "actor": { "actor_id": "operator-zhao", "actor_type": "human",
+                                        "authentication_method": "hmac_receipt_v2" },
+                             "method": "human_receipt", "human_confirmed": true },
+                    "addendum_waivers": [], "addendum_readiness": { "total": 0, "ready": 0, "not_ready": [] },
+                    "agent_waivers": [], "human_review_complete": true,
+                    "status": "DRAFTING", "project_version": 6 } }
+```
+拒绝面：无 db.json → `not_found`；项目已有补遗件 / 空白理由 →
+**`bad_args`**（域层 E_UNPROCESSABLE 原文——给出正确出口指引）。
 
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
@@ -566,6 +893,39 @@ UI 上报右上角三按钮占宽；标题栏右端这一段必须让位（不�
 → { "width": 138 }
 ```
 
+### bid.validate  `{}` —— 标书校验报告（写面：推进 VALIDATING；#18 出口闭环）
+主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面（与
+bid-mcp-stdio 同源裁决），UI 入口固定 `scope=all`（sections 细分是代理高级面）。
+工具面**会推进项目至 VALIDATING**（域层语义，壳不拦截）。无章节树 → E_STATE
+透传 `state` 码（§3.3——UI「校验尚未开放」引导卡）；无 db.json → `not_found`。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "VALIDATING" },
+    "report": { …validate_bid_document 工具输出原样（ok / errors[]（BLOCKER+MAJOR）/
+                warnings[]（MINOR）/ findings[] / counts{blocker,major,minor,
+                deterministic,model} / rules_profile…） } }
+```
+
+### bid.export  `{ format, output_path, dark_bid?, bidder_name? }` —— 标书导出落盘（写面；#18 出口闭环）
+主体经 `bid_mcp::dispatch_with(export_bid_document)` 走真实工具面：双前置门
+（校验通过 + pre_export_confirm 过门确认）由工具面裁决，E_STATE 原文含状态与
+前置说明，透传 `state` 码（UI「导出被前置门拦截」引导卡）。`format` 限
+`docx | pdf`（pdf 需 Word/LibreOffice 转换通道，环境缺失 → `bad_args` 响亮拒）；
+`output_path` 必须是**工作区相对路径**（绝对路径 / 含 `..` → 工具面 `bad_args`，
+防导出产物写任意盘位）。幂等：同 (项目, 内容版本, 格式, 路径, 报价决策) 重放
+直返首次结果（`deduplicated:true`，零 IO）。产物定位：前端拿
+`export.artifact.url`（工作区内绝对路径，`explorer.reveal` 放行）调
+`explorer.reveal`。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "EXPORTED" },
+    "export": { …export_bid_document 工具输出原样（artifact{url,sha256,size} /
+                chapters_written / total_chars / dark_bid? / warnings[] /
+                deduplicated?…） } }
+```
+拒绝面：未过双前置门 → `state`（E_STATE 原文）；format/output_path 非法 →
+`bad_args`；无 db.json → `not_found`。
+
 
 ## 7. 事件（无 id）
 
@@ -638,7 +998,7 @@ mang-app.exe [DIR] [选项]
 bidcore\target\release\mang-app.exe --selftest
 ```
 
-无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
+无窗口跑：ping / app.info / fs.tree / fs.read / fs.readBytes / 大响应落盘取回删除 / fs.writeBytes(允许+拒绝) / fs.stat / fs.mkdir / 路径围栏 5 例 / recent 往返 / history.list / unknown_cmd / bad_json / 启动清理 / mcp.status / llm.status→save→status 往返（掩码+拒绝+清 key）/ fspec.status（缺文件/在场）/ bid.state+bid.outline（#313 批 A：无 db.json→not_found / 真实项目 / db.json 外部变更后缓存重开）/ bid.matrix（#313 批 B：无 db.json→not_found / 真实项目 / db.json 变更后缓存重开与阻断计数）/ bid.coverage（#313 批 D：无 db.json→not_found / 未导入件诚实口径 total_blocks=0+next 引导）/ workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）。输出 `PASS <name>：<detail>` / `FAIL …`，最后 `== N passed, M failed ==`。
 
 窗口内 IPC 冒烟（真实 WebView2，走 CDP）：
 ```

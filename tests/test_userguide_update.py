@@ -10,9 +10,10 @@ DOC = (
 
 
 class TestUserGuideIncrement:
-    def test_section_nine_exists(self):
+    def test_quickref_chapter_exists(self):
         text = DOC.read_text(encoding="utf-8")
-        assert "## 九、研究 CLI 功能速查" in text
+        # 章号随 main 侧「导入向导」章（R33/PR #61）合入顺延：九 → 十
+        assert "## 十、研究 CLI 功能速查" in text
 
     @pytest.mark.parametrize(
         "feature,marker",

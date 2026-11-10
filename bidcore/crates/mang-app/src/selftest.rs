@@ -6,6 +6,11 @@
 //!       / mcp.status / llm.status+save 往返（#76）/ fspec.status（#76）
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
 //!       / bid.quality+bid.score（#313 批 C：早态 E_STATE→state 码 / MATRIX_READY 后真实读取）
+//!       / bid.gates+bid.gate_pass（#603 批 A：五门台账 / 人工过门宿主签发 receipt / 门序跳跃拒 / 非法门早拒）
+//!       / bid.matrix（#603 批 B overrides 读面）+ bid.matrix_override（无理由拒）
+//!       / bid.addenda+bid.addendum_waiver+bid.no_addendum_confirm（#603 批 C：补遗台账 / 全局确认 / 幽灵件拒 / 空白理由早拒）
+//!       / bid.matrix（#313 批 B：无 db.json not_found / 真实项目 / db.json 变更重开）
+//!       / bid.coverage（#313 批 D：未导入件诚实口径 total_blocks=0 + next 引导）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
 //! 输出形如 `PASS  <name>：<detail>` / `FAIL  <name>：<detail>`，最后一行汇总 + 退出码。
 
@@ -19,6 +24,9 @@ use crate::recent;
 struct Report {
     pass: usize,
     fail: usize,
+    /// 平台/环境门跳过的项（AGENTS.md §13.2：SKIP 显式可见，不入通过也不入失败——
+    /// 汇总行单独报，避免「假绿」或「静默吞」两端）
+    skip: usize,
 }
 
 impl Report {
@@ -36,6 +44,11 @@ impl Report {
         } else {
             self.bad(name, detail)
         }
+    }
+    /// 环境门跳过（缺件/平台不可种）——显式横幅 + 独立计数，不冒充通过
+    fn skip(&mut self, name: &str, why: &str) {
+        self.skip += 1;
+        println!("SKIP  {name}：{why}");
     }
 }
 
@@ -149,7 +162,7 @@ fn seed_bid_project(dir: &std::path::Path) {
 }
 
 pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
-    let mut r = Report { pass: 0, fail: 0 };
+    let mut r = Report { pass: 0, fail: 0, skip: 0 };
     println!("== mang-app --selftest ==");
     println!("version = {}", env!("CARGO_PKG_VERSION"));
     println!("temp    = {}", display(&std::env::temp_dir()));
@@ -298,14 +311,25 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
 
     // ---- 路径围栏
+    // R2（#47 平台区分①）：绝对越界样本平台自适应——Windows 用盘符正斜杠
+    // 形态（C:/…，顺带覆盖混合分隔符的绝对形态），Unix 用根路径形态。
+    // 历史写死 C:/Windows/win.ini：在 Linux 上是合法相对路径（C: 只是
+    // 普通目录名），围栏正确地按相对路径解析成 not_found，用例却期望
+    // outside_workspace——此前 mang-app 在 Linux 不可构建，从未真跑
+    // 暴露（假绿）。AGENTS.md 13.1：平台特定样本必须 cfg 分支。
     let outside_abs = std::env::temp_dir().join("mang-selftest-outside.txt");
     std::fs::write(&outside_abs, "outside").unwrap();
+    let abs_escape: &str = if cfg!(windows) {
+        "C:/Windows/win.ini"
+    } else {
+        "/etc/passwd"
+    };
     let cases = [
         ("fs.read ../", json!({"id":"g1","cmd":"fs.read","path":"../mang-selftest-outside.txt"})),
         ("fs.readBytes ../", json!({"id":"g2","cmd":"fs.readBytes","path":"sub/../../mang-selftest-outside.txt"})),
         ("fs.tree ../", json!({"id":"g3","cmd":"fs.tree","path":".."})),
         ("fs.stat 绝对越界", json!({"id":"g4","cmd":"fs.stat","path": display(&outside_abs)})),
-        ("fs.read 绝对越界", json!({"id":"g5","cmd":"fs.read","path": "C:/Windows/win.ini"})),
+        ("fs.read 绝对越界", json!({"id":"g5","cmd":"fs.read","path": abs_escape})),
     ];
     let mut all_blocked = true;
     let mut detail = Vec::new();
@@ -319,6 +343,23 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     }
     r.check("path-guard 越界全拦", all_blocked, detail.join("，"));
     let _ = std::fs::remove_file(&outside_abs);
+
+    // R2（#47 平台区分①）：盘符形态的平台归类对照——两侧都断言「本平台
+    // 的正确语义」，不是把一侧改成另一侧的期望：Windows 上 C:/… 是
+    // 绝对路径 → 越界拦；Unix 上 C: 是普通目录名 → 围栏内相对解析，
+    // 目标不存在 → not_found（同样是围栏在工作，只是走了相对分支）。
+    let resp = call(&ctx, json!({"id":"g6","cmd":"fs.read","path":"C:/Windows/win.ini"}));
+    let drive_code = err_code(&resp);
+    let (drive_expect, drive_why) = if cfg!(windows) {
+        ("outside_workspace", "Windows：盘符=绝对路径，越界拦")
+    } else {
+        ("not_found", "Unix：C: 是普通目录名，围栏内相对解析后目标不存在")
+    };
+    r.check(
+        "path-guard 盘符形态平台语义",
+        drive_code == drive_expect,
+        format!("C:/Windows/win.ini → {drive_code}（{drive_why}）"),
+    );
 
     // ---- 大文件拒绝
     // (不真的造 50MB，只验证 too_large 的判定入口存在：用超长 name 触发 bad_args 说明参数校验生效)
@@ -539,6 +580,24 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
                 .unwrap_or(false),
         format!("rows={} blocking={}", bm2["rows"].as_array().map(|a| a.len()).unwrap_or(0), bm2["summary"]["blocking"]),
     );
+    // #313 批 D：覆盖报告面（同一种子项目——未导入文件的工具面诚实口径：
+    // total_blocks=0 + next 引导导入，不是错误）；三态分账 / ★聚合恒零
+    let resp = call(&ctx, json!({"id":"t-bid-c1","cmd":"bid.coverage"}));
+    let bc = result(&resp);
+    r.check(
+        "bid.coverage(未导入件)",
+        resp["ok"] == json!(true)
+            && bc["present"] == json!(true)
+            && bc["project"]["name"] == json!("selftest 项目")
+            && bc["coverage"]["total_blocks"] == json!(0)
+            && bc["coverage"]["files"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && bc["coverage"]["next"].as_str().map(|s| s.contains("import_tender_files")).unwrap_or(false)
+            && bc["summary"]["judged_blocks"] == json!(0)
+            && bc["summary"]["excluded_blocks"] == json!(0)
+            && bc["summary"]["unjudged_blocks"] == json!(0)
+            && bc["star"]["total"]["star_truth"] == json!(0),
+        format!("total={} next={}", bc["coverage"]["total_blocks"], bc["coverage"]["next"]),
+    );
 
     // ---- #313 批 C：自评数据面（bid.quality / bid.score）
     // 早态（REQUIREMENTS_EXTRACTED，矩阵未建）→ 工具面 E_STATE 透传为
@@ -593,6 +652,268 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         ),
     );
 
+    // ---- #603 批 A：治理面（bid.gates / bid.gate_pass）
+    // 读面：五门台账 + 空账本警告位（此时三门全未过）
+    let resp = call(&ctx, json!({"id":"t-bid-g0","cmd":"bid.gates"}));
+    let bg = result(&resp);
+    r.check(
+        "bid.gates(五门台账)",
+        resp["ok"] == json!(true)
+            && bg["present"] == json!(true)
+            && bg["gates"].as_array().map(|a| a.len() == 5).unwrap_or(false)
+            && bg["gates"][0]["gate"] == json!("matrix_approval")
+            && bg["gates"][0]["approved"] == json!(false)
+            && bg["human_review_complete"] == json!(true)
+            && bg["reviews"].as_array().map(|a| a.is_empty()).unwrap_or(false),
+        format!("gates={}", bg["gates"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // 写面：门序跳跃 → 域层 E_STATE 透传为壳侧 state 码
+    let resp = call(&ctx, json!({"id":"t-bid-gp0","cmd":"bid.gate_pass","gate":"pre_export_confirm","decision":"APPROVED"}));
+    r.check(
+        "bid.gate_pass(门序跳跃拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    // 写面：宿主签发 receipt（#182）→ matrix 门过（human_receipt 路径）
+    let resp = call(&ctx, json!({"id":"t-bid-gp1","cmd":"bid.gate_pass","gate":"matrix_approval","decision":"APPROVED","actor_id":"selftest-reviewer"}));
+    let bgp = result(&resp);
+    r.check(
+        "bid.gate_pass(人工过门)",
+        resp["ok"] == json!(true)
+            && bgp["gate_pass"]["receipt"]["actor"]["actor_type"] == json!("human")
+            && bgp["gate_pass"]["receipt"]["method"] == json!("human_receipt")
+            && bgp["gate_pass"]["receipt"]["human_confirmed"] == json!(true)
+            && bgp["gate_pass"]["receipt"]["finding_ids"].as_array()
+                .map(|a| a.is_empty()).unwrap_or(false),
+        format!("actor={:?}", bgp["gate_pass"]["receipt"]["actor"]),
+    );
+    // 读面对账：matrix 门已过 + latest_pass 审计在场
+    let resp = call(&ctx, json!({"id":"t-bid-g1","cmd":"bid.gates"}));
+    let bg2 = result(&resp);
+    r.check(
+        "bid.gates(过门后对账)",
+        resp["ok"] == json!(true)
+            && bg2["gates"][0]["approved"] == json!(true)
+            && bg2["gates"][0]["latest_pass"]["actor"] == json!("selftest-reviewer")
+            && bg2["reviews"].as_array().map(|a| a.len() == 1).unwrap_or(false),
+        format!("reviews={}", bg2["reviews"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // 写面：非法门名 → 壳侧入参早拒（不进工具面）
+    let resp = call(&ctx, json!({"id":"t-bid-gp2","cmd":"bid.gate_pass","gate":"no_addendum_confirmed","decision":"APPROVED"}));
+    r.check(
+        "bid.gate_pass(非法门早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
+    // ---- #47 R8（#19 拖拽导入）：ingest_drop 落位（壳拖入路径 → 复制进工作区根；
+    //      不依赖 db.json——先拖文件再建项合法；导入仍走 bid.import_files 向导确认）
+    let drop_src = scratch_dir().join("招标文件.docx");
+    std::fs::write(&drop_src, b"PK\x03\x04selftest-drop-payload").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ing","cmd":"bid.ingest_drop","paths":[drop_src.to_string_lossy()]}));
+    let ing = result(&resp);
+    r.check(
+        "bid.ingest_drop(拖入落位)",
+        resp["ok"] == json!(true)
+            && ing["copied"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+            && ing["copied"][0]["rel"].as_str() == Some("招标文件.docx"),
+        format!("copied={}", ing["copied"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // 幂等重放：同名同内容 → already_present（不按错误回）
+    let resp = call(&ctx, json!({"id":"t-bid-ing2","cmd":"bid.ingest_drop","paths":[drop_src.to_string_lossy()]}));
+    let ing2 = result(&resp);
+    r.check(
+        "bid.ingest_drop(幂等重放)",
+        resp["ok"] == json!(true)
+            && ing2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
+        format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    // ---- #47 R10（平台区分③）：基名跨平台守卫——CON.docx 在 Linux 真实
+    //      可创建（文件在场、后缀过白名单），但落位被守卫分账拒绝
+    // 平台门（AGENTS.md §13.1）：CON.docx 在 Windows 上映射控制台设备——
+    // 种不出真文件（is_file 探测揭穿）。Linux 上真文件在场才跑落位守卫
+    // 断言；Windows 侧 SKIP 显式可见（import_files 的纯字符串守卫项
+    // 不依赖文件，照跑）。
+    let con_src = scratch_dir().join("CON.docx");
+    let con_seeded = std::fs::write(&con_src, b"PK\x03\x04selftest-reserved")
+        .map(|_| con_src.is_file())
+        .unwrap_or(false);
+    if con_seeded {
+        let resp = call(&ctx, json!({"id":"t-bid-ing3","cmd":"bid.ingest_drop","paths":[con_src.to_string_lossy()]}));
+        let ing3 = result(&resp);
+        r.check(
+            "bid.ingest_drop(保留名守卫)",
+            resp["ok"] == json!(true)
+                && ing3["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+                && ing3["skipped"][0]["reason"].as_str() == Some("name_not_portable"),
+            format!("skipped={}", ing3["skipped"][0]["reason"].as_str().unwrap_or("?")),
+        );
+    } else {
+        r.skip("bid.ingest_drop(保留名守卫)", "本平台种不出真 CON.docx 源文件（Windows 设备名映射）——Linux 断言面");
+    }
+    let resp = call(&ctx, json!({"id":"t-bid-impnp","cmd":"bid.import_files","files":[{"upload_ref":"CON.docx","kind":"招标文件"}]}));
+    r.check(
+        "bid.import_files(保留名基 bad_args)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("code={}", err_code(&resp)),
+    );
+    // ---- #47 R11（平台区分④）：大小写不敏感同名去重——Windows FS 占位
+    //      语义预演（招标文件.docx 在场，拖 招标文件.DOCX 同内容 →
+    //      CI 占位幂等，不放行第二份——拷到 Windows 不互覆）
+    let ci_src = scratch_dir().join("招标文件.docx");
+    std::fs::write(&ci_src, b"PK\x03\x04selftest-ci-same").unwrap();
+    let ci_var = scratch_dir().join("招标文件.DOCX");
+    std::fs::copy(&ci_src, &ci_var).unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ci1","cmd":"bid.ingest_drop","paths":[ci_src.to_string_lossy()]}));
+    let resp = call(&ctx, json!({"id":"t-bid-ci2","cmd":"bid.ingest_drop","paths":[ci_var.to_string_lossy()]}));
+    let ci2 = result(&resp);
+    r.check(
+        "bid.ingest_drop(大小写变体幂等)",
+        resp["ok"] == json!(true)
+            && ci2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ci2["skipped"][0]["reason"].as_str() == Some("already_present")
+            && ci2["skipped"][0]["detail"].as_str().unwrap_or("").contains("招标文件"),
+        format!("detail={}", ci2["skipped"][0]["detail"].as_str().unwrap_or("?")),
+    );
+    // ---- #47 R12（平台区分⑤）：MAX_PATH 预检——深目录工作区（40 层真
+    //      目录 ~280 字符根）+ 合法基名 → 落位总长 > 259 → path_too_long
+    //      分账（Linux 能落但拷 Windows 创建即失败，预演同拒）。测完切回
+    //      原工作区（后续 #603 段依赖本 scratch 的 db.json）。
+    let deep_ws = scratch_dir();
+    let mut deep_cur = deep_ws.clone();
+    for i in 0..40 {
+        deep_cur = deep_cur.join(format!("d{i:02}xx"));
+    }
+    std::fs::create_dir_all(&deep_cur).unwrap();
+    let mp_src = scratch_dir().join("标书.docx");
+    std::fs::write(&mp_src, b"PK\x03\x04selftest-maxpath").unwrap();
+    let resp = call(&ctx, json!({"id":"t-ws-deep","cmd":"workspace.open","path": deep_cur.to_string_lossy()}));
+    let resp = call(&ctx, json!({"id":"t-bid-mp","cmd":"bid.ingest_drop","paths":[mp_src.to_string_lossy()]}));
+    let mp = result(&resp);
+    r.check(
+        "bid.ingest_drop(MAX_PATH 预检)",
+        resp["ok"] == json!(true)
+            && mp["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && mp["skipped"][0]["reason"].as_str() == Some("path_too_long"),
+        format!("skipped={}", mp["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    // 切回原工作区（#603 段的 db.json 在这）
+    let resp = call(&ctx, json!({"id":"t-ws-back","cmd":"workspace.open","path": ws.root_display()}));
+    r.check(
+        "workspace.open(切回原根)",
+        resp["ok"] == json!(true),
+        format!("{}", ws.root_display()),
+    );
+    // ---- #47 R13（平台区分⑥）：NFC 归一——NFD 源（é = e + U+0301）
+    //      拖入落位为 NFC；NFC 重拖同内容占位幂等（双形态同键）
+    let nfd_src = scratch_dir().join("cafe\u{0301}招标.docx");
+    std::fs::write(&nfd_src, b"PK\x03\x04selftest-nfc").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-nfc1","cmd":"bid.ingest_drop","paths":[nfd_src.to_string_lossy()]}));
+    let n1 = result(&resp);
+    let nfc_rel = n1["copied"][0]["rel"].as_str().unwrap_or("?").to_string();
+    r.check(
+        "bid.ingest_drop(NFD 落位归一 NFC)",
+        resp["ok"] == json!(true)
+            && nfc_rel == "caf\u{00e9}招标.docx"
+            && !nfc_rel.contains('\u{0301}'),
+        format!("rel={nfc_rel}"),
+    );
+    let nfc_src = scratch_dir().join("caf\u{00e9}招标.docx");
+    std::fs::write(&nfc_src, b"PK\x03\x04selftest-nfc").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-nfc2","cmd":"bid.ingest_drop","paths":[nfc_src.to_string_lossy()]}));
+    let n2 = result(&resp);
+    r.check(
+        "bid.ingest_drop(NFC 重拖占位幂等)",
+        resp["ok"] == json!(true)
+            && n2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && n2["skipped"][0]["reason"].as_str() == Some("already_present"),
+        format!("skipped={}", n2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
+    // 读面：overrides 空对象恒在（UI 不赌键在场）
+    let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));
+    let bm = result(&resp);
+    r.check(
+        "bid.matrix(overrides 读面)",
+        resp["ok"] == json!(true)
+            && bm["overrides"].as_object().is_some(),
+        format!("overrides={}", bm["overrides"].as_object().map(|o| o.len()).unwrap_or(0)),
+    );
+    // 写面：NOT_APPLICABLE + 理由 → 行翻不适用、human 回执（#182）
+    let resp = call(&ctx, json!({"id":"t-bid-mo1","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"NOT_APPLICABLE","deviation":"规则说明性条款，无可响应正文","actor_id":"selftest-operator"}));
+    let bmo = result(&resp);
+    r.check(
+        "bid.matrix_override(人工豁免)",
+        resp["ok"] == json!(true)
+            && bmo["override"]["row"]["status"] == json!("NOT_APPLICABLE")
+            && bmo["override"]["actor"]["actor_type"] == json!("human"),
+        format!("row_status={:?}", bmo["override"]["row"]["status"].as_str()),
+    );
+    // 读面对账：overrides 面含本行（谁/何时/为何——回溯可查）
+    let resp = call(&ctx, json!({"id":"t-bid-mo2","cmd":"bid.matrix"}));
+    let bm2 = result(&resp);
+    r.check(
+        "bid.matrix(豁免后对账)",
+        resp["ok"] == json!(true)
+            && bm2["overrides"]["REQ-0001"]["status"] == json!("NOT_APPLICABLE")
+            && bm2["overrides"]["REQ-0001"]["actor"]["actor_id"] == json!("selftest-operator"),
+        format!("deviation={:?}", bm2["overrides"]["REQ-0001"]["deviation"].as_str().map(|s| s.chars().take(12).collect::<String>())),
+    );
+    // 写面：NOT_APPLICABLE 无理由 → 工具面拒（不可审计的豁免不算豁免）
+    let resp = call(&ctx, json!({"id":"t-bid-mo3","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"NOT_APPLICABLE"}));
+    r.check(
+        "bid.matrix_override(无理由拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
+    // ---- #603 批 C：补遗豁免（bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm）
+    // 读面：无补遗件台账（total=0——NotProvided 素材，不是故障）
+    let resp = call(&ctx, json!({"id":"t-bid-ad0","cmd":"bid.addenda"}));
+    let bad0 = result(&resp);
+    r.check(
+        "bid.addenda(补遗台账)",
+        resp["ok"] == json!(true)
+            && bad0["readiness"]["total"] == json!(0)
+            && bad0["waivers"].as_array().map(|a| a.is_empty()).unwrap_or(false),
+        format!("total={}", bad0["readiness"]["total"]),
+    );
+    // 写面：全局无补遗确认（宿主签发 receipt——human 路径）
+    let resp = call(&ctx, json!({"id":"t-bid-ad1","cmd":"bid.no_addendum_confirm","reason":"已核对招标文件全册，本项目无补遗/澄清件","actor_id":"selftest-operator"}));
+    let bad1 = result(&resp);
+    r.check(
+        "bid.no_addendum_confirm(全局确认)",
+        resp["ok"] == json!(true)
+            && bad1["no_addendum_confirm"]["confirmed_no_addendum"]["gate"] == json!("no_addendum_confirmed")
+            && bad1["no_addendum_confirm"]["confirmed_no_addendum"]["actor"]["actor_type"] == json!("human"),
+        format!("human_confirmed={:?}", bad1["no_addendum_confirm"]["confirmed_no_addendum"]["human_confirmed"]),
+    );
+    // 读面对账：no_addendum_confirmed 门已过（gates 同源）
+    let resp = call(&ctx, json!({"id":"t-bid-ad2","cmd":"bid.gates"}));
+    let bad2 = result(&resp);
+    r.check(
+        "bid.gates(全局确认后对账)",
+        resp["ok"] == json!(true)
+            && bad2["gates"][4]["gate"] == json!("no_addendum_confirmed")
+            && bad2["gates"][4]["approved"] == json!(true),
+        format!("latest={:?}", bad2["gates"][4]["latest_pass"]["actor"]),
+    );
+    // 写面：幽灵件 → 域层 ENotFound（凭空免责拒）
+    let resp = call(&ctx, json!({"id":"t-bid-ad3","cmd":"bid.addendum_waiver","file_id":"TF-9999","reason":"x"}));
+    r.check(
+        "bid.addendum_waiver(幽灵件拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // 写面：空白理由 → 壳侧早拒（不可审计的确认不成确认）
+    let resp = call(&ctx, json!({"id":"t-bid-ad4","cmd":"bid.no_addendum_confirm","reason":"  "}));
+    r.check(
+        "bid.no_addendum_confirm(空白理由早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
     // ---- #194：工作区切换（workspace.open / workspace.current）
     let ws_b = scratch_dir();
     let ws_b_display = Workspace::new(&ws_b).unwrap().root_display();
@@ -644,7 +965,12 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     let _ = std::fs::remove_dir_all(&ws_b);
 
     println!();
-    println!("== {} passed, {} failed ==", r.pass, r.fail);
+    println!(
+        "== {} passed, {} failed, {} skipped ==",
+        r.pass,
+        r.fail,
+        r.skip
+    );
     let _ = std::fs::remove_dir_all(&root);
     if r.fail == 0 {
         0
