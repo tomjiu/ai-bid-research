@@ -504,5 +504,69 @@ check(
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- #19：标书项目导入向导（空态引导卡 + bid.create / bid.import 接线） ----------
+check(
+  "空态引导卡：侧栏非标书工作区给「新建标书项目」入口（data-bid-act=create-project）",
+  /data-bid-act="create-project"/.test(app),
+  "空工作区无新建入口（issue #19 用户入口验收）"
+);
+check(
+  "空态引导卡：工作台未接入项目同样给向导入口",
+  /未接入标书项目[\s\S]{0,400}data-bid-act="create-project"/.test(app),
+  "工作台空态只有「重试」没有向导"
+);
+check(
+  "向导两段式：openBidImportWizard 在场（先建项后导入）",
+  /openBidImportWizard/.test(app),
+  "向导入口函数被删/改名"
+);
+check(
+  "向导第一步调 bid.create（真实 IPC）",
+  /ipc\("bid\.create",/.test(app),
+  "建项没走真实 IPC"
+);
+check(
+  "向导第二步调 bid.import（真实 IPC）",
+  /ipc\("bid\.import",/.test(app),
+  "导入没走真实 IPC"
+);
+check(
+  "coverage 未导入件 next 引导对齐向导入口（data-bid-act=import-wizard）",
+  /data-bid-act="import-wizard"/.test(app),
+  "覆盖报告空态文案没有可点击的「去导入」（issue #19 任务 2）"
+);
+check(
+  "演示桥补 bid.create / bid.import stub",
+  /case "bid\.create":/.test(app) && /case "bid\.import":/.test(app),
+  "浏览器预览模式下向导无数据"
+);
+check(
+  "壳侧 bid.rs 有 create / import（写面）",
+  /pub fn create\(/.test(bidRs) && /pub fn import\(/.test(bidRs),
+  "壳侧命令缺位——UI 接了壳没接"
+);
+check(
+  "壳侧经真实工具面 create_bid_project / import_tender_files",
+  bidRs.includes('"create_bid_project"') && bidRs.includes('"import_tender_files"'),
+  "没走 dispatch_with 真实工具面"
+);
+check(
+  "ipc.rs 分发 bid.create / bid.import",
+  /"bid\.create" =>/.test(ipcRs) && /"bid\.import" =>/.test(ipcRs),
+  "命令没注册进 IPC 分发表"
+);
+check(
+  "契约文档登记 bid.create / bid.import（#19）",
+  contract.includes("### bid.create") && contract.includes("### bid.import"),
+  "改了代码没同步契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+for (const sel of [".bid-imp ", ".bid-imp-step", ".bid-imp-file", ".bid-imp-result"]) {
+  check(
+    `styles.css 提供 ${sel.trim()} 向导样式`,
+    css.includes(sel),
+    "向导样式被删"
+  );
+}
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

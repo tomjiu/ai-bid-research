@@ -4201,3 +4201,120 @@ html[data-chrome="native"][data-maximized="1"] #app {
     max-width: 1100px;
   }
 }
+
+/* ============ #19：标书项目导入向导（两段式模态 + 空态引导卡） ============ */
+.bid-imp {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+.bid-imp .bid-card,
+.bid-imp-step {
+  background: var(--bg-2, #1e2227);
+  border: 1px solid var(--border-1, #2c3138);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.bid-imp-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin: 10px 0 4px;
+}
+.bid-imp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg-2, #9aa4b2);
+}
+.bid-imp-field input,
+.bid-imp-field select {
+  background: var(--bg-1, #14171b);
+  border: 1px solid var(--border-1, #2c3138);
+  border-radius: 6px;
+  color: var(--fg-1, #d7dde3);
+  padding: 6px 9px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.bid-imp-field input:focus,
+.bid-imp-field select:focus {
+  outline: none;
+  border-color: var(--accent, #4c8dff);
+}
+.bid-imp-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--fg-2, #9aa4b2);
+  line-height: 1.5;
+}
+.bid-imp-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.bid-imp-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-1, #14171b);
+  border: 1px solid var(--border-1, #2c3138);
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.bid-imp-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--fg-1, #d7dde3);
+}
+.bid-imp-file select {
+  background: var(--bg-2, #1e2227);
+  border: 1px solid var(--border-1, #2c3138);
+  border-radius: 5px;
+  color: var(--fg-1, #d7dde3);
+  font-size: 12px;
+  padding: 3px 5px;
+}
+.bid-imp-result {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+.bid-imp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.bid-imp-table th,
+.bid-imp-table td {
+  text-align: left;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--border-1, #2c3138);
+  color: var(--fg-1, #d7dde3);
+  white-space: nowrap;
+}
+.bid-imp-table th {
+  color: var(--fg-2, #9aa4b2);
+  font-weight: 600;
+}
+.bid-imp-empty .view-state {
+  padding: 26px 16px;
+}
+.bid-imp-empty-hint {
+  max-width: 520px;
+  margin: 4px auto 0;
+  font-size: 12px;
+  color: var(--fg-2, #9aa4b2);
+  line-height: 1.6;
+}
+@media (max-width: 900px) {
+  .bid-imp-form {
+    grid-template-columns: 1fr;
+  }
+}

@@ -563,6 +563,46 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
                          "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
 ```
 
+### bid.create —— 新建标书项目（写面；#19 导入向导第一步）
+经 `bid_mcp::dispatch_with(create_bid_project)` 走真实工具面（契约 §1：external_key 幂等
+——重试同键静默幂等；`bid_deadline` 已过 → `warnings[]` 警告不阻断）。**无 db.json 是本
+命令的合法入口**（空工作区建项正是它的场景）：不经读面缓存（`ensure_locked`），直接
+`BidService::open` 落 `db.json` + `.mang/approval.key`（#182 信任根）。已有项目且异
+`external_key` → 域层 M1 单项目存储前置拒（`bad_args`，消息自带「单项目」语义——UI 引
+导「本工作区已有项目」而非故障横幅，§109 口径）。
+```jsonc
+→ { name, mode:"明标"|"暗标", bid_deadline:"YYYY-MM-DD", external_key,
+    tender_notice_ref? }
+← { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFT" },
+    "project_id": "PRJ-0001",
+    "create": { …create_bid_project 工具输出原样（project_id / status /
+                project_version / request_id / warnings / deduplicated?）… } }
+```
+错误码：`bad_args`（参数缺/模式非法/已有项目异 key——M1 单项目）；`bad_json`（db.json 损坏）。
+
+### bid.import —— 导入招标文件（写面；#19 导入向导第二步）
+壳层职责 = **文件搬运 + 围栏适配**：`files[].path` 是对话框/拖拽来的**任意位置路径**——
+已在工作区内 → 原样作 upload_ref（不重复拷贝）；工作区外 → 拷入 `<ws>/tender/`（同名
+自动加 `-2`/`-3`，`copied[]` 回显 from→to），再以受信路径经 `dispatch_with
+(import_tender_files)` 走真实工具面（契约 §2：#183 围栏 / sha256 幂等去重 / 单件 500MB·
+单批 64 件限额全在工具与域层，壳不复制裁决）。**E_PARTIAL 不吞成功面**（契约 §2 明令）：
+部分件解析失败时仍是成功帧，`partial` 键携带逐件失败清单与重试指引，`import` 键照常携带
+成功面——UI 渲染「部分成功」报告而非故障横幅。
+```jsonc
+→ { files: [ { "path": "D:\\Downloads\\招标文件.pdf",           // 绝对或工作区相对
+               "kind": "招标文件",                                // 招标文件|附件|图纸|补遗|答疑|评分办法|格式模板（缺省附件）
+               "expected_pages?: 65 } ] }
+← { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "…", "status": "FILES_IMPORTED" },
+    "import":  { …import_tender_files 工具输出原样（file_ids / per_file /
+                 totals / forms_manifest? / addendum_readiness）… },
+    "copied":  [ { "from": "D:\\Downloads\\招标文件.pdf", "to": "tender/招标文件.pdf" } ],
+    "partial": { "what": "1 件导入失败…", "item_errors": ["…"], "hint": "…" } }  // 仅部分失败时在场
+```
+错误码：`not_found`（无 db.json——先建项，向导第一步引导）；`state`（工具面 E_STATE 透传
+——状态窗外导入）；`bad_args`（files 非法 / kind 越界）；`io`（拷贝失败）。
+
 ### recent.load / recent.save `{ items }`
 文件 `%APPDATA%\mang\recent.json`（缺失退回 LOCALAPPDATA → TEMP），最多 50 条，按 `openedAt` 倒序。同一 `path` 只留最新一条。写盘先 `.tmp` 再 rename。
 ```jsonc

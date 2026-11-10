@@ -561,6 +561,63 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         format!("total={} next={}", bc["coverage"]["total_blocks"], bc["coverage"]["next"]),
     );
 
+    // ---- #19：导入向导写面（bid.create / bid.import——独立 scratch 目录，
+    // 不动主 ctx 的种子项目态）。import 真件面（PDF 解析链）在 bid.rs 的
+    // cargo test 里用 fixtures/corpus-A 覆盖；selftest 覆盖**新增壳层路径**：
+    // 建项落库 / 缓存指纹失效 / 无项目引导 / E_PARTIAL 不吞成功面。
+    let dir19 = std::env::temp_dir().join(format!(
+        "mang-selftest-19-{}-{}",
+        std::process::id(),
+        ipc::now_ms()
+    ));
+    let _ = std::fs::remove_dir_all(&dir19);
+    std::fs::create_dir_all(&dir19).unwrap();
+    let ctx19 = Ctx::new(Workspace::new(&dir19).unwrap(), std::path::PathBuf::new());
+    // ① 无 db.json → bid.import 干净 not_found（向导第一步引导）
+    let resp = call(&ctx19, json!({"id":"t-19-i0","cmd":"bid.import",
+        "files": [{"path": "x.pdf", "kind": "招标文件"}]}));
+    r.check(
+        "bid.import(无db.json→先建项)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // ② bid.create 建项（external_key 幂等键）→ DRAFT + db.json 落盘
+    let resp = call(&ctx19, json!({"id":"t-19-c1","cmd":"bid.create",
+        "name": "selftest 向导项目", "mode": "明标",
+        "bid_deadline": "2099-12-31", "external_key": "mang-selftest-19"}));
+    let c19 = result(&resp);
+    r.check(
+        "bid.create(空工作区建项)",
+        resp["ok"] == json!(true)
+            && c19["create"]["status"] == json!("DRAFT")
+            && c19["project"]["name"] == json!("selftest 向导项目")
+            && dir19.join("db.json").is_file(),
+        format!("ok={} status={}", resp["ok"], c19["create"]["status"]),
+    );
+    // ③ 建项后读面立即可读（缓存指纹失效 → ensure_locked 重开新库）
+    let resp = call(&ctx19, json!({"id":"t-19-s1","cmd":"bid.state"}));
+    r.check(
+        "bid.state(建项后立即可读)",
+        resp["ok"] == json!(true)
+            && result(&resp)["project"]["name"] == json!("selftest 向导项目"),
+        format!("ok={}", resp["ok"]),
+    );
+    // ④ E_PARTIAL 不吞成功面：导入解析器不认的 .md → ok:true + partial
+    //    （成功帧携带逐件失败清单——契约 §2，UI 渲染「部分成功」而非故障）
+    std::fs::write(dir19.join("说明.md"), "# 不是招标文件格式").unwrap();
+    let resp = call(&ctx19, json!({"id":"t-19-i1","cmd":"bid.import",
+        "files": [{"path": "说明.md", "kind": "附件"}]}));
+    let p19 = result(&resp);
+    r.check(
+        "bid.import(E_PARTIAL不吞成功面)",
+        resp["ok"] == json!(true)
+            && p19["partial"]["item_errors"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+            && p19["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && p19["partial"]["hint"].is_string(),
+        format!("ok={} what={}", resp["ok"], p19["partial"]["what"]),
+    );
+    let _ = std::fs::remove_dir_all(&dir19);
+
     // ---- #313 批 C：自评数据面（bid.quality / bid.score）
     // 早态（REQUIREMENTS_EXTRACTED，矩阵未建）→ 工具面 E_STATE 透传为
     // 壳侧 `state` 码（UI 据此分支「尚未开放」引导卡，不是故障）

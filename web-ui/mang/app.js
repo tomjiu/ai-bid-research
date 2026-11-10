@@ -25,7 +25,9 @@
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.2 8.4 3 3 6.6-6.8"/></svg>',
     shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 13.4 3.8v3.4c0 3.2-2.2 5.6-5.4 6.9-3.2-1.3-5.4-3.7-5.4-6.9V3.8z"/><path d="m5.7 7.9 1.6 1.6 3-3.1"/></svg>',
     outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h2.2M4 12h2.2M4 18.5h2.2"/><path d="M10 5.5h10M10 12h7.5M10 18.5h9"/></svg>',
-    bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>'
+    bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>',
+    plus: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>',
+    import: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.4V2.6"/><path d="m5.2 7.6 2.8 2.8 2.8-2.8"/><path d="M2.8 10.8v1.4a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-1.4"/></svg>'
   };
   var KIND_ICON = { docx: "docx", xlsx: "xlsx", pdf: "pdf", md: "md", text: "text", dir: "folder", bidwork: "bid" };
   function fmtBytes(n) {
@@ -458,6 +460,33 @@
           { id: "REV-0002", gate: "outline_approval", decision: "APPROVED", reviewer: "agent:agent-01", actor: { actor_id: "agent-01", actor_type: "agent", authentication_method: "hmac_receipt_v2" }, findings: [], at: Math.floor(now / 1000) - 86400, reviewed_content_digest: "demo-digest" },
           { id: "REV-0001", gate: "matrix_approval", decision: "APPROVED", reviewer: "agent:agent-01", actor: { actor_id: "agent-01", actor_type: "agent", authentication_method: "hmac_receipt_v2" }, findings: [], at: Math.floor(now / 1000) - 86400 * 2, reviewed_content_digest: "demo-digest" }
         ]
+      },
+      // #19 导入向导：建项/导入演示面（与真实 bid.create / bid.import 响应
+      // 同形——演示态 = 建项成功回 DRAFT + 导入回两件全过（含格式件清单面
+      // forms_manifest 的形态展示），copied 回显演示「工作区外文件拷入
+      // tender/」语义）
+      create: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFT" },
+        project_id: "PRJ-0001",
+        create: { project_id: "PRJ-0001", status: "DRAFT", project_version: 1, request_id: "req-demo", warnings: [] }
+      },
+      import: {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "FILES_IMPORTED" },
+        import: {
+          file_ids: ["TF-0001", "TF-0002"],
+          per_file: [
+            { file_id: "TF-0001", kind: "招标文件", sha256: "a1b2c3d4e5", pages: 65, tables: 12, chunks: 486, ocr_tier: "text", parse_status: "OK", deduplicated: false },
+            { file_id: "TF-0002", kind: "格式模板", sha256: "f6g7h8i9j0", pages: 3, tables: 1, chunks: 18, ocr_tier: "n/a", parse_status: "OK", deduplicated: false }
+          ],
+          totals: { files: 2, chunks: 504, parse_failed: 0, partial: 0 },
+          forms_manifest: { count: 1, items: [{ file_id: "TF-0002", name: "投标函格式页.pdf", parse_status: "OK", pages: 3, tables: 1 }] },
+          addendum_readiness: { total: 0, ready: 0, not_ready: [] }
+        },
+        copied: [{ from: root + "\\Downloads\\招标文件.pdf", to: "tender/招标文件.pdf" }]
       }
     };
     // #603 批 A：演示桥的治理面可变态（gate_pass 会真改台账——与真实壳
@@ -533,6 +562,12 @@
               return demoGatePass(m);
             case "bid.coverage":
               return respond(m.id, DEMO_BID.coverage);
+            // #19 导入向导：演示桥同形透传（import 按演示两件全过——
+            // per_file/totals/forms_manifest 形态与真实壳一致）
+            case "bid.create":
+              return respond(m.id, DEMO_BID.create);
+            case "bid.import":
+              return respond(m.id, DEMO_BID.import);
 
             case "fs.tree":
               return respond(m.id, tree);
@@ -1159,6 +1194,9 @@
         else if (act === "refresh-quality") ui.loadBidQuality(true);
         else if (act === "refresh-gates") ui.loadBidGates(true);
         else if (act === "workbench-cov") ui.openBidWorkbench("coverage");
+        // #19 导入向导：空态引导卡/覆盖报告 next 引导的统一入口
+        else if (act === "create-project") ui.openBidImportWizard(true);
+        else if (act === "import-wizard") ui.openBidImportWizard(false);
 
       });
     });
@@ -1172,13 +1210,20 @@
     }
     if (!b.present) {
       const notProject = b.error && b.error.indexOf("db.json") >= 0;
+      // #19：空工作区不再是死胡同——「新建标书项目」引导卡（向导两段式：
+      // 建项 → 导入招标文件）与既有「切换工作区/重试」并列
       body.innerHTML =
         '<div class="bid-side"><div class="bid-card" data-kind="empty">'
-        + '<div class="bid-card-title">' + (notProject ? "当前工作区不是标书项目" : "读取失败") + "</div>"
+        + '<div class="bid-card-title">' + (notProject ? "当前工作区还不是标书项目" : "读取失败") + "</div>"
         + '<div class="bid-card-sub">' + esc(b.error || "无数据") + "</div>"
-        + '<div class="bid-card-actions">'
-        + (notProject ? '<button class="btn" data-bid-act="open-folder">' + ICON.folderOpen + "切换工作区</button>" : "")
-        + '<button class="btn" data-bid-act="refresh">重试</button></div>'
+        + (notProject
+          ? '<div class="bid-card-sub">在这里新建项目：建项（create_bid_project）→ 导入招标文件（import_tender_files）→ 抽取条款，全部在工作台完成</div>'
+            + '<div class="bid-card-actions">'
+            + '<button class="btn btn-primary" data-bid-act="create-project">' + ICON.plus + "新建标书项目</button>"
+            + '<button class="btn" data-bid-act="open-folder">' + ICON.folderOpen + "切换工作区</button>"
+            + '<button class="btn" data-bid-act="refresh">重试</button></div>'
+          : '<div class="bid-card-actions">'
+            + '<button class="btn" data-bid-act="refresh">重试</button></div>')
         + "</div></div>";
       bindBidViewActions(body);
       return;
@@ -1233,6 +1278,7 @@
       + '<span class="bid-wb-project" id="bid-wb-project"></span>'
       + '<span class="bid-wb-status" id="bid-wb-status"></span>'
       + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm" data-bid-act="import-wizard" title="导入招标文件（import_tender_files——补遗/答疑/格式模板追加，或空工作区首次导入）">' + ICON.import + "导入</button>"
       + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix / bid.coverage / 自评数据">刷新</button>'
       + "</header>"
       + '<div class="bid-wb-body">'
@@ -1328,7 +1374,18 @@
     if (!b.present) {
       projEl.textContent = "";
       statEl.textContent = "";
-      treeEl.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">未接入标书项目</div><div>' + esc(b.error || "当前工作区无 db.json") + '</div><button class="btn" data-bid-act="refresh">重试</button></div>';
+      // #19：工作台空态不再只有「重试」——空工作区给「新建/导入」向导
+      // 引导卡（与侧栏同款入口，IPC-CONTRACT §109 口径：引导而非故障）
+      treeEl.innerHTML =
+        '<div class="bid-imp-empty">'
+        + '<div class="view-state"><div class="view-state-title">未接入标书项目</div>'
+        + '<div>' + esc(b.error || "当前工作区无 db.json") + "</div>"
+        + '<div class="bid-imp-empty-hint">新建项目只需两步：① 填项目名/招标模式/截止日 → ② 选招标文件导入。工作区外选中的文件会自动拷入 tender/ 目录</div>'
+        + '<div class="bid-card-actions">'
+        + '<button class="btn btn-primary" data-bid-act="create-project">' + ICON.plus + "新建标书项目</button>"
+        + '<button class="btn" data-bid-act="open-folder">' + ICON.folderOpen + "切换工作区</button>"
+        + '<button class="btn" data-bid-act="refresh">重试</button>'
+        + "</div></div></div>";
       bindBidViewActions(treeEl);
       return;
     }
@@ -2240,13 +2297,17 @@
     }
     if (cv.status === "error" && cv.code === "state") {
       // 工具面 E_STATE 透传（壳侧 state 码，契约 §3.3）——早态项目引导卡
-      // 而非错误横幅（批 C 自评面同款纪律：单一真源在 code，不在文案）
+      // 而非错误横幅（批 C 自评面同款纪律：单一真源在 code，不在文案）。
+      // #19：next 引导从「MCP 管线之后自动可用」对齐为可点击的
+      // 「去导入」向导入口（同一交互语言——导入不再必须代理/CLI 驱动）
       panel.innerHTML =
         '<div class="bid-cov"><div class="view-state"><div class="view-state-title">覆盖报告尚未开放</div>'
-        + "<div>当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，MCP 管线 import_tender_files 之后自动可用</div>"
-        + '<div><button class="btn" data-cov-retry>重新检查</button></div></div></div>';
+        + "<div>当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，导入招标文件（import_tender_files）之后自动可用</div>"
+        + '<div><button class="btn btn-primary" data-bid-act="import-wizard">' + ICON.import + "去导入招标文件</button>"
+        + '<button class="btn" data-cov-retry>重新检查</button></div></div></div>';
       const retry = panel.querySelector("[data-cov-retry]");
       if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
+      bindBidViewActions(panel);
       return;
     }
     if (cv.status === "error" || !cv.data) {
@@ -4234,6 +4295,219 @@
         state.bid.coverage.error = err && (err.message || err.code) || "bid.coverage 读取失败";
       }
       renderBidWorkbenchIfOpen();
+    },
+    /** #19 导入向导：两段式模态（先建项后导入）的会话态。
+     *  phase: idle → creating（建项中）/ created（建项完成，进第二步）
+     *         → importing / imported（结果在场，含 partial 部分成功）
+     *  createError / importError：两段各自的失败态（state 码走引导文案）。
+     *  extKey：向导会话生成的 external_key——重试同键幂等（契约 §1），
+     *  重开向导换新键（新键 = 新项目意图）。 */
+    async openBidImportWizard(startAtCreate) {
+      if (!state.bridge) return;
+      const IMP = {
+        phase: startAtCreate ? "create" : "import",
+        files: [],           // [{path, name, kind}]
+        extKey: "mang-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+        busy: false,
+        createError: "",
+        createCode: "",
+        projName: "",
+        importError: "",
+        importCode: "",
+        result: null,
+      };
+      const KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];
+      const m = openModal(startAtCreate ? "新建标书项目" : "导入招标文件", "");
+      const body = m.body;
+
+      const createCardHtml = () => {
+        if (IMP.phase === "creating") {
+          return '<div class="bid-card bid-imp-step"><div class="view-state"><div class="view-spinner"></div><div>正在创建项目（create_bid_project）…</div></div></div>';
+        }
+        if (IMP.phase !== "create") return "";
+        let html = '<div class="bid-card bid-imp-step"><div class="bid-card-title">' + ICON.plus + ' 第一步 · 新建标书项目</div>'
+          + '<div class="bid-card-sub">create_bid_project——单工作区单项目；截止日已过仅警告不阻断（契约 §1）</div>'
+          + '<div class="bid-imp-form">'
+          + '<label class="bid-imp-field"><span>项目名称 *</span><input type="text" data-imp-name maxlength="80" placeholder="如：智慧园区弱电工程" value="' + esc(IMP.projName) + '"></label>'
+          + '<label class="bid-imp-field"><span>招标模式 *</span><select data-imp-mode><option value="明标">明标</option><option value="暗标">暗标（导出脱敏）</option></select></label>'
+          + '<label class="bid-imp-field"><span>投标截止日 *</span><input type="date" data-imp-deadline min="2020-01-01" max="2099-12-31"></label>'
+          + '<label class="bid-imp-field"><span>招标公告编号</span><input type="text" data-imp-notice maxlength="120" placeholder="选填——tender_notice_ref"></label>'
+          + "</div>";
+        if (IMP.createError) {
+          html += '<div class="view-state" data-kind="error"><div class="view-state-title">建项未完成</div><div>' + esc(IMP.createError) + "</div>"
+            + (IMP.createCode === "bad_args" && IMP.createError.indexOf("单项目") >= 0
+              ? '<div class="bid-imp-hint">' + ICON.info + " 本工作区已有标书项目（单项目存储）——切换工作区另建，或直接导入新文件</div>"
+              : "")
+            + "</div>";
+        }
+        html += '<div class="bid-card-actions"><button class="btn btn-primary" data-imp-create>' + ICON.check + "创建项目</button></div></div>";
+        return html;
+      };
+      const importCardHtml = () => {
+        if (IMP.phase === "importing") {
+          return '<div class="bid-card"><div class="view-state"><div class="view-spinner"></div><div>正在导入（解析 → 切块 → 证据注册 → 双索引）…</div></div></div>';
+        }
+        if (IMP.phase !== "import") return "";
+        let html = '<div class="bid-card"><div class="bid-card-title">' + ICON.import + " 第二步 · 导入招标文件</div>"
+          + '<div class="bid-card-sub">import_tender_files——PDF / DOCX / XLSX / .doc；工作区外选中的文件自动拷入 tender/；同内容重传幂等去重（sha256）</div>'
+          + '<div class="bid-card-actions"><button class="btn" data-imp-pick>' + ICON.folderOpen + "选择文件…</button></div>";
+        if (IMP.files.length) {
+          html += '<div class="bid-imp-files">';
+          IMP.files.forEach((f, i) => {
+            html += '<div class="bid-imp-file">'
+              + '<span class="bid-imp-file-name" title="' + esc(f.path) + '">' + esc(f.name) + "</span>"
+              + '<select data-imp-kind="' + i + '">'
+              + KINDS.map((k) => '<option value="' + k + '"' + (k === f.kind ? " selected" : "") + ">" + k + "</option>").join("")
+              + "</select>"
+              + '<button class="tab-action" data-imp-rm="' + i + '" aria-label="移除">' + ICON.close + "</button>"
+              + "</div>";
+          });
+          html += "</div>";
+        } else {
+          html += '<div class="bid-card-sub">还没选文件——支持多选（正本 / 补遗 / 答疑 / 评分办法 / 格式模板一次全进）</div>';
+        }
+        if (IMP.importError) {
+          html += '<div class="view-state" data-kind="error"><div class="view-state-title">导入未执行</div><div>' + esc(IMP.importError) + "</div></div>";
+        }
+        html += '<div class="bid-card-actions"><button class="btn btn-primary" data-imp-go ' + (IMP.files.length ? "" : "disabled") + ">" + ICON.import + "开始导入</button></div></div>";
+        return html;
+      };
+      const resultCardHtml = () => {
+        if (IMP.phase !== "imported" || !IMP.result) return "";
+        const r = IMP.result;
+        const imp = r.import || {};
+        const partial = r.partial;
+        const totals = imp.totals || {};
+        const per = Array.isArray(imp.per_file) ? imp.per_file : [];
+        const copied = Array.isArray(r.copied) ? r.copied : [];
+        let html = '<div class="bid-card bid-imp-step" data-kind="result"><div class="bid-card-title">' + (partial ? ICON.warning + " 导入完成（部分失败）" : ICON.check + " 导入完成") + "</div>";
+        if (partial) {
+          html += '<div class="bid-card-sub bid-qual-warn">' + ICON.warning + " " + esc(partial.what || "") + "——" + esc(partial.hint || "失败件修复后重传；成功件已落库可用") + "</div>";
+        }
+        html += '<div class="bid-stats">'
+          + bidStatCell(fmtChars(totals.files != null ? totals.files : per.length), "导入件数")
+          + bidStatCell(fmtChars((imp.file_ids || []).length), "入库 file_id")
+          + bidStatCell(fmtChars(totals.chunks), "切块")
+          + bidStatCell(fmtChars(totals.parse_failed), "解析失败")
+          + "</div>";
+        if (per.length) {
+          html += '<div class="bid-imp-result"><table class="bid-imp-table"><thead><tr><th>文件</th><th>角色</th><th>页</th><th>表</th><th>块</th><th>状态</th></tr></thead><tbody>';
+          per.forEach((f) => {
+            const fail = f.parse_status !== "OK";
+            html += "<tr><td>" + esc(f.filename || f.file_id) + (f.deduplicated ? "（去重）" : "") + "</td><td>" + esc(f.kind || "") + "</td><td>" + fmtChars(f.pages) + "</td><td>" + fmtChars(f.tables) + "</td><td>" + fmtChars(f.chunks) + "</td>"
+              + '<td><span class="bid-badge" data-status="' + (fail ? "FAILED" : "DRAFTED") + '">' + (fail ? "失败" : "OK") + "</span></td></tr>";
+          });
+          html += "</tbody></table></div>";
+        }
+        if (copied.length) {
+          html += '<div class="bid-card-sub">已拷入工作区：' + copied.map((c) => esc(c.to)).join("、") + "</div>";
+        }
+        html += '<div class="bid-card-sub">下一步：抽取条款（extract_requirements）建矩阵——由 Agent 管线或 bid-mcp 驱动，工作台矩阵页签随后可用</div>'
+          + '<div class="bid-card-actions"><button class="btn btn-primary" data-imp-done>' + ICON.check + "完成</button></div></div>";
+        return html;
+      };
+      const rerender = () => {
+        body.innerHTML = '<div class="bid-imp">'
+          + createCardHtml() + importCardHtml() + resultCardHtml()
+          + "</div>";
+        bindImp();
+      };
+      const bindImp = () => {
+        const pick = body.querySelector("[data-imp-pick]");
+        if (pick) pick.addEventListener("click", async () => {
+          try {
+            const r = await ipc("dialog.openFile", {
+              multiple: true,
+              title: "选择招标文件（可多选）",
+              filters: [{ name: "招标文件", extensions: ["pdf", "docx", "doc", "xlsx"] }]
+            }, 12e4);
+            const ps = (r && r.paths) || [];
+            ps.forEach((p) => {
+              const name = p.split(/[\\/]/).pop() || p;
+              if (!IMP.files.some((f) => f.path === p)) {
+                IMP.files.push({ path: p, name, kind: /补遗|澄清/i.test(name) ? "补遗" : (/评分|细则/i.test(name) ? "评分办法" : (/格式|模板/i.test(name) ? "格式模板" : (/图纸/i.test(name) ? "图纸" : "招标文件"))) });
+              }
+            });
+            IMP.importError = "";
+            rerender();
+          } catch (err) {
+            IMP.importError = "选择文件失败：" + ((err && err.message) || err) + "（演示模式无系统对话框——真实壳 mang-app.exe 可选本地文件）";
+            rerender();
+          }
+        });
+        const nameEl = body.querySelector("[data-imp-name]");
+        if (nameEl) nameEl.addEventListener("input", () => { IMP.projName = nameEl.value; });
+        body.querySelectorAll("[data-imp-kind]").forEach((sel) => {
+          sel.addEventListener("change", () => {
+            const i = Number(sel.dataset.impKind);
+            if (IMP.files[i]) IMP.files[i].kind = sel.value;
+          });
+        });
+        body.querySelectorAll("[data-imp-rm]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            IMP.files.splice(Number(btn.dataset.impRm), 1);
+            rerender();
+          });
+        });
+        const createBtn = body.querySelector("[data-imp-create]");
+        if (createBtn) createBtn.addEventListener("click", async () => {
+          const nameEl2 = body.querySelector("[data-imp-name]");
+          const modeEl = body.querySelector("[data-imp-mode]");
+          const dlEl = body.querySelector("[data-imp-deadline]");
+          const noticeEl = body.querySelector("[data-imp-notice]");
+          const name = (nameEl2 && nameEl2.value || "").trim();
+          const deadline = dlEl && dlEl.value || "";
+          if (!name) { IMP.createError = "项目名称必填"; rerender(); return; }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) { IMP.createError = "投标截止日必填（YYYY-MM-DD）"; rerender(); return; }
+          IMP.busy = true;
+          IMP.phase = "creating";
+          IMP.createError = "";
+          rerender();
+          try {
+            const args = { name: name, mode: (modeEl && modeEl.value) || "明标", bid_deadline: deadline, external_key: IMP.extKey };
+            const notice = (noticeEl && noticeEl.value || "").trim();
+            if (notice) args.tender_notice_ref = notice;
+            const r = await ipc("bid.create", args, 3e4);
+            const warns = r && r.create && r.create.warnings || [];
+            if (warns.length) ui.toast("warn", warns[0]);
+            IMP.projName = name;
+            IMP.phase = "import";
+            ui.loadBid(true);
+          } catch (err) {
+            IMP.phase = "create";
+            IMP.createError = (err && err.message) || "bid.create 失败";
+            IMP.createCode = (err && err.code) || "";
+          }
+          IMP.busy = false;
+          rerender();
+        });
+        const goBtn = body.querySelector("[data-imp-go]");
+        if (goBtn) goBtn.addEventListener("click", async () => {
+          if (!IMP.files.length) return;
+          IMP.phase = "importing";
+          IMP.importError = "";
+          rerender();
+          try {
+            const r = await ipc("bid.import", { files: IMP.files.map((f) => ({ path: f.path, kind: f.kind })) }, 3e5);
+            IMP.result = r;
+            IMP.phase = "imported";
+            ui.loadBid(true);
+            if (state.bid.coverage.status !== "idle") ui.loadBidCoverage(true);
+          } catch (err) {
+            IMP.phase = "import";
+            IMP.importError = (err && err.message) || "bid.import 失败";
+            IMP.importCode = (err && err.code) || "";
+          }
+          rerender();
+        });
+        const doneBtn = body.querySelector("[data-imp-done]");
+        if (doneBtn) doneBtn.addEventListener("click", () => {
+          m.close();
+          ui.loadBid(true);
+          ui.openBidWorkbench("coverage");
+        });
+      };
+      rerender();
     },
     /** #313 批 A/B/D：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  panel（"detail" | "matrix" | "coverage"）——面板直开（侧栏面板入口用） */
