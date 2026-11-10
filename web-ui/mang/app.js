@@ -1648,7 +1648,11 @@
       return;
     }
     if (activePanel === "matrix") {
-      renderBidMatrixPanel(host);
+      // #21 e2e 首跑捕获的存量 bug：此处原为 renderBidMatrixPanel(host)——
+      // 漏传第二参 panel，函数体首屏 panel.innerHTML 直接 TypeError，矩阵
+      // 页签点击无响应。静态断言未拦住（正是 #21 立项的论据）。
+      const mxPanel = host.querySelector("#bid-panel");
+      if (mxPanel) renderBidMatrixPanel(host, mxPanel);
       return;
     }
     // 选中态：保持已选（刷新后仍指向同一节）；初次进入选第一片叶
