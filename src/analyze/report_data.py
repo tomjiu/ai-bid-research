@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
 from src.analyze.buyers import buyer_profiles
+from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
@@ -63,6 +64,7 @@ def build_analysis_payload(
         "buyer_profiles": buyer_profiles(dataset),
         "supplier_profiles": supplier_profiles(dataset),
         "budget_outliers": budget_outliers(dataset),
+        "keyword_cooccurrence": keyword_cooccurrence(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
@@ -384,6 +386,25 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
             "注：离群是**统计标记**不是数据错误；低价离群常见于万元/元口径混录，高价离群常见于打包标，均需人工复核。",
+            "",
+        ]
+
+    cooc = payload.get("keyword_cooccurrence") or []
+    if cooc:
+        rows = [
+            [
+                " × ".join(entry["pair"]),
+                str(entry["count"]),
+                "；".join(entry["sample_projects"]),
+            ]
+            for entry in cooc
+        ]
+        sections += [
+            "## 十四、领域词共现（同项目结伴出现）",
+            "",
+            _render_table(["词对", "共现数", "示例项目"], rows),
+            "",
+            "注：共现 ≠ 因果，仅刻画「一起被提及」；共现数 < 2 的孤例词对不展示（无信号）。",
             "",
         ]
 
