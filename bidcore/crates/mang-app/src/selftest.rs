@@ -24,6 +24,9 @@ use crate::recent;
 struct Report {
     pass: usize,
     fail: usize,
+    /// 平台/环境门跳过的项（AGENTS.md §13.2：SKIP 显式可见，不入通过也不入失败——
+    /// 汇总行单独报，避免「假绿」或「静默吞」两端）
+    skip: usize,
 }
 
 impl Report {
@@ -41,6 +44,11 @@ impl Report {
         } else {
             self.bad(name, detail)
         }
+    }
+    /// 环境门跳过（缺件/平台不可种）——显式横幅 + 独立计数，不冒充通过
+    fn skip(&mut self, name: &str, why: &str) {
+        self.skip += 1;
+        println!("SKIP  {name}：{why}");
     }
 }
 
@@ -154,7 +162,7 @@ fn seed_bid_project(dir: &std::path::Path) {
 }
 
 pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
-    let mut r = Report { pass: 0, fail: 0 };
+    let mut r = Report { pass: 0, fail: 0, skip: 0 };
     println!("== mang-app --selftest ==");
     println!("version = {}", env!("CARGO_PKG_VERSION"));
     println!("temp    = {}", display(&std::env::temp_dir()));
@@ -721,21 +729,29 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
     );
-    // R10（#47）main 热修：上一行 `);` 在 #57 合并时丢失——r.check( 未闭合
-    // 导致 mang-app 编译失败（cargo test 报 717:12 unclosed delimiter）。
     // ---- #47 R10（平台区分③）：基名跨平台守卫——CON.docx 在 Linux 真实
     //      可创建（文件在场、后缀过白名单），但落位被守卫分账拒绝
+    // 平台门（AGENTS.md §13.1）：CON.docx 在 Windows 上映射控制台设备——
+    // 种不出真文件（is_file 探测揭穿）。Linux 上真文件在场才跑落位守卫
+    // 断言；Windows 侧 SKIP 显式可见（import_files 的纯字符串守卫项
+    // 不依赖文件，照跑）。
     let con_src = scratch_dir().join("CON.docx");
-    std::fs::write(&con_src, b"PK\x03\x04selftest-reserved").unwrap();
-    let resp = call(&ctx, json!({"id":"t-bid-ing3","cmd":"bid.ingest_drop","paths":[con_src.to_string_lossy()]}));
-    let ing3 = result(&resp);
-    r.check(
-        "bid.ingest_drop(保留名守卫)",
-        resp["ok"] == json!(true)
-            && ing3["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
-            && ing3["skipped"][0]["reason"].as_str() == Some("name_not_portable"),
-        format!("skipped={}", ing3["skipped"][0]["reason"].as_str().unwrap_or("?")),
-    );
+    let con_seeded = std::fs::write(&con_src, b"PK\x03\x04selftest-reserved")
+        .map(|_| con_src.is_file())
+        .unwrap_or(false);
+    if con_seeded {
+        let resp = call(&ctx, json!({"id":"t-bid-ing3","cmd":"bid.ingest_drop","paths":[con_src.to_string_lossy()]}));
+        let ing3 = result(&resp);
+        r.check(
+            "bid.ingest_drop(保留名守卫)",
+            resp["ok"] == json!(true)
+                && ing3["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+                && ing3["skipped"][0]["reason"].as_str() == Some("name_not_portable"),
+            format!("skipped={}", ing3["skipped"][0]["reason"].as_str().unwrap_or("?")),
+        );
+    } else {
+        r.skip("bid.ingest_drop(保留名守卫)", "本平台种不出真 CON.docx 源文件（Windows 设备名映射）——Linux 断言面");
+    }
     let resp = call(&ctx, json!({"id":"t-bid-impnp","cmd":"bid.import_files","files":[{"upload_ref":"CON.docx","kind":"招标文件"}]}));
     r.check(
         "bid.import_files(保留名基 bad_args)",
@@ -877,7 +893,12 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     let _ = std::fs::remove_dir_all(&ws_b);
 
     println!();
-    println!("== {} passed, {} failed ==", r.pass, r.fail);
+    println!(
+        "== {} passed, {} failed, {} skipped ==",
+        r.pass,
+        r.fail,
+        r.skip
+    );
     let _ = std::fs::remove_dir_all(&root);
     if r.fail == 0 {
         0

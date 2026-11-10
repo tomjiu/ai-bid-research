@@ -511,6 +511,7 @@ fn build_webview(
         .with_ipc_handler(move |req: wry::http::Request<String>| {
             handle_ipc(&ctx, &dialog_queue, &proxy, req.body());
         })
+
         // 直接加载 UI 页（dist/mang/index.html）——它自带 window.__ipcResolve/__ipcEvent，
         // 不再需要 dist/index.html 那层 iframe 宿主转发。
         .with_url("mang://localhost/mang/index.html")
@@ -518,7 +519,32 @@ fn build_webview(
         // 用 evaluate_script 发得太晚，UI 的 boot() 早就跑完了，
         // 结果窗口按钮不渲染、标题栏按浏览器模式处理。
         .with_initialization_script(
-            "try{window.__mangShell={version:1,protocol:1};}catch(e){}",
+            // #34 诊断通道：hook console.* → window.ipc → 宿主 stderr。
+            // 用 JSON.stringify(Array.prototype.slice.call(args)) 取值，
+            // 直接 map.call(arguments) 在 WebView2 里会拿到空数组。
+            r#"try{
+window.__mangShell={version:1,protocol:1};
+var __ol=console.log,__oe=console.error,__ow=console.warn;
+function __fwd(k,a){
+  try{
+    var arr=[];
+    for(var i=0;i<a.length;i++){
+      var v=a[i];
+      if(typeof v==="object"&&v!==null){try{v=JSON.stringify(v)}catch(e){v=String(v)}}
+      arr.push(String(v));
+    }
+    var s=arr.join(" ");
+    if(window.ipc&&window.ipc.postMessage){
+      window.ipc.postMessage(JSON.stringify({id:"diag",cmd:"diag.log",kind:k,text:s.slice(0,3000)}));
+    }
+  }catch(e){}
+}
+console.log=function(){__fwd("log",arguments);__ol.apply(console,arguments)};
+console.error=function(){__fwd("err",arguments);__oe.apply(console,arguments)};
+console.warn=function(){__fwd("warn",arguments);__ow.apply(console,arguments)};
+window.addEventListener("error",function(e){__fwd("uncaught",[e.message+" @ "+e.filename+":"+e.lineno])});
+window.addEventListener("unhandledrejection",function(e){__fwd("reject",[String(e.reason)])});
+}catch(e){}"#,
         )
         .build(window)?;
     Ok(webview)
