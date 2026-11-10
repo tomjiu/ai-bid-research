@@ -93,6 +93,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose", "-v", action="store_true", help="输出调试日志"
     )
     parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "日志落盘（追加；文件记 DEBUG 全量，控制台保持 INFO——"
+            "排障不开 --verbose 也能事后翻文件）"
+        ),
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=version_banner(),
@@ -1208,10 +1218,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    # R72：控制台 INFO（--verbose 升 DEBUG）+ 可选文件 DEBUG 全量。
+    # 注意不能用 basicConfig——root 已有 handler 时（pytest/宿主嵌入）
+    # 它是空操作，INFO 会被既有 WARNING 级吞掉；显式 setLevel 强制生效。
+    root_logger = logging.getLogger()
+    root_logger.setLevel(
+        logging.DEBUG if args.verbose else logging.INFO
     )
+    _fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+    has_console = any(
+        isinstance(h, logging.StreamHandler)
+        and not isinstance(h, logging.FileHandler)
+        for h in root_logger.handlers
+    )
+    if not has_console:
+        console = logging.StreamHandler()
+        console.setFormatter(logging.Formatter(_fmt))
+        root_logger.addHandler(console)
+    if args.log_file is not None:
+        try:
+            ensure_writable_path(args.log_file)
+            args.log_file.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(
+                args.log_file, encoding="utf-8", mode="a"
+            )
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(logging.Formatter(_fmt))
+            logging.getLogger().addHandler(file_handler)
+            logging.getLogger("ai-bid-research").info(
+                "日志文件面开启 → %s", args.log_file
+            )
+        except OSError as exc:
+            _err(f"错误：日志文件不可写：{exc}")
+            return EXIT_DATA
 
     if args.command == "report":
         return asyncio.run(run_report(args))
