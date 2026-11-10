@@ -442,8 +442,11 @@ class PdfRenderer {
 
   private scale = 1;
   private rotation = 0;
-  /** 当前缩放模式；宿主尺寸变化时据此重算。 */
-  private fitMode: 'fit-width' | 'fit-page' | 'free' = 'fit-width';
+  /** 当前缩放模式；宿主尺寸变化时据此重算。
+   * #25：默认 free（= 100% 真实大小，与 Word 一致）——旧 fit-width 在
+   * 大屏把 A4 铺到 285%（2048px 窗实测），观感刺眼；需要时用户
+   * 手动点「宽」/「整页」切换，fitMode 随之离开 free。 */
+  private fitMode: 'fit-width' | 'fit-page' | 'free' = 'free';
 
   private disposed = false;
   private errorText = '';
@@ -1082,6 +1085,10 @@ class PdfRenderer {
   private applyFit(): void {
     // 宿主不可见（宽高为 0）时 fit 无意义 —— 等 ResizeObserver 重算
     if (this.pages.length === 0 || this.scroller.clientWidth === 0) return;
+    // #25：free 模式（含默认 100%）不被 applyFit 重算——否则打开文件/
+    // 宿主尺寸变化都会把 100% 改写回 fit-width。首屏排版由 buildPages()
+    // 末尾的 setAllPageSize()（scale=1）保证。
+    if (this.fitMode === 'free') return;
     const swap = this.rotation % 180 !== 0;
     let maxW = 1;
     let maxH = 1;
