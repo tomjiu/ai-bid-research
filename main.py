@@ -404,8 +404,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # templates 子命令
-    sub.add_parser(
+    templates_cmd = sub.add_parser(
         "templates", help="列出可用的提示词模板"
+    )
+    templates_cmd.add_argument(
+        "--show",
+        metavar="NAME",
+        help="渲染指定模板（内置脱敏样例填充）——见模板真实全貌",
     )
 
     return parser
@@ -1093,11 +1098,33 @@ def run_db(args: argparse.Namespace) -> int:
     return 0
 
 
-def run_templates() -> int:
-    """执行 templates 子命令，打印模板清单。
+#: 模板样例数据（--show 渲染用；脱敏合成，非真实公告）
+_TEMPLATE_SAMPLES: Dict[str, Dict[str, str]] = {
+    "bid_extraction": {
+        "bid_text": (
+            "某单位智慧城市平台采购公告（合成样例）："
+            "预算 300万元，报名截止 2026年12月1日。"
+        )
+    },
+    "bid_analysis": {"bid_info": "智慧城市平台（预算 300万元）"},
+    "competitor_analysis": {
+        "keyword": "智慧城市",
+        "bid_list": "（样例）某市大脑项目 / 某区综治平台",
+    },
+    "report_generation": {
+        "analysis_data": "（样例）月度 12 条，中位预算 250 万元"
+    },
+}
+
+
+def run_templates(args: Optional[argparse.Namespace] = None) -> int:
+    """执行 templates 子命令：清单 / --show 渲染。
+
+    Args:
+        args: 已解析参数（``None`` = 旧式直接调用——只打清单）。
 
     Returns:
-        进程退出码（恒为 0）。
+        进程退出码（0 正常；2 --show 模板名不存在/渲染失败）。
     """
     descriptions = {
         "bid_extraction": "从招标公告原文抽取结构化信息（JSON）",
@@ -1105,11 +1132,35 @@ def run_templates() -> int:
         "competitor_analysis": "关键词领域竞争态势分析",
         "report_generation": "将分析数据整理为正式研究报告",
     }
+    show = getattr(args, "show", None) if args is not None else None
+
+    if show is not None:
+        templates = PromptTemplates.get_all_templates()
+        if show not in templates:
+            print(
+                f"错误：模板不存在: {show}"
+                f"（可用：{'、'.join(sorted(templates))}）",
+                file=sys.stderr,
+            )
+            return 2
+        sample = _TEMPLATE_SAMPLES.get(show, {})
+        try:
+            rendered = templates[show](**sample)
+        except TypeError as exc:
+            print(
+                f"错误：模板渲染失败（样例参数不匹配）: {exc}",
+                file=sys.stderr,
+            )
+            return 2
+        print(rendered)
+        return 0
+
     print("可用提示词模板：")
     for name, template in PromptTemplates.get_all_templates().items():
         print(f"  {name:<22} {descriptions.get(name, '')}")
         _ = template  # 模板函数本身通过 PromptTemplates.<name>() 调用
     print("\n调用方式：from src.llm.prompts import PromptTemplates")
+    print("渲染样例：python main.py templates --show bid_extraction")
     return 0
 
 
@@ -1151,7 +1202,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":
-        return run_templates()
+        return run_templates(args)
     parser.print_help()
     return 1
 
