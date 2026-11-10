@@ -5,7 +5,8 @@
 #
 # 覆盖面与 smoke-linux.sh 严格对齐：--version → collect → db --status
 # → data-quality（R82）→ analyze → db export → pipeline → db --runs
-# （R83）→ 产物断言。全程离线。
+# （R83）→ 产物断言 → 批 N 沉睡字段链路（R95-R98：十八至
+# 二十一节 + 跨平台信号）。全程离线。
 
 $ErrorActionPreference = 'Stop'
 
@@ -87,6 +88,34 @@ assert '\r' not in body, '行尾非 LF（R45 契约违背）'
 dedup = json.loads(Path(r'$(Join-Path $TmpDir 'snap-dedup.json')').read_text(encoding='utf-8'))
 assert isinstance(dedup, list) and len(dedup) <= len(snap), '去重快照异常'
 print(f'断言通过：快照 {len(snap)} 条，报告 {reports[-1].name}')
+"@
+
+    Write-Host ''
+    Write-Host '== 批 N 沉睡字段链路：g-fixture → 四新节渲染（R95-R98） =='
+    $GDb = Join-Path $TmpDir 'smoke-n.db'
+    $GReports = Join-Path $TmpDir 'reports-n'
+    $GSrc = 'tests/fixtures/announcements/g-沉睡字段.json'
+    & $Python main.py collect --source $GSrc --db ($GDb -replace '\\', '/')
+    & $Python main.py analyze --db ($GDb -replace '\\', '/') --output-dir ($GReports -replace '\\', '/')
+    & $Python -c @"
+from pathlib import Path
+reports = sorted(Path(r'$GReports').glob('*.md'))
+assert reports, '批 N 报告未生成'
+body = reports[-1].read_text(encoding='utf-8')
+for marker in (
+    '## 十八、响应窗口期',
+    '## 十九、代理机构画像',
+    '## 二十、品类分布',
+    '## 二十一、平台来源分布',
+    '### 跨平台转发信号',
+    '研究提示非违规认定',
+):
+    assert marker in body, f'批 N 缺: {marker}'
+assert '智慧安防改造工程 | 14' in body, '短窗示例缺失（R95）'
+sec21 = body.split('## 二十一')[1]
+assert '| qianlima.com | 2 |' in sec21, '域名归一失效（R98）'
+assert '\r' not in body, '行尾非 LF（R45 契约违背）'
+print('批 N 断言通过：十八至二十一节 + 跨平台信号 + 域名归一')
 "@
 
     Write-Host ''

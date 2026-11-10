@@ -6,7 +6,8 @@
 #
 # 覆盖面：--version → collect（fixture 装载+去重+入库）→ db --status
 # → data-quality（R82 质量巡检）→ analyze（离线报告）→ db export
-# → db --runs（R83 台账）→ 产物断言。
+# → db --runs（R83 台账）→ 产物断言 → 批 N 沉睡字段链路
+# （R95-R98：十八至二十一节 + 跨平台信号）。
 # 全程离线（不依赖 LLM/网络）——CI 与本机自检通用。
 
 set -euo pipefail
@@ -89,5 +90,35 @@ assert len(dedup) <= len(snap), "去重后条数反增"
 
 print(f"断言通过：快照 {len(snap)} 条（去重后 {len(dedup)}），报告 {reports[-1].name}")
 PYASSERT
+
+step "批 N 沉睡字段链路：g-fixture → 四新节渲染（R95-R98）"
+GDB="$TMP_DIR/smoke-n.db"
+GREPORTS="$TMP_DIR/reports-n"
+"$PYTHON" main.py collect --source "tests/fixtures/announcements/g-沉睡字段.json" --db "$GDB"
+"$PYTHON" main.py analyze --db "$GDB" --output-dir "$GREPORTS"
+"$PYTHON" - "$GREPORTS" << 'PYASSERT_N'
+import sys
+from pathlib import Path
+
+reports = sorted(Path(sys.argv[1]).glob("*.md"))
+assert reports, "批 N 报告未生成"
+body = reports[-1].read_text(encoding="utf-8")
+for marker in (
+    "## 十八、响应窗口期",       # R95 deadline
+    "## 十九、代理机构画像",      # R96 agency
+    "## 二十、品类分布",         # R97 category
+    "## 二十一、平台来源分布",    # R98 source_url
+    "### 跨平台转发信号",        # R98 与十六节簇交叉
+    "研究提示非违规认定",         # R95 短窗诚实口径注
+):
+    assert marker in body, f"批 N 缺: {marker}"
+# 短窗示例：GN-03 智慧安防改造工程（14 日 < 20）
+assert "智慧安防改造工程 | 14" in body, "短窗示例缺失（R95）"
+# 域名归一：www/裸域名/http 三形态折叠为同平台（qianlima 2 条）
+sec21 = body.split("## 二十一")[1]
+assert "| qianlima.com | 2 |" in sec21, "域名归一失效（R98）"
+assert "\r" not in body, "行尾非 LF（R45 契约违背）"
+print("批 N 断言通过：十八至二十一节 + 跨平台信号 + 域名归一")
+PYASSERT_N
 
 printf '\nSMOKE OK（Linux 离线全链）\n'

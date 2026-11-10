@@ -404,7 +404,7 @@ DOCX 后导入（docx 是本系统真源格式，解析最完整）。
 
 冒烟/流水线脚本按上表分支处理；`smoke-*.sh/ps1` 以 `set -e` 语义只认 0。
 
-## 十、研究 CLI 功能速查（#601 R39-R86 迭代增量）
+## 十、研究 CLI 功能速查（#601 R39-R100 迭代增量）
 
 > 平台差异详见 `docs/PLATFORM-NOTES.md`（Windows/Linux 权威口径）。
 
