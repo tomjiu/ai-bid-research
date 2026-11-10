@@ -3944,4 +3944,76 @@ mod tests {
         let _ = std::fs::remove_dir_all(d);
     }
 
+    // ── #47 R15 补口（平台区分⑧）：截止日==今天/明天的本地口径边界 ──
+    // #73 已钉远过去（2020-01-01）告警与幻日拒收；本测试钉**最锐利边界**——
+    // deadline==今天在本地日历日口径下不告警（旧 UTC 口径在东八区 0-8 点会把
+    // 「今天」错判成昨天：该告警的告，不该告的也告/该告的漏告——两侧都要钉）。
+    // 幻日/前缀形态已由 #73 的 bid-mcp 单测 + selftest 覆盖，此处不重复。
+
+    /// 边界三面：昨日→告警（回归门）/ 今天→不告警（午夜跨日竞态重验豁免）/
+    /// 明天→不告警。告警文案与契约 §1 引文逐字对账。
+    #[test]
+    fn r15_deadline_today_tomorrow_local_boundary() {
+        let today = bid_domain::dates::today_ymd();
+        let yesterday = bid_domain::dates::add_days(&today, -1).unwrap();
+        let tomorrow = bid_domain::dates::add_days(&today, 1).unwrap();
+
+        // ① 昨日截止 → BID_DEADLINE_PAST 在场 + 契约 §1 文案逐字在场
+        let (dir, ws) = tmp_ws("r15b-past");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "R15补口 昨日项目", "bid_deadline": yesterday, "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "过期截止是警告不是错误（契约 §1 不阻断）：{r}");
+        let warns = r["result"]["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(
+            warns
+                .iter()
+                .any(|w| w.as_str().unwrap_or("").contains("BID_DEADLINE_PAST")),
+            "昨日截止必须告警：{r}"
+        );
+        assert!(
+            warns
+                .iter()
+                .any(|w| w.as_str().unwrap_or("").contains("契约 §1：创建即警告，不阻断")),
+            "告警文案与契约 §1 引文一致（文档-实现逐字对账）：{r}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+
+        // ② 今天截止 → 不告警（本地日历日口径的核心边界；午夜跨日竞态：
+        //    工具面取的 today 若已前进到下一天，则豁免重验——不是口径回归）
+        let (dir, ws) = tmp_ws("r15b-today");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "R15补口 今日项目", "bid_deadline": today, "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "合法建项：{r}");
+        let saw_past = r["result"]["warnings"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .any(|w| w.as_str().unwrap_or("").contains("BID_DEADLINE_PAST"));
+        assert!(
+            !saw_past || bid_domain::dates::today_ymd() != today,
+            "「今天」截止不告警（旧 UTC 口径的错判形态之一就是不告/误告翻转；仅恰逢跨日豁免）：{r}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+
+        // ③ 明天截止 → 不告警（跨日竞态下 deadline==新今天，仍不告警——恒安全）
+        let (dir, ws) = tmp_ws("r15b-tmrw");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "R15补口 明日项目", "bid_deadline": tomorrow, "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "合法建项：{r}");
+        let warns = r["result"]["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(
+            !warns
+                .iter()
+                .any(|w| w.as_str().unwrap_or("").contains("BID_DEADLINE_PAST")),
+            "明日截止不告警：{r}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

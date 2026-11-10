@@ -18,12 +18,12 @@ edition = "2021"
 
 [dependencies.mdc-office-io]
 package = "mdc-office-io"
-git = "https://github.com/mmqz/mdcore"
+git = "https://git.mingjiu.store/sandbox/mdcore"
 rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b"
 
 [dependencies.mdc-pdf]
 package = "mdc-pdf"
-git = "https://github.com/mmqz/mdcore"
+git = "https://git.mingjiu.store/sandbox/mdcore"
 rev = "f4328ebf4f936e1321a2254382d59f9ab9f94b7b"
 features = ["engine-pdfium"]
 
