@@ -124,9 +124,9 @@ curl -X POST "https://git.mingjiu.store/api/v1/repos/sandbox/mdcore/pulls" \
 冲突处理、测试环境门等）全部继续有效。
 
 只有「用哪个平台」和「用什么命令」变了：
-  gh pr create        → 网页 / REST API
-  gh issue list       → 本平台无 issue 体系，任务由 Lead 派发
-  gh api repos/...    → https://git.mingjiu.store/api/v1/...
+  PR 创建              → 网页 / curl POST .../pulls（见 -1.3）
+  issue 查询           → curl "$FJ/repos/$ORG/<repo>/issues?labels=..."（见 0.0.11）
+  其他 API             → https://git.mingjiu.store/api/v1/...
   origin = github.com → origin = git.mingjiu.store
 ```
 
@@ -156,7 +156,7 @@ curl -X POST "https://git.mingjiu.store/api/v1/repos/sandbox/mdcore/pulls" \
 ✅ 唯一正确流程：
   1. 在功能分支上提交
   2. push 功能分支
-  3. 开 PR（gh pr create 或 gh api pulls）
+  3. 开 PR（网页 / REST API，见 -1.3）
   4. 等 Lead 审核合并
 ```
 
@@ -188,19 +188,20 @@ curl -X POST "https://git.mingjiu.store/api/v1/repos/sandbox/mdcore/pulls" \
 
 ```bash
 # 第 1 步：这个 issue 有没有人已经认领？
-gh api "repos/mmqz/<repo>/issues/<N>/comments" --jq '.[] | .body' | grep -i "认领"
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues/<N>/comments" \
+  | python3 -c "import sys,json; [print(c['user']['login'],':',c['body'][:60]) for c in json.load(sys.stdin) if '认领' in c['body']]"
 # 有认领记录 → 看是不是还在做（最后一个 commit/PR 时间）
 
 # 第 2 步：这个 issue 有没有已存在的 PR？
-gh api "repos/mmqz/<repo>/pulls?state=open&per_page=100" --jq '.[] | select(.title | test("#<N>\\b")) | "#\(.number) \(.title)"'
-gh api "repos/mmqz/<repo>/pulls?state=closed&per_page=100" --jq '.[] | select(.merged_at != null) | select(.title | test("#<N>\\b")) | "#\(.number) 已合并"'
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/pulls?state=open&limit=100" \
+  | python3 -c "import sys,json; [print('#%d %s' % (p['number'],p['title'])) for p in json.load(sys.stdin)]"
 
 # 第 3 步：这个 issue 有没有对应的分支？
-gh api "repos/mmqz/<repo>/branches?per_page=100" --jq '.[].name' | grep -i "<N>"
-
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/branches?limit=100" \
+  | python3 -c "import sys,json; [print(b['name']) for b in json.load(sys.stdin) if '<N>' in b['name']]"
 # 第 4 步：任务池里有没有人登记了
-gh api repos/mmqz/<repo>/issues/<pool> --jq '.body' | grep "<N>"
-```
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues/<pool>" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['body'])"
 
 **判定规则：**
 
@@ -483,8 +484,8 @@ ai-bid #320  认领 13.6 小时，零产出（无分支/无 PR/无评论）
 
 ```bash
 # ① 这个子项是不是已经有人拆过/在做？
-gh api "repos/mmqz/<repo>/issues?state=all&per_page=100" --jq '.[] | select(.title | test("<关键词>"))'
-
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=all&limit=100" \
+  | python3 -c "import sys,json; [print('#%d %s' % (i['number'],i['title'])) for i in json.load(sys.stdin) if '<关键词>' in i['title']]"
 # ② 这个方向是不是被明确后置了？
 #    看长期文档正文有没有「现在不做」「后置」的表态
 #    有 → 不要拆，先问 Lead 是否解冻
@@ -591,8 +592,8 @@ git rev-list --count HEAD..origin/main
 git rebase origin/main
 
 # 开 PR 前确认 base 是 main
-gh api repos/mmqz/<repo>/pulls/<N> --jq '.base.ref'   # 必须是 "main"
-```
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/pulls/<N>" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['base']['ref'])"   # 必须是 main
 
 **2026-11-07 实测代价**：6 个 PR 因 base 落后变 dirty → GitHub 不跑 CI → 永远「没有 CI」→ Lead 手工 rebase 10+ 次。
 
@@ -625,7 +626,9 @@ gh api repos/mmqz/<repo>/pulls/<N> --jq '.base.ref'   # 必须是 "main"
 git push ... HEAD:<branch>
 
 # 2. 开 PR（记下 PR 号）
-gh api repos/mmqz/<repo>/pulls -X POST ...
+curl -X POST "$FJ/repos/$ORG/$REPO/pulls" -H "Authorization: token $FJT" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"feat(#N): xxx","head":"<branch>","base":"main"}'
 
 # 3. 记下「回来检查时间」
 #    预计 CI 时长 + 15 分钟缓冲
@@ -647,8 +650,8 @@ gh api repos/mmqz/<repo>/pulls -X POST ...
 ```
 
 ```bash
-gh api repos/mmqz/<repo>/commits/$(gh api repos/mmqz/<repo>/pulls/<PR号> --jq .head.sha | cut -c1-8)/check-runs \
-  --jq '.check_runs[] | "\(.name) = \(.status)/\(.conclusion)"'
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/pulls/<N>" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('state=',d['state'],'merged=',bool(d.get('merged_at')))"
 ```
 
 **方式 B：派子代理监督（懒人版）**
@@ -912,19 +915,19 @@ status/stale         僵尸认领/长期无动静
 
 ```bash
 # P0 且是我熟的领域
-gh issue list --label "P0,area/pdf" --state open
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=open&labels=P0,area/pdf"
 
 # 接线缺口（最高价值）
-gh issue list --label type/wiring --state open
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=open&labels=type/wiring"
 
 # 假绿要清
-gh issue list --label type/fake-green --state open
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=open&labels=type/fake-green"
 
 # 1.0 必须做的
-gh issue list --milestone "1.0-必须" --state open
-
+# milestone 未启用，改用标签筛：
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=open&labels=P0,P1"
 # 可接取的
-gh issue list --label status/ready --state open
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=open&labels=status/ready"
 ```
 
 ## ★★ 建 issue 的硬要求（你在任何时候发现缺口都要遵守）
@@ -940,7 +943,7 @@ gh issue list --label status/ready --state open
 **命令模板：**
 
 ```bash
-gh issue create --repo mmqz/mdcore \
+curl -s -X POST "$FJ/repos/$ORG/$REPO/issues" \
   --title "P1: <一句话说清做什么>" \
   --body-file /tmp/body.md \
   --label "P1,area/pdf,type/wiring" \
@@ -967,11 +970,11 @@ gh issue create --repo mmqz/mdcore \
 
 ```bash
 # ① 能搜到吗
-gh issue list --label "P1,area/pdf" --state open
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues?state=open&labels=P1,area/pdf"
 
 # ② milestone 挂上了吗
-gh issue view <N> --json labels,milestone
-```
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues/<N>" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print([l['name'] for l in d['labels']])"
 
 **不打标签的 issue = 搜不到 = 等于不存在 = 白建。**
 
@@ -989,7 +992,7 @@ gh issue view <N> --json labels,milestone
 
 ```
 ❌ 「我去看任务池 issue 有哪些任务」→ 那个 issue 可能三天没更新
-✅ 「gh issue list --label P0 --state open」→ 永远当前真实状态
+✅ 「curl .../issues?labels=P0」→ 永远当前真实状态
 
 ❌ 「我发现缺口，写个 issue 就完了」→ 没标签，没人搜得到
 ✅ 「建 issue + 打 P1,area/pdf,type/wiring + 挂 1.0-必须」
@@ -1115,8 +1118,8 @@ main 编译不过（红）        → ⛔ 停下来，报告 Lead（你的分支
 **开 PR 时还要确认：**
 
 ```bash
-gh api repos/mmqz/<repo>/pulls/<N> --jq '.base.ref'   # 必须是 "main"
-```
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/pulls/<N>" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['base']['ref'])"   # 必须是 main
 
 **base 不是 main → 关掉重开**（改 base 不会重新触发 CI）。
 
@@ -1224,9 +1227,9 @@ cargo run -p bid-mcp --bin tool-surface -- --check
 
 ```bash
 # 认领评论必须包含这三项（缺一不可）
-gh api repos/mmqz/<repo>/issues/<N>/comments -X POST -f body="认领：<身份>
-
-预计完成：<时长>
+curl -s -X POST "$FJ/repos/$ORG/$REPO/issues/<N>/comments" \
+  -H "Authorization: token $FJT" -H 'Content-Type: application/json' \
+  -d '{"body":"认领：<身份> 预计 <时长> 分支 <branch-name>"}'
 分支名：<branch-name>（马上开）
 计划：<3 步以内>
 "
@@ -1242,7 +1245,9 @@ gh api repos/mmqz/<repo>/issues/<N>/comments -X POST -f body="认领：<身份>
 **开始任何工作之前，必须在 issue 上留言认领。**
 
 ```bash
-gh issue comment <number> --repo mmqz/<repo> --body "认领：<你的身份> 承接本任务，预计 <时间>"
+curl -s -X POST "$FJ/repos/$ORG/$REPO/issues/<N>/comments" \
+  -H "Authorization: token $FJT" -H 'Content-Type: application/json' \
+  -d '{"body":"认领：<你的身份> 承接本任务，预计 <时间>"}'
 ```
 
 **为什么**：
@@ -1280,7 +1285,7 @@ gh issue comment <number> --repo mmqz/<repo> --body "认领：<你的身份> 承
 ```
 生成后先查一下有没有被占用：
   在任务面板 #229 看已有的名字列表
-  或 gh api repos/mmqz/<repo>/issues?state=all --jq 筛选
+  或 curl -s "$FJ/repos/$ORG/$REPO/issues?state=all&limit=100" | python3 -c 筛选
 
 重复了 → 重新生成一个
 ```
@@ -1595,10 +1600,11 @@ songling 的 9 条验收门依赖 poppler，Windows CI 走 SKIP
 
 ```bash
 # 看 PR 上的评论
-gh pr view <n> --repo mmqz/<repo> --comments
+curl -s -H "Authorization: token $FJT" "$FJ/repos/$ORG/$REPO/issues/<N>/comments" \
+  | python3 -c "import sys,json; [print(c['user']['login'],':',c['body'][:200]) for c in json.load(sys.stdin)]"
 
 # 只看最近 5 条
-gh pr view <n> --repo mmqz/<repo> --comments | tail -50
+# 或直接看 PR 页面： https://git.mingjiu.store/sandbox/<repo>/pulls/<N>
 
 # 或者直接看 PR 页面
 ```
@@ -1622,10 +1628,10 @@ gh pr view <n> --repo mmqz/<repo> --comments | tail -50
 
 ```bash
 # 只看失败的 job 日志
-gh run view <run_id> --repo mmqz/<repo> --log-failed
+# （本平台无 CI，无需查 run）
 
 # 找关键行
-gh run view <run_id> --repo mmqz/<repo> --log-failed | grep -E "FAILED|panicked|target failed"
+# （本平台无 CI，无需查 run）
 ```
 
 **日志里一定写着：哪个测试、哪一行、什么断言失败。** 找不到就往下翻。
@@ -1652,7 +1658,7 @@ CI 显示 in_progress 超过 40 分钟；
 
 ```bash
 # 1. 看每个步骤的状态
-gh api repos/<repo>/actions/runs/<run_id>/jobs \
+# （本平台无 CI，无需查 run）
   --jq '.jobs[0].steps[] | "\(.number) \(.name): \(.status)/\(.conclusion)"'
 
 # 2. 如果所有「测试」步骤都是 completed/success
@@ -1660,7 +1666,7 @@ gh api repos/<repo>/actions/runs/<run_id>/jobs \
 #    → 这是 GitHub Actions 基础设施问题，不是代码问题
 
 # 3. 再确认日志里零失败
-gh run view <run_id> --repo <repo> --log | grep -c "test result: FAILED"
+# （本平台无 CI，无需查 run）
 # 输出 0 → 代码是好的
 ```
 
@@ -1668,10 +1674,10 @@ gh run view <run_id> --repo <repo> --log | grep -c "test result: FAILED"
 
 ```bash
 # 取消卡住的 run
-gh run cancel <run_id> --repo <repo>
+# （本平台无 CI，无需查 run）
 
 # 重新触发（会用同一个 commit，不产生新 commit）
-gh run rerun <run_id> --repo <repo>
+# （本平台无 CI，无需查 run）
 ```
 
 **注意：rerun 会重新跑整个 workflow，通常第二次就不会卡了。**
@@ -2051,7 +2057,7 @@ ai-bid 依赖 mdcore（通过 crates.io 或 git rev）
 ```
 [ ] 查步骤状态：所有测试步骤 success 但 run 不结束 = 基础设施问题
 [ ] 日志里 test result: FAILED 计数为 0 = 代码是好的
-[ ] 处理：gh run cancel + gh run rerun，代码一行不改
+[ ] 处理：本地重跑测试 + 修完再推，代码一行不改
 ```
 
 **PR 合并后**：
