@@ -830,6 +830,51 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && n2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("skipped={}", n2["skipped"][0]["reason"].as_str().unwrap_or("?")),
     );
+    // ---- #47 R14（跨平台硬化⑦）：混合分隔符矩阵——同一嵌套文件的
+    //      多种拼写（纯 \ / 点三明治混合）收敛到同一物理文件（幂等不
+    //      双入库）。独立小工作区 + DRAFT 项目（主工作区项目已推进
+    //      MATRIX_READY——import_tender_files 状态窗已关，测不了导入
+    //      语义；R12 深目录工作区同款往返模式）。种子用真 docx 夹具
+    //      （import_files 会真实切块——假 PK 头会解析失败进
+    //      item_errors，测不到收敛语义）。cargo 面另有纯函数矩阵 23
+    //      例 + cfg 双分支对照——selftest 覆盖 e2e 收敛主径。
+    let mix_ws = scratch_dir();
+    {
+        let mut svc = bid_tools::service::BidService::open(&mix_ws).unwrap();
+        svc.create_project("混合分隔符项目", "PRJ-SEP14", "明标", "ext-sep14").unwrap();
+    }
+    const MIX_MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+    std::fs::create_dir_all(mix_ws.join("v1/deep")).unwrap();
+    std::fs::write(mix_ws.join("v1/deep/招标文件.docx"), MIX_MIN_DOCX).unwrap();
+    let resp = call(&ctx, json!({"id":"t-ws-mix","cmd":"workspace.open","path": mix_ws.to_string_lossy()}));
+    r.check(
+        "workspace.open(切 R14 混合分隔符工作区)",
+        resp["ok"] == json!(true),
+        format!("{}", mix_ws.to_string_lossy()),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-mix1","cmd":"bid.import_files","files":[{"upload_ref":"v1\\deep\\招标文件.docx","kind":"招标文件"}]}));
+    let m1 = result(&resp);
+    r.check(
+        "bid.import_files(纯\\形态命中)",
+        resp["ok"] == json!(true) && m1["totals"]["files"] == json!(1),
+        format!("totals={}", m1["totals"]["files"]),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-mix2","cmd":"bid.import_files","files":[{"upload_ref":".\\v1/./deep\\招标文件.docx","kind":"招标文件"}]}));
+    let m2 = result(&resp);
+    r.check(
+        "bid.import_files(点三明治混合幂等)",
+        resp["ok"] == json!(true)
+            && m2["per_file"][0]["deduplicated"] == json!(true)
+            && m2["file_ids"][0] == m1["file_ids"][0],
+        format!("dedup={:?}", m2["per_file"][0]["deduplicated"].as_bool()),
+    );
+    // 切回原工作区（#603 段的 db.json 在这）
+    let resp = call(&ctx, json!({"id":"t-ws-back2","cmd":"workspace.open","path": ws.root_display()}));
+    r.check(
+        "workspace.open(切回原根 R14)",
+        resp["ok"] == json!(true),
+        format!("{}", ws.root_display()),
+    );
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));

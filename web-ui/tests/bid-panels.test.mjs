@@ -1112,5 +1112,32 @@ check(
   "NFC 口径没进契约"
 );
 
+// ---------- R14（#47 跨平台硬化⑦）：混合分隔符深度测试矩阵 ----------
+check(
+  "R14 测试：纯函数矩阵 + e2e 四拼写收敛 + cfg 双分支对照三项在场",
+  /fn upload_ref_mixed_separator_matrix/.test(bidRs) &&
+    /fn upload_ref_mixed_separator_e2e_convergence/.test(bidRs) &&
+    /fn upload_ref_mixed_separator_platform_semantics/.test(bidRs),
+  "混合分隔符回归门被删（矩阵/收敛/平台语义至少缺一）"
+);
+check(
+  "R14 测试：cfg 双分支对照结构（unix 诚实失败 + windows native 命中）",
+  /\#\[cfg\(unix\)\]/.test(bidRs.slice(bidRs.indexOf("fn upload_ref_mixed_separator_platform_semantics"), bidRs.indexOf("fn upload_ref_mixed_separator_platform_semantics") + 4000)) &&
+    /\#\[cfg\(windows\)\]/.test(bidRs.slice(bidRs.indexOf("fn upload_ref_mixed_separator_platform_semantics"), bidRs.indexOf("fn upload_ref_mixed_separator_platform_semantics") + 4000)),
+  "cfg 双分支对照缺角（Linux/Windows 语义各断一面）"
+);
+check(
+  "R14 selftest：混合拼写命中 + 点三明治幂等双项在场",
+  selftestRs.includes("bid.import_files(纯\\\\形态命中)") &&
+    selftestRs.includes("bid.import_files(点三明治混合幂等)"),
+  "集成自检项缺失"
+);
+check(
+  "R14 契约：混合分隔符矩阵口径登记（规范分隔符/..保留/绝对不压缩/字面名双面锁）",
+  contract.includes("混合分隔符矩阵（R14") &&
+    contract.includes("双面锁死"),
+  "混合分隔符口径没进契约"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);
