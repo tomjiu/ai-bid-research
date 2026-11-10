@@ -662,5 +662,27 @@ check(
   "完成态卡盖掉刚导入的逐件结果（现场信息降级）"
 );
 
+// ---------- R5（#47 / #19 任务 2）：coverage 早态引导对齐向导交互语言 ----------
+check(
+  "R5 UI：coverage E_NOTFOUND 引导卡（空工作区不再走错误横幅）",
+  /cv\.code === "not_found"[\s\S]{0,700}去新建标书项目/.test(app),
+  "空工作区（无 db.json）被渲染成「覆盖报告读取失败」——正常空态当故障（§109 口径违背）"
+);
+check(
+  "R5 UI：coverage E_STATE 卡主行动「去导入招标文件」（直通向导第二步）",
+  /cv\.code === "state"[\s\S]{0,700}data-cov-go-wizard>去导入招标文件/.test(app),
+  "早态卡只有「重新检查」死文案（#19 任务 2 的对齐目标缺失）"
+);
+check(
+  "R5 UI：去导入/去建项按钮切回 detail 页签（向导所在页）",
+  /data-cov-go-wizard[\s\S]{0,400}t\.meta\.panel = "detail";[\s\S]{0,120}renderBidWorkbenchPanes\(host\)/.test(app),
+  "CTA 按钮不切页签（用户找不到向导入口）"
+);
+check(
+  "R5 UI：早态卡带 bid-cov-next「下一步」条（与结果面同款交互语言）",
+  /cv\.code === "state"[\s\S]{0,900}bid-cov-next" data-state="ok"><span>下一步<\/span>导入招标文件（向导第二步）/.test(app),
+  "早态引导缺「下一步」条（交互语言未对齐）"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

@@ -2510,13 +2510,45 @@
       panel.innerHTML = '<div class="bid-cov"><div class="view-state"><div class="view-spinner"></div><div>正在读取覆盖报告…</div></div></div>';
       return;
     }
+    // R5（#47 / #19 任务 2）：早态引导卡对齐向导交互语言——主行动按钮
+    // （去导入/去建项——切回 detail 页签，向导就在那）+ bid-cov-next
+    // 「下一步」条 + 次行动「重新检查」。两侧共用一个接线小函数。
+    const covGoWizard = (label) => {
+      const go = panel.querySelector("[data-cov-go-wizard]");
+      if (go) go.addEventListener("click", () => {
+        const t = bidWorkbenchTab();
+        if (!t || !t.meta) return;
+        t.meta.panel = "detail";
+        syncBidTabBar(host, "detail");
+        renderBidWorkbenchPanes(host);
+      });
+      void label; // 按钮文案在 HTML 里（源级回归断言锚点）
+    };
+    if (cv.status === "error" && cv.code === "not_found") {
+      // R5（#47）：空工作区（无 db.json）不是错误——E_NOTFOUND 引导卡口径
+      // （§109）：引导去建项（向导第一步在 detail 页签），不再走下面的
+      // 错误横幅（正常空态渲染成故障违反引导卡约定）
+      panel.innerHTML =
+        '<div class="bid-cov"><div class="view-state"><div class="view-state-title">还没有标书项目</div>'
+        + "<div>当前工作区没有 db.json——新建标书项目并导入招标文件后，覆盖报告在这里统计「哪些块没归属」</div>"
+        + '<div><button class="btn btn-primary" data-cov-go-wizard>去新建标书项目</button> <button class="btn" data-cov-retry>重新检查</button></div></div>'
+        + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>新建标书项目（向导第一步）——建项后导入招标文件，覆盖报告自动可用</div></div>';
+      covGoWizard("去新建标书项目");
+      const retry = panel.querySelector("[data-cov-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
+      return;
+    }
     if (cv.status === "error" && cv.code === "state") {
       // 工具面 E_STATE 透传（壳侧 state 码，契约 §3.3）——早态项目引导卡
-      // 而非错误横幅（批 C 自评面同款纪律：单一真源在 code，不在文案）
+      // 而非错误横幅（批 C 自评面同款纪律：单一真源在 code，不在文案）。
+      // R5（#47 / #19 任务 2）：对齐向导交互语言——主行动「去导入」直通
+      // 向导第二步（detail 页签），不再是只有「重新检查」的死文案。
       panel.innerHTML =
         '<div class="bid-cov"><div class="view-state"><div class="view-state-title">覆盖报告尚未开放</div>'
-        + "<div>当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，MCP 管线 import_tender_files 之后自动可用</div>"
-        + '<div><button class="btn" data-cov-retry>重新检查</button></div></div></div>';
+        + "<div>当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，导入后自动可用</div>"
+        + '<div><button class="btn btn-primary" data-cov-go-wizard>去导入招标文件</button> <button class="btn" data-cov-retry>重新检查</button></div></div>'
+        + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>导入招标文件（向导第二步）——extract_requirements 抽取条款、build_outline 建纲之后，覆盖报告在这里给出三态分账</div></div>';
+      covGoWizard("去导入招标文件");
       const retry = panel.querySelector("[data-cov-retry]");
       if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
       return;
