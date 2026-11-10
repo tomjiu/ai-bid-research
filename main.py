@@ -463,6 +463,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="机器可读 JSON 输出（供 CI 门槛/外部审计消费）",
     )
+    dq.add_argument(
+        "--min-score",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "健康分门槛：低于 N 退出码 2（数据错误域——CI 可判）；"
+            "缺省不设门槛（纯揭示，发现问题也 0）"
+        ),
+    )
 
     # templates 子命令
     templates_cmd = sub.add_parser(
@@ -1293,8 +1303,9 @@ def run_data_quality(args: argparse.Namespace) -> int:
         args: 已解析的命令行参数。
 
     Returns:
-        进程退出码（0 正常——发现问题也 0，审计的职责是揭示而非拦截；
-        2 = 库不存在）。
+        进程退出码（0 正常——无门槛时发现问题也 0，审计的职责是
+        揭示而非拦截；2 = 库不存在 **或** --min-score 门槛不过
+        [数据错误域]）。
     """
     from src.analyze import load_dataset
     from src.analyze.quality import (
@@ -1325,30 +1336,46 @@ def run_data_quality(args: argparse.Namespace) -> int:
                     "records": len(dataset),
                     "field_quality": filled,
                     "semantic_health": semantic,
+                    "min_score": args.min_score,
+                    "gate_passed": (
+                        True
+                        if args.min_score is None
+                        else semantic["health_score"] >= args.min_score
+                    ),
                 },
                 ensure_ascii=False,
                 indent=2,
             )
         )
-        return 0
-
-    print(f"数据质量审计：{scope} {len(dataset)} 条记录")
-    print("")
-    # 语义面（Markdown 表直出——与报告第十七节同源单点）
-    print(render_semantic_health_markdown(semantic).rstrip("\n"))
-    print("")
-    # 填充率摘要（全表见 analyze 报告七节，这里只给行动面 Top5）
-    if filled["most_missing"]:
-        print("最缺字段（填充率——下一步补采行动面）：")
-        for name in filled["most_missing"]:
-            rate = filled["fields"][name]["rate"]
-            print(f"  {name}: {rate * 100:.1f}%")
     else:
-        print("字段填充率：无缺口（12 字段全满）。")
-    print(
-        f"整体字段填充率："
-        f"{(filled['overall'] or 0) * 100:.1f}%"
-    )
+        print(f"数据质量审计：{scope} {len(dataset)} 条记录")
+        print("")
+        # 语义面（Markdown 表直出——与报告第十七节同源单点）
+        print(render_semantic_health_markdown(semantic).rstrip("\n"))
+        print("")
+        # 填充率摘要（全表见 analyze 报告七节，这里只给行动面 Top5）
+        if filled["most_missing"]:
+            print("最缺字段（填充率——下一步补采行动面）：")
+            for name in filled["most_missing"]:
+                rate = filled["fields"][name]["rate"]
+                print(f"  {name}: {rate * 100:.1f}%")
+        else:
+            print("字段填充率：无缺口（12 字段全满）。")
+        print(
+            f"整体字段填充率："
+            f"{(filled['overall'] or 0) * 100:.1f}%"
+        )
+
+    # 门槛面（--min-score）：JSON 面也含 gate_passed，退出码供 CI 判
+    if (
+        args.min_score is not None
+        and semantic["health_score"] < args.min_score
+    ):
+        _err(
+            f"质量门槛未过：健康分 {semantic['health_score']}"
+            f" < 门槛 {args.min_score}"
+        )
+        return EXIT_DATA
     return 0
 
 

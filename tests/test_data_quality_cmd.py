@@ -133,3 +133,42 @@ class TestSection17InReport:
 
         payload = build_analysis_payload(load_dataset(dirty_db))
         json.dumps(payload, ensure_ascii=False)  # 不炸即契约
+
+
+class TestMinScoreGate:
+    """R87：--min-score 门槛面（CI 可判）。"""
+
+    def test_gate_fails_below_threshold(self, dirty_db, capsys):
+        # 脏库健康分 < 100：门槛 100 → 退出 2 + stderr 门槛信息
+        code = main(
+            ["data-quality", "--db", str(dirty_db), "--min-score", "100"]
+        )
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "质量门槛未过" in err
+        assert "< 门槛 100" in err
+
+    def test_gate_passes_when_clean_enough(self, dirty_db, capsys):
+        # 同库低门槛（0）→ 通过 → 0
+        code = main(
+            ["data-quality", "--db", str(dirty_db), "--min-score", "0"]
+        )
+        assert code == 0
+
+    def test_json_gate_face(self, dirty_db, capsys):
+        # JSON 面含 gate_passed / min_score（CI 可从 stdout 判）
+        code = main(
+            [
+                "data-quality", "--db", str(dirty_db),
+                "--json", "--min-score", "100",
+            ]
+        )
+        assert code == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["min_score"] == 100
+        assert payload["gate_passed"] is False
+
+    def test_no_gate_still_zero_on_findings(self, dirty_db, capsys):
+        # 无门槛：纯揭示——发现 4 类问题仍 0（审计语义不变）
+        code = main(["data-quality", "--db", str(dirty_db)])
+        assert code == 0
