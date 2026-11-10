@@ -504,5 +504,428 @@ check(
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- #19：导入向导（空态引导卡——新建项目 + 导入文件） ----------
+check(
+  "#19 壳侧：bid.rs 实现 create_project / import_files 写面",
+  /pub fn create_project\(/.test(bidRs) && /pub fn import_files\(/.test(bidRs),
+  "写面函数被删/改名"
+);
+check(
+  "#19 壳侧：ipc.rs 注册 bid.create_project / bid.import_files",
+  ipcRs.includes('"bid.create_project" => crate::bid::create_project') &&
+    ipcRs.includes('"bid.import_files" => crate::bid::import_files'),
+  "UI 接了壳没接（分发表缺登记）"
+);
+check(
+  "#19 壳侧：经 dispatch_with 走真实工具面（create_bid_project / import_tender_files）",
+  bidRs.includes('"create_bid_project".to_string()') &&
+    bidRs.includes('"import_tender_files".to_string()'),
+  "写面绕开工具面 = 与 bid-mcp-stdio 两套裁决"
+);
+check(
+  "#19 壳侧：E_PARTIAL 转成功面 + partial 分账（不是故障）",
+  /EPartial[\s\S]{0,900}o\.insert\("partial"/.test(bidRs),
+  "部分成功被当错误回——向导无法同屏呈现成功件/失败件"
+);
+check(
+  "#19 壳侧：空工作区起步 ensure_or_open（无 db.json 不再 not_found）",
+  /fn ensure_or_open/.test(bidRs) && /ensure_or_open\(&mut guard, ws\)/.test(bidRs),
+  "create_project 走了只读面的干净拒绝路径"
+);
+check(
+  "#19 壳侧：quick_stats 补 files 计数（判「DRAFT 且未导入」用）",
+  bidRs.includes('"files".into()'),
+  "导入卡判据缺数据面"
+);
+check(
+  "#19 壳侧：全链集成测试在场（空态→建项→幂等→导入→状态推进）",
+  bidRs.includes("fn wizard_create_and_import_roundtrip_19"),
+  "向导回归门被删"
+);
+check(
+  "#19 UI：ipc 调用 bid.create_project / bid.import_files（真实命令名）",
+  /ipc\("bid\.create_project", \{/.test(app) && /ipc\("bid\.import_files", \{/.test(app),
+  "命令名漂移（壳注册与 UI 调用对不上）"
+);
+check(
+  "#19 UI：向导三渲染函数（创建卡 / 导入卡 / 结果面）",
+  /function renderBidWizardCreate\(/.test(app) &&
+    /function renderBidWizardImport\(/.test(app) &&
+    /function renderBidWizardResult\(/.test(app),
+  "向导渲染被删/改名"
+);
+check(
+  "#19 UI：工作台空态分支进向导（不再死胡同错误页）",
+  /if \(!b\.present\) \{[\s\S]{0,300}renderBidWizardCreate\(treeEl\)/.test(app),
+  "空工作区回到错误横幅（§109 引导卡口径被回退）"
+);
+check(
+  "#19 UI：DRAFT 且未导入 → 导入卡（quick_stats.files 判据）",
+  /st19 === "DRAFT" && !\(q19\.files > 0\)/.test(app),
+  "导入卡判据被改（状态机口径漂移）"
+);
+check(
+  "#19 UI：kind 清单 + 扩展名白名单（契约 §2 同源）",
+  app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];') &&
+    app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc|ods)$/i;'),
+  "kind 合法值/可解析扩展名漂移"
+);
+check(
+  "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
+  /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
+  "导入参数形状漂移（壳侧围栏锚定依赖 rel 形态）"
+);
+check(
+  "#19 演示桥：两写面 stub 在场（浏览器预览不报未知命令）",
+  /case "bid\.create_project":/.test(app) && /case "bid\.import_files":/.test(app),
+  "演示模式向导死路"
+);
+for (const sel of [".bid-wiz-card", ".bid-wiz-file", ".bid-table"]) {
+  check(
+    `#19 样式：styles.css 提供 ${sel.trim()} 样式`,
+    css.includes(sel),
+    "向导样式被删"
+  );
+}
+check(
+  "#19 契约：IPC-CONTRACT.md 登记两写面命令",
+  contract.includes("### bid.create_project") && contract.includes("### bid.import_files"),
+  "写面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "#19 契约：bid.state 的 quick_stats 登记 files 计数",
+  /"files": 4,\s*\/\/ #19/.test(contract),
+  "files 计数没进契约样例"
+);
+
+// ---------- R3（#47）：导入结果反馈面——partial 分账明细 ----------
+check(
+  "R3 UI：partial 三源合取（壳侧标记 / FAILED 行 / totals.parse_failed）",
+  /const partial = !!r\.partial \|\| failedRows\.length > 0 \|\| \(totals\.parse_failed \|\| 0\) > 0;/.test(app),
+  "部分成功判据回退到单一来源（演示桥/真实壳任一形态点不亮）"
+);
+check(
+  "R3 UI：摘要计数条（成功/失败/已存在 + 部分成功口径）",
+  /bid-wiz-summary/.test(app) && /成功 " \+ okCount \+ " 件/.test(app) && /失败 " \+ failedRows\.length \+ " 件/.test(app),
+  "分账计数条被删（R1 的 item_errors 单行拼接回归）"
+);
+check(
+  "R3 UI：失败清单结构化（bid-wiz-fails 逐条独立行 + 全程禁引口径）",
+  /bid-wiz-fails/.test(app) && /全程禁引——补遗\/条款抽取\/评分都不会引用/.test(app) && /bid-wiz-fail-row/.test(app),
+  "失败清单退回 <br> 拼接或口径文案丢失"
+);
+check(
+  "R3 UI：部分成功不是故障——成功件不回滚口径在场",
+  app.includes("部分成功不是故障——成功件照常入库不回滚，失败件全程禁引"),
+  "口径文案漂移（向导会把部分成功当故障渲染）"
+);
+check(
+  "R3 演示桥：损坏件教学面（partial:true + item_errors + FAILED 行同形）",
+  /\/损坏件\/\.test/.test(app) && /out\.partial = true;/.test(app) && /out\.item_errors = brokenFl\.map/.test(app),
+  "演示桥无法教学部分成功面（真实壳 partial 形态无演示对照）"
+);
+check(
+  "R3 演示桥：损坏件失败行 0 页 0 块（成功面不被失败件污染计数）",
+  /pages: broken \? 0 : 12/.test(app) && /chunks: broken \? 0 : 48/.test(app) && /chunks: fl\.reduce\(\(s, f\) => s \+ f\.chunks, 0\)/.test(app),
+  "totals 计数被失败件污染（chunks 虚高）"
+);
+check(
+  "R3 样式：bid-wiz-summary / bid-wiz-fails 提供 ok|warn 双态",
+  /\.bid-wiz-summary\[data-state="warn"\]/.test(css) && /\.bid-wiz-fails summary/.test(css),
+  "分账样式缺失"
+);
+
+// ---------- R4（#47）：向导完成态首屏 + 会话态生命周期 ----------
+check(
+  "R4 UI：switchWorkspace 重置向导会话态（result 不跨工作区泄漏）",
+  /async switchWorkspace\(p0\) \{[\s\S]{0,3000}state\.bidWizard = \{/.test(app),
+  "旧工作区导入现场（result/sel/files）泄漏到新工作区——「文件已入库」错挂新项目"
+);
+check(
+  "R4 UI：完成态卡渲染函数 renderBidWizardDone（重开工作区场景）",
+  /function renderBidWizardDone\(/.test(app),
+  "重开工作区后右面板无完成态首屏"
+);
+check(
+  "R4 UI：完成态卡数据面 = bid.state quick_stats 同源（files/requirements/evidence/pages_estimate）",
+  /q\.files \|\| 0/.test(app) && /q\.requirements \|\| 0/.test(app) && /q\.pages_estimate \|\| 0/.test(app) && /q\.evidence \|\| 0/.test(app),
+  "完成态卡造数或字段漂移（quick_stats 是唯一真源）"
+);
+check(
+  "R4 UI：已导入未建纲分支（q19.files > 0 && 无向导现场 → 完成态卡）",
+  /\} else if \(q19\.files > 0\) \{[\s\S]{0,600}renderBidWizardDone\(panelEl19, b\)/.test(app),
+  "重开工作区回到泛泛「大纲未建立」占位（完成态分支被删）"
+);
+check(
+  "R4 UI：完成态优先级——刚导入现场（result）仍走逐件表",
+  /else if \(state\.bidWizard\.result\) \{[\s\S]{0,500}renderBidWizardResult\(panelEl19, state\.bidWizard\.result\)/.test(app),
+  "完成态卡盖掉刚导入的逐件结果（现场信息降级）"
+);
+
+// ---------- R5（#47 / #19 任务 2）：coverage 早态引导对齐向导交互语言 ----------
+// R6（#47 / #19 任务 3）：coverage 两分支收编共享工厂 renderBidEarlyGuide 后，
+// 断言改写为收编形态（强度不减：not_found / state 双卡 + CTA 文案 + 切页签
+// + next 条，锚点统一为工厂的 data-bid-guide-cta / -retry）。
+check(
+  "R5 UI：coverage E_NOTFOUND 引导卡（空工作区不再走错误横幅）",
+  /cv\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}code: "not_found"[\s\S]{0,400}还没有标书项目/.test(app),
+  "空工作区（无 db.json）被渲染成「覆盖报告读取失败」——正常空态当故障（§109 口径违背）"
+);
+check(
+  "R5 UI：coverage E_STATE 引导卡主行动「去导入招标文件」（直通向导第二步）",
+  /cv\.code === "state"[\s\S]{0,500}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}覆盖报告尚未开放/.test(app),
+  "早态卡只有「重新检查」死文案（#19 任务 2 的对齐目标缺失）"
+);
+check(
+  "R5 UI：去导入/去建项按钮切回 detail 页签（向导所在页）",
+  /data-bid-guide-cta[\s\S]{0,400}t\.meta\.panel = "detail";[\s\S]{0,120}renderBidWorkbenchPanes\(host\)/.test(app),
+  "CTA 按钮不切页签（用户找不到向导入口）"
+);
+check(
+  "R5 UI：早态卡带 bid-cov-next「下一步」条（与结果面同款交互语言）",
+  /o\.next \? '<div class="bid-cov-next" data-state="ok"><span>下一步<\/span>' \+ o\.next/.test(app),
+  "早态引导缺「下一步」条（交互语言未对齐）"
+);
+
+// ---------- R6（#47 / #19 任务 3）：E_NOTFOUND/E_STATE 引导卡约定统一 + IPC-CONTRACT 登记 ----------
+check(
+  "R6 UI：共享引导卡工厂在场（CTA 文案按 code 推导——单一真源）",
+  /function renderBidEarlyGuide\(host, panel, opts\)[\s\S]{0,600}const cta = isNotFound \? "去新建标书项目" : "去导入招标文件";/.test(app),
+  "各面板手写引导卡（文案漂移无单源——约定未统一）"
+);
+check(
+  "R6 UI：工厂卡片不带 data-kind=error（空态不是故障）+ 次「重新检查」锚点统一",
+  /data-bid-guide-cta>' \+ cta \+ '<\/button> <button class="btn" data-bid-guide-retry>重新检查<\/button>/.test(app)
+  && !/data-kind="error"[\s\S]{0,300}data-bid-guide-cta/.test(app),
+  "引导卡带错误横幅样式（空态渲染成故障——契约 §3.4 违背）"
+);
+check(
+  "R6 UI：matrix 记错误码（对齐 coverage/gates——面板才能分支引导卡）",
+  /state\.bid\.matrix\.code = \(err && err\.code\) \|\| ""/.test(app)
+  && /matrix: \{ status: "idle", data: null, error: "", code: "" \}/.test(app),
+  "loadBidMatrix 只记 message（mx.code 恒空——not_found/state 永远一把抓成故障横幅）"
+);
+check(
+  "R6 UI：matrix 面板 E_NOTFOUND/E_STATE 双分支引导卡（不再一把抓错误横幅）",
+  /mx\.code === "not_found" \|\| mx\.code === "state"[\s\S]{0,700}renderBidEarlyGuide/.test(app),
+  "矩阵未建（DRAFT 主路径）与真故障（io）共用「矩阵读取失败」横幅"
+);
+check(
+  "R6 UI：quality 面板 not_found 分支收编引导卡（原「不是标书项目」错误横幅退役）",
+  /q\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide/.test(app),
+  "自评面板空工作区仍走 data-kind=error 横幅（§109 引导卡约定违背）"
+);
+check(
+  "R6 UI：quality 面板 state 分支收编引导卡（E_STATE 原文 + hint 进卡不吞）",
+  /q\.code === "state"[\s\S]{0,500}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,400}MATRIX_READY[\s\S]{0,300}prepare_outline_and_matrix/.test(app),
+  "自评早态卡丢「矩阵就绪后显示什么」与后继管线信息"
+);
+check(
+  "R6 UI：gates 面板 not_found 分支引导卡（注释口径「只在无 db.json 分支引导」落地）",
+  /gt\.code === "not_found" \|\| gt\.code === "state"[\s\S]{0,700}renderBidEarlyGuide/.test(app),
+  "门台账注释说分支引导、代码一把抓 error 横幅（注释与实现背离）"
+);
+check(
+  "R6 契约：IPC-CONTRACT §3.4 引导卡约定登记（锚点 + 工厂 + 双码口径）",
+  /### 3\.4 引导卡约定（E_NOTFOUND \/ E_STATE 的 UI 呈现规范；#47 R6 \/ #19 任务 3）/.test(contract)
+  && /data-bid-guide-cta/.test(contract) && /renderBidEarlyGuide/.test(contract)
+  && /去新建标书项目/.test(contract) && /去导入招标文件/.test(contract),
+  "引导卡约定散在 §109 表格一行 + 注释里，契约文档无正式登记（改代码无同步锚点）"
+);
+
+// ---------- R6 merge main（#47 / #19 任务 3 收编 export 面）：#18 出口闭环面板引导卡统一 ----------
+check(
+  "R6 收编：export 面（#18）not_found 分支进共享工厂（原错误横幅退役）",
+  /x\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide/.test(app),
+  "#18 校验面板空工作区仍走 data-kind=error 横幅（契约 §3.4 面板清单违背）"
+);
+check(
+  "R6 收编：export 面（#18）state 分支进共享工厂（E_STATE 原文 + 双前置门 hint 进卡）",
+  /x\.code === "state"[\s\S]{0,600}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}pre_export_confirm[\s\S]{0,200}校验并导出成品/.test(app),
+  "#18 校验早态卡丢双前置门说明或后继管线信息"
+);
+check(
+  "R6 契约：§3.4 面板清单含 export（merge main 后 #18 面板纳入约定）",
+  /detail \/ matrix \/ quality \/ gates \/ coverage \/ export/.test(contract),
+  "契约 §3.4 面板清单漏 export 面（merge main 新增面板未纳入约定）"
+);
+
+// ---------- R7（#47）：向导重入——半完成态（DRAFT 0 文件）重开工作台的新鲜度 ----------
+check(
+  "R7 UI：重开工作台半完成态 → 双源重拉（bid.state 强制 + 文件列表重置 idle 自动重拉）",
+  /bR7\.status === "ready" && pR7\.status === "DRAFT" && !\(qR7\.files > 0\)[\s\S]{0,250}state\.bidWizard\.treeStatus = "idle"[\s\S]{0,120}ui\.loadBid\(true\)/.test(app),
+  "重开工作台沿用旧文件列表（壳外新放的招标文件不可见——重入语义缺失，只能手点刷新）"
+);
+check(
+  "R7 UI：文件列表重置只动 ready 态（loading/error 不打断）",
+  /if \(state\.bidWizard\.treeStatus === "ready"\) state\.bidWizard\.treeStatus = "idle";/.test(app),
+  "重置不分态——进行中拉取被误清白跑 / error 提示丢失"
+);
+check(
+  "R7 merge 热修：openBidWorkbench 单一定义（merge main 双版本收编）",
+  (app.match(/async openBidWorkbench\(panel\) \{/g) || []).length === 1,
+  "openBidWorkbench 双定义（JS 后定义静默覆盖前定义——单一真源违背，merge 冲突残留）"
+);
+
+// ---------- #18 出口闭环：校验报告 + 确认导出 ----------
+check(
+  "#18 工作台头部「校验并导出」按钮（validate-export 动作）",
+  /data-bid-act="validate-export"/.test(app) && /校验并导出/.test(app),
+  "出口动作入口被删或改名"
+);
+check(
+  "#18 「校验与导出」页签（data-bid-panel=export）",
+  /data-bid-panel="export">校验与导出/.test(app),
+  "出口页签被删或改名"
+);
+check(
+  "#18 renderBidExportPanel 分发（树空 / 主体两路）",
+  (app.match(/renderBidExportPanel\(host\)/g) || []).length >= 3,
+  "面板路由断裂——页签点开不渲染（树空引导 + 主体 + 面板函数定义至少 3 处引用）"
+);
+check(
+  "#18 bid.validate IPC 调用 + 状态面",
+  /ipc\("bid\.validate", \{\}, 12e4\)/.test(app) && /bidExport: \{/.test(app),
+  "校验拉取或状态面被回退"
+);
+check(
+  "#18 bid.export IPC 调用（format + output_path + dark_bid）",
+  /ipc\("bid\.export", body, 3e5\)/.test(app) && /output_path: path/.test(app),
+  "导出写面接线被回退"
+);
+check(
+  "#18 产物回显（artifact.url/sha256/size）+ explorer.reveal 定位",
+  /x\.done\.artifact && x\.done\.artifact\.url/.test(app) && /ipc\("explorer\.reveal", \{ path: url \}, 15e3\)/.test(app),
+  "产物回显或定位接线被回退"
+);
+check(
+  "#18 E_STATE 引导卡分支（state 码 → 校验尚未开放 / 导出被前置门拦截）",
+  /校验尚未开放/.test(app) && /导出被前置门拦截/.test(app),
+  "state 码分支引导卡被删——退回错误横幅即违规（契约 §3.3）"
+);
+check(
+  "#18 侧栏「校验与导出」入口",
+  /data-bid-act="validate-export">.*校验与导出/.test(app.replace(/\n/g, "")) || (app.includes('data-bid-act="validate-export"') && app.includes("缺陷清单 · 确认导出 · 产物定位")),
+  "侧栏入口被删"
+);
+check(
+  "#18 壳侧分发：ipc.rs 登记 bid.validate / bid.export（经 bid.rs 真实处理）",
+  /"bid\.validate" => crate::bid::validate\(&ws, &self\.bid, &a\)/.test(ipcRs)
+    && /"bid\.export" => crate::bid::export\(&ws, &self\.bid, &a\)/.test(ipcRs),
+  "壳侧 IPC 分发缺命令——UI 调用会 unknown_cmd"
+);
+check(
+  "#18 bid.rs 走真实工具面（dispatch_with validate_bid_document / export_bid_document）",
+  /tool: "validate_bid_document"/.test(bidRs) && /tool: "export_bid_document"/.test(bidRs),
+  "壳侧没经 bid_mcp 真实工具面（直读 DomainStore 或空实现即违规）"
+);
+check(
+  "#18 契约文档登记 bid.validate / bid.export",
+  contract.includes("### bid.validate") && contract.includes("### bid.export"),
+  "出口闭环命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "#18 导出面板样式（bid-export 表单 + 产物路径）",
+  /\.bid-export-form/.test(css) && /\.bid-export-path/.test(css),
+  "导出面板样式被删"
+);
+
+// ---------- 壳侧：IPC 命令真实在场（#603 批 C：补遗豁免） ----------
+check(
+  "mang-app bid.rs 提供 addenda / addendum_waiver / no_addendum_confirm",
+  bidRs.includes("pub fn addenda(") && bidRs.includes("pub fn addendum_waiver(") && bidRs.includes("pub fn no_addendum_confirm("),
+  "补遗豁免三面模块被删"
+);
+check(
+  "bid.addenda 走 DomainStore+readiness 直读（addendum_statuses / addendum_waivers 同源）",
+  bidRs.includes("bid_tools::readiness::addendum_statuses") && bidRs.includes("addendum_waivers()"),
+  "补遗状态被第二套实现取代（必须读域层真源）"
+);
+check(
+  "两写面走宿主签发 + 真实工具面（#182 签域分账：addendum_waiver:{file_id} / no_addendum_confirmed）",
+  bidRs.includes("addendum_waiver_scope") && bidRs.includes("no_addendum_confirmed_scope") && bidRs.includes("record_addendum_waiver"),
+  "receipt 签发链被绕过或两语义未分账"
+);
+check(
+  "ipc.rs 分发 bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm",
+  /"bid\.addenda" => crate::bid::addenda\(/.test(ipcRs) && /"bid\.addendum_waiver" => crate::bid::addendum_waiver\(/.test(ipcRs) && /"bid\.no_addendum_confirm" => crate::bid::no_addendum_confirm\(/.test(ipcRs),
+  "补遗面命令没接进 IPC 分发"
+);
+check(
+  "壳侧单测覆盖补遗面（无 db 干净拒 + 全局确认全链 + gates 对账）",
+  bidRs.includes("addendum_faces_clean_not_found_without_db") && bidRs.includes("no_addendum_confirm_full_flow"),
+  "壳侧单测面被删"
+);
+
+// ---------- app.js：#603 批 C——补遗豁免面接线 ----------
+check(
+  "读面调用 bid.addenda + 两写面 bid.addendum_waiver / bid.no_addendum_confirm（真实 IPC）",
+  /ipc\("bid\.addenda", \{\}, 15e3\)/.test(app) && /ipc\("bid\.addendum_waiver", \{ file_id: fileId, reason: reason \}, 3e4\)/.test(app) && /ipc\("bid\.no_addendum_confirm", \{ reason: reason \}, 3e4\)/.test(app),
+  "补遗面 IPC 调用被删或改形"
+);
+check(
+  "两补遗门真按钮接线（逐件确认 / 确认无补遗——替掉批 A 占位符）",
+  !/bid-gt-batchc/.test(app) && /data-gt-aw-toggle/.test(app) && /data-gt-na-toggle/.test(app),
+  "占位符残留或按钮未接线"
+);
+check(
+  "逐件确认列表（不就绪件 + 内联理由 + 已确认审计）",
+  /function bidGtAwListHtml/.test(app) && /data-aw-reason=/.test(app) && /data-aw-confirm=/.test(app) && /已确认台账（审计面——放行后不消失）/.test(app),
+  "逐件列表被删"
+);
+check(
+  "全局无补遗确认表单（#379 语义引导 + 理由必填）",
+  /function bidGtNaFormHtml/.test(app) && /data-na-reason/.test(app) && /data-na-confirm/.test(app) && /仅适用于「未发现补遗/.test(app),
+  "全局确认表单被删"
+);
+check(
+  "理由必填前端预检（与域层同口径——不可审计的确认不成确认）",
+  /确认理由必填（不可审计的确认不成确认）/.test(app),
+  "空白理由会被放行"
+);
+check(
+  "豁免后台账/门台账/侧栏三处同源刷新",
+  /ui\.loadBidAddenda\(true\)/.test(app) && /waiveBidAddendum/.test(app) && /confirmNoAddendum/.test(app),
+  "写面生效后面板不刷新"
+);
+check(
+  "工作区切换时补遗面状态随根失效",
+  /state\.bidAddenda = \{ status: "idle"/.test(app),
+  "旧工作区补遗台账会残留"
+);
+check(
+  "演示桥补三命令 stub + 可变台账（waiver 真改演示态 + #379 诚实拒）",
+  /case "bid\.addenda":/.test(app) && /demoAddendumWaiver/.test(app) && /demoNoAddendumConfirm/.test(app) && /与事实矛盾/.test(app),
+  "演示模式补遗面会空转或假成功"
+);
+
+// ---------- styles.css：#603 批 C 补遗豁免面样式 ----------
+for (const sel of [".bid-gt-aw ", ".bid-gt-aw-row", ".bid-gt-aw-name", ".bid-gt-aw-actions", ".bid-gt-aw-audit"]) {
+  check(
+    `styles.css 提供 ${sel.trim()} 样式`,
+    css.includes(sel.trim()),
+    "补遗面样式被删"
+  );
+}
+
+// ---------- 契约：IPC-CONTRACT.md 登记（#603 批 C） ----------
+check(
+  "契约文档登记 bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm（#603 批 C）",
+  contract.includes("### bid.addenda") && contract.includes("### bid.addendum_waiver") && contract.includes("### bid.no_addendum_confirm"),
+  "补遗面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+
+// ---------- #21 e2e 骨架（静态面）：漏参防御 + 套件纳入 ----------
+check(
+  "#21 矩阵页签分发双参调用（漏传 panel = 运行时 TypeError——e2e 首跑捕获的存量 bug 形态）",
+  /renderBidMatrixPanel\(host, mxPanel\);/.test(app) && !/\brenderBidMatrixPanel\(host\);/.test(app),
+  "renderBidMatrixPanel(host) 单参调用又在场——函数签名是 (host, panel)，漏参必崩"
+);
+check(
+  "#21 e2e 套件在场（run-all glob 自动纳入）",
+  readFileSync(join(ROOT, "web-ui", "tests", "bid-e2e.test.mjs"), "utf8").length > 0,
+  "tests/bid-e2e.test.mjs 被删——运行时断链门消失"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

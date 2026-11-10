@@ -683,7 +683,12 @@ function readRunFmt(rPr: Element): RunFmt {
         break;
       }
       case 'highlight': {
-        if (val) f.highlight = val.toLowerCase();
+        // Word 会在大量 run 上显式写 <w:highlight w:val="none"/> 表示「无高亮」。
+        // 旧实现把 "none" 也当有效值存下来，渲染时查不到映射就兜底成黄色——
+        // 真实文件里 3938/3940 处 none 全被涂黄（整页背景发黄的真因）。
+        // 这里把 none 归一为「不设置」（不透传给下游）。
+        const hv = (val ?? '').trim().toLowerCase();
+        if (hv && hv !== 'none') f.highlight = hv;
         break;
       }
       default:
@@ -750,7 +755,10 @@ function highlightColor(name: string): string {
     black: '#000000',
     white: '#ffffff',
   };
-  return table[name] ?? '#fff59d';
+  // 未知枚举：返回空串（= 不上色），绝不兜底成黄色。
+  // 兜底成黄色会把「解析不到的颜色」和「用户真的标了黄」混为一谈——
+  // 旧实现正是因此把 w:val="none" 渲染成整页黄底。
+  return table[name] ?? '';
 }
 
 /** 段落对齐映射（jc 枚举 → CSS text-align）。 */
@@ -815,7 +823,10 @@ function wrapFmt(doc: Document, inner: Node, fmt: RunFmt, measureOnly: boolean):
   if (fmt.halfPoints !== null) css.push('font-size:' + halfPointsToPx(fmt.halfPoints).toFixed(1) + 'px');
   if (fmt.color) css.push('color:' + fmt.color);
   if (fmt.font) css.push('font-family:' + quoteFamily(fmt.font));
-  if (fmt.highlight) css.push('background-color:' + highlightColor(fmt.highlight));
+  if (fmt.highlight) {
+    const hl = highlightColor(fmt.highlight);
+    if (hl) css.push('background-color:' + hl);
+  }
   if (css.length > 0 && !measureOnly) {
     const span = el(doc, 'span');
     span.setAttribute('style', css.join(';'));
@@ -1464,6 +1475,12 @@ function buildStyleSheet(): string {
     '}',
     // 纸面：A4 宽 210mm、内边距 20mm；position:relative 供证据高亮层定位；
     // overflow:visible —— 滚动归宿主外层滚动器（本模块不建滚动容器）。
+    // #34 A 级虚拟化：content-visibility:auto 让屏外纸面跳过布局/绘制，
+    // 标签切换（activateTab hidden 互斥）回切时只重排视口附近 1-2 页。
+    // contain-intrinsic-size 的 auto = 优先用「上次记忆尺寸」，首渲染前
+    // 以 1123px（A4 高 @96dpi）占位；宽度不受影响（本规则 width:100% 非
+    // 内容驱动，尺寸包含不改变显式宽度）。页脚 offsetTop 页码跟踪依赖的
+    // 盒位仍单调（占位高度只影响未渲染页的估算位）。
     SCOPE + ' .mang-docx-page {',
     '  position: relative;',
     '  overflow: visible;',
@@ -1477,6 +1494,8 @@ function buildStyleSheet(): string {
     '  color: var(--mang-fg, #1f2328);',
     '  box-shadow: var(--mang-doc-shadow);',
     '  border-radius: 2px;',
+    '  content-visibility: auto;',
+    '  contain-intrinsic-size: auto 1123px;',
     '}',
     // 页脚页码（低位、低调；纯装饰）。
     SCOPE + ' .mang-docx-page[data-page]::after {',
@@ -1595,11 +1614,13 @@ function buildStyleSheet(): string {
     '  border-radius: 3px;',
     '}',
     // 打印：纸面阴影/页码隐藏（浏览器打印不重复分页——打印走宿主整页）。
+    // #34：打印强制全量渲染（屏外页不跳过），避免打印输出丢页。
     '@media print {',
     '  ' + SCOPE + ' .mang-docx-page {',
     '    box-shadow: none;',
     '    margin: 0;',
     '    max-width: none;',
+    '    content-visibility: visible;',
     '  }',
     '  ' + SCOPE + ' .mang-docx-page[data-page]::after { display: none; }',
     '}',
@@ -1867,19 +1888,24 @@ export function renderDocx(
     const teardown = (): void => {
       try {
         if (root && root.parentNode) root.parentNode.removeChild(root);
-        if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+        // 宿主标记先摘——本渲染器不再计入「还有谁在用全局样式表」。
+        host.classList.remove('mang-docx');
+        host.removeAttribute('data-mang-renderer');
+        host.removeAttribute('data-mang-theme');
+        // 样式表是全局单例（renderDocx 去重只留一份，内容确定同构）——
+        // 还有其他 docx 渲染器在场时不能摘：重载/关闭 A 标签的 dispose
+        // 不能把 B 标签正在用的纸面样式一起带走（否则 B 只能等自己重渲
+        // 才恢复样式）。
+        if (styleEl && styleEl.parentNode) {
+          const stillInUse =
+            host.ownerDocument && host.ownerDocument.querySelector('[data-mang-renderer="docx"]');
+          if (!stillInUse) styleEl.parentNode.removeChild(styleEl);
+        }
         for (const url of s.blobUrls) URL.revokeObjectURL(url);
       } catch {
         /* disposer 不抛：宿主可能已被整体移除 */
       }
       s.blobUrls.length = 0;
-      try {
-        host.classList.remove('mang-docx');
-        host.removeAttribute('data-mang-renderer');
-        host.removeAttribute('data-mang-theme');
-      } catch {
-        /* 忽略：宿主已失效 */
-      }
     };
     // 同步段已全部发生（DOM/样式表已在位）；只有异步构建可能仍在跑。
     teardown();

@@ -7,6 +7,8 @@
 //!       / bid.state+bid.outline（#313 批 A：无 db.json 干净 not_found / 真实项目读取 / db.json 外部变更后缓存重开）
 //!       / bid.quality+bid.score（#313 批 C：早态 E_STATE→state 码 / MATRIX_READY 后真实读取）
 //!       / bid.gates+bid.gate_pass（#603 批 A：五门台账 / 人工过门宿主签发 receipt / 门序跳跃拒 / 非法门早拒）
+//!       / bid.matrix（#603 批 B overrides 读面）+ bid.matrix_override（无理由拒）
+//!       / bid.addenda+bid.addendum_waiver+bid.no_addendum_confirm（#603 批 C：补遗台账 / 全局确认 / 幽灵件拒 / 空白理由早拒）
 //!       / bid.matrix（#313 批 B：无 db.json not_found / 真实项目 / db.json 变更重开）
 //!       / bid.coverage（#313 批 D：未导入件诚实口径 total_blocks=0 + next 引导）
 //!       / workspace.open+current（#194：切换/新根命令面/幂等/记忆/失败不换根）
@@ -301,14 +303,25 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
 
     // ---- 路径围栏
+    // R2（#47 平台区分①）：绝对越界样本平台自适应——Windows 用盘符正斜杠
+    // 形态（C:/…，顺带覆盖混合分隔符的绝对形态），Unix 用根路径形态。
+    // 历史写死 C:/Windows/win.ini：在 Linux 上是合法相对路径（C: 只是
+    // 普通目录名），围栏正确地按相对路径解析成 not_found，用例却期望
+    // outside_workspace——此前 mang-app 在 Linux 不可构建，从未真跑
+    // 暴露（假绿）。AGENTS.md 13.1：平台特定样本必须 cfg 分支。
     let outside_abs = std::env::temp_dir().join("mang-selftest-outside.txt");
     std::fs::write(&outside_abs, "outside").unwrap();
+    let abs_escape: &str = if cfg!(windows) {
+        "C:/Windows/win.ini"
+    } else {
+        "/etc/passwd"
+    };
     let cases = [
         ("fs.read ../", json!({"id":"g1","cmd":"fs.read","path":"../mang-selftest-outside.txt"})),
         ("fs.readBytes ../", json!({"id":"g2","cmd":"fs.readBytes","path":"sub/../../mang-selftest-outside.txt"})),
         ("fs.tree ../", json!({"id":"g3","cmd":"fs.tree","path":".."})),
         ("fs.stat 绝对越界", json!({"id":"g4","cmd":"fs.stat","path": display(&outside_abs)})),
-        ("fs.read 绝对越界", json!({"id":"g5","cmd":"fs.read","path": "C:/Windows/win.ini"})),
+        ("fs.read 绝对越界", json!({"id":"g5","cmd":"fs.read","path": abs_escape})),
     ];
     let mut all_blocked = true;
     let mut detail = Vec::new();
@@ -322,6 +335,23 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     }
     r.check("path-guard 越界全拦", all_blocked, detail.join("，"));
     let _ = std::fs::remove_file(&outside_abs);
+
+    // R2（#47 平台区分①）：盘符形态的平台归类对照——两侧都断言「本平台
+    // 的正确语义」，不是把一侧改成另一侧的期望：Windows 上 C:/… 是
+    // 绝对路径 → 越界拦；Unix 上 C: 是普通目录名 → 围栏内相对解析，
+    // 目标不存在 → not_found（同样是围栏在工作，只是走了相对分支）。
+    let resp = call(&ctx, json!({"id":"g6","cmd":"fs.read","path":"C:/Windows/win.ini"}));
+    let drive_code = err_code(&resp);
+    let (drive_expect, drive_why) = if cfg!(windows) {
+        ("outside_workspace", "Windows：盘符=绝对路径，越界拦")
+    } else {
+        ("not_found", "Unix：C: 是普通目录名，围栏内相对解析后目标不存在")
+    };
+    r.check(
+        "path-guard 盘符形态平台语义",
+        drive_code == drive_expect,
+        format!("C:/Windows/win.ini → {drive_code}（{drive_why}）"),
+    );
 
     // ---- 大文件拒绝
     // (不真的造 50MB，只验证 too_large 的判定入口存在：用超长 name 触发 bad_args 说明参数校验生效)
@@ -664,6 +694,90 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     let resp = call(&ctx, json!({"id":"t-bid-gp2","cmd":"bid.gate_pass","gate":"no_addendum_confirmed","decision":"APPROVED"}));
     r.check(
         "bid.gate_pass(非法门早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
+    // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
+    // 读面：overrides 空对象恒在（UI 不赌键在场）
+    let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));
+    let bm = result(&resp);
+    r.check(
+        "bid.matrix(overrides 读面)",
+        resp["ok"] == json!(true)
+            && bm["overrides"].as_object().is_some(),
+        format!("overrides={}", bm["overrides"].as_object().map(|o| o.len()).unwrap_or(0)),
+    );
+    // 写面：NOT_APPLICABLE + 理由 → 行翻不适用、human 回执（#182）
+    let resp = call(&ctx, json!({"id":"t-bid-mo1","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"NOT_APPLICABLE","deviation":"规则说明性条款，无可响应正文","actor_id":"selftest-operator"}));
+    let bmo = result(&resp);
+    r.check(
+        "bid.matrix_override(人工豁免)",
+        resp["ok"] == json!(true)
+            && bmo["override"]["row"]["status"] == json!("NOT_APPLICABLE")
+            && bmo["override"]["actor"]["actor_type"] == json!("human"),
+        format!("row_status={:?}", bmo["override"]["row"]["status"].as_str()),
+    );
+    // 读面对账：overrides 面含本行（谁/何时/为何——回溯可查）
+    let resp = call(&ctx, json!({"id":"t-bid-mo2","cmd":"bid.matrix"}));
+    let bm2 = result(&resp);
+    r.check(
+        "bid.matrix(豁免后对账)",
+        resp["ok"] == json!(true)
+            && bm2["overrides"]["REQ-0001"]["status"] == json!("NOT_APPLICABLE")
+            && bm2["overrides"]["REQ-0001"]["actor"]["actor_id"] == json!("selftest-operator"),
+        format!("deviation={:?}", bm2["overrides"]["REQ-0001"]["deviation"].as_str().map(|s| s.chars().take(12).collect::<String>())),
+    );
+    // 写面：NOT_APPLICABLE 无理由 → 工具面拒（不可审计的豁免不算豁免）
+    let resp = call(&ctx, json!({"id":"t-bid-mo3","cmd":"bid.matrix_override","requirement_id":"REQ-0001","status":"NOT_APPLICABLE"}));
+    r.check(
+        "bid.matrix_override(无理由拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
+    // ---- #603 批 C：补遗豁免（bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm）
+    // 读面：无补遗件台账（total=0——NotProvided 素材，不是故障）
+    let resp = call(&ctx, json!({"id":"t-bid-ad0","cmd":"bid.addenda"}));
+    let bad0 = result(&resp);
+    r.check(
+        "bid.addenda(补遗台账)",
+        resp["ok"] == json!(true)
+            && bad0["readiness"]["total"] == json!(0)
+            && bad0["waivers"].as_array().map(|a| a.is_empty()).unwrap_or(false),
+        format!("total={}", bad0["readiness"]["total"]),
+    );
+    // 写面：全局无补遗确认（宿主签发 receipt——human 路径）
+    let resp = call(&ctx, json!({"id":"t-bid-ad1","cmd":"bid.no_addendum_confirm","reason":"已核对招标文件全册，本项目无补遗/澄清件","actor_id":"selftest-operator"}));
+    let bad1 = result(&resp);
+    r.check(
+        "bid.no_addendum_confirm(全局确认)",
+        resp["ok"] == json!(true)
+            && bad1["no_addendum_confirm"]["confirmed_no_addendum"]["gate"] == json!("no_addendum_confirmed")
+            && bad1["no_addendum_confirm"]["confirmed_no_addendum"]["actor"]["actor_type"] == json!("human"),
+        format!("human_confirmed={:?}", bad1["no_addendum_confirm"]["confirmed_no_addendum"]["human_confirmed"]),
+    );
+    // 读面对账：no_addendum_confirmed 门已过（gates 同源）
+    let resp = call(&ctx, json!({"id":"t-bid-ad2","cmd":"bid.gates"}));
+    let bad2 = result(&resp);
+    r.check(
+        "bid.gates(全局确认后对账)",
+        resp["ok"] == json!(true)
+            && bad2["gates"][4]["gate"] == json!("no_addendum_confirmed")
+            && bad2["gates"][4]["approved"] == json!(true),
+        format!("latest={:?}", bad2["gates"][4]["latest_pass"]["actor"]),
+    );
+    // 写面：幽灵件 → 域层 ENotFound（凭空免责拒）
+    let resp = call(&ctx, json!({"id":"t-bid-ad3","cmd":"bid.addendum_waiver","file_id":"TF-9999","reason":"x"}));
+    r.check(
+        "bid.addendum_waiver(幽灵件拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // 写面：空白理由 → 壳侧早拒（不可审计的确认不成确认）
+    let resp = call(&ctx, json!({"id":"t-bid-ad4","cmd":"bid.no_addendum_confirm","reason":"  "}));
+    r.check(
+        "bid.no_addendum_confirm(空白理由早拒)",
         resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
         format!("{}", err_code(&resp)),
     );
