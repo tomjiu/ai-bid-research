@@ -25,12 +25,16 @@ const APP_JS = join(ROOT, "web-ui", "mang", "app.js");
 const CSS = join(ROOT, "web-ui", "mang", "styles.css");
 const BID_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "bid.rs");
 const IPC_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "ipc.rs");
+const PATHS_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "paths.rs");
+const SELFTEST_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "selftest.rs");
 const CONTRACT = join(ROOT, "docs", "mang", "IPC-CONTRACT.md");
 
 const app = readFileSync(APP_JS, "utf8");
 const css = readFileSync(CSS, "utf8");
 const bidRs = readFileSync(BID_RS, "utf8");
 const ipcRs = readFileSync(IPC_RS, "utf8");
+const pathsRs = readFileSync(PATHS_RS, "utf8");
+const selftestRs = readFileSync(SELFTEST_RS, "utf8");
 const contract = readFileSync(CONTRACT, "utf8");
 
 let pass = 0;
@@ -983,6 +987,38 @@ check(
   "#21 e2e 套件在场（run-all glob 自动纳入）",
   readFileSync(join(ROOT, "web-ui", "tests", "bid-e2e.test.mjs"), "utf8").length > 0,
   "tests/bid-e2e.test.mjs 被删——运行时断链门消失"
+);
+
+// ---------- R10（#47 平台区分③）：基名跨平台守卫（Win 保留名/非法字符） ----------
+check(
+  "R10 壳侧：guard_portable_basename 三判据（保留名/非法字符/尾点空格）",
+  /pub fn guard_portable_basename\(name: &str\) -> Result<\(\), String> \{[\s\S]{0,900}"COM1" \| "COM2"/.test(pathsRs) && /ends_with\(' '\) \|\| name\.ends_with\('\.'\)/.test(pathsRs),
+  "守卫函数被删或判据缺角（基名跨 Windows 迁移失效）"
+);
+check(
+  "R10 壳侧：ingest_drop 分账口径（name_not_portable 一件非法不毁整批）",
+  /reason": "name_not_portable"/.test(bidRs),
+  "拖拽批次保留名件被当整批错误回（或直接落位）"
+);
+check(
+  "R10 壳侧：import_files 请求级 bad_args（upload_ref 基名 + filename 双查）",
+  /for what in \[upload_ref, filename\.as_str\(\)\] \{[\s\S]{0,400}guard_portable_basename/.test(bidRs),
+  "导入守卫缺角（显式 filename 或 upload_ref 基名单查漏一面）"
+);
+check(
+  "R10 测试：守卫表驱动单测 + import_files 拒绝零副作用集成",
+  /fn guard_portable_basename_table/.test(pathsRs) && /fn import_files_rejects_non_portable_basename/.test(bidRs),
+  "守卫回归门被删"
+);
+check(
+  "R10 selftest：保留名守卫双项（ingest 分账 + import bad_args）",
+  selftestRs.includes("bid.ingest_drop(保留名守卫)") && selftestRs.includes("bid.import_files(保留名基 bad_args)"),
+  "集成自检项缺失"
+);
+check(
+  "R10 契约：ingest_drop 节登记基名跨平台守卫（双平台同拒 + 分账/bad_args 口径）",
+  contract.includes("基名跨平台守卫（R10") && contract.includes("双平台同拒"),
+  "守卫口径没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);

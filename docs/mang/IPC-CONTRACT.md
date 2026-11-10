@@ -620,8 +620,17 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
 文件再建项合法——不碰 DomainStore）。落位规则：同名且 sha256 相同 → `skipped:
 already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找空位。白名单与
 `BID_IMPORT_EXTS` 同源（docx/xlsx/pdf/doc/ods）；目录拖入明拒（`is_dir`——R17+ 递归导
-入）；不存在的路径 `not_found`。R9-R16 平台硬化专列在此基础做 Win 保留名 / 大小写不
-敏感去重 / 分隔符统一。
+入）；不存在的路径 `not_found`。
+
+**基名跨平台守卫（R10，#47 平台区分③——R8 注释预留硬化项落地）**：`paths::guard_portable_basename`
+在壳侧入口拦截不可跨 Windows 迁移的基名，**双平台同拒**（不是 cfg 分支）——
+① Windows 保留设备名（`CON/PRN/AUX/NUL/COM1-9/LPT1-9`，不分大小写、带扩展同样保留：
+Linux 合法的 `CON.docx` 落库后拷到 Windows 即失效）；② 非法字符 `<>:"|?*/\` 与控制符；
+③ 尾部空格/点（Windows 剥掉后落位名与记录键错位）。`bid.ingest_drop` 按**批次分账**
+（`skipped: name_not_portable`，一件非法不毁整批——与 `ext_blocked` 同口径）；
+`bid.import_files` 对 `upload_ref` 基名与显式 `filename` **双查、请求级 `bad_args`**
+（输入规范错误与 mode 校验同款先例：零副作用早拒，改名重试）。后续 R11+ 在此基础做
+大小写不敏感去重 / MAX_PATH。
 
 ```jsonc
 → { "present": true,

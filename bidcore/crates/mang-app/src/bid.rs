@@ -1550,6 +1550,18 @@ pub fn import_files(
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| upload_ref.to_string())
             });
+        // R10（#47 平台区分③）：基名跨平台守卫——upload_ref 基名与显式
+        // filename 双查（Linux 合法的 CON.docx / 报告?.pdf 落库后拷到
+        // Windows 即失效）。请求级 bad_args（输入规范错误与 mode 校验
+        // 同款先例：零副作用早拒，用户改名重试），不进逐件分账。
+        for what in [upload_ref, filename.as_str()] {
+            let base = what.rsplit(['/', '\\']).next().unwrap_or(what);
+            if let Err(why) = paths::guard_portable_basename(base) {
+                return Err(IpcError::bad_args(format!(
+                    "files[{i}] 基名不可跨平台迁移——{why}（基名取自 upload_ref/filename 的最后一段；混合分隔符形态请统一用 / ）"
+                )));
+            }
+        }
         let mut spec = json!({ "upload_ref": upload_ref, "filename": filename });
         if let Some(k) = f.get("kind").and_then(Value::as_str) {
             spec["kind"] = json!(k);
@@ -1677,6 +1689,16 @@ pub fn ingest_drop(
             skipped.push(json!({
                 "path": raw, "reason": "ext_blocked",
                 "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc/ods）")
+            }));
+            continue;
+        }
+        // R10（#47 平台区分③）：基名跨平台守卫——Linux 拖入 CON.docx 能落
+        // 位，但项目库拷到 Windows 即失效。拖拽批次一件非法不毁整批
+        // （与 ext_blocked 同款分账口径：skipped + reason，不按错误回）
+        if let Err(why) = crate::paths::guard_portable_basename(&name) {
+            skipped.push(json!({
+                "path": raw, "reason": "name_not_portable",
+                "detail": why
             }));
             continue;
         }
@@ -2857,8 +2879,85 @@ mod tests {
         let r = call_args(&ctx, "bid.ingest_drop", json!({ "paths": [] }));
         assert_eq!(r["ok"], json!(false), "空批次拒绝：{r}");
 
+        // ⑥ R10（#47 平台区分③）：基名跨平台守卫——Linux 允许创建
+        // CON.docx（真实文件在场、白名单后缀也过），但落位会被守卫分账
+        // 拒绝（name_not_portable——项目库跨 Windows 迁移即失效）。
+        // 拖拽批次一件非法不毁整批：与合法件混拖时合法件照常落位。
+        // 平台门（AGENTS.md §13.1）：Windows 上 CreateFile("CON.docx")
+        // 映射到控制台设备——write 不报错但**没有真文件**（is_file 探测
+        // 揭穿）。种不出真源文件 → SKIP 横幅显式可见，不伪造环境。
+        let con_src = src_dir.join("CON.docx");
+        let con_seed_ok = std::fs::write(&con_src, b"PK\x03\x04reserved-name-payload")
+            .map(|_| con_src.is_file())
+            .unwrap_or(false);
+        if !con_seed_ok {
+            eprintln!(
+                "SKIP [R10 ⑥ 保留名落位守卫]：本平台种不出真 CON.docx 源文件\
+                 （Windows 设备名映射/创建即拒）——该断言面在 Linux 跑"
+            );
+        } else {
+            let ok_src = src_dir.join("补遗说明.docx");
+            std::fs::write(&ok_src, b"PK\x03\x04ok-name-payload").unwrap();
+            let r = call_args(&ctx, "bid.ingest_drop", json!({
+                "paths": [con_src.to_string_lossy(), ok_src.to_string_lossy()]
+            }));
+            assert_eq!(r["ok"], json!(true), "混拖批次整体成功（分账不按错误回）：{r}");
+            let out = r["result"].clone();
+            let skipped = out["skipped"].as_array().unwrap();
+            assert_eq!(skipped.len(), 1, "保留名一件分账：{out}");
+            assert_eq!(skipped[0]["reason"], json!("name_not_portable"), "保留名 reason：{out}");
+            assert!(skipped[0]["detail"].as_str().unwrap_or("").contains("保留设备名"));
+            let copied = out["copied"].as_array().unwrap();
+            assert_eq!(copied.len(), 1, "合法件照常落位：{out}");
+            assert_eq!(copied[0]["rel"], json!("补遗说明.docx"));
+            assert!(dir.join("补遗说明.docx").is_file());
+            assert!(!dir.join("CON.docx").exists(), "保留名不落位");
+        }
+
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R10（#47 平台区分③）：import_files 基名守卫——请求级 bad_args
+    /// （Linux 合法名 CON.docx 落库后跨 Windows 迁移失效；显式 filename
+    /// 与 upload_ref 基名双查——UI 的 filename 缺省推导与显式传参同守）。
+    #[test]
+    fn import_files_rejects_non_portable_basename() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("imp-np");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        // 建项（守卫在建项之后——import_files 需要 db.json）
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "守卫演示项目", "bid_deadline": "2099-12-31", "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "{r}");
+        // Linux 上真实创建 CON.docx（文件在场——守卫拦的不是文件存在性，
+        // 是基名可移植性）。Windows 上该名字映射到控制台设备（写不报错
+        // 但无真文件）——种不出也不影响断言（守卫是纯字符串判定，先于
+        // 任何文件访问），非致命写。
+        let _ = std::fs::write(dir.join("CON.docx"), b"PK\x03\x04whatever");
+        std::fs::write(dir.join("正常件.docx"), b"PK\x03\x04normal").unwrap();
+
+        // ① upload_ref 基名保留名 → bad_args（零副作用：不导入任何件）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "CON.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(false), "保留名基应拒：{r}");
+        assert_eq!(r["code"], json!("bad_args"));
+        assert!(r["error"]["message"].as_str().unwrap_or("").contains("保留设备名"));
+
+        // ② 显式 filename 非法字符（半角冒号）→ bad_args（即使 upload_ref 合法）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "正常件.docx", "filename": "计划:终稿.docx", "kind": "附件" }]
+        }));
+        assert_eq!(r["ok"], json!(false), "非法 filename 应拒：{r}");
+        assert_eq!(r["code"], json!("bad_args"));
+
+        // ③ 拒绝零副作用：CON.docx 未入库（state files 计数仍 0）
+        let r = call(&ctx, "bid.state");
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(0), "守卫拒绝零副作用：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// R9（#47 跨平台硬化①）：upload_ref 分隔符归一——Windows 形态 `\` 在
@@ -2950,7 +3049,12 @@ mod tests {
     }
 
     // ── #603 批 C：补遗豁免面 ──
+    // （假绿修复：replay 拼接（e8acc3e）丢了 #[test] 属性——两函数在 main 上
+    //  从未运行（dead_code 警告是唯一线索）。原提交 20dd6a1 有属性与文档注释，
+    //  此处按原样恢复——测试门重新生效。）
 
+    /// 无 db.json → 三命令干净 not_found（读/写同款——不落副作用）。
+#[test]
     fn addendum_faces_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb-603c");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
@@ -2975,6 +3079,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// 补遗豁免全流程：无补遗件读面（total=0）→ 全局确认（human 签域）→
+    /// gates 过门对账 → #379 拆门（全局确认不写逐件台账）→ 拒绝面（幽灵件 /
+    /// 空白理由早拒）。
+    #[test]
     fn no_addendum_confirm_full_flow() {
         let (dir, _ws) = tmp_ws("flow-603c");
         seed_matrix_ready_project(&dir);
