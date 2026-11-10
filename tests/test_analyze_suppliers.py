@@ -103,3 +103,43 @@ class TestSupplierProfiles:
 
     def test_empty_dataset(self):
         assert supplier_profiles(AnalysisDataset(records=[])) == []
+
+
+class TestReportSectionTwelve:
+    def test_payload_and_markdown_wiring(self):
+        from src.analyze import build_analysis_payload, render_analysis_markdown
+
+        ds = AnalysisDataset(
+            records=_rows(
+                {
+                    "winner": "丁公司",
+                    "project_name": "A",
+                    "budget": 120.0,
+                    "category": "信息化",
+                    "purchaser": "教育局",
+                    "publish_date": "2026-02-01",
+                },
+                {
+                    "winner": "丁公司",
+                    "project_name": "B",
+                    "budget": 80.0,
+                    "category": "安防",
+                    "purchaser": "公安局",
+                },
+            )
+        )
+        payload = build_analysis_payload(ds)
+        assert payload["supplier_profiles"][0]["winner"] == "丁公司"
+        md = render_analysis_markdown(payload)
+        assert "## 十二、供应商画像（中标数 Top）" in md
+        assert "丁公司" in md
+        assert "项目预算口径" in md  # 语义警示在节内
+
+    def test_section_omitted_without_winners(self):
+        from src.analyze import build_analysis_payload, render_analysis_markdown
+
+        ds = AnalysisDataset(
+            records=_rows({"project_name": "未定标", "winner": None})
+        )
+        md = render_analysis_markdown(build_analysis_payload(ds))
+        assert "十二、供应商画像" not in md

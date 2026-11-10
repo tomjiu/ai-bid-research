@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
 from src.analyze.buyers import buyer_profiles
+from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
 from src.analyze.quality import field_quality
 from src.analyze.keywords import (
@@ -59,6 +60,7 @@ def build_analysis_payload(
         "density": competition_density(dataset),
         "field_quality": field_quality(dataset),
         "buyer_profiles": buyer_profiles(dataset),
+        "supplier_profiles": supplier_profiles(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
@@ -324,6 +326,31 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
             "注：HHI 按当月采购人分布估算（口径同六节）；无发布日期记录不参与；单月数据无趋势对照不展示本节。",
+            "",
+        ]
+
+    suppliers = payload.get("supplier_profiles") or []
+    if suppliers:
+        rows = [
+            [
+                profile["winner"],
+                str(profile["award_count"]),
+                _fmt_money(profile["budget_total"]),
+                _fmt_money(profile["budget_mean"]),
+                str(profile["purchaser_count"]),
+                "、".join(profile["categories"]) or "——",
+            ]
+            for profile in suppliers
+        ]
+        sections += [
+            "## 十二、供应商画像（中标数 Top）",
+            "",
+            _render_table(
+                ["供应商", "中标数", "所中项目预算合计(万)", "平均预算(万)", "买方数", "领域"],
+                rows,
+            ),
+ "",
+            "注：预算为**项目预算口径**（库内无中标合同额字段）；未定标/流标记录不参与本节；买方数 = 所中项目采购人去重数。",
             "",
         ]
 
