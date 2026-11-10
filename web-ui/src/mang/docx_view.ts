@@ -683,7 +683,10 @@ function readRunFmt(rPr: Element): RunFmt {
         break;
       }
       case 'highlight': {
-        if (val) f.highlight = val.toLowerCase();
+        // #24：w:val="none" 是「明确无高亮」（真件 3940 处中 3938 处是 none），
+        // 归一为不设置；只存真实高亮色。
+        const hv = (val ?? '').trim().toLowerCase();
+        if (hv && hv !== 'none') f.highlight = hv;
         break;
       }
       default:
@@ -750,7 +753,9 @@ function highlightColor(name: string): string {
     black: '#000000',
     white: '#ffffff',
   };
-  return table[name] ?? '#fff59d';
+  // #24：未知颜色不再兜底 '#fff59d'——那是整页发黄的另一半根因；
+  // 返回空串交由调用方跳过上色。
+  return table[name] ?? '';
 }
 
 /** 段落对齐映射（jc 枚举 → CSS text-align）。 */
@@ -815,7 +820,11 @@ function wrapFmt(doc: Document, inner: Node, fmt: RunFmt, measureOnly: boolean):
   if (fmt.halfPoints !== null) css.push('font-size:' + halfPointsToPx(fmt.halfPoints).toFixed(1) + 'px');
   if (fmt.color) css.push('color:' + fmt.color);
   if (fmt.font) css.push('font-family:' + quoteFamily(fmt.font));
-  if (fmt.highlight) css.push('background-color:' + highlightColor(fmt.highlight));
+  if (fmt.highlight) {
+    // #24：highlightColor 对未知色返回空串，空色不上样式
+    const hl = highlightColor(fmt.highlight);
+    if (hl) css.push('background-color:' + hl);
+  }
   if (css.length > 0 && !measureOnly) {
     const span = el(doc, 'span');
     span.setAttribute('style', css.join(';'));
