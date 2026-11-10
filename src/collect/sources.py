@@ -210,7 +210,7 @@ def _read_jsonl_items(path: Path) -> tuple:
     return items, line_errors
 
 
-def _read_csv_rows(path: Path) -> tuple:
+def _read_csv_rows(path: Path, *, max_rows: Optional[int] = None) -> tuple:
     """读取 CSV 载荷（行级粒度：坏行不殃及好行，#601 R31）。
 
     约定：
@@ -219,7 +219,9 @@ def _read_csv_rows(path: Path) -> tuple:
     - 空白单元格置 ``None``（「缺失」与「显式留空」同口径）；
     - 列数与表头不齐的行登记行级失败；
     - 编码 UTF-8（BOM 容忍 ``utf-8-sig``）；
-    - **单元格内换行不支持**（研究面约定：导出源先清洗，或改用 JSONL）。
+    - 带引号的多行单元格按标准 CSV 语义解析（R55 流式化的
+      附带收益——原「不支持」约定升级）；
+    - ``max_rows``：数据行数上限（防失控保护；``None`` = 不限）。
 
     Returns:
         ``(items, row_errors)`` 二元组（与 :func:`_read_jsonl_items` 同形）：
@@ -229,36 +231,53 @@ def _read_csv_rows(path: Path) -> tuple:
         ValueError: 文件为空 / 无表头 / 零数据行 / 解码失败
             （文件级失败语义同 JSONL「零非空行」——大概率是截断/损坏）。
     """
+    items: List[tuple] = []
+    row_errors: List[tuple] = []
+    # R55：流式读取——open() 句柄逐行喂给 csv.reader，内存占用
+    # 与文件大小解耦（研究语料 10 万行级 CSV 不再整文件入内存）。
+    # 附带收益：带引号的多行单元格（原「不支持」约定）现按标准
+    # CSV 语义正确解析；行号 = 逻辑行号（从 2 起，1 为表头）。
     try:
-        text = path.read_text(encoding="utf-8-sig")
+        fh = open(path, encoding="utf-8-sig", newline="")
+    except OSError as exc:
+        raise ValueError(f"CSV 打开失败: {exc}") from exc
+    try:
+        items, row_errors = _iter_csv_rows(fh, max_rows=max_rows)
     except UnicodeDecodeError as exc:
         raise ValueError(f"CSV 解码失败（须 UTF-8）: {exc}") from exc
-    lines = text.splitlines()
-    if not lines or not lines[0].strip():
-        raise ValueError("CSV 文件为空（无表头行）")
+    finally:
+        fh.close()
+    if not items and not row_errors:
+        raise ValueError("CSV 文件为空（零数据行）")
+    return items, row_errors
+
+
+def _iter_csv_rows(fh, *, max_rows: Optional[int] = None) -> tuple:
+    """在已打开的句柄上流式解析 CSV（R55 内部面）。
+
+    调用方负责句柄生命周期与解码错误包装。
+    """
+    items: List[tuple] = []
+    row_errors: List[tuple] = []
+    reader = csv.reader(fh)
     try:
-        header = next(csv.reader([lines[0]]))
+        header = next(reader)
+    except StopIteration:
+        raise ValueError("CSV 文件为空（无表头行）") from None
     except csv.Error as exc:
         raise ValueError(f"CSV 表头语法错误: {exc}") from exc
     header = [cell.strip() for cell in header]
     if not any(header):
         raise ValueError("CSV 表头行为空")
-    data_lines = lines[1:]
-    if not any(line.strip() for line in data_lines):
-        raise ValueError("CSV 文件为空（零数据行）")
-    items: List[tuple] = []
-    row_errors: List[tuple] = []
-    for lineno, line in enumerate(data_lines, start=2):
-        if not line.strip():
-            continue
-        try:
-            row = next(csv.reader([line]))
-        except csv.Error as exc:
-            row_errors.append((lineno, f"CSV 语法错误: {exc}"))
+    for lineno, row in enumerate(reader, start=2):
+        if not row or not any(cell.strip() for cell in row):
             continue
         if len(row) != len(header):
             row_errors.append(
-                (lineno, f"列数不齐（表头 {len(header)} 列，该行 {len(row)} 列）")
+                (
+                    lineno,
+                    f"列数不齐（表头 {len(header)} 列，该行 {len(row)} 列）",
+                )
             )
             continue
         payload: Dict[str, Any] = {}
@@ -266,6 +285,12 @@ def _read_csv_rows(path: Path) -> tuple:
             cell = cell.strip()
             payload[key] = cell if cell else None
         items.append((lineno, payload))
+        if max_rows is not None and len(items) >= max_rows:
+            raise ValueError(
+                f"CSV 数据行数达上限 {max_rows}"
+                f"（已读至逻辑行 {lineno}）——防失控保护，"
+                f"如需全量请显式传 max_rows=None"
+            )
     return items, row_errors
 
 
