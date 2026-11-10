@@ -778,6 +778,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
             days=args.days,
             html=args.html,
             incremental=args.incremental,
+            resume=getattr(args, "resume", False),
         )
     except SourceError as exc:
         print(f"错误：{exc}", file=sys.stderr)

@@ -127,9 +127,13 @@ def apply_extraction(
             missing_required=validation.missing_required,
         )
     saved = db.save_bid(_row_from_fields(merged))
+    # R58：抽取完成标记 + 同记录 pending 自动清账（续跑闭环）
+    bid_id = merged.get("bid_id")
+    db.set_extract_status(bid_id, "extracted")
+    db.resolve_pending_by_bid(bid_id)
     return StoreOutcome(
         status=STATUS_STORED,
-        bid_id=merged.get("bid_id"),
+        bid_id=bid_id,
         hit_rate=validation.hit_rate,
         used_llm=outcome.used_llm,
         saved=saved,

@@ -93,7 +93,7 @@ class TestSchemaVersioning:
         db = BidDatabase(tmp_path / "v.db")
         try:
             info = db.schema_info()
-            assert info["user_version"] == 2
+            assert info["user_version"] == 3
             assert set(info["tables"]) >= {
                 "bids", "pending_announcements", "pipeline_runs",
             }
@@ -104,11 +104,11 @@ class TestSchemaVersioning:
     def test_migration_runs_once_idempotent(self, tmp_path):
         db = BidDatabase(tmp_path / "i.db")
         try:
-            assert db.schema_info()["user_version"] == 2
+            assert db.schema_info()["user_version"] == 3
             # 重复初始化（旧实例关闭重开）不重复迁移、版本不漂
             db.close()
             db2 = BidDatabase(tmp_path / "i.db")
-            assert db2.schema_info()["user_version"] == 2
+            assert db2.schema_info()["user_version"] == 3
         finally:
             try:
                 db.close()
@@ -121,7 +121,8 @@ class TestSchemaVersioning:
 
     def test_legacy_db_upgraded(self, tmp_path):
         """伪造 user_version=0 的旧库（bids 表结构与现版一致，
-        缺 pending/pipeline_runs 两表）→ 打开后自动补齐到 v2。"""
+        缺 pending/pipeline_runs 两表与 extract_status 列）
+        → 打开后自动逐级迁移到最新 v3。"""
         import sqlite3
 
         legacy = tmp_path / "legacy.db"
@@ -144,10 +145,15 @@ class TestSchemaVersioning:
         db = BidDatabase(legacy)
         try:
             info = db.schema_info()
-            assert info["user_version"] == 2
+            assert info["user_version"] == 3
             # 补齐的表已可见
             assert "pending_announcements" in info["tables"]
             assert "pipeline_runs" in info["tables"]
+            # v3 迁移列已补齐
+            cols = {
+                r[1] for r in db._conn.execute("PRAGMA table_info(bids)")
+            }
+            assert "extract_status" in cols
         finally:
             db.close()
 
@@ -161,6 +167,6 @@ class TestSchemaVersioning:
         )
         assert rc == 0
         out = capsys.readouterr().out
-        assert "schema 版本：v2" in out
+        assert "schema 版本：v3" in out
         assert "bids: 0" in out
         assert "PRAGMA 生效" in out

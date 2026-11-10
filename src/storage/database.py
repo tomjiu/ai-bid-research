@@ -74,6 +74,10 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started ON pipeline_runs(started_at
 #: 只钉 user_version 标记位）。未来 schema 变更在此追加。
 _MIGRATIONS: Dict[int, str] = {
     2: "-- v2：基线标记（结构由 _DB_SCHEMA 幂等保证）",
+    # v3（R58 断点续跑）：抽取状态列——collect 置 'raw'，
+    # 抽取成功置 'extracted'；NULL = 外部导入/历史行（来源不明，
+    # 不参与续跑扫描）。不在 _BID_COLUMNS：导入导出面不泄露内部态。
+    3: "ALTER TABLE bids ADD COLUMN extract_status TEXT;",
 }
 
 # 允许写入 bids 表的业务字段（requirements 以 JSON 文本存储）
@@ -161,6 +165,54 @@ class BidDatabase:
             ).fetchone()[0]
             tables[name] = count
         return {"user_version": version, "tables": tables}
+
+    def set_extract_status(self, bid_id: str, status: str) -> None:
+        """设置单条记录的抽取状态（R58）。
+
+        Args:
+            bid_id: 记录标识。
+            status: ``raw``（采集入库待抽）/ ``extracted``（抽取完成）。
+        """
+        self._conn.execute(
+            "UPDATE bids SET extract_status = ? WHERE bid_id = ?",
+            (status, str(bid_id)),
+        )
+        self._conn.commit()
+
+    def extract_status_of(self, bid_id: str) -> Optional[str]:
+        """读取单条记录的抽取状态（缺行/未标记 → None）。"""
+        row = self._conn.execute(
+            "SELECT extract_status FROM bids WHERE bid_id = ?", (str(bid_id),)
+        ).fetchone()
+        return row[0] if row else None
+
+    def list_by_extract_status(
+        self, status: str, *, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """按抽取状态列行（续跑扫描面）。"""
+        sql = (
+            "SELECT bid_id FROM bids WHERE extract_status = ?"
+            " ORDER BY bid_id"
+        )
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        rows = self._conn.execute(sql, (status,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def resolve_pending_by_bid(self, bid_id: str) -> int:
+        """按 bid_id 解决 pending 条目（R58：续跑成功后自动清账）。
+
+        Returns:
+            解决的条数（0 = 无该记录的 pending 条目）。
+        """
+        cursor = self._conn.execute(
+            "UPDATE pending_announcements SET status = 'resolved',"
+            " updated_at = datetime('now','localtime')"
+            " WHERE bid_id = ? AND status = 'pending'",
+            (str(bid_id),),
+        )
+        self._conn.commit()
+        return cursor.rowcount
 
     # ------------------------------------------------------------------
     # 写入
