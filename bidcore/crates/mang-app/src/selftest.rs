@@ -964,6 +964,50 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
     let _ = std::fs::remove_dir_all(&ws_b);
 
+    // ---- #47 R14（平台区分⑦）：混合分隔符矩阵 E2E——全新 DRAFT 工作区，
+    //      Windows 形态 upload_ref（资料\技术标.docx）导入成功，且与正斜杠
+    //      形态同 file_id（R9 归一 + sha 幂等的 selftest 面锁定）。状态窗
+    //      走全新工作区——不为 MATRIX_READY 主线项目放宽状态窗（同 R10 纪律）
+    let ws_r14 = scratch_dir();
+    std::fs::create_dir_all(ws_r14.join("资料")).unwrap();
+    std::fs::write(
+        ws_r14.join("资料").join("技术标.docx"),
+        include_bytes!("../../../tests/fixtures/wizard19-min.docx"),
+    )
+    .unwrap();
+    let resp = call(&ctx, json!({"id":"t-ws-r14","cmd":"workspace.open","path": ws_r14.to_string_lossy()}));
+    r.check(
+        "workspace.open(R14 矩阵工作区)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-cp14","cmd":"bid.create_project","name":"R14 混合分隔符","bid_deadline":"2026-12-31","mode":"明标"}));
+    r.check(
+        "bid.create_project(R14 起步)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    // Windows 形态：`资料\技术标.docx` ——归一成 `/` 找到同一文件
+    let resp = call(&ctx, json!({"id":"t-bid-im14a","cmd":"bid.import_files","files":[{"upload_ref":"资料\\技术标.docx","kind":"招标文件"}]}));
+    let im14a = result(&resp);
+    let id14 = im14a["file_ids"][0].clone();
+    r.check(
+        "bid.import_files(Windows 形态归一导入)",
+        resp["ok"] == json!(true) && im14a["totals"]["files"] == json!(1),
+        format!("totals={:?}", im14a["totals"]["files"]),
+    );
+    // 正斜杠形态重导 → 同 file_id + deduplicated（两形态一文件，不双入库）
+    let resp = call(&ctx, json!({"id":"t-bid-im14b","cmd":"bid.import_files","files":[{"upload_ref":"资料/技术标.docx","kind":"招标文件"}]}));
+    let im14b = result(&resp);
+    r.check(
+        "bid.import_files(两形态同件幂等)",
+        resp["ok"] == json!(true)
+            && im14b["file_ids"][0] == id14
+            && im14b["per_file"][0]["deduplicated"] == json!(true),
+        format!("id14={id14} 重放={}", im14b["file_ids"][0]),
+    );
+    let _ = std::fs::remove_dir_all(&ws_r14);
+
     println!();
     println!(
         "== {} passed, {} failed, {} skipped ==",

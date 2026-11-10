@@ -353,3 +353,109 @@ fn empty_roots_rejected_with_guidance() {
     let e = resolve_write(&[], std::path::Path::new("a.docx")).unwrap_err();
     assert!(matches!(e, bid_domain::ToolError::EUnprocessable { .. }));
 }
+
+// ── R14（#47 跨平台硬化⑦）：混合分隔符矩阵 ────────────────────────────
+//
+// 面：MCP 直调（import_tender_files / 导出 output_path）不经壳侧 R9 归一，
+// 原始混合分隔符形态直接进围栏。三层矩阵：
+//   1. 共享不变量（无 cfg，两平台同断言）：**任何形态都不逃逸围栏**——
+//      Ok 则解析结果必在根内；Err 则必是 EUnprocessable（词法/越界/不可
+//      解析拒）。围栏的安全语义平台无关；
+//   2. cfg 双分支对照（AGENTS.md §13）：解析**形态**两平台不同——Unix 把
+//      `\` 当普通字符（单段字面名）；Windows 当分隔符（真子目录/词法拒
+//      `..`）。两侧各自锁定确定行为；
+//   3. UNC 形态（`\\srv\sh\x` / `//srv/sh/x`）：两侧都拒（词法门或
+//      canonicalize 后不在根内——不是本工作区的引用没有放行语义）。
+
+/// 共享不变量：混合分隔符任何形态不逃逸围栏（Ok 必在根内 / Err 必是
+/// EUnprocessable——两平台跑同一断言集）。
+#[test]
+fn mixed_separator_never_escapes_fence() {
+    let root = tmp_root("mx-esc");
+    let roots = canon_roots(&root);
+    let mixed_forms = [
+        "sub\\a.docx",
+        "sub\\..\\a.docx",
+        "..\\escape.docx",
+        "a\\..\\b\\c.docx",
+        "\\\\srv\\sh\\x.docx",
+        "//srv\\sh\\x.docx",
+    ];
+    for form in mixed_forms {
+        match resolve_read(&roots, std::path::Path::new(form)) {
+            Ok(r) => assert!(
+                bid_tools::fs_fence::is_inside(&r.absolute(), &roots[0]),
+                "{form}: 解析结果必须在围栏内（绝不逃逸）：{}",
+                r.absolute().display()
+            ),
+            Err(e) => assert!(
+                matches!(e, bid_domain::ToolError::EUnprocessable { .. }),
+                "{form}: 拒绝必须是 EUnprocessable（词法/越界），实际：{e:?}"
+            ),
+        }
+    }
+    // 写面同规（输出路径混合形态同样不逃逸）
+    match resolve_write(&roots, std::path::Path::new("out\\x.docx")) {
+        Ok(r) => assert!(
+            bid_tools::fs_fence::is_inside(&r.absolute(), &roots[0]),
+            "写面解析结果必须在围栏内：{}",
+            r.absolute().display()
+        ),
+        Err(e) => assert!(
+            matches!(e, bid_domain::ToolError::EUnprocessable { .. }),
+            "写面拒绝必须是 EUnprocessable：{e:?}"
+        ),
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// cfg 双分支对照（Unix 侧）：`\` 是普通字符——`sub\a.docx` 是**单段字面
+/// 名**（不会进 sub/ 子目录）；`sub\..\a.docx` 的 `..` 不是分量（词法门
+/// 不拒），但字面名穿不透围栏（canonicalize 锚定在根内的字面路径）。
+/// 下游（sha256_file）按「不可读」逐件失败——不是逃逸，是怪名。
+#[test]
+#[cfg(unix)]
+fn mixed_separator_unix_backslash_is_literal_character() {
+    let root = tmp_root("mx-u");
+    let roots = canon_roots(&root);
+    let r = resolve_read(&roots, std::path::Path::new("sub\\a.docx")).unwrap();
+    assert_eq!(
+        r.absolute(),
+        exp(&root.join("sub\\a.docx")),
+        "Unix：整串是单段字面名（落在根下，不进 sub/）"
+    );
+    let r = resolve_read(&roots, std::path::Path::new("sub\\..\\a.docx")).unwrap();
+    assert_eq!(
+        r.absolute(),
+        exp(&root.join("sub\\..\\a.docx")),
+        "Unix：`..` 在字面名内不是分量——词法门不拒，但也穿不透"
+    );
+    // UNC 反斜杠形态：词法非绝对（Unix 无 \\ 前缀语义）→ 锚定根内单段名
+    let r = resolve_read(&roots, std::path::Path::new("\\\\srv\\sh\\x.docx")).unwrap();
+    assert!(
+        bid_tools::fs_fence::is_inside(&r.absolute(), &roots[0]),
+        "Unix：UNC 形态锚定为根内字面名"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// cfg 双分支对照（Windows 侧）：`\` 是分隔符——`sub\a.docx` 进真子目录；
+/// `sub\..\a.docx` 的 `..` 是分量 → 词法预拒（与 `sub/../a.docx` 同罪）。
+#[test]
+#[cfg(windows)]
+fn mixed_separator_windows_backslash_is_separator() {
+    let root = tmp_root("mx-w");
+    let roots = canon_roots(&root);
+    let r = resolve_read(&roots, std::path::Path::new("sub\\a.docx")).unwrap();
+    assert_eq!(
+        r.absolute(),
+        exp(&root.join("sub").join("a.docx")),
+        "Windows：反斜杠分隔——解析进 sub/ 子目录"
+    );
+    let e = resolve_read(&roots, std::path::Path::new("sub\\..\\a.docx")).unwrap_err();
+    assert!(
+        matches!(e, bid_domain::ToolError::EUnprocessable { .. }),
+        "Windows：`..` 分量词法拒：{e:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

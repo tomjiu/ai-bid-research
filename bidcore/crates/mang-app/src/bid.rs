@@ -1540,15 +1540,21 @@ pub fn import_files(
         // 失效（同一文件双入库）。
         let upload_ref = normalize_upload_ref(upload_ref_raw);
         let upload_ref = upload_ref.as_str();
+        // R14（#47 平台区分⑦）：filename 回退用双分隔符字符串基名——
+        // std Path::file_name 按本平台分隔符解析（Unix 上 `a\b` 整串当
+        // 基名）；归一后的 upload_ref 只含 `/` 两侧等价，但跨平台字符串
+        // 一律走 str_basename（与 recent.rs / web-ui baseName 同口径）
         let filename = f
             .get("filename")
             .and_then(Value::as_str)
             .map(str::to_string)
             .unwrap_or_else(|| {
-                std::path::Path::new(upload_ref)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| upload_ref.to_string())
+                let base = paths::str_basename(upload_ref);
+                if base.is_empty() {
+                    upload_ref.to_string()
+                } else {
+                    base.to_string()
+                }
             });
         // R10（#47 平台区分③）：基名跨平台守卫——upload_ref 基名与显式
         // filename 双查（Linux 合法的 CON.docx / 报告?.pdf 落库后拷到
@@ -3315,6 +3321,72 @@ mod tests {
         assert_eq!(normalize_upload_ref("C:\\ws\\x.docx"), "C:/ws/x.docx");
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// R14（#47 跨平台硬化⑦）：混合分隔符深度测试矩阵——归一函数表驱动
+    /// 金样 + 三条不变量。纯字符串面：**两平台同答**（函数不触 std Path，
+    /// 平台分歧无从引入——本测试在两侧跑同一断言集即「cfg 双分支对照」
+    /// 的共享底座；平台分歧面见 paths.rs 对照测试与 fs_fence 矩阵）。
+    #[test]
+    fn r14_mixed_separator_normalize_matrix() {
+        let cases: &[(&str, &str)] = &[
+            // 混合分隔符（一个串里两种——Windows 侧拼接/手滑形态）
+            ("a\\b/c.docx", "a/b/c.docx"),
+            ("a/b\\c.docx", "a/b/c.docx"),
+            ("资料\\第一章\\技术标.docx", "资料/第一章/技术标.docx"),
+            ("资料/第一章\\技术标.docx", "资料/第一章/技术标.docx"),
+            // 反斜杠开头 → 绝对形态只换不压（Unix `//x` / Windows UNC 同规）
+            ("\\a/b.docx", "/a/b.docx"),
+            // 连续/混合连续分隔符（相对形态压空段）
+            ("a\\\\b.docx", "a/b.docx"),
+            ("a\\\\/b.docx", "a/b.docx"),
+            ("a/\\\\b.docx", "a/b.docx"),
+            // 尾分隔符 → 压尾空段
+            ("a\\b\\", "a/b"),
+            ("a/b/", "a/b"),
+            // 点段混合
+            (".\\a\\./b.docx", "a/b.docx"),
+            ("./a\\./b.docx", "a/b.docx"),
+            // `..` 保留（反斜杠进、斜杠出——穿越裁决仍归域层）
+            ("a\\../b.docx", "a/../b.docx"),
+            ("a\\..\\b.docx", "a/../b.docx"),
+            ("..\\a\\b.docx", "../a/b.docx"),
+            // 盘符混合（绝对形态：只换分隔符，空段不压——绝对语义保全）
+            ("C:\\w/s\\x.docx", "C:/w/s/x.docx"),
+            ("C:/w\\s.docx", "C:/w/s.docx"),
+            ("C:\\\\w\\\\x.docx", "C://w//x.docx"),
+            // UNC 混合（两形态同归一——盘符/根形态只换不压）
+            ("\\\\srv\\sh/x.docx", "//srv/sh/x.docx"),
+            ("//srv\\sh\\x.docx", "//srv/sh/x.docx"),
+            // CJK 与组合字符（R13 正交：归一不动字符组成）
+            ("cafe\u{0301}\\招标.docx", "cafe\u{0301}/招标.docx"),
+            // 退化形态
+            ("", ""),
+            (".", ""),
+            ("./", ""),
+            ("a", "a"),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(normalize_upload_ref(raw), *want, "normalize({raw:?})");
+        }
+        // 不变量 ①：相对形态输出永不含 `\`（下游 fs_fence/rel 的单一形态）
+        // 不变量 ②：幂等（normalize(normalize(x)) == normalize(x)——两跑同答）
+        // 不变量 ③：`..` 段逐段保留（穿越裁决在域层，归一不得吞段）
+        for (raw, _) in cases {
+            let n = normalize_upload_ref(raw);
+            let absolute = n.starts_with('/') || n.as_bytes().len() >= 2
+                && n.as_bytes()[0].is_ascii_alphabetic()
+                && n.as_bytes()[1] == b':';
+            if !absolute {
+                assert!(!n.contains('\\'), "相对形态输出含反斜杠：{raw:?} → {n:?}");
+            }
+            assert_eq!(normalize_upload_ref(&n), n, "幂等破坏：{raw:?} → {n:?}");
+            let dots_in = raw.replace('\\', "/").matches("../").count()
+                + raw.replace('\\', "/").ends_with("..").then_some(1).unwrap_or(0);
+            let dots_out = n.matches("../").count()
+                + n.ends_with("..").then_some(1).unwrap_or(0);
+            assert_eq!(dots_in, dots_out, "`..` 段数变化（吞段=开洞）：{raw:?} → {n:?}");
+        }
     }
 
     // ── #603 批 C：补遗豁免面 ──
