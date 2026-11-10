@@ -1540,6 +1540,18 @@ pub fn import_files(
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| upload_ref.to_string())
             });
+        // R10（#47 平台区分③）：基名跨平台守卫——upload_ref 基名与显式
+        // filename 双查（Linux 合法的 CON.docx / 报告?.pdf 落库后拷到
+        // Windows 即失效）。请求级 bad_args（输入规范错误与 mode 校验
+        // 同款先例：零副作用早拒，用户改名重试），不进逐件分账。
+        for what in [upload_ref, filename.as_str()] {
+            let base = what.rsplit(['/', '\\']).next().unwrap_or(what);
+            if let Err(why) = paths::guard_portable_basename(base) {
+                return Err(IpcError::bad_args(format!(
+                    "files[{i}] 基名不可跨平台迁移——{why}（基名取自 upload_ref/filename 的最后一段；混合分隔符形态请统一用 / ）"
+                )));
+            }
+        }
         let mut spec = json!({ "upload_ref": upload_ref, "filename": filename });
         if let Some(k) = f.get("kind").and_then(Value::as_str) {
             spec["kind"] = json!(k);
@@ -1667,6 +1679,16 @@ pub fn ingest_drop(
             skipped.push(json!({
                 "path": raw, "reason": "ext_blocked",
                 "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc/ods）")
+            }));
+            continue;
+        }
+        // R10（#47 平台区分③）：基名跨平台守卫——Linux 拖入 CON.docx 能落
+        // 位，但项目库拷到 Windows 即失效。拖拽批次一件非法不毁整批
+        // （与 ext_blocked 同款分账口径：skipped + reason，不按错误回）
+        if let Err(why) = crate::paths::guard_portable_basename(&name) {
+            skipped.push(json!({
+                "path": raw, "reason": "name_not_portable",
+                "detail": why
             }));
             continue;
         }
@@ -2825,8 +2847,71 @@ mod tests {
         let r = call_args(&ctx, "bid.ingest_drop", json!({ "paths": [] }));
         assert_eq!(r["ok"], json!(false), "空批次拒绝：{r}");
 
+        // ⑥ R10（#47 平台区分③）：基名跨平台守卫——Linux 允许创建
+        // CON.docx（真实文件在场、白名单后缀也过），但落位会被守卫分账
+        // 拒绝（name_not_portable——项目库跨 Windows 迁移即失效）。
+        // 拖拽批次一件非法不毁整批：与合法件混拖时合法件照常落位。
+        let con_src = src_dir.join("CON.docx");
+        std::fs::write(&con_src, b"PK\x03\x04reserved-name-payload").unwrap();
+        let ok_src = src_dir.join("补遗说明.docx");
+        std::fs::write(&ok_src, b"PK\x03\x04ok-name-payload").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [con_src.to_string_lossy(), ok_src.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "混拖批次整体成功（分账不按错误回）：{r}");
+        let out = r["result"].clone();
+        let skipped = out["skipped"].as_array().unwrap();
+        assert_eq!(skipped.len(), 1, "保留名一件分账：{out}");
+        assert_eq!(skipped[0]["reason"], json!("name_not_portable"), "保留名 reason：{out}");
+        assert!(skipped[0]["detail"].as_str().unwrap_or("").contains("保留设备名"));
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "合法件照常落位：{out}");
+        assert_eq!(copied[0]["rel"], json!("补遗说明.docx"));
+        assert!(dir.join("补遗说明.docx").is_file());
+        assert!(!dir.join("CON.docx").exists(), "保留名不落位");
+
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R10（#47 平台区分③）：import_files 基名守卫——请求级 bad_args
+    /// （Linux 合法名 CON.docx 落库后跨 Windows 迁移失效；显式 filename
+    /// 与 upload_ref 基名双查——UI 的 filename 缺省推导与显式传参同守）。
+    #[test]
+    fn import_files_rejects_non_portable_basename() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("imp-np");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        // 建项（守卫在建项之后——import_files 需要 db.json）
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "守卫演示项目", "bid_deadline": "2099-12-31", "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "{r}");
+        // Linux 上真实创建 CON.docx（文件在场——守卫拦的不是文件存在性，
+        // 是基名可移植性）
+        std::fs::write(dir.join("CON.docx"), b"PK\x03\x04whatever").unwrap();
+        std::fs::write(dir.join("正常件.docx"), b"PK\x03\x04normal").unwrap();
+
+        // ① upload_ref 基名保留名 → bad_args（零副作用：不导入任何件）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "CON.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(false), "保留名基应拒：{r}");
+        assert_eq!(r["code"], json!("bad_args"));
+        assert!(r["error"]["message"].as_str().unwrap_or("").contains("保留设备名"));
+
+        // ② 显式 filename 非法字符（半角冒号）→ bad_args（即使 upload_ref 合法）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "正常件.docx", "filename": "计划:终稿.docx", "kind": "附件" }]
+        }));
+        assert_eq!(r["ok"], json!(false), "非法 filename 应拒：{r}");
+        assert_eq!(r["code"], json!("bad_args"));
+
+        // ③ 拒绝零副作用：CON.docx 未入库（state files 计数仍 0）
+        let r = call(&ctx, "bid.state");
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(0), "守卫拒绝零副作用：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
     }
     // ── #603 批 C：补遗豁免面 ──
 

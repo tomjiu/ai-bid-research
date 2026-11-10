@@ -720,6 +720,28 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ing2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
             && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    // R10（#47）main 热修：上一行 `);` 在 #57 合并时丢失——r.check( 未闭合
+    // 导致 mang-app 编译失败（cargo test 报 717:12 unclosed delimiter）。
+    // ---- #47 R10（平台区分③）：基名跨平台守卫——CON.docx 在 Linux 真实
+    //      可创建（文件在场、后缀过白名单），但落位被守卫分账拒绝
+    let con_src = scratch_dir().join("CON.docx");
+    std::fs::write(&con_src, b"PK\x03\x04selftest-reserved").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ing3","cmd":"bid.ingest_drop","paths":[con_src.to_string_lossy()]}));
+    let ing3 = result(&resp);
+    r.check(
+        "bid.ingest_drop(保留名守卫)",
+        resp["ok"] == json!(true)
+            && ing3["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ing3["skipped"][0]["reason"].as_str() == Some("name_not_portable"),
+        format!("skipped={}", ing3["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-impnp","cmd":"bid.import_files","files":[{"upload_ref":"CON.docx","kind":"招标文件"}]}));
+    r.check(
+        "bid.import_files(保留名基 bad_args)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("code={}", err_code(&resp)),
+    );
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));

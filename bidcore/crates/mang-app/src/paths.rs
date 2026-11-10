@@ -215,6 +215,57 @@ pub fn rel_join(p: &Path) -> String {
         .join("/")
 }
 
+/// 基名跨平台可移植性守卫（R10，#47 平台区分③ / R8 注释预留的硬化项）。
+///
+/// **两侧同拒**（不是 cfg 分支）：Linux 允许 `CON.docx`、`报告?.pdf` 这类
+/// 名字，但项目库（db.json 的 upload_ref / 文件本体）要跨平台迁移——在
+/// Linux 落库的保留名文件拷到 Windows 即失效/无法创建。守卫放在**壳侧
+/// 入口**（ingest_drop 落位 / import_files 的 upload_ref 与 filename），
+/// 域层/工具面零改动（分层不重复）。判据（Windows 文件系统规则）：
+///
+/// 1. 保留基名（不分大小写，含带扩展形态）：`CON PRN AUX NUL COM1-9 LPT1-9`
+///    ——`CON.docx` 的主干 `CON` 同样保留（Win32 CreateFile 语义）；
+/// 2. 非法字符：`< > : " | ? *` 与 ASCII 控制符（0x00-0x1F、0x7F）；
+///    `/` 与 `\` 是**基名内**的路径分隔符，同样拒（基名不该含分隔符——
+///    分隔符归一在 `normalize_upload_ref`，两守卫互补不重叠）；
+/// 3. 尾部空格或点：Windows 剥尾点/空格后实际创建的文件名与记录键
+///    不一致（幂等 sha 检查会错位）——拒。
+///
+/// 返回 Err(原因) 供调用方组装分账/错误文案；合法名返回 Ok(())。
+/// 全角冒号 `：`、CJK 标点均合法（不在禁集）。
+pub fn guard_portable_basename(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("基名为空".into());
+    }
+    // 1) 保留名：主干（第一个 '.' 前）不分大小写匹配
+    let stem = name.split('.').next().unwrap_or("");
+    let upper = stem.to_ascii_uppercase();
+    let reserved = matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+    );
+    if reserved {
+        return Err(format!(
+            "Windows 保留设备名（CON/PRN/AUX/NUL/COM1-9/LPT1-9，不分大小写、带扩展同样保留）：{name}"
+        ));
+    }
+    // 2) 非法字符：Win32 命名规则 + 路径分隔符 + 控制字符
+    if let Some(bad) = name.chars().find(|&c| {
+        matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\')
+            || (c as u32) < 0x20
+            || c as u32 == 0x7f
+    }) {
+        return Err(format!("含 Windows 非法字符 {bad:?}（<>:\"|?*/\\ 与控制符）：{name}"));
+    }
+    // 3) 尾部空格/点
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err(format!("基名以空格或点结尾（Windows 会剥掉导致落位名与记录键错位）：{name}"));
+    }
+    Ok(())
+}
+
 /// a 是否在 b 之内（按路径组件比较，大小写不敏感——Windows 语义）
 pub fn is_inside(a: &Path, b: &Path) -> bool {
     let norm = |p: &Path| -> Vec<String> {
@@ -330,5 +381,43 @@ mod tests {
             );
         }
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// R10（#47 平台区分③）：基名跨平台守卫——表驱动，双平台同拒
+    /// （守卫本身不是 cfg 分支；两侧跑同一断言集）
+    #[test]
+    fn guard_portable_basename_table() {
+        // 合法名（含中文/全角标点/多位点/大写扩展——全部 Ok）
+        for ok in [
+            "招标文件.docx",
+            "技术标 - 最终版.pdf",
+            "报价单.v2.xlsx",
+            "图纸目录.ods",
+            "Q&A 汇总.docx",
+            "说明：格式要求.docx",      // 全角冒号合法（半角 : 才拒）
+            "CONCEPT 概念设计.docx",   // CON 开头但主干是 CONCEPT——不误伤
+            "com.docx",                // 小写 com 是普通名（COM1-9 才保留）
+        ] {
+            assert!(guard_portable_basename(ok).is_ok(), "合法名被误拒：{ok}");
+        }
+        // 保留设备名（不分大小写、带扩展同样保留）
+        for bad in [
+            "CON", "con.docx", "NUL.pdf", "Aux", "aUx.xlsx",
+            "COM1", "com9.docx", "LPT1", "lpt7.pdf",
+        ] {
+            assert!(guard_portable_basename(bad).is_err(), "保留名漏拒：{bad}");
+        }
+        // 非法字符（含基名内分隔符与控制符）
+        for bad in [
+            "报告<终稿>.docx", "计划|变更.pdf", "问?号.docx",
+            "星*号.docx", "半角:冒号.docx", "引\"号.docx",
+            "斜/杠.docx", "反\\斜.docx", "a\u{0007}b.docx",
+        ] {
+            assert!(guard_portable_basename(bad).is_err(), "非法字符漏拒：{bad}");
+        }
+        // 尾部空格/点 + 空名
+        for bad in ["REPORT.", "报告 .docx ", ""] {
+            assert!(guard_portable_basename(bad).is_err(), "形态漏拒：{bad:?}");
+        }
     }
 }
