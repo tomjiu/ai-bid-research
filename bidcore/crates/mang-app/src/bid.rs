@@ -773,6 +773,148 @@ pub fn gate_pass(
     }))
 }
 
+// ---------------------------------------------------------------- #20 治理出口三件
+//
+// 认领 issue #20（#313 总纲审计 缺口-3）：三个用户决策/治理动作此前无
+// UI 出口（只能代理/CLI 驱动）。三条 IPC 全部经 `bid_mcp::dispatch_with`
+// 走真实工具面，裁决全在域层（壳零重实现）：
+//   * [`packages`] —— list_packages（#316 只读：多标段/多包识别与选包状态）
+//   * [`matrix_override`] —— set_matrix_override（#226 否决项死锁的人工
+//     出口：把「本次招标不接受联合体」类招标人规则说明标 NOT_APPLICABLE，
+//     偏离说明必填；receipt 宿主签发四重绑定行/状态/理由——Agent 伪造不了）
+//   * [`recover_state`] —— recover_validating_state（#243 历史异常态
+//     VALIDATING+缺章的受支持恢复：三重域层约束 + 审计账，非任意状态写入）
+
+/// `bid.packages` —— 分包清单（只读，#316）。
+pub fn packages(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "list_packages".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "packages": tool_out,
+    }))
+}
+
+/// `bid.matrix_override` —— 否决项死锁人工裁定（写面，#226）。
+///
+/// receipt 走 #182 宿主签发面（不进 MCP 工具表——Agent 拿不到）：
+/// `matrix_override_scope` 四重绑定（project/requirement/status/理由
+/// sha256），换任何一项都要换签。status=NOT_APPLICABLE 的偏离说明
+/// 必填性由工具面裁决（壳透传空串会被响亮拒——不可审计的豁免不算豁免）。
+pub fn matrix_override(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let requirement_id = a.req_str("requirement_id")?.trim().to_string();
+    if requirement_id.is_empty() {
+        return Err(IpcError::bad_args("requirement_id 不能为空"));
+    }
+    let status = a.req_str("status")?.trim().to_string();
+    let deviation = a.str("deviation")?.unwrap_or("").trim().to_string();
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发：四重绑定签域（project/requirement/status/理由摘要）
+    let scope = bid_mcp::matrix_override_scope(&project_id, &requirement_id, &status, &deviation);
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "requirement_id": requirement_id,
+        "status": status,
+        "deviation": deviation,
+        "receipt": receipt,
+    });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "set_matrix_override".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "override": tool_out,
+    }))
+}
+
+/// `bid.recover_state` —— VALIDATING+缺章异常态恢复（写面，#243）。
+///
+/// 理由必填非空白（不可审计的恢复不成恢复）；三重域层约束（仅
+/// VALIDATING / 仅缺章 / 理由非空白）+ 审计账全在工具面——非死锁态
+/// 按「恢复」会被 E_STATE 响亮拒（UI 引导，不是故障）。
+pub fn recover_state(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let reason = a.req_str("reason")?.trim().to_string();
+    if reason.is_empty() {
+        return Err(IpcError::bad_args("reason 必填非空白（不可审计的恢复不成恢复）"));
+    }
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({ "project_id": project_id, "reason": reason });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "recover_validating_state".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    // 恢复改写项目状态 → db.json 落盘，指纹变化自动失效缓存（读面刷新重开）。
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "recover": tool_out,
+    }))
+}
+
 /// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
 /// 借用面：先取后放，`dispatch_with` 要 `&mut BidService`。
 fn project_meta(
@@ -2115,4 +2257,71 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    // ================================ #20 治理出口三件 ================================
+
+    /// packages 只读面 + override/recover 写面的壳侧守门与真实工具面路由。
+    /// 正向死锁豁免（NOT_APPLICABLE 全链）与 VALIDATING 恢复正例待 Windows
+    /// 真机/管线种子——本测覆盖：读面应答形态 / 壳侧预检 / 域层守门透传。
+    #[test]
+    fn governance_exits_read_and_guards() {
+        let (dir, ws) = tmp_ws("gov-20");
+        seed_project(&dir);
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        // ① bid.packages：真实 list_packages 应答（present + packages 键）
+        let frame = call(&ctx, "bid.packages");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let pk = ok_of(&frame);
+        assert_eq!(pk["present"], json!(true), "{frame}");
+        assert!(
+            pk["packages"].is_object(),
+            "工具面 list_packages 回对象形态：{pk}"
+        );
+        assert!(
+            pk["packages"]["items"].as_array().is_some(),
+            "packages.items 恒为数组（识别 0 包也回空数组）：{pk}"
+        );
+
+        // ② bid.matrix_override：壳侧预检——空 requirement_id 拒（不签发不路由）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "  ", "status": "NOT_APPLICABLE" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "{frame}");
+        // 真实工具面守门：不存在行 → 工具面响亮拒（receipt 签发后按行存在性裁决）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "REQ-9999", "status": "NOT_APPLICABLE",
+                    "deviation": "不存在的行——工具面须拒" }),
+        );
+        assert_eq!(
+            frame["ok"],
+            json!(false),
+            "REQ-9999 不存在，工具面必拒：{frame}"
+        );
+
+        // ③ bid.recover_state：壳侧预检（空理由拒）+ 域层三重约束透传
+        let frame = call_args(&ctx, "bid.recover_state", json!({ "reason": "   " }));
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "空理由在壳侧预检：{frame}");
+        // 种子态非 VALIDATING → 工具面三重约束响亮拒（不假成功）
+        let frame = call_args(
+            &ctx,
+            "bid.recover_state",
+            json!({ "reason": "旧版校验在缺章时误推进 VALIDATING——人工恢复" }),
+        );
+        assert_eq!(
+            frame["ok"],
+            json!(false),
+            "非 VALIDATING 态恢复必被域层拒：{frame}"
+        );
+        assert!(
+            err_code_of(&frame) == "state" || err_code_of(&frame) == "bad_args" || err_code_of(&frame) == "io",
+            "守门拒绝映射到可引导错误码：{frame}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

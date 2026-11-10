@@ -533,6 +533,48 @@
               return respond(m.id, demoGates);
             case "bid.gate_pass":
               return demoGatePass(m);
+            case "bid.packages":
+              // #20 演示桥：分包 stub（真实壳 = 工具面 list_packages——#316 识别面）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                packages: {
+                  detected: 2,
+                  items: [
+                    { id: "PKG-A", label: "一标段：设备采购", kind: "标段", number: "1", req_count: 42, sources: ["A-招标文件.docx"], selected: true },
+                    { id: "PKG-B", label: "二标段：安装服务", kind: "标段", number: "2", req_count: 18, sources: ["A-招标文件.docx"], selected: false }
+                  ],
+                  shared_req_count: 6,
+                  total_requirements: 60,
+                  selected_package: { id: "PKG-A", label: "一标段：设备采购", kind: "标段", number: "1" },
+                  usage: "build_outline 传 package=<id|label|number> 选定投哪个包（共用条款自动进纲）；投全部 = 每包各建一个项目",
+                  status: "DRAFTING",
+                  project_version: 3
+                }
+              });
+            case "bid.matrix_override":
+              // #20 演示桥：人工裁定 stub（真实壳 = 宿主签发 receipt → set_matrix_override）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                override: {
+                  requirement_id: m.requirement_id || "REQ-0001",
+                  status: m.status || "NOT_APPLICABLE",
+                  from_status: "NOT_RESPONDED",
+                  blocking_after: 2,
+                  audit: { actor_id: "shell-operator", at: Math.floor(Date.now() / 1000), method: "human_receipt" }
+                }
+              });
+            case "bid.recover_state":
+              // #20 演示桥：异常态恢复 stub（真实壳 = 工具面 recover_validating_state——三重约束守门）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                recover: { from_status: "VALIDATING", to_status: "DRAFTING", recovered_sections: ["SEC-T03"], audit_reason: m.reason || "" }
+              });
             case "bid.coverage":
               return respond(m.id, DEMO_BID.coverage);
             case "bid.create_project":
@@ -687,7 +729,7 @@
     bid: {
       status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
       matrix: { status: "idle", data: null, error: "" },
-      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" },
       coverage: { status: "idle", data: null, error: "", code: "" },
       cov: { expandedFile: "" }
     },
@@ -705,6 +747,7 @@
       createBusy: false, createError: "",
       treeStatus: "idle", treeError: "", files: [], sel: {},
       importBusy: false, importError: "", result: null
+    },
     // #18 出口闭环（校验报告 + 导出落盘）：validate 报告面与 export 写面
     // 分开记——报告可独立重看，导出有自己的 loading/产物回显；两码
     // （state/not_found/bad_args）都走引导卡而非错误横幅
@@ -713,6 +756,8 @@
       exporting: false, format: "docx", path: "", darkBid: false, bidderName: "",
       done: null, doneError: "", doneCode: "",
     },
+    // #20 分包视图（bid.packages 只读拉取缓存——工作台「分包」页签用）
+    bidPackages: { status: "idle", data: null, error: "" },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1227,6 +1272,7 @@
         else if (act === "refresh-validate") ui.loadBidValidate(true);
         else if (act === "confirm-export") ui.runBidExport();
         else if (act === "reveal-artifact") ui.revealBidArtifact();
+        else if (act === "workbench-packages") ui.openBidWorkbench("packages");
 
       });
     });
@@ -1288,6 +1334,7 @@
       + '<button class="bid-entry" data-bid-act="workbench-mx"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">合规矩阵</span><span class="bid-entry-sub">REQ × 响应状态 × 证据</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-quality"><span class="bid-entry-icon">' + ICON.check + '</span><span class="bid-entry-main"><span class="bid-entry-name">自评</span><span class="bid-entry-sub">评分 · 质量摘要 · BLOCKER</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-gates"><span class="bid-entry-icon">' + ICON.shield + '</span><span class="bid-entry-main"><span class="bid-entry-name">审核门</span><span class="bid-entry-sub">五门台账 · 追认 · 人工过门</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + '<button class="bid-entry" data-bid-act="workbench-packages"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">分包</span><span class="bid-entry-sub">多标段/多包识别 · 选包状态（#316）</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-cov"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">覆盖报告</span><span class="bid-entry-sub">已判定 / 未判定 / ★条款</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="validate-export"><span class="bid-entry-icon">' + ICON.export + '</span><span class="bid-entry-main"><span class="bid-entry-name">校验与导出</span><span class="bid-entry-sub">缺陷清单 · 确认导出 · 产物定位</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + "</div></div>";
@@ -1317,6 +1364,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="gates">审核门</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="export">校验与导出</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="packages">分包</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1448,6 +1496,8 @@
       if (activePanel === "gates") renderBidGatesPanel(host);
       // #18：出口面板不依赖章节树——早期态给 E_STATE 引导卡（先建纲）
       if (activePanel === "export") renderBidExportPanel(host);
+      // #20：分包清单同样不依赖章节树（#316 识别面任何阶段可看）
+      if (activePanel === "packages") renderBidPackagesPanel(host);
       return;
     }
     const byId = {};
@@ -1505,6 +1555,10 @@
     if (activePanel === "export") {
       // #18：校验报告 + 确认导出 + 产物回显（不依赖选中节点）
       renderBidExportPanel(host);
+      return;
+    }
+    if (activePanel === "packages") {
+      renderBidPackagesPanel(host);
       return;
     }
     if (activePanel === "matrix") {
@@ -2185,6 +2239,27 @@
     // 写面消息（成功/失败——域层拒绝原样透传，不假成功）
     if (gt.passInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(gt.passInfo) + "</div>";
     if (gt.passError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(gt.passError) + "</div>";
+    // #20：VALIDATING+缺章异常态恢复出口（#243——域层三重约束守门：
+    // 仅 VALIDATING / 仅缺章 / 理由必填；非死锁态按了也 E_STATE 响亮拒）
+    const projSt = (state.bid.data && state.bid.data.state && state.bid.data.state.status) || "";
+    if (projSt === "VALIDATING") {
+      html +=
+        '<div class="bid-card" data-kind="recover"><div class="bid-card-title">' + ICON.warning + " 校验异常态（VALIDATING）</div>"
+        + '<div class="bid-card-sub">项目停在 VALIDATING 且存在未起草叶（旧版校验误推进所致）——恢复回 DRAFTING 解锁起草面；每次恢复落审计记录（何时/为何/缺哪些章）</div>';
+      if (gt.formGate === "__recover__") {
+        html +=
+          '<div class="bid-gt-form" data-rv-form>'
+          + '<div class="bid-gt-form-title">人工恢复（审计留痕）</div>'
+          + '<textarea class="bid-gt-input" data-rv-reason rows="2" placeholder="恢复理由（必填非空白）——如：旧版校验在缺章时误推进 VALIDATING"></textarea>'
+          + '<div class="bid-gt-form-actions">'
+          + '<button class="btn btn-primary btn-sm" data-rv-confirm' + (passing ? " disabled" : "") + ">" + (passing ? "恢复中…" : "确认恢复") + "</button>"
+          + '<button class="btn btn-sm" data-rv-cancel>取消</button></div>'
+          + "</div>";
+      } else {
+        html += '<div class="bid-card-actions"><button class="btn btn-sm" data-rv-open' + (passing ? " disabled" : "") + ">恢复起草面（回 DRAFTING）</button></div>";
+      }
+      html += "</div>";
+    }
     // ① agent 豁免追认清单（#277——human_confirmed=false 的门）
     if (waivers.length) {
       html += '<div class="bid-card" data-kind="ratify"><div class="bid-card-title">' + ICON.warning + " Agent 声明过门待追认（" + waivers.length + "）</div>";
@@ -2306,6 +2381,33 @@
         });
       });
     });
+    // ---- #20 恢复出口交互（data-rv-*——VALIDATING 异常态，#243）
+    panel.querySelectorAll("[data-rv-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        gt.formGate = "__recover__";
+        gt.passError = "";
+        renderBidGatesPanel(host);
+      });
+    });
+    panel.querySelectorAll("[data-rv-cancel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        gt.formGate = "";
+        renderBidGatesPanel(host);
+      });
+    });
+    panel.querySelectorAll("[data-rv-confirm]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const form = panel.querySelector("[data-rv-form]");
+        const reasonEl = form && form.querySelector("[data-rv-reason]");
+        const reason = reasonEl ? reasonEl.value.trim() : "";
+        if (!reason) {
+          gt.passError = "恢复理由必填（不可审计的恢复不成恢复）";
+          renderBidGatesPanel(host);
+          return;
+        }
+        ui.recoverBidState(reason);
+      });
+    });
   }
 
   // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
@@ -2413,6 +2515,38 @@
           .join("")
       : '<div class="bid-mx-ev-line dim">无在绑证据' + (r.evidence_required ? "（本条款要求证明材料——#241 证据缺口面）" : "") + "</div>";
     const pendHtml = pends.length ? '<div class="bid-mx-ev-line pend">待补占位：' + esc(pends.join("、")) + "（#245 待补可追踪，不清阻塞）</div>" : "";
+    // #20：人工裁定出口（#226 否决项死锁——理由必填 + receipt 壳签发）。
+    // 死锁场景（必选条款无法响应且证据无法补）出在此行展开面；非死锁也能
+    // 裁定（域层守门：状态机不允许时 E_STATE 响亮拒）。
+    const f = state.bid.mx;
+    let moHtml =
+      '<div class="bid-mx-d-block"><div class="bid-mx-d-k">人工裁定（#226）</div>'
+      + '<div class="bid-mx-d-v">'
+      + '<button class="btn btn-sm" data-mo-open="' + esc(q.id) + '"' + (f.passing ? " disabled" : "") + ">"
+      + (f.formReq === q.id ? "收起裁定表单" : "裁定响应状态")
+      + "</button>"
+      + (r.blocking ? ' <span class="bid-mx-block">阻断行——常见出口：招标人规则说明标「不适用」并附偏离依据</span>' : "")
+      + "</div>";
+    if (f.formReq === q.id) {
+      moHtml +=
+        '<div class="bid-gt-form" data-mo-form="' + esc(q.id) + '">'
+        + '<div class="bid-gt-form-title">' + esc(q.id) + " → 人工裁定（审计留痕：操作者/理由/时间，不可抹除）</div>"
+        + '<label class="bid-mx-check">目标状态'
+        + '<select class="bid-gt-input" data-mo-status>'
+        + '<option value="NOT_APPLICABLE">不适用（招标人规则说明——须填偏离依据）</option>'
+        + '<option value="RESPONDED">已响应（补正文后人工改判）</option>'
+        + '<option value="PARTIAL">部分响应</option>'
+        + '<option value="NOT_RESPONDED">未响应（维持现状——仅改台账口径时用）</option>'
+        + "</select></label>"
+        + '<textarea class="bid-gt-input" data-mo-deviation rows="2" placeholder="偏离/不适用说明——NOT_APPLICABLE 必填（不可审计的豁免不算豁免）"></textarea>'
+        + '<div class="bid-gt-form-actions">'
+        + '<button class="btn btn-primary btn-sm" data-mo-confirm="' + esc(q.id) + '"' + (f.passing ? " disabled" : "") + ">" + (f.passing ? "裁定中…" : "确认裁定") + "</button>"
+        + '<button class="btn btn-sm" data-mo-cancel>取消</button></div>'
+        + (f.passError ? '<div class="bid-wiz-error">' + esc(f.passError) + "</div>" : "")
+        + (f.passInfo ? '<div class="bid-wiz-info">' + esc(f.passInfo) + "</div>" : "")
+        + "</div>";
+    }
+    moHtml += "</div>";
     return (
       '<tr class="bid-mx-detail"><td colspan="6">'
       + '<div class="bid-mx-d-grid">'
@@ -2422,12 +2556,70 @@
       + '<div class="bid-mx-d-block"><div class="bid-mx-d-k">响应章节</div><div class="bid-mx-d-v">' + (r.draft_section_id
         ? '<button class="bid-mx-link" data-mx-sec="' + esc(r.draft_section_id) + '">跳转 ' + esc(bidMxSectionTitle(r.draft_section_id) || r.draft_section_id) + "</button>"
         : "未归属——大纲树尚无章节覆盖本条款") + "</div></div>"
+      + moHtml
       + "</div></td></tr>"
     );
+  }
+  /** #20 分包面板（工作台右面板的 packages 页签——bid.packages 只读）
+   *  多标段/多包识别（#316）：包清单 + 逐包条款数 + 选包状态 + 共用条款。
+   *  只读面：选包动作不在本面板（选包 = build_outline 传 package 参数——
+   *  管线动作，走 MCP；面板只呈现识别结果与 usage 提示，不伪装可写）。 */
+  function renderBidPackagesPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const pk = state.bidPackages;
+    if (pk.status === "idle") ui.loadBidPackages();
+    if (pk.status === "idle" || pk.status === "loading") {
+      panel.innerHTML = '<div class="bid-gt"><div class="view-state"><div class="view-spinner"></div><div>正在读取分包清单…</div></div></div>';
+      return;
+    }
+    if (pk.status === "error" || !pk.data) {
+      panel.innerHTML =
+        '<div class="bid-gt"><div class="view-state" data-kind="error"><div class="view-state-title">分包清单读取失败</div><div>'
+        + esc(pk.error || "无数据")
+        + '</div><div><button class="btn" data-pk-retry>重试</button></div></div></div>';
+      const retry = panel.querySelector("[data-pk-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidPackages(true));
+      return;
+    }
+    const d = pk.data && pk.data.packages || {};
+    const items = Array.isArray(d.items) ? d.items : [];
+    const sel = d.selected_package;
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">分包清单（#316 识别面）</div>'
+      + '<div class="bid-card-sub">识别 ' + fmtChars(d.detected) + " 包 · 共用条款 " + fmtChars(d.shared_req_count) + " · 条款总数 " + fmtChars(d.total_requirements) + "</div>";
+    if (!items.length) {
+      html += '<div class="bid-card-sub">未识别出多标段/多包结构——单包项目无需选包</div>';
+    } else {
+      html += '<div class="bid-gt-gates">';
+      for (const it of items) {
+        html +=
+          '<div class="bid-gt-row" data-selected="' + (it.selected ? "true" : "false") + '">'
+          + '<div class="bid-gt-main"><span class="bid-gt-name">' + esc(it.label || it.id) + "</span>"
+          + '<span class="bid-gt-sub">' + esc(it.kind || "") + (it.number ? " · " + esc(it.number) : "") + " · 条款 " + fmtChars(it.req_count)
+          + (Array.isArray(it.sources) && it.sources.length ? " · 来源 " + it.sources.length + " 件" : "")
+          + "</span></div>"
+          + '<span class="bid-badge" data-status="' + (it.selected ? "ok" : "") + '">' + (it.selected ? "已选包" : "未选") + "</span>"
+          + "</div>";
+      }
+      html += "</div>";
+    }
+    html += '<div class="bid-card-sub">' + esc(d.usage || "") + "</div>";
+    if (sel) html += '<div class="bid-card-sub">当前选包：' + esc(sel.label || sel.id) + "</div>";
+    html += '</div><div class="bid-card-actions"><button class="btn btn-sm" data-pk-refresh>刷新</button></div></div>';
+    panel.innerHTML = html;
+    const rf = panel.querySelector("[data-pk-refresh]");
+    if (rf) rf.addEventListener("click", () => ui.loadBidPackages(true));
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */
   function renderBidMatrixPanel(host, panel) {
     const mx = state.bid.matrix;
+    // #20 顺手修：工作台路由经单参调用（panel 未传）——与 gates/quality
+    // 面板同款防御取值，否则「合规矩阵」页签点击即 TypeError（运行时断链，
+    // 静态断言拦不住——issue #21 的典型形态）。
+    if (!panel) panel = host.querySelector("#bid-panel");
+    if (!panel) return;
     // 矩阵面不选中大纲树节点（避免左树残留详情高亮）
     host.querySelectorAll("#bid-tree .bid-node").forEach((row) => {
       row.dataset.selected = "false";
@@ -2569,10 +2761,44 @@
       })
     );
     panel.querySelectorAll(".bid-mx-row").forEach((tr) =>
-      tr.addEventListener("click", () => {
+      tr.addEventListener("click", (e) => {
+        // #20：裁定表单内的点击不触发行折叠（表单在展开行内——防误触）
+        if (e.target.closest("[data-mo-form]") || e.target.closest("[data-mo-open]")) return;
         const id = tr.dataset.req;
         state.bid.mx.expandedId = state.bid.mx.expandedId === id ? "" : id;
         renderBidMatrixPanel(host, panel);
+      })
+    );
+    // ---- #20 人工裁定出口（data-mo-*——与审核门表单同款接线纪律）
+    panel.querySelectorAll("[data-mo-open]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const f2 = state.bid.mx;
+        f2.formReq = f2.formReq === b.dataset.moOpen ? "" : b.dataset.moOpen;
+        f2.passError = "";
+        f2.expandedId = b.dataset.moOpen; // 保持展开（表单在展开行内）
+        renderBidMatrixPanel(host, panel);
+      })
+    );
+    panel.querySelectorAll("[data-mo-cancel]").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.bid.mx.formReq = "";
+        state.bid.mx.passError = "";
+        renderBidMatrixPanel(host, panel);
+      })
+    );
+    panel.querySelectorAll("[data-mo-confirm]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const form = panel.querySelector('[data-mo-form="' + b.dataset.moConfirm + '"]');
+        const statusEl = form && form.querySelector("[data-mo-status]");
+        const devEl = form && form.querySelector("[data-mo-deviation]");
+        const status = statusEl ? statusEl.value : "NOT_APPLICABLE";
+        const deviation = devEl ? devEl.value.trim() : "";
+        if (status === "NOT_APPLICABLE" && !deviation) {
+          state.bid.mx.passError = "「不适用」必须填写偏离依据（不可审计的豁免不算豁免——域层同样会拒，前置拦截省一次往返）";
+          renderBidMatrixPanel(host, panel);
+          return;
+        }
+        ui.passMatrixOverride(b.dataset.moConfirm, status, deviation);
       })
     );
     panel.querySelectorAll("[data-mx-sec]").forEach((b) =>
@@ -4573,7 +4799,7 @@
       state.bid = {
         status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
         matrix: { status: "idle", data: null, error: "" },
-        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" },
         coverage: { status: "idle", data: null, error: "", code: "" },
         cov: { expandedFile: "" }
       };
@@ -4988,6 +5214,80 @@
         await ipc("explorer.reveal", { path: url }, 15e3);
       } catch (err) {
         ui.setStatus({ message: "定位产物失败：" + ((err && err.message) || "未知") });
+      }
+    },
+    /** #20：拉取分包清单（bid.packages 只读——工作台「分包」页签）。 */
+    async loadBidPackages(force) {
+      if (!state.bridge) return;
+      if (state.bidPackages.status === "loading" && !force) return;
+      state.bidPackages.status = "loading";
+      state.bidPackages.error = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.packages", {}, 15e3);
+        if (r && r.present) {
+          state.bidPackages.data = r;
+          state.bidPackages.status = "ready";
+        } else {
+          state.bidPackages.data = null;
+          state.bidPackages.status = "error";
+          state.bidPackages.error = "当前工作区无分包数据";
+        }
+      } catch (err) {
+        state.bidPackages.data = null;
+        state.bidPackages.status = "error";
+        state.bidPackages.error = err && (err.message || err.code) || "bid.packages 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #20：否决项死锁人工裁定（bid.matrix_override → 工具面
+     *  set_matrix_override；receipt 由壳签发——UI 只传 行/状态/偏离说明）。
+     *  成功 → 矩阵重拉（blocking 重算）；失败 → 表单内反馈（E_STATE 引导）。 */
+    async passMatrixOverride(reqId, status, deviation) {
+      const f = state.bid.mx;
+      f.passing = true;
+      f.passError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.matrix_override", {
+          requirement_id: reqId,
+          status: status,
+          deviation: deviation || ""
+        }, 3e4);
+        f.passing = false;
+        f.formReq = "";
+        const ov = r && r.override || {};
+        const from = ov.from_status || "";
+        const blocking = ov.blocking_after != null ? " · 剩余阻断 " + ov.blocking_after : "";
+        f.passInfo = "已裁定 " + reqId + " → " + esc(ov.status || status) + blocking;
+        ui.loadBidMatrix(true); // 覆写后矩阵立即重算（blocking 口径同源）
+      } catch (err) {
+        f.passing = false;
+        f.passError = err && err.message || "bid.matrix_override 失败";
+        renderBidWorkbenchIfOpen();
+      }
+    },
+    /** #20：VALIDATING+缺章异常态恢复（bid.recover_state → 工具面
+     *  recover_validating_state——域层三重约束守门，非死锁态 E_STATE 响亮拒）。 */
+    async recoverBidState(reason) {
+      const gt = state.bidGates;
+      gt.passing = true;
+      gt.passError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.recover_state", { reason: reason }, 3e4);
+        gt.passing = false;
+        gt.formGate = "";
+        gt.formMode = "";
+        const rc = r && r.recover || {};
+        gt.passInfo = "已恢复到 " + esc(rc.to_status || "DRAFTING") + "（缺章解锁起草面）";
+        // 项目状态/门台账/大纲三面同源刷新
+        ui.loadBidGates(true);
+        ui.loadBid(true);
+      } catch (err) {
+        gt.passing = false;
+        gt.passError = err && err.message || "bid.recover_state 失败";
+        renderBidWorkbenchIfOpen();
       }
     },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
