@@ -43,7 +43,9 @@
 | `src/collect/sanity.py`（健全性规则，R33） | 跨字段启发式告警：日期倒挂/可疑长周期/未来发布/零预算 | **告警不拒收**（区别于必填校验拒收面）；命中≠错误，研究数据质量信号随记录 `warnings` 携带 |
 | `src/extract/`（抽取面） | 公告原文→LLM 结构化抽取→schema 校验→合并入库；失败进 `pending_announcements` 降级面可重试 | 抽取走研究提示词（`PromptTemplates.bid_extraction`）；「LLM 补全不覆盖」——源字段强证据，模型只填缺 |
 | `src/analyze/`（分析面） | 预算分位/区域/趋势/关键词频次与月度演化（R37）/竞争密度/采购人画像（R35）/预算×区域交叉分桶（R36） | 全部**描述性统计与启发式估算**（密度分层/HHI/分桶均为研究经验口径），报告明示「估算」口径，不冒充事实 |
-| `src/pipeline/`（编排面） | collect→extract→analyze→report 四阶段串联 + `pipeline_runs` 运行台账 + 增量水位 | 研究管道一条命令；台账为审计面（研究可复现），水位只服务增量文件读取 |
+| `src/pipeline/`（编排面） | collect→extract→analyze→report 四阶段串联 + `pipeline_runs` 运行台账 + 增量水位 + 断点续跑（R58 `--resume`/`extract_status`） | 研究管道一条命令；台账为审计面（研究可复现），水位只服务增量文件读取；批量写单事务（R62） |
+| `src/platform.py` / `src/locking.py` / `src/colors.py` / `src/progress.py` / `src/exit_codes.py`（平台与运行时基建，R39-R72） | 跨平台检测（win/linux）/文件锁/WAL 探测/控制台加固与颜色/进度/退出码 | **纯 Python 基建，无 Rust 对应**；平台差异唯一权威口径见 `docs/PLATFORM-NOTES.md`；`src/version.py` 为版本唯一真源 |
+| `src/analyze/suppliers.py` / `outliers.py` / `cooccurrence.py` / `regions.py` / `rolling.py` / `relationships.py` / `charts.py`（分析深化，R47-R64） | 供应商画像/预算 IQR 离群/领域词共现/省级归一/滑动窗口环比/重复合作关系/ASCII 图表 | 全部**描述性统计**（离群是统计标记非错误；共现≠因果；重复中标是信号非认定）；省份表为封闭 34 项枚举 |
 
 **判定规则**：任何"投标生产"语义的数据与产物 → Rust 侧是真源；
 Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
