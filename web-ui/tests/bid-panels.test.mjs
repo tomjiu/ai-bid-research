@@ -733,5 +733,85 @@ check(
   "引导卡约定散在 §109 表格一行 + 注释里，契约文档无正式登记（改代码无同步锚点）"
 );
 
+// ---------- R6 merge main（#47 / #19 任务 3 收编 export 面）：#18 出口闭环面板引导卡统一 ----------
+check(
+  "R6 收编：export 面（#18）not_found 分支进共享工厂（原错误横幅退役）",
+  /x\.code === "not_found"[\s\S]{0,500}renderBidEarlyGuide/.test(app),
+  "#18 校验面板空工作区仍走 data-kind=error 横幅（契约 §3.4 面板清单违背）"
+);
+check(
+  "R6 收编：export 面（#18）state 分支进共享工厂（E_STATE 原文 + 双前置门 hint 进卡）",
+  /x\.code === "state"[\s\S]{0,600}renderBidEarlyGuide\(host, panel, \{[\s\S]{0,500}pre_export_confirm[\s\S]{0,200}校验并导出成品/.test(app),
+  "#18 校验早态卡丢双前置门说明或后继管线信息"
+);
+check(
+  "R6 契约：§3.4 面板清单含 export（merge main 后 #18 面板纳入约定）",
+  /detail \/ matrix \/ quality \/ gates \/ coverage \/ export/.test(contract),
+  "契约 §3.4 面板清单漏 export 面（merge main 新增面板未纳入约定）"
+);
+
+// ---------- #18 出口闭环：校验报告 + 确认导出 ----------
+check(
+  "#18 工作台头部「校验并导出」按钮（validate-export 动作）",
+  /data-bid-act="validate-export"/.test(app) && /校验并导出/.test(app),
+  "出口动作入口被删或改名"
+);
+check(
+  "#18 「校验与导出」页签（data-bid-panel=export）",
+  /data-bid-panel="export">校验与导出/.test(app),
+  "出口页签被删或改名"
+);
+check(
+  "#18 renderBidExportPanel 分发（树空 / 主体两路）",
+  (app.match(/renderBidExportPanel\(host\)/g) || []).length >= 3,
+  "面板路由断裂——页签点开不渲染（树空引导 + 主体 + 面板函数定义至少 3 处引用）"
+);
+check(
+  "#18 bid.validate IPC 调用 + 状态面",
+  /ipc\("bid\.validate", \{\}, 12e4\)/.test(app) && /bidExport: \{/.test(app),
+  "校验拉取或状态面被回退"
+);
+check(
+  "#18 bid.export IPC 调用（format + output_path + dark_bid）",
+  /ipc\("bid\.export", body, 3e5\)/.test(app) && /output_path: path/.test(app),
+  "导出写面接线被回退"
+);
+check(
+  "#18 产物回显（artifact.url/sha256/size）+ explorer.reveal 定位",
+  /x\.done\.artifact && x\.done\.artifact\.url/.test(app) && /ipc\("explorer\.reveal", \{ path: url \}, 15e3\)/.test(app),
+  "产物回显或定位接线被回退"
+);
+check(
+  "#18 E_STATE 引导卡分支（state 码 → 校验尚未开放 / 导出被前置门拦截）",
+  /校验尚未开放/.test(app) && /导出被前置门拦截/.test(app),
+  "state 码分支引导卡被删——退回错误横幅即违规（契约 §3.3）"
+);
+check(
+  "#18 侧栏「校验与导出」入口",
+  /data-bid-act="validate-export">.*校验与导出/.test(app.replace(/\n/g, "")) || (app.includes('data-bid-act="validate-export"') && app.includes("缺陷清单 · 确认导出 · 产物定位")),
+  "侧栏入口被删"
+);
+check(
+  "#18 壳侧分发：ipc.rs 登记 bid.validate / bid.export（经 bid.rs 真实处理）",
+  /"bid\.validate" => crate::bid::validate\(&ws, &self\.bid, &a\)/.test(ipcRs)
+    && /"bid\.export" => crate::bid::export\(&ws, &self\.bid, &a\)/.test(ipcRs),
+  "壳侧 IPC 分发缺命令——UI 调用会 unknown_cmd"
+);
+check(
+  "#18 bid.rs 走真实工具面（dispatch_with validate_bid_document / export_bid_document）",
+  /tool: "validate_bid_document"/.test(bidRs) && /tool: "export_bid_document"/.test(bidRs),
+  "壳侧没经 bid_mcp 真实工具面（直读 DomainStore 或空实现即违规）"
+);
+check(
+  "#18 契约文档登记 bid.validate / bid.export",
+  contract.includes("### bid.validate") && contract.includes("### bid.export"),
+  "出口闭环命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "#18 导出面板样式（bid-export 表单 + 产物路径）",
+  /\.bid-export-form/.test(css) && /\.bid-export-path/.test(css),
+  "导出面板样式被删"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

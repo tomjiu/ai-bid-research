@@ -4384,4 +4384,73 @@ html[data-chrome="native"][data-maximized="1"] #app {
 @media (max-width: 900px) {
   .bid-wiz-file select { display: none; }
   .bid-wizard { padding: 12px 10px 16px; }
+/* ---------- #18 出口闭环：校验报告 + 确认导出 + 产物回显 ---------- */
+.bid-export {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 22px 26px;
+  max-width: 980px;
+}
+/* 通过/缺陷双态徽章（复用 bid-qual-tag 骨架，ok = 绿、默认 = 警示黄） */
+.bid-qual-tag.ok {
+  color: var(--ok, #3fb950);
+  background: color-mix(in srgb, var(--ok, #3fb950) 13%, transparent);
+  border-color: color-mix(in srgb, var(--ok, #3fb950) 32%, transparent);
+}
+.bid-export-form {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px 14px;
+  align-items: center;
+}
+.bid-export-field {
+  display: contents;
+}
+.bid-export-field > span {
+  font-size: 12px;
+  color: var(--fg-muted);
+  text-align: right;
+}
+.bid-export-field > select,
+.bid-export-field > input {
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border, #444c56);
+  border-radius: 6px;
+  background: var(--bg, #22272e);
+  color: var(--fg, #e6edf3);
+}
+.bid-export-check {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.bid-export-actions {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bid-export-path {
+  word-break: break-all;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+@media (max-width: 900px) {
+  .bid-export-form {
+    grid-template-columns: 1fr;
+  }
+  .bid-export-field > span {
+    text-align: left;
+  }
+  .bid-export-check,
+  .bid-export-actions {
+    grid-column: 1;
+  }
 }

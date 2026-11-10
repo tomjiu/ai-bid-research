@@ -486,6 +486,23 @@ impl Ctx {
             "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
 
             "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+            // ── #18 出口闭环（bid.rs——validate / export 均经 bid_mcp 真实
+            //    工具面 validate_bid_document / export_bid_document；
+            //    E_STATE 透传 `state` 码 → UI 引导卡）──────────────────
+            "bid.validate" => crate::bid::validate(&ws, &self.bid, &a),
+
+            "bid.export" => crate::bid::export(&ws, &self.bid, &a),
+
+            // ── #20 治理出口三件（bid.rs——packages 只读；matrix_override /
+            //    recover_state 为写面：receipt 宿主签发（#182 四重绑定签域）
+            //    后经 bid_mcp 真实工具面 set_matrix_override /
+            //    recover_validating_state；裁决全在域层）────────────
+            "bid.packages" => crate::bid::packages(&ws, &self.bid, &a),
+
+            "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
+
+            "bid.recover_state" => crate::bid::recover_state(&ws, &self.bid, &a),
+
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),

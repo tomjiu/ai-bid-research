@@ -24,6 +24,7 @@
     info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.3v4M8 5.1v.6"/></svg>',
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3.2 8.4 3 3 6.6-6.8"/></svg>',
     shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 13.4 3.8v3.4c0 3.2-2.2 5.6-5.4 6.9-3.2-1.3-5.4-3.7-5.4-6.9V3.8z"/><path d="m5.7 7.9 1.6 1.6 3-3.1"/></svg>',
+    export: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2v7.6"/><path d="m5.2 6.9 2.8 2.9 2.8-2.9"/><path d="M2.8 10.4v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"/></svg>',
     outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h2.2M4 12h2.2M4 18.5h2.2"/><path d="M10 5.5h10M10 12h7.5M10 18.5h9"/></svg>',
     bid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15.2 3.6V7H19"/><path d="M9 11.5h6M9 14.5h6"/><path d="m9.2 17.4 1.4 1.4 2.7-2.8"/></svg>'
   };
@@ -532,6 +533,48 @@
               return respond(m.id, demoGates);
             case "bid.gate_pass":
               return demoGatePass(m);
+            case "bid.packages":
+              // #20 演示桥：分包 stub（真实壳 = 工具面 list_packages——#316 识别面）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                packages: {
+                  detected: 2,
+                  items: [
+                    { id: "PKG-A", label: "一标段：设备采购", kind: "标段", number: "1", req_count: 42, sources: ["A-招标文件.docx"], selected: true },
+                    { id: "PKG-B", label: "二标段：安装服务", kind: "标段", number: "2", req_count: 18, sources: ["A-招标文件.docx"], selected: false }
+                  ],
+                  shared_req_count: 6,
+                  total_requirements: 60,
+                  selected_package: { id: "PKG-A", label: "一标段：设备采购", kind: "标段", number: "1" },
+                  usage: "build_outline 传 package=<id|label|number> 选定投哪个包（共用条款自动进纲）；投全部 = 每包各建一个项目",
+                  status: "DRAFTING",
+                  project_version: 3
+                }
+              });
+            case "bid.matrix_override":
+              // #20 演示桥：人工裁定 stub（真实壳 = 宿主签发 receipt → set_matrix_override）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                override: {
+                  requirement_id: m.requirement_id || "REQ-0001",
+                  status: m.status || "NOT_APPLICABLE",
+                  from_status: "NOT_RESPONDED",
+                  blocking_after: 2,
+                  audit: { actor_id: "shell-operator", at: Math.floor(Date.now() / 1000), method: "human_receipt" }
+                }
+              });
+            case "bid.recover_state":
+              // #20 演示桥：异常态恢复 stub（真实壳 = 工具面 recover_validating_state——三重约束守门）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                recover: { from_status: "VALIDATING", to_status: "DRAFTING", recovered_sections: ["SEC-T03"], audit_reason: m.reason || "" }
+              });
             case "bid.coverage":
               return respond(m.id, DEMO_BID.coverage);
             case "bid.create_project":
@@ -686,7 +729,7 @@
     bid: {
       status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
       matrix: { status: "idle", data: null, error: "" },
-      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+      mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" },
       coverage: { status: "idle", data: null, error: "", code: "" },
       cov: { expandedFile: "" }
     },
@@ -705,6 +748,16 @@
       treeStatus: "idle", treeError: "", files: [], sel: {},
       importBusy: false, importError: "", result: null
     },
+    // #18 出口闭环（校验报告 + 导出落盘）：validate 报告面与 export 写面
+    // 分开记——报告可独立重看，导出有自己的 loading/产物回显；两码
+    // （state/not_found/bad_args）都走引导卡而非错误横幅
+    bidExport: {
+      status: "idle", report: null, error: "", code: "", ts: 0,
+      exporting: false, format: "docx", path: "", darkBid: false, bidderName: "",
+      done: null, doneError: "", doneCode: "",
+    },
+    // #20 分包视图（bid.packages 只读拉取缓存——工作台「分包」页签用）
+    bidPackages: { status: "idle", data: null, error: "" },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -733,12 +786,20 @@
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw Object.assign(new Error("\u8BFB\u53D6\u5927\u54CD\u5E94\u5931\u8D25\uFF08HTTP " + res.status + "\uFF09"), { code: "ipc_file" });
     const text = await res.text();
+    let body;
     try {
-      result.payload = JSON.parse(text);
+      body = JSON.parse(text);
     } catch (e) {
       throw Object.assign(new Error("\u5927\u54CD\u5E94\u4E0D\u662F\u5408\u6CD5 JSON\uFF1A" + e.message), { code: "ipc_file" });
     }
-    return result;
+    // spill 落盘的是**完整响应壳**（ipc.rs::spill_if_large 写的是整个 resp）：
+    //   { id, ok, result: { ...真实结果... } }
+    // 调用方（如 fs.readBytes 读 r.data）期望的却是**解包后的 result 本体**。
+    // 旧实现把壳塞进 result.payload，谁都没读 → 大文件静默变空（PDF「数据为空」）。
+    if (body && typeof body === "object" && body.result && typeof body.result === "object") {
+      return body.result;
+    }
+    return body && typeof body === "object" ? body : result;
   }
   function ipc(cmd, args, timeoutMs) {
     const payload = Object.assign({}, args || {});
@@ -1205,6 +1266,13 @@
         else if (act === "wizard") ui.openBidWorkbench("detail");
         else if (act === "wizard-refresh-tree") ui.loadBidWizardTree(true);
         else if (act === "wizard-retry-import") ui.submitBidWizardImport();
+        // #18 出口闭环：工具栏「校验并导出」（切页签 + 触发校验）/ 重新校验 /
+        // 确认导出 / 产物定位
+        else if (act === "validate-export") ui.openBidWorkbench("export");
+        else if (act === "refresh-validate") ui.loadBidValidate(true);
+        else if (act === "confirm-export") ui.runBidExport();
+        else if (act === "reveal-artifact") ui.revealBidArtifact();
+        else if (act === "workbench-packages") ui.openBidWorkbench("packages");
 
       });
     });
@@ -1266,7 +1334,9 @@
       + '<button class="bid-entry" data-bid-act="workbench-mx"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">合规矩阵</span><span class="bid-entry-sub">REQ × 响应状态 × 证据</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-quality"><span class="bid-entry-icon">' + ICON.check + '</span><span class="bid-entry-main"><span class="bid-entry-name">自评</span><span class="bid-entry-sub">评分 · 质量摘要 · BLOCKER</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-gates"><span class="bid-entry-icon">' + ICON.shield + '</span><span class="bid-entry-main"><span class="bid-entry-name">审核门</span><span class="bid-entry-sub">五门台账 · 追认 · 人工过门</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + '<button class="bid-entry" data-bid-act="workbench-packages"><span class="bid-entry-icon">' + ICON.grid + '</span><span class="bid-entry-main"><span class="bid-entry-name">分包</span><span class="bid-entry-sub">多标段/多包识别 · 选包状态（#316）</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + '<button class="bid-entry" data-bid-act="workbench-cov"><span class="bid-entry-icon"></span><span class="bid-entry-main"><span class="bid-entry-name">覆盖报告</span><span class="bid-entry-sub">已判定 / 未判定 / ★条款</span></span><span class="bid-entry-state ok">已接线</span></button>'
+      + '<button class="bid-entry" data-bid-act="validate-export"><span class="bid-entry-icon">' + ICON.export + '</span><span class="bid-entry-main"><span class="bid-entry-name">校验与导出</span><span class="bid-entry-sub">缺陷清单 · 确认导出 · 产物定位</span></span><span class="bid-entry-state ok">已接线</span></button>'
       + "</div></div>";
     bindBidViewActions(body);
   }
@@ -1281,6 +1351,7 @@
       + '<span class="bid-wb-project" id="bid-wb-project"></span>'
       + '<span class="bid-wb-status" id="bid-wb-status"></span>'
       + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm btn-primary" data-bid-act="validate-export" title="先校验出报告，确认后导出成品文档（#18 出口闭环）">' + ICON.export + "校验并导出</button>"
       + '<button class="btn btn-sm" data-bid-act="refresh" title="重新读取 bid.state / bid.outline / bid.matrix / bid.coverage / 自评数据">刷新</button>'
       + "</header>"
       + '<div class="bid-wb-body">'
@@ -1292,6 +1363,8 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="quality">自评</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="gates">审核门</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="export">校验与导出</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="packages">分包</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1305,6 +1378,8 @@
         // 门台账同款（#603 批 A）
         if (state.bidGates.status !== "idle") ui.loadBidGates(true);
         if (state.bid.coverage && state.bid.coverage.status !== "idle") ui.loadBidCoverage(true);
+        // #18：出口面已看过也一并刷新（报告是导出前置，不能拿旧报告导新内容）
+        if (state.bidExport.status !== "idle") ui.loadBidValidate(true);
       }
       // #313 批 B/C/D：右侧页签切换（章节详情 / 合规矩阵 / 自评 / 覆盖报告）
       const tabBtn = e.target.closest('.bid-tab[data-bid-panel]');
@@ -1419,6 +1494,10 @@
       if (activePanel === "quality") renderBidQualityPanel(host);
       // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
       if (activePanel === "gates") renderBidGatesPanel(host);
+      // #18：出口面板不依赖章节树——早期态给 E_STATE 引导卡（先建纲）
+      if (activePanel === "export") renderBidExportPanel(host);
+      // #20：分包清单同样不依赖章节树（#316 识别面任何阶段可看）
+      if (activePanel === "packages") renderBidPackagesPanel(host);
       return;
     }
     const byId = {};
@@ -1471,6 +1550,15 @@
     }
     if (activePanel === "gates") {
       renderBidGatesPanel(host);
+      return;
+    }
+    if (activePanel === "export") {
+      // #18：校验报告 + 确认导出 + 产物回显（不依赖选中节点）
+      renderBidExportPanel(host);
+      return;
+    }
+    if (activePanel === "packages") {
+      renderBidPackagesPanel(host);
       return;
     }
     if (activePanel === "matrix") {
@@ -1823,6 +1911,144 @@
     const retry = panel.querySelector("[data-bid-guide-retry]");
     if (retry && o.retry) retry.addEventListener("click", () => o.retry());
   }
+  /** #18 出口闭环面板：校验报告（bid.validate）→ 确认导出（bid.export）
+   * → 产物回显 + explorer.reveal 定位。E_STATE/not_found 走引导卡
+   * （IPC-CONTRACT §109 约定），不弹错误横幅。 */
+  function renderBidExportPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const x = state.bidExport;
+    if (x.status === "idle") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取校验报告…</div></div>';
+      ui.loadBidValidate();
+      return;
+    }
+    if (x.status === "loading") {
+      panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在校验全文档（规则 + 模型复核）…</div></div>';
+      return;
+    }
+    if (x.code === "not_found") {
+      // R6（#47 / #19 任务 3）merge main 收编：export 面（#18）原错误横幅
+      // → 共享工厂引导卡（契约 §3.4——全部 bid.* 读面板同一约定）
+      renderBidEarlyGuide(host, panel, {
+        code: "not_found",
+        wrapClass: "bid-export",
+        title: "还没有标书项目",
+        text: "当前工作区没有 db.json——新建标书项目并导入招标文件后，在这里校验全文档并导出成品标书",
+        next: "新建标书项目（向导第一步）——建项导入、抽取条款建纲起草之后，到这里「校验并导出」",
+        retry: () => ui.loadBidValidate(true)
+      });
+      return;
+    }
+    if (x.code === "state") {
+      // 工具面 E_STATE 原文已含状态与前置说明（如「DRAFTING 态无章节树——先建纲再校验」）
+      // R6（#47 / #19 任务 3）merge main 收编：手写引导卡 → 共享工厂（§3.4）
+      renderBidEarlyGuide(host, panel, {
+        code: "state",
+        wrapClass: "bid-export",
+        title: "校验尚未开放",
+        text: esc(x.error || ""),
+        hint: "校验需要章节树已建立；导出还需过双前置门（校验通过 + pre_export_confirm 过门确认——审核门页签可人工过门）。",
+        next: "导入招标文件（向导第二步）——extract_requirements 抽取条款、build_outline 建纲、起草应答之后，到这里校验并导出成品",
+        retry: () => ui.loadBidValidate(true)
+      });
+      return;
+    }
+    if (!x.report) {
+      panel.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">校验报告读取失败</div><div>' + esc(x.error || "未知错误") + '</div><button class="btn" data-bid-act="refresh-validate">重试</button></div>';
+      bindBidViewActions(panel);
+      return;
+    }
+    // ---- 校验报告（validate_bid_document 工具输出：ok/errors/warnings/findings/counts）----
+    const r = x.report;
+    const counts = r.counts || {};
+    const errors = Array.isArray(r.errors) ? r.errors : [];
+    const warnings = Array.isArray(r.warnings) ? r.warnings : [];
+    let html = '<div class="bid-export">';
+    html +=
+      '<div class="bid-qual-head">'
+      + '<span class="bid-qual-tag ' + (r.ok ? "ok" : "warn") + '">' + (r.ok ? ICON.check + " 校验通过" : ICON.warning + " 存在缺陷") + "</span>"
+      + '<span class="bid-qual-sub">' + (x.ts ? timeAgo(x.ts) : "—") + "</span>"
+      + '<span class="bid-wb-spacer"></span>'
+      + '<button class="btn btn-sm" data-bid-act="refresh-validate" title="重新跑 bid.validate（会推进项目至 VALIDATING）">' + ICON.refresh + "重新校验</button>"
+      + "</div>";
+    html +=
+      '<div class="bid-card"><div class="bid-card-title">校验计数</div><div class="bid-stats">'
+      + bidStatCell(fmtChars(counts.blocker), "BLOCKER")
+      + bidStatCell(fmtChars(counts.major), "MAJOR")
+      + bidStatCell(fmtChars(counts.minor), "MINOR")
+      + bidStatCell(fmtChars(counts.deterministic), "规则命中")
+      + bidStatCell(fmtChars(counts.model), "模型复核")
+      + "</div></div>";
+    if (errors.length) {
+      html += bidQualList("缺陷清单（BLOCKER/MAJOR · " + errors.length + "）", errors.map((e2) => (e2.rule_code || "?") + " · " + (e2.severity || "?") + (e2.section_id ? " · " + e2.section_id : "") + "：" + (e2.message || "")));
+    } else {
+      html += '<div class="bid-card"><div class="bid-card-sub">' + ICON.check + " 无 BLOCKER/MAJOR 缺陷</div></div>";
+    }
+    if (warnings.length) {
+      html += bidQualList("警告（MINOR · " + warnings.length + "）", warnings.map(String));
+    }
+    // ---- 导出表单（看完报告确认后落盘）----
+    const proj = (state.bid.data && state.bid.data.project) || {};
+    const defName = (proj.name || "标书").replace(/[\\/:*?"<>|]/g, "_");
+    if (!x.path) x.path = "export/" + defName + "." + x.format;
+    html +=
+      '<div class="bid-card" data-kind="export-form"><div class="bid-card-title">' + ICON.export + " 确认导出</div>"
+      + '<div class="bid-export-form">'
+      + '<label class="bid-export-field"><span>格式</span>'
+      + '<select id="bid-export-format"><option value="docx"' + (x.format === "docx" ? " selected" : "") + '>DOCX（Word）</option><option value="pdf"' + (x.format === "pdf" ? " selected" : "") + '>PDF（需 Word/LibreOffice）</option></select></label>'
+      + '<label class="bid-export-field"><span>输出路径（工作区相对）</span>'
+      + '<input type="text" id="bid-export-path" value="' + esc(x.path) + '" placeholder="export/' + esc(defName) + '.docx" /></label>'
+      + '<label class="bid-export-check"><input type="checkbox" id="bid-export-dark"' + (x.darkBid ? " checked" : "") + ' /> 暗标模式（脱敏投标人名）</label>'
+      + '<label class="bid-export-field"' + (x.darkBid ? "" : ' style="display:none"') + ' id="bid-export-bidder-row"><span>投标人名称（暗标脱敏用）</span>'
+      + '<input type="text" id="bid-export-bidder" value="' + esc(x.bidderName) + '" placeholder="公司全称" /></label>'
+      + '<div class="bid-export-actions">'
+      + '<button class="btn btn-primary" data-bid-act="confirm-export"' + (x.exporting ? " disabled" : "") + ">" + (x.exporting ? "正在导出…" : ICON.export + " 导出成品文档") + "</button>"
+      + (r.ok ? "" : '<span class="bid-qual-warn">' + ICON.warning + " 校验未通过——导出前置门可能拦截，建议先按缺陷清单修复</span>")
+      + "</div></div></div>";
+    // ---- 产物回显 / 导出失败引导 ----
+    if (x.done) {
+      const art = x.done.artifact || {};
+      html +=
+        '<div class="bid-card" data-kind="export-done"><div class="bid-card-title">' + ICON.check + " 导出完成</div>"
+        + '<div class="bid-stats">'
+        + bidStatCell(fmtBytes(art.size), "产物大小")
+        + bidStatCell(fmtChars(x.done.chapters_written), "章节写入")
+        + bidStatCell(fmtChars(x.done.total_chars), "总字数")
+        + bidStatCell(String(art.sha256 || "").slice(0, 12) || "—", "SHA-256 前 12 位")
+        + "</div>"
+        + '<div class="bid-card-sub bid-export-path" title="' + esc(art.url || "") + '">产物：' + esc(art.url || "") + "</div>"
+        + '<div class="bid-card-actions"><button class="btn" data-bid-act="reveal-artifact">' + ICON.folderOpen + " 在工作区中显示</button></div>"
+        + (Array.isArray(x.done.warnings) && x.done.warnings.length ? '<div class="bid-card-sub bid-qual-warn">' + ICON.warning + " " + x.done.warnings.length + " 条导出警告（如暗标未提供投标人名未脱敏）——见上方报告</div>" : "")
+        + "</div>";
+    } else if (x.doneError) {
+      html +=
+        '<div class="bid-card" data-kind="export-error"><div class="bid-card-title">' + ICON.warning + (x.doneCode === "state" ? " 导出被前置门拦截" : " 导出失败") + "</div>"
+        + "<div>" + esc(x.doneError) + "</div>"
+        + '<div class="bid-qual-hint">双前置门：校验通过 + pre_export_confirm 过门确认（审核门页签可人工过门）。E_STATE 原文见上——补前置后重试。</div>'
+        + "</div>";
+    }
+    html += "</div>";
+    panel.innerHTML = html;
+    bindBidViewActions(panel);
+    // 表单 → 状态（重渲染不丢输入；change 后按需联动暗标行）
+    const fmtSel = panel.querySelector("#bid-export-format");
+    const pathInput = panel.querySelector("#bid-export-path");
+    const darkChk = panel.querySelector("#bid-export-dark");
+    const bidderInput = panel.querySelector("#bid-export-bidder");
+    if (fmtSel) fmtSel.addEventListener("change", () => {
+      x.format = fmtSel.value;
+      if (pathInput && /export\/.+\.(docx|pdf)$/i.test(x.path)) x.path = x.path.replace(/\.(docx|pdf)$/i, "." + x.format);
+      renderBidWorkbenchIfOpen();
+    });
+    if (pathInput) pathInput.addEventListener("change", () => { x.path = pathInput.value.trim(); });
+    if (darkChk) darkChk.addEventListener("change", () => {
+      x.darkBid = darkChk.checked;
+      const row = panel.querySelector("#bid-export-bidder-row");
+      if (row) row.style.display = x.darkBid ? "" : "none";
+    });
+    if (bidderInput) bidderInput.addEventListener("change", () => { x.bidderName = bidderInput.value.trim(); });
+  }
   /** 自评面板主体（工作台右面板） */
   function renderBidQualityPanel(host) {
     const panel = host.querySelector("#bid-panel");
@@ -2093,6 +2319,27 @@
     // 写面消息（成功/失败——域层拒绝原样透传，不假成功）
     if (gt.passInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(gt.passInfo) + "</div>";
     if (gt.passError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(gt.passError) + "</div>";
+    // #20：VALIDATING+缺章异常态恢复出口（#243——域层三重约束守门：
+    // 仅 VALIDATING / 仅缺章 / 理由必填；非死锁态按了也 E_STATE 响亮拒）
+    const projSt = (state.bid.data && state.bid.data.state && state.bid.data.state.status) || "";
+    if (projSt === "VALIDATING") {
+      html +=
+        '<div class="bid-card" data-kind="recover"><div class="bid-card-title">' + ICON.warning + " 校验异常态（VALIDATING）</div>"
+        + '<div class="bid-card-sub">项目停在 VALIDATING 且存在未起草叶（旧版校验误推进所致）——恢复回 DRAFTING 解锁起草面；每次恢复落审计记录（何时/为何/缺哪些章）</div>';
+      if (gt.formGate === "__recover__") {
+        html +=
+          '<div class="bid-gt-form" data-rv-form>'
+          + '<div class="bid-gt-form-title">人工恢复（审计留痕）</div>'
+          + '<textarea class="bid-gt-input" data-rv-reason rows="2" placeholder="恢复理由（必填非空白）——如：旧版校验在缺章时误推进 VALIDATING"></textarea>'
+          + '<div class="bid-gt-form-actions">'
+          + '<button class="btn btn-primary btn-sm" data-rv-confirm' + (passing ? " disabled" : "") + ">" + (passing ? "恢复中…" : "确认恢复") + "</button>"
+          + '<button class="btn btn-sm" data-rv-cancel>取消</button></div>'
+          + "</div>";
+      } else {
+        html += '<div class="bid-card-actions"><button class="btn btn-sm" data-rv-open' + (passing ? " disabled" : "") + ">恢复起草面（回 DRAFTING）</button></div>";
+      }
+      html += "</div>";
+    }
     // ① agent 豁免追认清单（#277——human_confirmed=false 的门）
     if (waivers.length) {
       html += '<div class="bid-card" data-kind="ratify"><div class="bid-card-title">' + ICON.warning + " Agent 声明过门待追认（" + waivers.length + "）</div>";
@@ -2214,6 +2461,33 @@
         });
       });
     });
+    // ---- #20 恢复出口交互（data-rv-*——VALIDATING 异常态，#243）
+    panel.querySelectorAll("[data-rv-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        gt.formGate = "__recover__";
+        gt.passError = "";
+        renderBidGatesPanel(host);
+      });
+    });
+    panel.querySelectorAll("[data-rv-cancel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        gt.formGate = "";
+        renderBidGatesPanel(host);
+      });
+    });
+    panel.querySelectorAll("[data-rv-confirm]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const form = panel.querySelector("[data-rv-form]");
+        const reasonEl = form && form.querySelector("[data-rv-reason]");
+        const reason = reasonEl ? reasonEl.value.trim() : "";
+        if (!reason) {
+          gt.passError = "恢复理由必填（不可审计的恢复不成恢复）";
+          renderBidGatesPanel(host);
+          return;
+        }
+        ui.recoverBidState(reason);
+      });
+    });
   }
 
   // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
@@ -2321,6 +2595,38 @@
           .join("")
       : '<div class="bid-mx-ev-line dim">无在绑证据' + (r.evidence_required ? "（本条款要求证明材料——#241 证据缺口面）" : "") + "</div>";
     const pendHtml = pends.length ? '<div class="bid-mx-ev-line pend">待补占位：' + esc(pends.join("、")) + "（#245 待补可追踪，不清阻塞）</div>" : "";
+    // #20：人工裁定出口（#226 否决项死锁——理由必填 + receipt 壳签发）。
+    // 死锁场景（必选条款无法响应且证据无法补）出在此行展开面；非死锁也能
+    // 裁定（域层守门：状态机不允许时 E_STATE 响亮拒）。
+    const f = state.bid.mx;
+    let moHtml =
+      '<div class="bid-mx-d-block"><div class="bid-mx-d-k">人工裁定（#226）</div>'
+      + '<div class="bid-mx-d-v">'
+      + '<button class="btn btn-sm" data-mo-open="' + esc(q.id) + '"' + (f.passing ? " disabled" : "") + ">"
+      + (f.formReq === q.id ? "收起裁定表单" : "裁定响应状态")
+      + "</button>"
+      + (r.blocking ? ' <span class="bid-mx-block">阻断行——常见出口：招标人规则说明标「不适用」并附偏离依据</span>' : "")
+      + "</div>";
+    if (f.formReq === q.id) {
+      moHtml +=
+        '<div class="bid-gt-form" data-mo-form="' + esc(q.id) + '">'
+        + '<div class="bid-gt-form-title">' + esc(q.id) + " → 人工裁定（审计留痕：操作者/理由/时间，不可抹除）</div>"
+        + '<label class="bid-mx-check">目标状态'
+        + '<select class="bid-gt-input" data-mo-status>'
+        + '<option value="NOT_APPLICABLE">不适用（招标人规则说明——须填偏离依据）</option>'
+        + '<option value="RESPONDED">已响应（补正文后人工改判）</option>'
+        + '<option value="PARTIAL">部分响应</option>'
+        + '<option value="NOT_RESPONDED">未响应（维持现状——仅改台账口径时用）</option>'
+        + "</select></label>"
+        + '<textarea class="bid-gt-input" data-mo-deviation rows="2" placeholder="偏离/不适用说明——NOT_APPLICABLE 必填（不可审计的豁免不算豁免）"></textarea>'
+        + '<div class="bid-gt-form-actions">'
+        + '<button class="btn btn-primary btn-sm" data-mo-confirm="' + esc(q.id) + '"' + (f.passing ? " disabled" : "") + ">" + (f.passing ? "裁定中…" : "确认裁定") + "</button>"
+        + '<button class="btn btn-sm" data-mo-cancel>取消</button></div>'
+        + (f.passError ? '<div class="bid-wiz-error">' + esc(f.passError) + "</div>" : "")
+        + (f.passInfo ? '<div class="bid-wiz-info">' + esc(f.passInfo) + "</div>" : "")
+        + "</div>";
+    }
+    moHtml += "</div>";
     return (
       '<tr class="bid-mx-detail"><td colspan="6">'
       + '<div class="bid-mx-d-grid">'
@@ -2330,12 +2636,70 @@
       + '<div class="bid-mx-d-block"><div class="bid-mx-d-k">响应章节</div><div class="bid-mx-d-v">' + (r.draft_section_id
         ? '<button class="bid-mx-link" data-mx-sec="' + esc(r.draft_section_id) + '">跳转 ' + esc(bidMxSectionTitle(r.draft_section_id) || r.draft_section_id) + "</button>"
         : "未归属——大纲树尚无章节覆盖本条款") + "</div></div>"
+      + moHtml
       + "</div></td></tr>"
     );
+  }
+  /** #20 分包面板（工作台右面板的 packages 页签——bid.packages 只读）
+   *  多标段/多包识别（#316）：包清单 + 逐包条款数 + 选包状态 + 共用条款。
+   *  只读面：选包动作不在本面板（选包 = build_outline 传 package 参数——
+   *  管线动作，走 MCP；面板只呈现识别结果与 usage 提示，不伪装可写）。 */
+  function renderBidPackagesPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const pk = state.bidPackages;
+    if (pk.status === "idle") ui.loadBidPackages();
+    if (pk.status === "idle" || pk.status === "loading") {
+      panel.innerHTML = '<div class="bid-gt"><div class="view-state"><div class="view-spinner"></div><div>正在读取分包清单…</div></div></div>';
+      return;
+    }
+    if (pk.status === "error" || !pk.data) {
+      panel.innerHTML =
+        '<div class="bid-gt"><div class="view-state" data-kind="error"><div class="view-state-title">分包清单读取失败</div><div>'
+        + esc(pk.error || "无数据")
+        + '</div><div><button class="btn" data-pk-retry>重试</button></div></div></div>';
+      const retry = panel.querySelector("[data-pk-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidPackages(true));
+      return;
+    }
+    const d = pk.data && pk.data.packages || {};
+    const items = Array.isArray(d.items) ? d.items : [];
+    const sel = d.selected_package;
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">分包清单（#316 识别面）</div>'
+      + '<div class="bid-card-sub">识别 ' + fmtChars(d.detected) + " 包 · 共用条款 " + fmtChars(d.shared_req_count) + " · 条款总数 " + fmtChars(d.total_requirements) + "</div>";
+    if (!items.length) {
+      html += '<div class="bid-card-sub">未识别出多标段/多包结构——单包项目无需选包</div>';
+    } else {
+      html += '<div class="bid-gt-gates">';
+      for (const it of items) {
+        html +=
+          '<div class="bid-gt-row" data-selected="' + (it.selected ? "true" : "false") + '">'
+          + '<div class="bid-gt-main"><span class="bid-gt-name">' + esc(it.label || it.id) + "</span>"
+          + '<span class="bid-gt-sub">' + esc(it.kind || "") + (it.number ? " · " + esc(it.number) : "") + " · 条款 " + fmtChars(it.req_count)
+          + (Array.isArray(it.sources) && it.sources.length ? " · 来源 " + it.sources.length + " 件" : "")
+          + "</span></div>"
+          + '<span class="bid-badge" data-status="' + (it.selected ? "ok" : "") + '">' + (it.selected ? "已选包" : "未选") + "</span>"
+          + "</div>";
+      }
+      html += "</div>";
+    }
+    html += '<div class="bid-card-sub">' + esc(d.usage || "") + "</div>";
+    if (sel) html += '<div class="bid-card-sub">当前选包：' + esc(sel.label || sel.id) + "</div>";
+    html += '</div><div class="bid-card-actions"><button class="btn btn-sm" data-pk-refresh>刷新</button></div></div>';
+    panel.innerHTML = html;
+    const rf = panel.querySelector("[data-pk-refresh]");
+    if (rf) rf.addEventListener("click", () => ui.loadBidPackages(true));
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */
   function renderBidMatrixPanel(host, panel) {
     const mx = state.bid.matrix;
+    // #20 顺手修：工作台路由经单参调用（panel 未传）——与 gates/quality
+    // 面板同款防御取值，否则「合规矩阵」页签点击即 TypeError（运行时断链，
+    // 静态断言拦不住——issue #21 的典型形态）。
+    if (!panel) panel = host.querySelector("#bid-panel");
+    if (!panel) return;
     // 矩阵面不选中大纲树节点（避免左树残留详情高亮）
     host.querySelectorAll("#bid-tree .bid-node").forEach((row) => {
       row.dataset.selected = "false";
@@ -2496,10 +2860,44 @@
       })
     );
     panel.querySelectorAll(".bid-mx-row").forEach((tr) =>
-      tr.addEventListener("click", () => {
+      tr.addEventListener("click", (e) => {
+        // #20：裁定表单内的点击不触发行折叠（表单在展开行内——防误触）
+        if (e.target.closest("[data-mo-form]") || e.target.closest("[data-mo-open]")) return;
         const id = tr.dataset.req;
         state.bid.mx.expandedId = state.bid.mx.expandedId === id ? "" : id;
         renderBidMatrixPanel(host, panel);
+      })
+    );
+    // ---- #20 人工裁定出口（data-mo-*——与审核门表单同款接线纪律）
+    panel.querySelectorAll("[data-mo-open]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const f2 = state.bid.mx;
+        f2.formReq = f2.formReq === b.dataset.moOpen ? "" : b.dataset.moOpen;
+        f2.passError = "";
+        f2.expandedId = b.dataset.moOpen; // 保持展开（表单在展开行内）
+        renderBidMatrixPanel(host, panel);
+      })
+    );
+    panel.querySelectorAll("[data-mo-cancel]").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.bid.mx.formReq = "";
+        state.bid.mx.passError = "";
+        renderBidMatrixPanel(host, panel);
+      })
+    );
+    panel.querySelectorAll("[data-mo-confirm]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const form = panel.querySelector('[data-mo-form="' + b.dataset.moConfirm + '"]');
+        const statusEl = form && form.querySelector("[data-mo-status]");
+        const devEl = form && form.querySelector("[data-mo-deviation]");
+        const status = statusEl ? statusEl.value : "NOT_APPLICABLE";
+        const deviation = devEl ? devEl.value.trim() : "";
+        if (status === "NOT_APPLICABLE" && !deviation) {
+          state.bid.mx.passError = "「不适用」必须填写偏离依据（不可审计的豁免不算豁免——域层同样会拒，前置拦截省一次往返）";
+          renderBidMatrixPanel(host, panel);
+          return;
+        }
+        ui.passMatrixOverride(b.dataset.moConfirm, status, deviation);
       })
     );
     panel.querySelectorAll("[data-mx-sec]").forEach((b) =>
@@ -4491,7 +4889,7 @@
       state.bid = {
         status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
         matrix: { status: "idle", data: null, error: "", code: "" },
-        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
+        mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "", formReq: "", passing: false, passError: "", passInfo: "" },
         coverage: { status: "idle", data: null, error: "", code: "" },
         cov: { expandedFile: "" }
       };
@@ -4845,6 +5243,147 @@
       // 台账 + 侧栏门审摘要同源刷新（agent_waivers/human_review_complete 两处都消费）
       ui.loadBidGates(true);
       ui.loadBid(true);
+    },
+    /** #18：跑校验报告（bid.validate → validate_bid_document 真实工具面）。
+     *  会推进项目至 VALIDATING（域层语义）；E_STATE 透传 state 码 → 引导卡。 */
+    async loadBidValidate(force) {
+      if (!state.bridge) return;
+      if (state.bidExport.status === "loading" && !force) return;
+      state.bidExport.status = "loading";
+      state.bidExport.error = "";
+      state.bidExport.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.validate", {}, 12e4);
+        state.bidExport.report = (r && r.report) || null;
+      } catch (err) {
+        state.bidExport.report = null;
+        state.bidExport.code = (err && err.code) || "";
+        state.bidExport.error = err && (err.message || err.code) || "bid.validate 失败";
+      }
+      state.bidExport.status = "ready";
+      state.bidExport.ts = Date.now();
+      renderBidWorkbenchIfOpen();
+    },
+    /** #18：确认导出（bid.export → export_bid_document 真实工具面）。
+     *  双前置门由工具面裁决：E_STATE（未校验/未过门）原文进引导卡；
+     *  成功则回显产物（artifact.url/sha256/size）并触发 explorer.reveal。 */
+    async runBidExport() {
+      const x = state.bidExport;
+      if (!state.bridge || x.exporting) return;
+      const path = (x.path || "").trim();
+      if (!path) {
+        x.doneError = "输出路径不能为空（工作区相对路径，如 export/标书.docx）";
+        x.doneCode = "";
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      x.exporting = true;
+      x.doneError = "";
+      x.doneCode = "";
+      x.done = null;
+      renderBidWorkbenchIfOpen();
+      try {
+        const body = { format: x.format, output_path: path, dark_bid: !!x.darkBid };
+        if (x.darkBid && x.bidderName) body.bidder_name = x.bidderName;
+        const r = await ipc("bid.export", body, 3e5);
+        x.done = (r && r.export) || null;
+        if (!x.done) throw Object.assign(new Error("bid.export 应答缺少 export 载荷"), { code: "ipc" });
+        // 导出成功即重拉项目面（状态推进 EXPORTED、门台账可能翻新）
+        ui.loadBid(true);
+        if (state.bidGates.status !== "idle") ui.loadBidGates(true);
+      } catch (err) {
+        x.done = null;
+        x.doneCode = (err && err.code) || "";
+        x.doneError = err && (err.message || err.code) || "bid.export 失败";
+      }
+      x.exporting = false;
+      renderBidWorkbenchIfOpen();
+    },
+    /** #18：产物定位（explorer.reveal——工作区内绝对路径放行）。 */
+    async revealBidArtifact() {
+      const x = state.bidExport;
+      const url = x.done && x.done.artifact && x.done.artifact.url;
+      if (!state.bridge || !url) return;
+      try {
+        await ipc("explorer.reveal", { path: url }, 15e3);
+      } catch (err) {
+        ui.setStatus({ message: "定位产物失败：" + ((err && err.message) || "未知") });
+      }
+    },
+    /** #20：拉取分包清单（bid.packages 只读——工作台「分包」页签）。 */
+    async loadBidPackages(force) {
+      if (!state.bridge) return;
+      if (state.bidPackages.status === "loading" && !force) return;
+      state.bidPackages.status = "loading";
+      state.bidPackages.error = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.packages", {}, 15e3);
+        if (r && r.present) {
+          state.bidPackages.data = r;
+          state.bidPackages.status = "ready";
+        } else {
+          state.bidPackages.data = null;
+          state.bidPackages.status = "error";
+          state.bidPackages.error = "当前工作区无分包数据";
+        }
+      } catch (err) {
+        state.bidPackages.data = null;
+        state.bidPackages.status = "error";
+        state.bidPackages.error = err && (err.message || err.code) || "bid.packages 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #20：否决项死锁人工裁定（bid.matrix_override → 工具面
+     *  set_matrix_override；receipt 由壳签发——UI 只传 行/状态/偏离说明）。
+     *  成功 → 矩阵重拉（blocking 重算）；失败 → 表单内反馈（E_STATE 引导）。 */
+    async passMatrixOverride(reqId, status, deviation) {
+      const f = state.bid.mx;
+      f.passing = true;
+      f.passError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.matrix_override", {
+          requirement_id: reqId,
+          status: status,
+          deviation: deviation || ""
+        }, 3e4);
+        f.passing = false;
+        f.formReq = "";
+        const ov = r && r.override || {};
+        const from = ov.from_status || "";
+        const blocking = ov.blocking_after != null ? " · 剩余阻断 " + ov.blocking_after : "";
+        f.passInfo = "已裁定 " + reqId + " → " + esc(ov.status || status) + blocking;
+        ui.loadBidMatrix(true); // 覆写后矩阵立即重算（blocking 口径同源）
+      } catch (err) {
+        f.passing = false;
+        f.passError = err && err.message || "bid.matrix_override 失败";
+        renderBidWorkbenchIfOpen();
+      }
+    },
+    /** #20：VALIDATING+缺章异常态恢复（bid.recover_state → 工具面
+     *  recover_validating_state——域层三重约束守门，非死锁态 E_STATE 响亮拒）。 */
+    async recoverBidState(reason) {
+      const gt = state.bidGates;
+      gt.passing = true;
+      gt.passError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.recover_state", { reason: reason }, 3e4);
+        gt.passing = false;
+        gt.formGate = "";
+        gt.formMode = "";
+        const rc = r && r.recover || {};
+        gt.passInfo = "已恢复到 " + esc(rc.to_status || "DRAFTING") + "（缺章解锁起草面）";
+        // 项目状态/门台账/大纲三面同源刷新
+        ui.loadBidGates(true);
+        ui.loadBid(true);
+      } catch (err) {
+        gt.passing = false;
+        gt.passError = err && err.message || "bid.recover_state 失败";
+        renderBidWorkbenchIfOpen();
+      }
     },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  批 C：panel 入参直达指定页签（"quality" = 自评——侧栏面板入口用） */
