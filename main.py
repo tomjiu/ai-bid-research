@@ -752,6 +752,19 @@ def run_analyze(args: argparse.Namespace) -> int:
         print(f"密度：{density['density_level']}"
               f"（{density['monthly_rate'] and round(density['monthly_rate'], 1)} 条/月，"
               f"定标率 {density['award_rate'] and round(density['award_rate'] * 100, 1) or 0}%）")
+        # R64：区域 Top 5 条形图（控制台编码自适应降级 #）
+        from src.analyze.charts import console_bar_char, render_bars
+
+        region_top = list(payload["region"].items())[:5]
+        if region_top and not (
+            len(region_top) == 1 and "未知" in region_top[0][0]
+        ):
+            bars = render_bars(
+                region_top, width=16, char=console_bar_char()
+            )
+            print("区域 Top 5：")
+            for line in bars:
+                print(f"  {line}")
 
     # R54：机器可读导出面——完整 payload 原样落盘（上下游程序消费）
     if args.json is not None:
