@@ -102,19 +102,63 @@ def normalize_path_key(path: Path | str) -> str:
 
 
 def console_encoding_safe() -> bool:
-    """当前 stdout 是否能安全输出非 ASCII（中文）文本。
+    """当前 stdout 是否能**确认**安全输出非 ASCII（中文）文本。
 
     Windows 传统控制台代码页（GBK/cp936）打印部分 Unicode 字符
     会抛 ``UnicodeEncodeError``；utf-8 代码页或重定向到文件时安全。
     Linux 终端/locale 缺省安全（Python 3.7+ UTF-8 模式回退）。
+
+    语义：**未验证即不安全**——编码属性缺失或无法确认时返回
+    False，调用方应做降级加固而非放任崩溃。
     """
     stream = sys.stdout
     encoding = getattr(stream, "encoding", None) or ""
     norm = encoding.lower().replace("-", "")
-    if norm in ("utf8", "utf8mb4", ""):
+    if norm in ("utf8", "utf8mb4"):
         return True
     try:
         "招标公告测试".encode(encoding)
     except (LookupError, UnicodeEncodeError):
         return False
     return True
+
+
+def _stream_can_encode_chinese(stream: object) -> bool:
+    """流是否能无损编码中文与常用报告符号（方框图线等）。"""
+    encoding = getattr(stream, "encoding", None) or ""
+    try:
+        "招标公告 ▏█ 壹贰叁".encode(encoding)
+    except (LookupError, UnicodeEncodeError):
+        return False
+    return True
+
+
+def configure_console_safe() -> list[str]:
+    """控制台输出加固（#601 R40）——跨平台「不崩溃」保证。
+
+    场景：Windows 传统控制台代码页（GBK/cp936/ascii）打印报告中的
+    方框图线（█▏）、生僻字或 emoji 时抛 ``UnicodeEncodeError`` 导致
+    CLI 中途崩溃。本函数对 stdout/stderr 做**就地降级**：
+
+    - 编码无法覆盖中文/制表符号的流：``reconfigure(errors="replace")``
+      （坏字符变 ``?``，绝不上抛）；Windows 上进一步尝试切 UTF-8
+      代码页（失败静默——仅当代码页可切时受益）；
+    - UTF-8 流（Linux 缺省 / 已重定向文件）：零改动。
+
+    返回采取的动作清单（空列表 = 无需加固），供 ``--verbose`` 与测试
+    断言使用。
+    """
+    actions: list[str] = []
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is None or not hasattr(stream, "reconfigure"):
+            continue
+        if _stream_can_encode_chinese(stream):
+            continue
+        try:
+            stream.reconfigure(errors="replace")
+            actions.append(f"{name}:errors=replace")
+        except (ValueError, OSError):
+            # 非常规流（已 detach/关闭）——跳过，打印侧自行兜底
+            continue
+    return actions

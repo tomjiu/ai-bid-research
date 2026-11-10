@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from src.platform import (
+    _stream_can_encode_chinese,
+    configure_console_safe,
     console_encoding_safe,
     filesystem_case_sensitive,
     is_linux,
@@ -104,14 +106,15 @@ class TestConsoleEncoding:
         monkeypatch.setattr(sys, "stdout", fake)
         assert console_encoding_safe() is False
 
-    def test_no_encoding_attr_is_safe(self, monkeypatch):
+    def test_no_encoding_attr_unverified(self, monkeypatch):
+        # 编码属性缺失 → 未验证 → 不安全（防御性语义，与加固面一致）
         monkeypatch.setattr(sys, "platform", "linux")
 
         class _NoEnc:
             pass
 
         monkeypatch.setattr(sys, "stdout", _NoEnc())
-        assert console_encoding_safe() is True
+        assert console_encoding_safe() is False
 
 
 @pytest.fixture
@@ -127,3 +130,89 @@ def fake_stdout_factory():
         return obj
 
     return _make
+
+
+class TestConfigureConsoleSafe:
+    def _fake_stream(self, encoding: str, can_reconfigure: bool = True):
+        class _FakeStream:
+            def __init__(self):
+                self.encoding = encoding
+                self.reconfigure_kwargs = None
+                if can_reconfigure:
+                    self.calls = []
+
+            def reconfigure(self, **kwargs):
+                self.reconfigure_kwargs = kwargs
+
+        return _FakeStream() if can_reconfigure else object()
+
+    def test_gbk_stream_gets_replace(self, monkeypatch):
+        import src.platform as plat
+
+        out = self._fake_stream("gbk")
+        # 让中文可编码但方框图不可——模拟 cp936 真实短板
+        monkeypatch.setattr(plat, "_stream_can_encode_chinese", lambda s: False)
+        monkeypatch.setattr(sys, "stdout", out)
+        monkeypatch.setattr(sys, "stderr", self._fake_stream("utf-8"))
+        actions = plat.configure_console_safe()
+        assert "stdout:errors=replace" in actions
+        assert out.reconfigure_kwargs == {"errors": "replace"}
+
+    def test_utf8_streams_untouched(self, monkeypatch):
+        monkeypatch.setattr(sys, "stdout", self._fake_stream("utf-8"))
+        monkeypatch.setattr(sys, "stderr", self._fake_stream("UTF-8"))
+        assert configure_console_safe() == []
+
+    def test_non_reconfigurable_stream_skipped(self, monkeypatch):
+        # 无 reconfigure 方法的流（如 StringIO 特化或已 detach）不炸
+        monkeypatch.setattr(sys, "stdout", self._fake_stream("ascii", False))
+        monkeypatch.setattr(sys, "stderr", self._fake_stream("utf-8"))
+        assert configure_console_safe() == []
+
+    def test_reconfigure_failure_swallowed(self, monkeypatch):
+        class _Exploding:
+            encoding = "ascii"
+
+            def reconfigure(self, **kwargs):
+                raise ValueError("underlying buffer is detached")
+
+        monkeypatch.setattr(sys, "stdout", _Exploding())
+        monkeypatch.setattr(sys, "stderr", _Exploding())
+        assert configure_console_safe() == []
+
+    def test_ascii_stream_flagged(self, monkeypatch):
+        monkeypatch.setattr(sys, "stdout", self._fake_stream("ascii"))
+        monkeypatch.setattr(sys, "stderr", self._fake_stream("ascii"))
+        actions = configure_console_safe()
+        assert len(actions) == 2
+
+    def test_can_encode_chinese_detection(self):
+        assert _detect("utf-8") is True
+        assert _detect("gbk") is True  # GBK 覆盖常用汉字
+        assert _detect("ascii") is False
+        assert _detect("") is False  # 无编码信息 → 未验证 → 加固
+
+
+def _detect(encoding: str) -> bool:
+    from src.platform import _stream_can_encode_chinese
+
+    class _S:
+        pass
+
+    s = _S()
+    s.encoding = encoding
+    return _stream_can_encode_chinese(s)
+
+
+class TestMainWiring:
+    def test_console_hardening_before_any_output(self, monkeypatch, capsys):
+        # main() 先加固再解析——GBK 控制台下 --help 含中文不崩
+        import main as main_mod
+
+        hardened = []
+        monkeypatch.setattr(
+            main_mod, "configure_console_safe", lambda: hardened.append(1) or []
+        )
+        rc = main_mod.main(["templates"])
+        assert hardened == [1]
+        assert rc == 0

@@ -50,6 +50,7 @@ from typing import Any, Optional, Sequence
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
+from src.platform import configure_console_safe
 from src.report.generator import ReportGenerator
 from src.storage.database import _BID_COLUMNS, BidDatabase
 
@@ -944,6 +945,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     Returns:
         进程退出码。
     """
+    # R40：控制台加固先于一切输出——Windows GBK/ascii 代码页打印
+    # 报告符号（█▏）不再崩溃，坏字符降级为 ?
+    for action in configure_console_safe():
+        logging.getLogger(__name__).debug("console hardened: %s", action)
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
