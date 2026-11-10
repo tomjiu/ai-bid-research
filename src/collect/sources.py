@@ -1,4 +1,5 @@
-"""本地源读取器（JSON / JSONL 三形态，#601 批次 A）。
+"""本地源读取器（JSON / JSONL / CSV 三形态，#601 批次 A；CSV 为 R31、
+读取器注册表为 R32 扩展）。
 
 设计说明
 --------
@@ -6,7 +7,11 @@
 
 - ``.json`` 文件：JSON 数组（每元素一条公告）或单 JSON 对象；
 - ``.jsonl`` 文件：每行一个 JSON 对象（行式流式形态，空行容忍）；
-- 目录源：收集全部 ``*.json`` / ``*.jsonl``，按文件名排序（确定性——
+- ``.csv`` 文件（R31）：首行表头（规范名或中文别名均可，
+  ``AnnouncementRecord.from_raw`` 统一归一），每数据行一条公告
+  （行级失败粒度；UTF-8 含 BOM 容忍；**单元格内换行不支持**——
+  含换行源请先清洗或改用 JSONL）；
+- 目录源：收集全部 ``*.json`` / ``*.jsonl`` / ``*.csv``，按文件名排序（确定性——
   同一批文件两次运行产出顺序一致，研究可复现）。
 
 失败语义（对照 AGENTS「不静默吞错」纪律）：
@@ -19,15 +24,19 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import os
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from src.collect.records import AnnouncementRecord
+from src.collect.sanity import apply_sanity_checks
 
-#: 目录源收集的扩展名（小写比较）。
-_SOURCE_SUFFIXES = (".json", ".jsonl")
+#: 行式读取器签名：``Path → (items, row_errors)``（同 _read_jsonl_items）。
+RowReader = Callable[[Path], tuple]
 
 
 class SourceError(ValueError):
@@ -63,35 +72,81 @@ class LoadResult:
 # 路径解析
 # ----------------------------------------------------------------------
 
-def resolve_source_files(source: Union[str, Path]) -> List[Path]:
+def resolve_source_files(
+    source: Union[str, Path],
+    *,
+    recursive: bool = False,
+) -> List[Path]:
     """把源路径解析为待读文件清单。
 
     Args:
         source: 文件或目录路径。
+        recursive: ``True`` 时目录源深度遍历子目录
+            （``os.walk``），并做**路径键去重**：
+
+            - 符号链接环防护（已访问目录键不再下钻）；
+            - Windows 大小写不敏感卷上 ``Data/`` 与 ``data/``
+              经 :func:`src.platform.normalize_path_key` 折叠为同键，
+              重复入口只读一次（Linux 大小写敏感卷保持原样）。
 
     Returns:
-        排序后的文件路径列表（目录源按文件名排序保证确定性）。
+        排序后的文件路径列表（目录源按文件名排序保证确定性；
+        递归模式按相对路径排序）。
 
     Raises:
-        SourceError: 路径不存在，或目录内无 ``.json``/``.jsonl`` 文件，
+        SourceError: 路径不存在，或目录内无受支持扩展名
+            （``.json`` + 已注册行式读取器）的源文件，
             或文件扩展名不支持。
     """
     path = Path(source)
     if not path.exists():
         raise SourceError(f"源路径不存在: {path}")
+    suffixes = supported_suffixes()
     if path.is_dir():
+        if recursive:
+            return _walk_directory(path, suffixes)
         files = sorted(
-            p for p in path.iterdir() if p.suffix.lower() in _SOURCE_SUFFIXES
+            p for p in path.iterdir() if p.suffix.lower() in suffixes
         )
         if not files:
-            raise SourceError(f"目录内无 .json/.jsonl 源文件: {path}")
+            raise SourceError(
+                f"目录内无 {'/'.join(suffixes)} 源文件: {path}"
+            )
         return files
-    if path.suffix.lower() not in _SOURCE_SUFFIXES:
+    if path.suffix.lower() not in suffixes:
         raise SourceError(
             f"不支持的源文件类型: {path.suffix or '(无扩展名)'}"
-            f"（支持 {'/'.join(_SOURCE_SUFFIXES)}）"
+            f"（支持 {'/'.join(suffixes)}）"
         )
     return [path]
+
+
+def _walk_directory(root: Path, suffixes: set) -> List[Path]:
+    """递归遍历目录收集源文件（R43）。
+
+    - ``os.walk(topdown=True)`` + 已访问目录键集合防符号链接环；
+    - 目录键经 :func:`src.platform.normalize_path_key` 折叠——
+      Windows 大小写不敏感卷上重复入口只读一次；
+    - 结果按相对路径排序，保证跨平台/跨次运行确定性。
+    """
+    from src.platform import normalize_path_key
+
+    visited: set = set()
+    found: List[Path] = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        dir_key = normalize_path_key(dirpath)
+        if dir_key in visited:
+            continue
+        visited.add(dir_key)
+        for name in filenames:
+            if Path(name).suffix.lower() in suffixes:
+                found.append(Path(dirpath) / name)
+    if not found:
+        raise SourceError(
+            f"目录（含子目录）无 {'/'.join(sorted(suffixes))} 源文件: {root}"
+        )
+    root_key = str(root)
+    return sorted(found, key=lambda p: str(p.relative_to(root_key)))
 
 
 # ----------------------------------------------------------------------
@@ -155,6 +210,129 @@ def _read_jsonl_items(path: Path) -> tuple:
     return items, line_errors
 
 
+def _read_csv_rows(path: Path, *, max_rows: Optional[int] = None) -> tuple:
+    """读取 CSV 载荷（行级粒度：坏行不殃及好行，#601 R31）。
+
+    约定：
+
+    - 首行为表头（字段名支持规范名与中文别名，``from_raw`` 统一归一）；
+    - 空白单元格置 ``None``（「缺失」与「显式留空」同口径）；
+    - 列数与表头不齐的行登记行级失败；
+    - 编码 UTF-8（BOM 容忍 ``utf-8-sig``）；
+    - 带引号的多行单元格按标准 CSV 语义解析（R55 流式化的
+      附带收益——原「不支持」约定升级）；
+    - ``max_rows``：数据行数上限（防失控保护；``None`` = 不限）。
+
+    Returns:
+        ``(items, row_errors)`` 二元组（与 :func:`_read_jsonl_items` 同形）：
+        行号从 2 起（1 为表头行）。
+
+    Raises:
+        ValueError: 文件为空 / 无表头 / 零数据行 / 解码失败
+            （文件级失败语义同 JSONL「零非空行」——大概率是截断/损坏）。
+    """
+    items: List[tuple] = []
+    row_errors: List[tuple] = []
+    # R55：流式读取——open() 句柄逐行喂给 csv.reader，内存占用
+    # 与文件大小解耦（研究语料 10 万行级 CSV 不再整文件入内存）。
+    # 附带收益：带引号的多行单元格（原「不支持」约定）现按标准
+    # CSV 语义正确解析；行号 = 逻辑行号（从 2 起，1 为表头）。
+    try:
+        fh = open(path, encoding="utf-8-sig", newline="")
+    except OSError as exc:
+        raise ValueError(f"CSV 打开失败: {exc}") from exc
+    try:
+        items, row_errors = _iter_csv_rows(fh, max_rows=max_rows)
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"CSV 解码失败（须 UTF-8）: {exc}") from exc
+    finally:
+        fh.close()
+    if not items and not row_errors:
+        raise ValueError("CSV 文件为空（零数据行）")
+    return items, row_errors
+
+
+def _iter_csv_rows(fh, *, max_rows: Optional[int] = None) -> tuple:
+    """在已打开的句柄上流式解析 CSV（R55 内部面）。
+
+    调用方负责句柄生命周期与解码错误包装。
+    """
+    items: List[tuple] = []
+    row_errors: List[tuple] = []
+    reader = csv.reader(fh)
+    try:
+        header = next(reader)
+    except StopIteration:
+        raise ValueError("CSV 文件为空（无表头行）") from None
+    except csv.Error as exc:
+        raise ValueError(f"CSV 表头语法错误: {exc}") from exc
+    header = [cell.strip() for cell in header]
+    if not any(header):
+        raise ValueError("CSV 表头行为空")
+    for lineno, row in enumerate(reader, start=2):
+        if not row or not any(cell.strip() for cell in row):
+            continue
+        if len(row) != len(header):
+            row_errors.append(
+                (
+                    lineno,
+                    f"列数不齐（表头 {len(header)} 列，该行 {len(row)} 列）",
+                )
+            )
+            continue
+        payload: Dict[str, Any] = {}
+        for key, cell in zip(header, row):
+            cell = cell.strip()
+            payload[key] = cell if cell else None
+        items.append((lineno, payload))
+        if max_rows is not None and len(items) >= max_rows:
+            raise ValueError(
+                f"CSV 数据行数达上限 {max_rows}"
+                f"（已读至逻辑行 {lineno}）——防失控保护，"
+                f"如需全量请显式传 max_rows=None"
+            )
+    return items, row_errors
+
+
+# ----------------------------------------------------------------------
+# 读取器注册表（R32）——研究脚本扩展点
+# ----------------------------------------------------------------------
+
+#: 行式源读取器注册表（后缀 → 读取函数）。注册即可被目录源收集与
+#: 单文件分发自动识别（无需改动本文件）。
+_ROW_READERS: Dict[str, RowReader] = {
+    ".csv": _read_csv_rows,
+    ".jsonl": _read_jsonl_items,
+}
+
+
+def supported_suffixes() -> tuple:
+    """当前受支持的源扩展名（``.json`` + 已注册行式读取器，排序确定性）。"""
+    return tuple(sorted({".json", *_ROW_READERS}))
+
+
+def register_source_reader(suffix: str, reader: RowReader) -> None:
+    """注册行式源读取器（研究面扩展点，R32）。
+
+    注册后目录源自动收集该扩展名、单文件源自动分发——研究脚本
+    无需改动 ``sources.py`` 即可接入新格式（如 ``.tsv``）。
+
+    Args:
+        suffix: 扩展名（须以 ``.`` 开头，大小写不敏感，归一为小写）。
+        reader: 读取函数，签名同 :func:`_read_jsonl_items`：
+            ``Path → (items, row_errors)``。
+
+    Raises:
+        ValueError: suffix 不以 ``.`` 开头，或 reader 不可调用。
+    """
+    name = str(suffix).strip().lower()
+    if not name.startswith("."):
+        raise ValueError(f"扩展名须以 . 开头: {suffix!r}")
+    if not callable(reader):
+        raise ValueError(f"reader 不可调用: {reader!r}")
+    _ROW_READERS[name] = reader
+
+
 # ----------------------------------------------------------------------
 # 装载入口
 # ----------------------------------------------------------------------
@@ -164,27 +342,34 @@ def load_records(
     *,
     skip_invalid: bool = True,
     since: Optional[float] = None,
+    today: Union[None, str, date] = None,
+    recursive: bool = False,
 ) -> LoadResult:
     """从本地源装载公告记录（规范化入口：raw → AnnouncementRecord）。
 
     Args:
-        source: ``.json`` / ``.jsonl`` 文件或包含它们的目录。
+        source: ``.json`` / ``.jsonl`` / ``.csv`` 文件或包含它们的目录。
         skip_invalid: ``True``（默认）时坏文件/坏记录登记进
             :attr:`LoadResult.failures` 后继续；``False`` 时第一条
             失败即抛对应异常（严格模式）。
         since: 增量水位（epoch 秒）——只读 mtime 晚于水位的文件；
             目录内无新文件时返回**空结果**（零记录零失败，
             不是错误——「无新文件」是增量的正常结局）。
+        today: 健全性检查的「今天」基准（``date`` / ``YYYY-MM-DD`` /
+            ``None``=系统当前日期，R33）——注入以保证测试确定性。
+        recursive: 目录源深度遍历子目录（R43）——路径键去重
+            （符号链接环 / Windows 大小写）见
+            :func:`resolve_source_files`。
 
     Returns:
-        装载结果（成功记录 + 失败明细 + 文件数）。
+        装载结果（成功记录——含健全性告警 warnings——+ 失败明细 + 文件数）。
 
     Raises:
         SourceError: 源路径/类型问题（无论 skip_invalid）。
         ValueError / RecordValidationError: skip_invalid=False 时的
             首个载荷/记录错误。
     """
-    files = resolve_source_files(source)
+    files = resolve_source_files(source, recursive=recursive)
     if since is not None:
         # 增量水位：只读新文件（mtime 严格晚于水位）
         files = [p for p in files if p.stat().st_mtime > since]
@@ -194,9 +379,11 @@ def load_records(
     result.files_read = len(files)
 
     for path in files:
-        if path.suffix.lower() == ".jsonl":
+        row_reader = _ROW_READERS.get(path.suffix.lower())
+
+        if row_reader is not None:
             try:
-                items, line_errors = _read_jsonl_items(path)
+                items, line_errors = row_reader(path)
             except ValueError as exc:
                 # 文件级失败（空文件/不可读）——坏文件不殃及后续文件
                 if skip_invalid:
@@ -226,10 +413,13 @@ def load_records(
 
         for origin, payload in iterable:
             try:
-                result.records.append(AnnouncementRecord.from_raw(payload))
+                record = AnnouncementRecord.from_raw(payload)
             except (ValueError, TypeError) as exc:
                 if skip_invalid:
                     result.add_failure(origin, str(exc))
                     continue
                 raise
+            # 健全性告警（R33）——告警不拒收，随记录携带供复核
+            apply_sanity_checks(record, today=today)
+            result.records.append(record)
     return result

@@ -35,7 +35,6 @@ from src.extract import (
     park_record_failure,
 )
 from src.analyze import build_analysis_payload, load_dataset
-from src.collect.sources import SourceError
 from src.report.generator import ReportGenerator
 from src.storage.database import BidDatabase
 
@@ -124,6 +123,7 @@ class ResearchPipeline:
         days: Optional[int] = None,
         html: bool = False,
         incremental: bool = False,
+        resume: bool = False,
     ) -> PipelineResult:
         """运行研究管道（同步编排；extract 内部异步由批次 B 收口）。
 
@@ -135,6 +135,11 @@ class ResearchPipeline:
             incremental: 增量模式——collect 只读 mtime 晚于上次
                 成功运行的新文件（水位来自 pipeline_runs 台账）；
                 首次运行无水位 = 全量。
+            resume: 断点续跑（R58）——从台账恢复上次**失败**运行的
+                参数（source/keyword/days）；collect 面把库内
+                ``extract_status='raw'`` 的崩溃残留**重新视为新公告**
+                （源文件是真源——避免从库内有损重建），extract
+                补抽后标记 ``extracted`` 并自动清 pending 账。
 
         Returns:
             管道结果（stages/payload/report_path）。
@@ -149,6 +154,17 @@ class ResearchPipeline:
         """
         import time as _time
         from datetime import datetime
+
+        # R58：续跑参数恢复——显式传入优先，缺省从上次失败运行取
+        resume_sweep = False
+        if resume:
+            with BidDatabase(self.db_path) as db:
+                failed = db.pipeline_runs_last(status="failed")
+            if failed is not None and source is None:
+                source = failed.get("source")
+                keyword = keyword or failed.get("keyword")
+                days = days if days is not None else failed.get("days")
+            resume_sweep = True  # 崩溃残留补抽（有源才扫得回）
 
         started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         watermark = _time.time()  # 亚秒精度——与文件 mtime 同口径
@@ -167,7 +183,8 @@ class ResearchPipeline:
 
         try:
             result = self._run_stages(
-                source, keyword=keyword, days=days, html=html, since=since
+                source, keyword=keyword, days=days, html=html, since=since,
+                resume_sweep=resume_sweep,
             )
         except Exception:
             with BidDatabase(self.db_path) as db:
@@ -201,12 +218,15 @@ class ResearchPipeline:
         days,
         html,
         since: Optional[float],
+        resume_sweep: bool = False,
     ) -> PipelineResult:
         result = PipelineResult()
 
         new_records: List[Any] = []
         if source is not None:
-            new_records, collect_stage = self._stage_collect(source, since=since)
+            new_records, collect_stage = self._stage_collect(
+                source, since=since, resume_sweep=resume_sweep
+            )
             result.stages.append(collect_stage)
         else:
             result.stages.append(
@@ -248,21 +268,47 @@ class ResearchPipeline:
     # 各阶段
     # ------------------------------------------------------------------
 
-    def _stage_collect(self, source, *, since: Optional[float] = None) -> tuple:
-        """collect 阶段：装载（可水位增量）→ 去重 → 新/更新分账 upsert。"""
+    def _stage_collect(
+        self,
+        source,
+        *,
+        since: Optional[float] = None,
+        resume_sweep: bool = False,
+    ) -> tuple:
+        """collect 阶段：装载（可水位增量）→ 去重 → 新/更新分账 upsert。
+
+        resume_sweep（R58）：库内 ``extract_status='raw'`` 的崩溃
+        残留重新视为「新」——源文件是真源，重装载拿到完整
+        AnnouncementRecord（含原文 extras），extract 才有料可抽。
+        """
         loaded = load_records(source, since=since)  # SourceError 直抛
         deduped = dedupe_records(loaded.records)
 
         new_records: List[Any] = []
         updated_count = 0
+        recovered = 0
         with BidDatabase(self.db_path) as db:
-            for record in deduped.unique:
-                if db.get_bid(record.bid_id) is None:
-                    new_records.append(record)
-                    db.save_bid(record.to_bid_row())
-                else:
-                    db.save_bid(record.to_bid_row())  # 幂等覆盖（可能带新字段）
-                    updated_count += 1
+            # R62：单查询预取身份集合（消逐条 get_bid 的 N+1），
+            # 整批单事务（万条级源从万次 fsync 降为一次）
+            existing_ids = db.all_bid_ids()
+            raw_ids = (
+                {row["bid_id"] for row in db.list_by_extract_status("raw")}
+                if resume_sweep
+                else set()
+            )
+            with db.transaction():
+                for record in deduped.unique:
+                    if record.bid_id not in existing_ids:
+                        new_records.append(record)
+                        db.save_bid(record.to_bid_row())
+                        db.set_extract_status(record.bid_id, "raw")
+                        existing_ids.add(record.bid_id)
+                    elif record.bid_id in raw_ids:
+                        new_records.append(record)  # 崩溃残留补抽（R58）
+                        recovered += 1
+                    else:
+                        db.save_bid(record.to_bid_row())  # 幂等覆盖（可能带新字段）
+                        updated_count += 1
 
         stage = StageResult(
             name="collect",
@@ -273,6 +319,7 @@ class ResearchPipeline:
                 "deduped": deduped.removed,
                 "new": len(new_records),
                 "updated": updated_count,
+                **({"recovered_raw": recovered} if resume_sweep else {}),
             },
             failures=list(loaded.failures),
         )

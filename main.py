@@ -43,17 +43,37 @@ import argparse
 import asyncio
 import json
 import logging
+import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
+from src.colors import ColorPrinter
+from src.exit_codes import EXIT_CODE_TABLE, EXIT_DATA
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
+from src.platform import (
+    configure_console_safe,
+    ensure_writable_path,
+    write_text_lf,
+)
 from src.report.generator import ReportGenerator
-from src.storage.database import BidDatabase
+from src.storage.database import _BID_COLUMNS, BidDatabase
+from src.version import version_banner
 
 logger = logging.getLogger("ai-bid-research")
+
+#: stderr 颜色助手（main() 入口初始化；import 期无色直印）
+_STDERR_PRINTER: Optional[ColorPrinter] = None
+
+
+def _err(message: str) -> None:
+    """错误输出（R65：支持色时红显）。"""
+    if _STDERR_PRINTER is not None:
+        _STDERR_PRINTER.err(message)
+    else:
+        print(message, file=sys.stderr)
 
 #: 默认数据库路径（存在时 report 子命令自动接入）
 DEFAULT_DB_PATH = Path("data/bids.db")
@@ -72,6 +92,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="输出调试日志"
     )
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "日志落盘（追加；文件记 DEBUG 全量，控制台保持 INFO——"
+            "排障不开 --verbose 也能事后翻文件）"
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=version_banner(),
+        help="显示版本与运行环境",
+    )
+
     sub = parser.add_subparsers(dest="command", help="可用子命令")
 
     # report 子命令
@@ -128,8 +165,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help=(
-            "公告源路径：.json/.jsonl 文件，或包含它们的目录"
+            "公告源路径：.json/.jsonl/.csv 文件，或包含它们的目录"
             "（目录源按文件名排序装载）"
+        ),
+    )
+    collect.add_argument(
+        "--recursive",
+        action="store_true",
+        help=(
+            "目录源深度遍历子目录（含符号链接环防护与"
+            " Windows 大小写路径去重）"
         ),
     )
     collect.add_argument(
@@ -224,6 +269,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="领域对照模式：逗号分隔 ≥2 个关键词（如 --compare 智慧城市,政务云）",
     )
     analyze.add_argument(
+        "--json",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "同时导出机器可读 JSON（完整分析 payload；"
+            "缺省不导出。'-' = stdout）"
+        ),
+    )
+    analyze.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output/reports"),
@@ -285,7 +340,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # db 子命令
     db = sub.add_parser(
-        "db", help="招标信息数据库管理（导入/统计）"
+        "db", help="招标信息数据库管理（导入/查询/统计/导出）"
     )
     db.add_argument(
         "--db",
@@ -303,6 +358,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--stats", action="store_true", help="输出数据库统计概览"
     )
     db.add_argument(
+        "--status",
+        action="store_true",
+        help="输出库结构状态（schema 版本 + 各表行数 + PRAGMA）",
+    )
+    db.add_argument(
+        "--backup",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "在线备份库到目标文件（SQLite backup API——WAL 安全，"
+            "比拷贝 .db 文件多保住 -wal 未落盘内容）"
+        ),
+    )
+    db.add_argument(
+        "--diff",
+        nargs=2,
+        type=Path,
+        metavar=("OLD", "NEW"),
+        help=(
+            "对比两份 JSON 研究快照（db export 产物）："
+            "新增/移除/字段变更明细（配合 --out 落机器可读 JSON）"
+        ),
+    )
+    db.add_argument(
         "--query",
         help="按关键词查询项目记录（可选，配合 --days）",
     )
@@ -310,9 +389,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--days", type=int, default=None, help="查询回溯天数（配合 --query）"
     )
     db.add_argument(
+        "--export",
+        choices=("csv", "json"),
+        help="导出项目记录为研究快照（配合 --query/--days 过滤、--out 落盘）",
+    )
+    db.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="导出目标文件（缺省输出到 stdout；CSV 落盘用 utf-8-sig）",
+    )
+    db.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="导出条数上限（配合 --export；缺省导出全部命中）",
+    )
+    db.add_argument(
         "--pending",
         action="store_true",
         help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
+    )
+    db.add_argument(
+        "--priority",
+        action="store_true",
+        help=(
+            "配合 --pending：按重试价值优先序展示"
+            "（llm_error 先于 rejected，hit_rate 降序）"
+        ),
     )
     db.add_argument(
         "--pending-stats",
@@ -321,8 +425,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # templates 子命令
-    sub.add_parser(
+    templates_cmd = sub.add_parser(
         "templates", help="列出可用的提示词模板"
+    )
+    templates_cmd.add_argument(
+        "--show",
+        metavar="NAME",
+        help="渲染指定模板（内置脱敏样例填充）——见模板真实全貌",
     )
 
     return parser
@@ -369,14 +478,14 @@ async def run_report(args: argparse.Namespace) -> int:
         if args.input is not None:
             if not args.input.is_file():
                 print(f"错误：分析数据文件不存在: {args.input}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
             try:
                 analysis_data = json.loads(
                     args.input.read_text(encoding="utf-8")
                 )
             except json.JSONDecodeError as exc:
                 print(f"错误：分析数据 JSON 解析失败: {exc}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
         else:
             # 无 --input：尝试从数据库取数
             if db is None:
@@ -385,13 +494,13 @@ async def run_report(args: argparse.Namespace) -> int:
                     "或通过 --db 接入数据库",
                     file=sys.stderr,
                 )
-                return 2
+                return EXIT_DATA
             if db.get_bid(args.bid_id) is None:
                 print(
                     f"错误：数据库中不存在招标编号: {args.bid_id}",
                     file=sys.stderr,
                 )
-                return 2
+                return EXIT_DATA
             analysis_data = None
         report_path = await generator.generate_bid_report(
             args.bid_id, analysis_data
@@ -400,7 +509,7 @@ async def run_report(args: argparse.Namespace) -> int:
         print(
             "错误：请指定 --keyword 或 --bid-id", file=sys.stderr
         )
-        return 2
+        return EXIT_DATA
 
     print(f"报告已生成: {report_path}")
     if args.html:
@@ -421,10 +530,14 @@ def run_collect(args: argparse.Namespace) -> int:
         进程退出码（0 正常；2 源不可读/严格模式下遇到坏数据）。
     """
     try:
-        loaded = load_records(args.source, skip_invalid=not args.strict)
+        loaded = load_records(
+            args.source,
+            skip_invalid=not args.strict,
+            recursive=getattr(args, "recursive", False),
+        )
     except (SourceError, ValueError) as exc:
-        print(f"错误：{exc}", file=sys.stderr)
-        return 2
+        _err(f"错误：{exc}")
+        return EXIT_DATA
 
     deduped = dedupe_records(loaded.records)
 
@@ -438,6 +551,15 @@ def run_collect(args: argparse.Namespace) -> int:
           f"待入库 {len(deduped.unique)} 条")
     for dup in deduped.duplicates:
         print(f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件（{dup['reason']}）")
+
+    # 健全性告警面（R33）——告警不拒收，逐条可见供复核
+    warned = [r for r in deduped.unique if r.warnings]
+    if warned:
+        print(f"健全性告警：{len(warned)} 条（不拒收，供复核）")
+        for record in warned[:5]:
+            print(f"  ⚠ {record.bid_id}: {'; '.join(record.warnings)}")
+        if len(warned) > 5:
+            print(f"  … 另有 {len(warned) - 5} 条见记录 warnings")
 
     if args.dry_run:
         print("演练模式：未写库（--dry-run）")
@@ -490,7 +612,7 @@ def run_extract(args: argparse.Namespace) -> int:
         client = _build_llm_client_or_none()
         if client is None:
             print("错误：--retry 需要真实 LLM（设 DEEPSEEK_API_KEY）", file=sys.stderr)
-            return 2
+            return EXIT_DATA
         report = asyncio.run(
             _retry_with_client(args.db, client, args.limit)
         )
@@ -507,12 +629,12 @@ def run_extract(args: argparse.Namespace) -> int:
     # 抽取模式：装载→去重→抽取→入库
     if args.source is None:
         print("错误：需要 --source 或 --retry", file=sys.stderr)
-        return 2
+        return EXIT_DATA
     try:
         loaded = load_records(args.source, skip_invalid=not args.strict)
     except (SourceError, ValueError) as exc:
         print(f"错误：{exc}", file=sys.stderr)
-        return 2
+        return EXIT_DATA
 
     deduped = dedupe_records(loaded.records)
     print(f"源装载：读取 {loaded.files_read} 个文件，"
@@ -521,7 +643,18 @@ def run_extract(args: argparse.Namespace) -> int:
 
     client = None if args.no_llm else _build_llm_client_or_none()
     extractor = AnnouncementExtractor(client)
-    batch = asyncio.run(extractor.extract_batch(deduped.unique))
+    # R68：批抽取进度面（tty 行内刷新；非 tty 静默 + DEBUG 日志）
+    from src.progress import ProgressPrinter
+
+    progress_printer = ProgressPrinter(
+        total=len(deduped.unique), label="抽取"
+    )
+    batch = asyncio.run(
+        extractor.extract_batch(
+            deduped.unique, progress=progress_printer.step
+        )
+    )
+    progress_printer.finish()
 
     llm_count = sum(1 for o in batch.outcomes if o.used_llm)
     print(f"抽取完成：LLM {llm_count} 条 / 直通 "
@@ -602,6 +735,30 @@ async def _retry_with_client(db_path, client, limit):
         await client.close()
 
 
+def _export_analysis_json(payload: Dict[str, Any], target: Path) -> int:
+    """分析 payload 的 JSON 导出（R54）。
+
+    - ``-``：stdout（紧凑，ensure_ascii=False——中文原文直出）；
+    - 文件：indent=2 + LF 行尾（R45 字节契约）+ 长路径防护（R44）。
+    """
+    import json as _json
+
+    if str(target) == "-":
+        sys.stdout.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+        return 0
+    try:
+        ensure_writable_path(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        write_text_lf(
+            target, _json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        )
+    except OSError as exc:
+        print(f"错误：JSON 导出失败：{exc}", file=sys.stderr)
+        return EXIT_DATA
+    print(f"分析 JSON 已导出: {target}")
+    return 0
+
+
 def run_analyze(args: argparse.Namespace) -> int:
     """执行 analyze 子命令：数据集 → 分析面 → 纯数据报告。
 
@@ -625,7 +782,7 @@ def run_analyze(args: argparse.Namespace) -> int:
             )
         except ValueError as exc:
             print(f"错误：{exc}", file=sys.stderr)
-            return 2
+            return EXIT_DATA
         generator = ReportGenerator(output_dir=args.output_dir)
         report_path = generator.generate_comparison_report(comparison)
         print(f"对照报告已生成: {report_path}")
@@ -652,6 +809,25 @@ def run_analyze(args: argparse.Namespace) -> int:
         print(f"密度：{density['density_level']}"
               f"（{density['monthly_rate'] and round(density['monthly_rate'], 1)} 条/月，"
               f"定标率 {density['award_rate'] and round(density['award_rate'] * 100, 1) or 0}%）")
+        # R64：区域 Top 5 条形图（控制台编码自适应降级 #）
+        from src.analyze.charts import console_bar_char, render_bars
+
+        region_top = list(payload["region"].items())[:5]
+        if region_top and not (
+            len(region_top) == 1 and "未知" in region_top[0][0]
+        ):
+            bars = render_bars(
+                region_top, width=16, char=console_bar_char()
+            )
+            print("区域 Top 5：")
+            for line in bars:
+                print(f"  {line}")
+
+    # R54：机器可读导出面——完整 payload 原样落盘（上下游程序消费）
+    if args.json is not None:
+        rc = _export_analysis_json(payload, args.json)
+        if rc != 0:
+            return rc
 
     generator = ReportGenerator(output_dir=args.output_dir)
     report_path = generator.generate_analysis_report(payload)
@@ -690,10 +866,11 @@ def run_pipeline(args: argparse.Namespace) -> int:
             days=args.days,
             html=args.html,
             incremental=args.incremental,
+            resume=getattr(args, "resume", False),
         )
     except SourceError as exc:
         print(f"错误：{exc}", file=sys.stderr)
-        return 2
+        return EXIT_DATA
 
     for stage in result.stages:
         detail = stage.detail
@@ -731,8 +908,113 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
+    """导出项目记录为研究快照（CSV/JSON，#601 R34）。
+
+    Args:
+        db: 已打开的数据库。
+        args: 命令行参数（--export/--out/--limit/--query/--days）。
+
+    Returns:
+        进程退出码（0 正常；2 目标路径不可写）。
+    """
+    import csv as csv_mod
+
+    keyword = args.query
+    days = args.days
+    total = db.count_bids(keyword=keyword, days=days)
+    limit = args.limit if args.limit is not None else max(total, 1)
+    rows = db.query_bids(keyword=keyword, days=days, limit=limit)
+
+    # 只导业务列（id/created_at 是库内账面，不入研究快照）
+    columns = list(_BID_COLUMNS)
+    out_path = args.out
+
+    if args.export == "csv":
+
+        def _render(fh) -> None:
+            writer = csv_mod.DictWriter(
+                fh, fieldnames=columns, extrasaction="ignore"
+            )
+            writer.writeheader()
+            for row in rows:
+                item = {key: row.get(key) for key in columns}
+                if isinstance(item.get("requirements"), list):
+                    item["requirements"] = ";".join(item["requirements"])
+                writer.writerow(item)
+
+        if out_path is not None:
+            try:
+                with open(
+                    out_path, "w", encoding="utf-8-sig", newline=""
+                ) as fh:
+                    _render(fh)
+            except OSError as exc:
+                print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
+                return EXIT_DATA
+            print(
+                f"已导出 {len(rows)} 条 → {out_path}（CSV，utf-8-sig）",
+                file=sys.stderr,
+            )
+        else:
+            _render(sys.stdout)
+        return 0
+
+    # JSON 快照：requirements 保持列表形态（下游机器可读）
+    snapshot = [{key: row.get(key) for key in columns} for row in rows]
+    payload = json.dumps(snapshot, ensure_ascii=False, indent=2)
+    if out_path is not None:
+        try:
+            write_text_lf(out_path, payload + "\n")
+        except OSError as exc:
+            print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
+            return EXIT_DATA
+        print(f"已导出 {len(rows)} 条 → {out_path}（JSON）", file=sys.stderr)
+    else:
+        print(payload)
+    return 0
+
+
+def _run_snapshot_diff(args: argparse.Namespace) -> int:
+    """db --diff OLD NEW：研究快照对比（R60）。"""
+    from src.storage.snapshot_diff import (
+        diff_snapshots,
+        render_diff_summary,
+    )
+
+    old_path, new_path = args.diff
+    for path in (old_path, new_path):
+        if not path.is_file():
+            print(f"错误：快照文件不存在: {path}", file=sys.stderr)
+            return EXIT_DATA
+    try:
+        old_rows = json.loads(old_path.read_text(encoding="utf-8"))
+        new_rows = json.loads(new_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        print(f"错误：快照 JSON 解析失败: {exc}", file=sys.stderr)
+        return EXIT_DATA
+    if not isinstance(old_rows, list) or not isinstance(new_rows, list):
+        print("错误：快照顶层须为 JSON 数组（db export 产物）", file=sys.stderr)
+        return EXIT_DATA
+
+    result = diff_snapshots(old_rows, new_rows)
+    print(render_diff_summary(result))
+    if args.out is not None:
+        try:
+            ensure_writable_path(args.out)
+            write_text_lf(
+                args.out,
+                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+            )
+        except OSError as exc:
+            print(f"错误：diff JSON 导出失败: {exc}", file=sys.stderr)
+            return EXIT_DATA
+        print(f"diff JSON 已导出: {args.out}")
+    return 0
+
+
 def run_db(args: argparse.Namespace) -> int:
-    """执行 db 子命令：导入/查询/统计。
+    """执行 db 子命令：导入/查询/统计/导出。
 
     Args:
         args: 已解析的命令行参数。
@@ -742,24 +1024,51 @@ def run_db(args: argparse.Namespace) -> int:
     """
     db_path: Path = args.db
     creating = args.import_file is not None
+    if args.diff is not None:
+        return _run_snapshot_diff(args)
+    if args.backup is not None:
+        # 幽灵库不静默建库再备份（与 --stats/--status 同口径）
+        if not db_path.exists():
+            _err(f"错误：数据库不存在: {db_path}")
+            return EXIT_DATA
+        with BidDatabase(args.db) as db:
+            try:
+                target = db.backup_to(args.backup)
+            except (sqlite3.Error, ValueError, OSError) as exc:
+                _err(f"错误：备份失败：{exc}")
+                return EXIT_DATA
+        print(f"已备份 → {target}（{target.stat().st_size} 字节）")
+        return 0
     if not creating and not db_path.exists():
-        print(f"错误：数据库不存在: {db_path}", file=sys.stderr)
-        return 2
+        _err(f"错误：数据库不存在: {db_path}")
+        return EXIT_DATA
 
     with BidDatabase(db_path) as db:
+        if args.status:
+            info = db.schema_info()
+            print(f"schema 版本：v{info['user_version']}")
+            print("表行数：")
+            for table, count in info["tables"].items():
+                print(f"  {table}: {count}")
+            print(f"PRAGMA 生效：{db.pragmas}")
+            return 0
+
+        if args.export:
+            return _export_bids(db, args)
+
         if args.import_file is not None:
             if not args.import_file.is_file():
                 print(
                     f"错误：导入文件不存在: {args.import_file}", file=sys.stderr
                 )
-                return 2
+                return EXIT_DATA
             try:
                 payload = json.loads(
                     args.import_file.read_text(encoding="utf-8")
                 )
             except json.JSONDecodeError as exc:
                 print(f"错误：导入 JSON 解析失败: {exc}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
             bids = payload if isinstance(payload, list) else [payload]
             saved = db.import_bids(bids)
             print(f"已导入 {saved} 条项目记录 → {db_path}")
@@ -776,8 +1085,12 @@ def run_db(args: argparse.Namespace) -> int:
                 )
 
         if args.pending:
-            rows = db.list_pending(limit=50)
-            print(f"pending 面待处理 {len(rows)} 条（最近 50 条）：")
+            order = "priority" if args.priority else "fifo"
+            rows = db.list_pending(limit=50, order=order)
+            label = "重试价值优先序" if args.priority else "登记序"
+            print(
+                f"pending 面待处理 {len(rows)} 条（最近 50 条，{label}）："
+            )
             for row in rows:
                 print(
                     f"  [{row['reason']}] {row['bid_id'] or '（缺编号）'}"
@@ -819,11 +1132,33 @@ def run_db(args: argparse.Namespace) -> int:
     return 0
 
 
-def run_templates() -> int:
-    """执行 templates 子命令，打印模板清单。
+#: 模板样例数据（--show 渲染用；脱敏合成，非真实公告）
+_TEMPLATE_SAMPLES: Dict[str, Dict[str, str]] = {
+    "bid_extraction": {
+        "bid_text": (
+            "某单位智慧城市平台采购公告（合成样例）："
+            "预算 300万元，报名截止 2026年12月1日。"
+        )
+    },
+    "bid_analysis": {"bid_info": "智慧城市平台（预算 300万元）"},
+    "competitor_analysis": {
+        "keyword": "智慧城市",
+        "bid_list": "（样例）某市大脑项目 / 某区综治平台",
+    },
+    "report_generation": {
+        "analysis_data": "（样例）月度 12 条，中位预算 250 万元"
+    },
+}
+
+
+def run_templates(args: Optional[argparse.Namespace] = None) -> int:
+    """执行 templates 子命令：清单 / --show 渲染。
+
+    Args:
+        args: 已解析参数（``None`` = 旧式直接调用——只打清单）。
 
     Returns:
-        进程退出码（恒为 0）。
+        进程退出码（0 正常；2 --show 模板名不存在/渲染失败）。
     """
     descriptions = {
         "bid_extraction": "从招标公告原文抽取结构化信息（JSON）",
@@ -831,11 +1166,35 @@ def run_templates() -> int:
         "competitor_analysis": "关键词领域竞争态势分析",
         "report_generation": "将分析数据整理为正式研究报告",
     }
+    show = getattr(args, "show", None) if args is not None else None
+
+    if show is not None:
+        templates = PromptTemplates.get_all_templates()
+        if show not in templates:
+            print(
+                f"错误：模板不存在: {show}"
+                f"（可用：{'、'.join(sorted(templates))}）",
+                file=sys.stderr,
+            )
+            return EXIT_DATA
+        sample = _TEMPLATE_SAMPLES.get(show, {})
+        try:
+            rendered = templates[show](**sample)
+        except TypeError as exc:
+            print(
+                f"错误：模板渲染失败（样例参数不匹配）: {exc}",
+                file=sys.stderr,
+            )
+            return EXIT_DATA
+        print(rendered)
+        return 0
+
     print("可用提示词模板：")
     for name, template in PromptTemplates.get_all_templates().items():
         print(f"  {name:<22} {descriptions.get(name, '')}")
         _ = template  # 模板函数本身通过 PromptTemplates.<name>() 调用
     print("\n调用方式：from src.llm.prompts import PromptTemplates")
+    print("渲染样例：python main.py templates --show bid_extraction")
     return 0
 
 
@@ -848,13 +1207,50 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     Returns:
         进程退出码。
     """
+    # R40：控制台加固先于一切输出——Windows GBK/ascii 代码页打印
+    # 报告符号（█▏）不再崩溃，坏字符降级为 ?
+    for action in configure_console_safe():
+        logging.getLogger(__name__).debug("console hardened: %s", action)
+    # R65：stderr 颜色助手（NO_COLOR/非 tty/Win VT 判定收敛）
+    global _STDERR_PRINTER
+    _STDERR_PRINTER = ColorPrinter(sys.stderr)
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    # R72：控制台 INFO（--verbose 升 DEBUG）+ 可选文件 DEBUG 全量。
+    # 注意不能用 basicConfig——root 已有 handler 时（pytest/宿主嵌入）
+    # 它是空操作，INFO 会被既有 WARNING 级吞掉；显式 setLevel 强制生效。
+    root_logger = logging.getLogger()
+    root_logger.setLevel(
+        logging.DEBUG if args.verbose else logging.INFO
     )
+    _fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+    has_console = any(
+        isinstance(h, logging.StreamHandler)
+        and not isinstance(h, logging.FileHandler)
+        for h in root_logger.handlers
+    )
+    if not has_console:
+        console = logging.StreamHandler()
+        console.setFormatter(logging.Formatter(_fmt))
+        root_logger.addHandler(console)
+    if args.log_file is not None:
+        try:
+            ensure_writable_path(args.log_file)
+            args.log_file.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(
+                args.log_file, encoding="utf-8", mode="a"
+            )
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(logging.Formatter(_fmt))
+            logging.getLogger().addHandler(file_handler)
+            logging.getLogger("ai-bid-research").info(
+                "日志文件面开启 → %s", args.log_file
+            )
+        except OSError as exc:
+            _err(f"错误：日志文件不可写：{exc}")
+            return EXIT_DATA
 
     if args.command == "report":
         return asyncio.run(run_report(args))
@@ -869,8 +1265,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "db":
         return run_db(args)
     if args.command == "templates":
-        return run_templates()
+        return run_templates(args)
     parser.print_help()
+    print(
+        f"\n{EXIT_CODE_TABLE}"
+        "（详见 docs/USER-GUIDE.md 退出码一节）",
+        file=sys.stderr,
+    )
     return 1
 
 

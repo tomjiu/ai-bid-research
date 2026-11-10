@@ -114,7 +114,7 @@ class TestPipelineCLI:
                 "--keyword", "管道",
             ]
         )
-        out = capsys.readouterr().out
+        capsys.readouterr()
         assert code == 0
         reports = list((tmp_path / "r").glob("analysis_管道_*.md"))
         assert len(reports) == 1

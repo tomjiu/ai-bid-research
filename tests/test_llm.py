@@ -75,7 +75,7 @@ class TestLLMClient:
             mock_openai.chat.completions.create = AsyncMock(
                 side_effect=ConnectionError("一直失败")
             )
-            with pytest.raises(LLMError, match="3 次重试"):
+            with pytest.raises(LLMError, match="3 次尝试"):
                 asyncio.run(
                     self.client.chat([{"role": "user", "content": "必败"}])
                 )
@@ -120,8 +120,6 @@ class TestLLMClient:
     def test_batch_chat_preserves_order(self) -> None:
         """batch_chat 并发调用且结果顺序与输入一致。"""
         replies = ["回复一", "回复二", "回复三"]
-        responses = [make_mock_response(r) for r in replies]
-
         async def fake_chat(messages, **kwargs):  # noqa: ANN001, ANN003
             return replies[len(fake_chat.calls)]
 

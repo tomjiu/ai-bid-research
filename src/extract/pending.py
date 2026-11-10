@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional
 from src.collect.records import AnnouncementRecord
 from src.extract.extractor import AnnouncementExtractor
 from src.extract.store import (
-    STATUS_REJECTED,
     STATUS_STORED,
     apply_extraction,
     apply_extraction_from_raw,
@@ -117,6 +116,7 @@ def park_raw_failure(
     bid_id: Optional[str] = None,
     error: Optional[str] = None,
     extracted_fields: Optional[Dict[str, Any]] = None,
+    hit_rate: Optional[float] = None,
 ) -> int:
     """登记原文流失败（无源记录，身份锚定原文哈希）。
 
@@ -141,6 +141,7 @@ def park_raw_failure(
         raw_text=raw_text,
         payload=payload,
         error=error,
+        hit_rate=hit_rate,
     )
 
 
@@ -173,7 +174,9 @@ def retry_pending(
     Args:
         db: 研究工作区数据库。
         extractor: 抽取器（可换模型/提示词后的新实例）。
-        limit: 最多重试条数（``None`` = 全部）。
+        limit: 最多重试条数（``None`` = 全部）——**优先序消费**
+            （R61）：llm_error 且 hit_rate 高者先重试，有限预算
+            先烧最有希望的。
 
     Returns:
         重试报告（resolved / still_pending / skipped_rebuild）。
@@ -185,7 +188,9 @@ def retry_pending(
     import asyncio
 
     report = RetryReport()
-    rows = db.list_pending(status=STATUS_PENDING, limit=limit or 1000)
+    rows = db.list_pending(
+        status=STATUS_PENDING, limit=limit or 1000, order="priority"
+    )
     for row in rows:
         fingerprint = row["fingerprint"]
         raw_text = row.get("raw_text")

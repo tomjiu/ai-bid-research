@@ -79,7 +79,15 @@ class TestRenderAnalysisMarkdown:
             assert section in md
         assert "| 指标 | 值 |" in md
         assert "智慧城市" in md
-        assert "甲公司" not in md  # 中标人 top3 是占比，不点名（隐私面）
+        # 密度节的匿名契约：top3 中标人只给占比不点名（隐私面）。
+        # 供应商画像节（R48 十二节）是独立的显式点名面——与采购人
+        # 画像节对偶（中标人是公开信息），两契约并存互不侵扰。
+        density_section = md.split("## 六、竞争密度")[1].split("## 七")[0]
+        assert "甲公司" not in density_section
+        # 十二节显式点名（同一测试数据 winner=甲公司 ×4）
+        assert "## 十二、供应商画像" in md
+        supplier_section = md.split("## 十二、供应商画像")[1].split("## 口径说明")[0]
+        assert "甲公司" in supplier_section
         assert "启发式估算" in md
 
     def test_empty_dataset_renders_gap_section(self):

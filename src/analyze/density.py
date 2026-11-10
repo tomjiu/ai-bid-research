@@ -108,3 +108,54 @@ def competition_density(dataset: AnalysisDataset) -> Dict[str, Any]:
         "award_rate": dataset.award_rate,
         "winner_top3_share": _top_share(winner_counter),
     }
+
+
+def concentration_trend(dataset: AnalysisDataset) -> Dict[str, Any]:
+    """采购人集中度月度序列（HHI 按月，R38）。
+
+    研究问题：「买家集中度在时间上如何变化？」——逐月 HHI 让
+    「市场在被少数买家收拢还是走向分散」可对照（全局 HHI 掩盖演化）。
+
+    Args:
+        dataset: 分析数据集。
+
+    Returns:
+        ``{"months": [{"month", "projects", "purchasers", "hhi",
+        "award_rate"}, ...]}``——月份升序；**无发布日期的记录不参与**
+        （时间轴口径同术语演化面）；无有效月份返回
+        ``{"months": []}``（不猜数）。
+
+    口径说明：
+        - ``hhi`` 语义同 :func:`competition_density`（0-10000，按当月
+          采购人分布；未知采购人归「未知」单一桶——同全局口径）；
+        - ``award_rate`` 只按当月记录计（winner 非空占比）。
+    """
+    monthly: Dict[str, Dict[str, Any]] = {}
+    for record in dataset.records:
+        date_value = record.get("publish_date")
+        if not date_value:
+            continue  # 无日期不参与时间轴面
+        month = str(date_value)[:7]
+        slot = monthly.setdefault(
+            month, {"counter": Counter(), "total": 0, "awarded": 0}
+        )
+        slot["total"] += 1
+        purchaser = (record.get("purchaser") or "").strip() or UNKNOWN_LABEL
+        slot["counter"][purchaser] += 1
+        if str(record.get("winner") or "").strip():
+            slot["awarded"] += 1
+
+    months = []
+    for month in sorted(monthly):
+        slot = monthly[month]
+        total = slot["total"]
+        months.append(
+            {
+                "month": month,
+                "projects": total,
+                "purchasers": len(slot["counter"]),
+                "hhi": _hhi(slot["counter"]),
+                "award_rate": slot["awarded"] / total if total else None,
+            }
+        )
+    return {"months": months}

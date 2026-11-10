@@ -68,7 +68,7 @@ class TestAnalyzeCLI:
     def test_empty_db_renders_gap(self, tmp_path, capsys):
         """空库：仍退出 0，报告含数据缺口说明。"""
         db_path = tmp_path / "empty.db"
-        with BidDatabase(db_path) as db:  # 建空库（只有表结构）
+        with BidDatabase(db_path):  # 建空库（只有表结构）
             pass
         code = cli.main(
             [
@@ -99,3 +99,83 @@ class TestAnalyzeCLI:
         with pytest.raises(SystemExit):
             cli.main(["--help"])
         assert "analyze" in capsys.readouterr().out
+
+
+class TestAnalyzeJsonExport:
+    """R54：analyze --json 机器可读导出面。"""
+
+    def test_json_file_export_roundtrip(self, tmp_path, capsys):
+        import json as _json
+
+        import main as main_mod
+        from src.storage.database import BidDatabase
+
+        db = BidDatabase(tmp_path / "bids.db")
+        try:
+            db.save_bid(
+                {
+                    "bid_id": "J-1",
+                    "project_name": "智慧城市平台",
+                    "region": "浙江省杭州市",
+                    "budget": 100.0,
+                    "publish_date": "2026-01-05",
+                    "winner": "甲公司",
+                    "purchaser": "大数据局",
+                }
+            )
+        finally:
+            db.close()
+
+        out = tmp_path / "analysis.json"
+        rc = main_mod.main(
+            [
+                "analyze", "--db", str(tmp_path / "bids.db"),
+                "--json", str(out),
+                "--output-dir", str(tmp_path / "reports"),
+            ]
+        )
+        assert rc == 0
+        payload = _json.loads(out.read_text(encoding="utf-8"))
+        assert payload["record_count"] == 1
+        assert payload["supplier_profiles"][0]["winner"] == "甲公司"
+        assert payload["province_distribution"]["distribution"]["浙江省"] == 1
+        # R45 字节契约：LF 行尾
+        assert b"\r" not in out.read_bytes()
+        assert "分析 JSON 已导出" in capsys.readouterr().out
+
+    def test_json_stdout_dash_mode(self, tmp_path, capsys):
+        import json as _json
+
+        import main as main_mod
+
+        rc = main_mod.main(
+            [
+                "analyze", "--db", str(tmp_path / "empty.db"),
+                "--json", "-",
+                "--output-dir", str(tmp_path / "reports"),
+            ]
+        )
+        assert rc == 0
+        out = capsys.readouterr().out
+        json_line = next(
+            ln for ln in out.splitlines() if ln.startswith("{")
+        )
+        payload = _json.loads(json_line)
+        assert payload["record_count"] == 0
+
+    def test_json_export_too_long_path_actionable(self, tmp_path, monkeypatch):
+        import sys as _sys
+
+        import main as main_mod
+
+        monkeypatch.setattr(_sys, "platform", "win32")
+        deep = tmp_path / ("x" * 240) / ("y" * 40) / "a.json"
+        rc = main_mod.main(
+            [
+                "analyze", "--db", str(tmp_path / "e.db"),
+                "--json", str(deep),
+                "--output-dir", str(tmp_path / "r"),
+            ]
+        )
+        # 长路径防护触发 → rc=2 且报错可行动（不落误导性 FileNotFoundError）
+        assert rc == 2

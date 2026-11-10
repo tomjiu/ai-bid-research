@@ -131,9 +131,9 @@ class TestDirectorySource:
         assert result.files_read == 1
 
     def test_directory_without_sources_raises(self, tmp_path):
-        """目录内无 json/jsonl → SourceError。"""
+        """目录内无受支持源文件 → SourceError（R32 起动态列举类型）。"""
         (tmp_path / "only.txt").write_text("x", encoding="utf-8")
-        with pytest.raises(SourceError, match="无 .json/.jsonl"):
+        with pytest.raises(SourceError, match="目录内无"):
             load_records(tmp_path)
 
     def test_missing_path_raises(self, tmp_path):

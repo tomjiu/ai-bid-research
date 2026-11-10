@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
+from src.platform import ensure_writable_path, sanitize_filename, write_text_lf
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期导入，避免运行时强耦合
     from src.storage.database import BidDatabase
@@ -178,7 +179,7 @@ class ReportGenerator:
         Returns:
             已保存的 Markdown 报告文件路径。
         """
-        data_source = f"通用行业知识（未接入本地数据库）"
+        data_source = "通用行业知识（未接入本地数据库）"
         if self.db is not None:
             bid_rows = self.db.query_bids(keyword=keyword, days=days)  # type: ignore[union-attr]
             data_source = f"本地数据库 {len(bid_rows)} 条项目记录"
@@ -335,7 +336,8 @@ class ReportGenerator:
             body=self.markdown_to_html(markdown_text),
         )
         target = source.with_suffix(".html")
-        target.write_text(html_content, encoding="utf-8")
+        ensure_writable_path(target)
+        write_text_lf(target, html_content)
         logger.info("HTML 报告已导出: %s", target)
         return target
 
@@ -349,10 +351,13 @@ class ReportGenerator:
         Returns:
             保存的文件路径，形如 ``<prefix>_<YYYYMMDD_HHMMSS>.md``。
         """
-        safe_prefix = _UNSAFE_FILENAME_RE.sub("_", prefix).strip("_") or "report"
+        # R46：平台清洗面（非法字符/保留名/尾点）——\w 类正则不拦
+        # Windows 保留名与尾点空格，统一走 sanitize_filename
+        safe_prefix = sanitize_filename(prefix) or "report"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self.output_dir / f"{safe_prefix}_{timestamp}.md"
-        path.write_text(content, encoding="utf-8")
+        ensure_writable_path(path)
+        write_text_lf(path, content)
         logger.info("报告已保存: %s", path)
         return path
 

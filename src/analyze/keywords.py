@@ -148,3 +148,63 @@ def common_bigrams(
             counter[gram] += 1
     items = sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))
     return dict(items[:top])
+
+
+def keyword_monthly_trend(
+    dataset: AnalysisDataset,
+    *,
+    top_n: int = 5,
+    lexicon: Optional[Iterable[str]] = None,
+    extra_terms: Optional[Iterable[str]] = None,
+) -> Dict[str, Dict[str, object]]:
+    """领域词月度命中趋势（术语演化信号，R37）。
+
+    Args:
+        dataset: 分析数据集。
+        top_n: 返回词数上限（总命中数降序，并列按词名——确定性）。
+        lexicon: 完整替换词表（``None`` = 内置种子词表）。
+        extra_terms: 追加词（与词表并集——常用扩展口）。
+
+    Returns:
+        ``{词: {"months": {YYYY-MM: 命中数}, "first_seen": 月,
+        "last_seen": 月, "total": 总命中数}}``——按 total 降序；
+        一词一项只计一次（同 :func:`keyword_frequency` 口径）；
+        **无发布日期的记录不参与**（演化面需时间轴，口径明示）；
+        无命中返回 ``{}``（不猜数）。
+    """
+    terms: Set[str] = set(lexicon if lexicon is not None else DEFAULT_LEXICON)
+    if extra_terms:
+        terms.update(extra_terms)
+
+    monthly: Dict[str, Dict[str, int]] = {}
+    for record in dataset.records:
+        date_value = record.get("publish_date")
+        if not date_value:
+            continue  # 无日期不参与演化面
+        month = str(date_value)[:7]
+        text = _match_text(record)
+        if not text:
+            continue
+        haystack = text.lower()
+        for term in terms:
+            if term.lower() in haystack:
+                term_months = monthly.setdefault(term, {})
+                term_months[month] = term_months.get(month, 0) + 1
+
+    if not monthly:
+        return {}
+
+    ordered = sorted(
+        monthly.items(),
+        key=lambda kv: (-sum(kv[1].values()), kv[0]),
+    )[:top_n]
+    result: Dict[str, Dict[str, object]] = {}
+    for term, months in ordered:
+        sorted_months = dict(sorted(months.items()))
+        result[term] = {
+            "months": sorted_months,
+            "first_seen": next(iter(sorted_months)),
+            "last_seen": next(reversed(sorted_months)),
+            "total": sum(months.values()),
+        }
+    return result

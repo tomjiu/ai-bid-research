@@ -11,10 +11,22 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
-from src.analyze.density import competition_density
+from src.analyze.buyers import buyer_profiles
+from src.analyze.cooccurrence import keyword_cooccurrence
+from src.analyze.outliers import budget_outliers
+from src.analyze.regions import province_distribution
+from src.analyze.relationships import purchaser_supplier_pairs
+from src.analyze.rolling import rolling_comparison
+from src.analyze.suppliers import supplier_profiles
+from src.analyze.density import competition_density, concentration_trend
 from src.analyze.quality import field_quality
-from src.analyze.keywords import common_bigrams, keyword_frequency
+from src.analyze.keywords import (
+    common_bigrams,
+    keyword_frequency,
+    keyword_monthly_trend,
+)
 from src.analyze.stats import (
+    budget_region_crosstab,
     budget_summary,
     date_range,
     monthly_trend,
@@ -52,6 +64,16 @@ def build_analysis_payload(
         "bigrams": common_bigrams(dataset, top=10),
         "density": competition_density(dataset),
         "field_quality": field_quality(dataset),
+        "buyer_profiles": buyer_profiles(dataset),
+        "supplier_profiles": supplier_profiles(dataset),
+        "budget_outliers": budget_outliers(dataset),
+        "keyword_cooccurrence": keyword_cooccurrence(dataset),
+        "province_distribution": province_distribution(dataset),
+        "rolling_comparison": rolling_comparison(dataset),
+        "purchaser_supplier_pairs": purchaser_supplier_pairs(dataset),
+        "budget_region_crosstab": budget_region_crosstab(dataset),
+        "keyword_trends": keyword_monthly_trend(dataset),
+        "concentration_trend": concentration_trend(dataset),
     }
 
 
@@ -60,6 +82,13 @@ def _fmt_money(value: Optional[float]) -> str:
     if value is None:
         return "——"
     return f"{value:,.1f}"
+
+
+def _signed(value: Optional[float]) -> str:
+    """带符号数值渲染（环比差专用）：None → ——，正数显式 +。"""
+    if value is None:
+        return "——"
+    return f"{value:+g}"
 
 
 def _fmt_pct(value: Optional[float]) -> str:
@@ -78,6 +107,58 @@ def _render_table(headers: List[str], rows: List[List[str]]) -> str:
     for row in rows:
         lines.append("| " + " | ".join(row) + " |")
     return "\n".join(lines)
+
+
+def _slugify_heading(heading: str) -> str:
+    """Markdown 锚点 slug（GitHub 风格近似——中文保留、空白折叠）。
+
+    GitHub 锚点规则对中文报告：小写 ASCII、去标点、空白→连字符、
+    中文原样保留。研究面 HTML 导出（export_html）自建锚点，
+    此 slug 仅服务 GitHub/兼容渲染器预览。
+    """
+    slug = []
+    for ch in heading.strip().lower():
+        if ch.isalnum() or "\u4e00" <= ch <= "\u9fff":
+            slug.append(ch)
+        elif ch.isspace():
+            slug.append("-")
+        # 标点丢弃
+    return "".join(slug) or "section"
+
+
+def build_toc(markdown_text: str, *, max_depth: int = 3) -> str:
+    """从已渲染 Markdown 提取标题生成目录（R63）。
+
+    Args:
+        markdown_text: 完整报告 Markdown。
+        max_depth: 收录标题层级（缺省 3——## 节 + ### 子节；
+            报告面最深即 ###）。
+
+    Returns:
+        目录块（``## 目录`` + 锚点列表）；无标题返回空串。
+    """
+    entries = []
+    in_code_block = False
+    for line in markdown_text.splitlines():
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        stripped = line.lstrip()
+        if not stripped.startswith("#"):
+            continue
+        level = len(stripped) - len(stripped.lstrip("#"))
+        if level < 2 or level > max_depth:
+            continue
+        title = stripped[level:].strip()
+        if title == "目录":
+            continue  # 防 TOC 自引用
+        indent = "  " * (level - 2)
+        entries.append(f"{indent}- [{title}](#{_slugify_heading(title)})")
+    if not entries:
+        return ""
+    return "\n".join(["## 目录", "", *entries, ""])
 
 
 def render_analysis_markdown(payload: Dict[str, Any]) -> str:
@@ -157,6 +238,45 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
         ]
+        rolling = payload.get("rolling_comparison") or {}
+        if rolling and not rolling.get("skipped_reason"):
+            cur, prev, delta = (
+                rolling["current"],
+                rolling["previous"],
+                rolling["delta"],
+            )
+            sections += [
+                "### 窗口对照（近 "
+                + str(len(cur["months"]))
+                + " 个月 vs 再前同宽）",
+                "",
+                _render_table(
+                    ["指标", "当前窗口", "前一窗口", "环比差"],
+                    [
+                        [
+                            "项目数",
+                            str(cur["project_count"]),
+                            str(prev["project_count"]),
+                            _signed(delta["project_count"]),
+                        ],
+                        [
+                            "平均预算(万)",
+                            _fmt_money(cur["budget_mean"]),
+                            _fmt_money(prev["budget_mean"]),
+                            _signed(delta["budget_mean"]),
+                        ],
+                        [
+                            "定标数",
+                            str(cur["awarded_count"]),
+                            str(prev["awarded_count"]),
+                            _signed(delta["awarded_count"]),
+                        ],
+                    ],
+                ),
+                "",
+                "注：环比差 = 当前 − 前值；预算均值只计有值样本；月份不足两倍窗口时本块不展示。",
+                "",
+            ]
 
     keywords = payload["keywords"]
     if keywords:
@@ -218,6 +338,220 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             "",
         ]
 
+    buyers = payload.get("buyer_profiles") or []
+    if buyers:
+        rows = [
+            [
+                profile["purchaser"],
+                str(profile["project_count"]),
+                _fmt_money(profile["budget_total"]),
+                _fmt_money(profile["budget_mean"]),
+                str(len(profile["active_months"])),
+                "、".join(profile["categories"]) or "——",
+            ]
+            for profile in buyers
+        ]
+        sections += [
+            "## 八、采购人画像（项目数 Top）",
+            "",
+            _render_table(
+                ["采购人", "项目数", "预算合计(万)", "平均预算(万)", "活跃月份数", "领域"],
+                rows,
+            ),
+            "",
+            "注：预算口径只计有值样本（样本数见 payload budget_sample_count），缺失不折零。",
+            "",
+        ]
+
+    crosstab = payload.get("budget_region_crosstab") or {}
+    # 只有「未知」区域 = 无区域信号（同二节跳节口径）
+    if crosstab and not (len(crosstab) == 1 and "未知" in crosstab):
+        first_buckets = next(iter(crosstab.values()))
+        headers = ["区域"] + list(first_buckets.keys()) + ["合计"]
+        rows = []
+        for region, buckets in crosstab.items():
+            rows.append(
+                [region]
+                + [str(count) for count in buckets.values()]
+                + [str(sum(buckets.values()))]
+            )
+        totals = [
+            str(sum(row[label] for row in crosstab.values()))
+            for label in first_buckets
+        ]
+        rows.append(
+            ["合计"] + totals + [str(sum(map(sum, (b.values() for b in crosstab.values()))))]
+        )
+        sections += [
+            "## 九、预算 × 区域交叉（计数矩阵，万元分桶）",
+            "",
+            _render_table(headers, rows),
+            "",
+            "注：分桶为研究经验口径（左闭右开，末桶无上界）；「预算未知」为数据缺口如实可见。",
+            "",
+        ]
+
+    trends = payload.get("keyword_trends") or {}
+    if trends:
+        months_union = sorted(
+            {month for slot in trends.values() for month in slot["months"]}
+        )
+        headers = ["领域词", "首次出现"] + months_union + ["合计"]
+        rows = [
+            [term, str(slot["first_seen"])]
+            + [str(slot["months"].get(month, 0)) for month in months_union]
+            + [str(slot["total"])]
+            for term, slot in trends.items()
+        ]
+        sections += [
+            "## 十、术语演化（领域词月度命中趋势）",
+            "",
+            _render_table(headers, rows),
+            "",
+            "注：无发布日期的记录不参与本节；首次出现为该词首个命中月份——**新兴领域信号，供人工复核**。",
+            "",
+        ]
+
+    concentration = payload.get("concentration_trend") or {}
+    months = concentration.get("months") or []
+    # 趋势面需 ≥2 个时间点才有对照意义（单月无演化可看，六节已覆盖全局密度）
+    if len(months) >= 2:
+        rows = [
+            [
+                slot["month"],
+                str(slot["projects"]),
+                str(slot["purchasers"]),
+                str(round(slot["hhi"], 0)) if slot["hhi"] is not None else "——",
+                _fmt_pct(slot["award_rate"]),
+            ]
+            for slot in months
+        ]
+        sections += [
+            "## 十一、集中度月度趋势（估算）",
+            "",
+            _render_table(
+                ["月份", "项目数", "采购人数", "HHI(0-10000)", "定标率"], rows
+            ),
+            "",
+            "注：HHI 按当月采购人分布估算（口径同六节）；无发布日期记录不参与；单月数据无趋势对照不展示本节。",
+            "",
+        ]
+
+    suppliers = payload.get("supplier_profiles") or []
+    if suppliers:
+        rows = [
+            [
+                profile["winner"],
+                str(profile["award_count"]),
+                _fmt_money(profile["budget_total"]),
+                _fmt_money(profile["budget_mean"]),
+                str(profile["purchaser_count"]),
+                "、".join(profile["categories"]) or "——",
+            ]
+            for profile in suppliers
+        ]
+        sections += [
+            "## 十二、供应商画像（中标数 Top）",
+            "",
+            _render_table(
+                ["供应商", "中标数", "所中项目预算合计(万)", "平均预算(万)", "买方数", "领域"],
+                rows,
+            ),
+ "",
+            "注：预算为**项目预算口径**（库内无中标合同额字段）；未定标/流标记录不参与本节；买方数 = 所中项目采购人去重数。",
+            "",
+        ]
+        pairs = payload.get("purchaser_supplier_pairs") or []
+        if pairs:
+            pair_rows = [
+                [
+                    p["purchaser"],
+                    p["winner"],
+                    str(p["repeat_count"]),
+                    _fmt_money(p["budget_total"]),
+                    "、".join(p["months"]),
+                ]
+                for p in pairs
+            ]
+            sections += [
+                "### 重复合作关系（同采购人 × 同供应商 ≥ 2 次）",
+                "",
+                _render_table(
+                    ["采购人", "供应商", "合作次数", "预算合计(万)", "合作月份"],
+                    pair_rows,
+                ),
+                "",
+                "注：重复中标是**合作信号**不是违规认定；单次合作对不展示；月份为公告月口径。",
+                "",
+            ]
+
+    outliers = payload.get("budget_outliers") or {}
+    if outliers and not outliers.get("skipped_reason"):
+        rows = [
+            ["疑似高价（超上围栏）", o["project_name"], _fmt_money(o["budget"])]
+            for o in outliers["high"]
+        ] + [
+            ["疑似低价（低于下围栏）", o["project_name"], _fmt_money(o["budget"])]
+            for o in outliers["low"]
+        ]
+        fence = (
+            f"样本 {outliers['sample_count']} 个；"
+            f"Q1={_fmt_money(outliers['q1'])} / 中位={_fmt_money(outliers['median'])} / "
+            f"Q3={_fmt_money(outliers['q3'])}；"
+            f"围栏 [{_fmt_money(outliers['lower_fence'])}, "
+            f"{_fmt_money(outliers['upper_fence'])}]"
+        )
+        sections += [
+            "## 十三、预算离群标记（IQR）",
+            "",
+            fence,
+            "",
+            (
+                _render_table(["类别", "项目", "预算(万)"], rows)
+                if rows
+                else "本口径下无离群样本。"
+            ),
+            "",
+            "注：离群是**统计标记**不是数据错误；低价离群常见于万元/元口径混录，高价离群常见于打包标，均需人工复核。",
+            "",
+        ]
+
+    cooc = payload.get("keyword_cooccurrence") or []
+    if cooc:
+        rows = [
+            [
+                " × ".join(entry["pair"]),
+                str(entry["count"]),
+                "；".join(entry["sample_projects"]),
+            ]
+            for entry in cooc
+        ]
+        sections += [
+            "## 十四、领域词共现（同项目结伴出现）",
+            "",
+            _render_table(["词对", "共现数", "示例项目"], rows),
+            "",
+            "注：共现 ≠ 因果，仅刻画「一起被提及」；共现数 < 2 的孤例词对不展示（无信号）。",
+            "",
+        ]
+
+    province = payload.get("province_distribution") or {}
+    prov_dist = province.get("distribution") or {}
+    if prov_dist:
+        rows = [[name, str(count)] for name, count in prov_dist.items()]
+        sections += [
+            "## 十五、省级归一分布（混杂口径折叠）",
+            "",
+            _render_table(["省级区域", "项目数"], rows),
+            "",
+            (
+                f"解析成功 {province['parsed_count']} 条 / "
+                f"无法定位省级 {province['unknown_count']} 条"
+                "（裸市名/空区域不猜数，不计入本节）。"
+            ),
+            "",
+        ]
+
     sections += [
         "## 口径说明",
         "",
@@ -226,4 +560,17 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
         "- 预算单位统一为万元（采集/抽取面归一口径）。",
         "",
     ]
-    return "\n".join(sections)
+    body = "\n".join(sections)
+    # R63：目录注入（标题块后）——15 节长报告可导航
+    toc = build_toc(body)
+    if toc:
+        lines = body.split("\n")
+        # 标题元信息块（# 标题 + 空行 + 摘要列表）后、首个 ## 节前插入
+        first_section = next(
+            (i for i, ln in enumerate(lines) if ln.startswith("## ")), None
+        )
+        if first_section:
+            lines.insert(first_section, toc.rstrip("\n"))
+            lines.insert(first_section + 1, "")
+            body = "\n".join(lines)
+    return body

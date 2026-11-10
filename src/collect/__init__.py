@@ -6,7 +6,13 @@
 
 from src.collect.dedupe import DedupeResult, dedupe_records, normalize_source_url
 from src.collect.records import AnnouncementRecord, RecordValidationError
-from src.collect.sources import LoadResult, SourceError, load_records
+from src.collect.sources import (
+    LoadResult,
+    SourceError,
+    load_records,
+    register_source_reader,
+    supported_suffixes,
+)
 
 __all__ = [
     "AnnouncementRecord",
@@ -14,6 +20,8 @@ __all__ = [
     "LoadResult",
     "SourceError",
     "load_records",
+    "register_source_reader",
+    "supported_suffixes",
     "DedupeResult",
     "dedupe_records",
     "normalize_source_url",
