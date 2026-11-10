@@ -1287,10 +1287,20 @@ pub fn import_files(
 
     let mut specs: Vec<Value> = Vec::with_capacity(files.len());
     for (i, f) in files.iter().enumerate() {
-        let upload_ref = f
+        let upload_ref_raw = f
             .get("upload_ref")
             .and_then(Value::as_str)
             .ok_or_else(|| IpcError::bad_args(format!("files[{i}].upload_ref 缺失")))?;
+        // R9（#47 跨平台硬化①）：upload_ref 分隔符归一（壳侧入口形态归一——
+        // 单一真源）：Windows `\` → `/`、压缩空段与 `.` 段（`a//b`、`a/./b`
+        // → `a/b`）。**`..` 段原样保留**（穿越裁决在域层 fs_fence——归一
+        // 不得吞 `..`，否则 `a/../b` 被错误归一成 `a/b` 开洞）；绝对路径
+        // （Unix `/x` / Windows 盘符 `C:/x`）只换分隔符不压缩（压缩会破坏
+        // 绝对语义）。归一动机：Windows 形态 `子\文件.docx` 在 Linux 壳上
+        // 被当单文件名（找不到真文件）；两形态 rel 不一致 → sha 幂等去重
+        // 失效（同一文件双入库）。
+        let upload_ref = normalize_upload_ref(upload_ref_raw);
+        let upload_ref = upload_ref.as_str();
         let filename = f
             .get("filename")
             .and_then(Value::as_str)
@@ -1522,6 +1532,28 @@ fn resolve_ingest_dst(
         }
     }
     Err(format!("{name} 同名冲突超过 999 个变体（请整理工作区）"))
+}
+
+/// R9（#47 跨平台硬化①）：`upload_ref` 分隔符归一——壳侧入口形态归一
+/// （单一真源）。规则：`\` → `/`；相对路径压缩空段与 `.` 段（`a//b`、
+/// `a/./b` → `a/b`）；**`..` 段原样保留**（穿越裁决在域层 `fs_fence`——
+/// 归一吞 `..` 会把 `a/../b` 错误归一成 `a/b` 开洞）；绝对路径（Unix
+/// `/x` / Windows 盘符 `C:/x`）只换分隔符不压缩（压缩破坏绝对语义——
+/// `/etc/x` 会错指工作区内 `etc/x`）。
+fn normalize_upload_ref(raw: &str) -> String {
+    let s = raw.replace('\\', "/");
+    let bytes = s.as_bytes();
+    let is_unix_abs = s.starts_with('/');
+    let is_win_drive = bytes.len() >= 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':';
+    if is_unix_abs || is_win_drive {
+        return s;
+    }
+    s.split('/')
+        .filter(|seg| !seg.is_empty() && *seg != ".")
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// 写面服务获取（#19 专用）：无 db.json → `BidService::open` 空态起步
@@ -2588,5 +2620,93 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R9（#47 跨平台硬化①）：upload_ref 分隔符归一——Windows 形态 `\` 在
+    /// Linux 壳上归一成 `/` 找到同一文件；两形态同 sha 幂等（不双入库）；
+    /// `..` 段保留（域层围栏照拦）；绝对路径只换分隔符不压缩。
+    #[test]
+    fn upload_ref_separator_normalized_and_idempotent() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("sep9");
+        // 建项（导入需要项目在场——project_id 由壳侧注入）
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("分隔符归一项目", "PRJ-SEP9", "明标", "ext-sep9")
+                .unwrap();
+        }
+        // 种真实文件（/ 形态目录——与 fs.tree 的 rel 形态一致）
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("子目录")).unwrap();
+        std::fs::write(dir.join("子目录").join("招标文件.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        // ① Windows 形态 `子目录\招标文件.docx` ——归一成 `/` 找到同一文件
+        //    （归一前在 Linux 壳上被当单文件名 → 找不到文件 item failure）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "子目录\\招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "Windows 形态 upload_ref 归一后应导入成功：{r}");
+        assert_eq!(
+            r["result"]["totals"]["files"], json!(1),
+            "归一后 1 件入库：{r}"
+        );
+
+        // ② `/` 形态重复导入同一文件 → 同 sha 幂等（域层 no-op：原 file_id
+        //    + deduplicated 标记——归一后两形态同 rel 同 sha，不双入库）
+        let first_id = r["result"]["file_ids"][0].clone();
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "子目录/招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "幂等重放不是错误：{r}");
+        assert_eq!(
+            r["result"]["per_file"][0]["deduplicated"], json!(true),
+            "同 sha 同文件（归一后同 rel）→ 域层 no-op 幂等标记：{r}"
+        );
+        assert_eq!(
+            r["result"]["file_ids"][0], first_id,
+            "幂等重放返回原 file_id（不建新条目）：{r}"
+        );
+        // 全量文件计数仍 1（bid.state 同源——两形态不双入库）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(
+            r["result"]["quick_stats"]["files"], json!(1),
+            "两形态导入后库内仍只 1 件：{r}"
+        );
+
+        // ③ `..` 段保留：`../x.docx` 不被归一吞段——域层围栏照拦（not_found
+        //    之外的安全语义不变）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "../escape.docx", "kind": "招标文件" }]
+        }));
+        // 围栏内词法预拒 → 逐件失败登记（E_PARTIAL 成功面）或壳侧错误——
+        // 关键断言：不因归一把 `..` 吞掉而「成功」
+        let ok = r["ok"] == json!(true);
+        if ok {
+            let totals = &r["result"]["totals"];
+            assert_ne!(
+                totals["files"], json!(1),
+                "`..` 段被归一吞掉会开穿越洞（错误归一）：{r}"
+            );
+        }
+
+        // ④ 归一形态断言：`a//b`、`a/./b` → `a/b`（纯函数面）
+        assert_eq!(normalize_upload_ref("a//b.docx"), "a/b.docx");
+        assert_eq!(normalize_upload_ref("a/./b.docx"), "a/b.docx");
+        assert_eq!(normalize_upload_ref(".\\a\\b.docx"), "a/b.docx");
+        // `..` 保留 / 绝对路径只换分隔符不压缩
+        assert_eq!(normalize_upload_ref("a/../b.docx"), "a/../b.docx");
+        assert_eq!(normalize_upload_ref("/etc/x.docx"), "/etc/x.docx");
+        assert_eq!(normalize_upload_ref("C:\\ws\\x.docx"), "C:/ws/x.docx");
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
