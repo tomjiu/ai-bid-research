@@ -256,6 +256,9 @@ pub fn state(
         "evidence_bindings".into(),
         json!(store.evidence_bindings().len()),
     );
+    // #19：文件计数（向导判「DRAFT 且未导入」用——files===0 时 detail 面
+    // 顶部给导入卡；与 requirements/evidence 同源同口径，不另开真源）
+    qo.insert("files".into(), json!(store.files().len()));
     Ok(json!({
         "present": true,
         "workspace": ws.root_display(),
@@ -449,7 +452,19 @@ pub fn matrix(
         );
     }
 
-    Ok(json!({
+        // #603 批 B：overrides 直读面（DomainStore——bid.outline / bid.gates
+    // 直读先例）。工具面 get_compliance_matrix 行内无覆写标记，本面补
+    // 「哪些行被人工豁免过、谁豁免的、何时、为何」的审计素材（UI 徽章
+    // + 追溯 tooltip）；行状态本身仍是工具面派生真源（override > 证据+
+    // 章节），两处不重复判定。
+    let overrides: serde_json::Map<String, Value> = svc
+        .store()
+        .matrix_overrides()
+        .iter()
+        .map(|(k, o)| (k.clone(), matrix_override_json(o)))
+        .collect();
+
+Ok(json!({
         "present": true,
         "workspace": ws.root_display(),
         "project": {
@@ -467,6 +482,7 @@ pub fn matrix(
             "evidence_missing": evidence_missing,
         },
         "star_summary": star_summary,
+        "overrides": Value::Object(overrides),
         "warnings": warnings,
         "project_version": project_version,
         "fetched_pages": pages,
@@ -770,6 +786,374 @@ pub fn gate_pass(
     }))
 }
 
+// ---------------------------------------------------------------- #20 治理出口三件
+//
+// 认领 issue #20（#313 总纲审计 缺口-3）：三个用户决策/治理动作此前无
+// UI 出口（只能代理/CLI 驱动）。三条 IPC 全部经 `bid_mcp::dispatch_with`
+// 走真实工具面，裁决全在域层（壳零重实现）：
+//   * [`packages`] —— list_packages（#316 只读：多标段/多包识别与选包状态）
+//   * [`matrix_override`] —— set_matrix_override（#226 否决项死锁的人工
+//     出口：把「本次招标不接受联合体」类招标人规则说明标 NOT_APPLICABLE，
+//     偏离说明必填；receipt 宿主签发四重绑定行/状态/理由——Agent 伪造不了）
+//   * [`recover_state`] —— recover_validating_state（#243 历史异常态
+//     VALIDATING+缺章的受支持恢复：三重域层约束 + 审计账，非任意状态写入）
+
+/// `bid.packages` —— 分包清单（只读，#316）。
+pub fn packages(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "list_packages".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "packages": tool_out,
+    }))
+}
+
+/// `bid.matrix_override` —— 否决项死锁人工裁定（写面，#226）。
+///
+/// receipt 走 #182 宿主签发面（不进 MCP 工具表——Agent 拿不到）：
+/// `matrix_override_scope` 四重绑定（project/requirement/status/理由
+/// sha256），换任何一项都要换签。status=NOT_APPLICABLE 的偏离说明
+/// 必填性由工具面裁决（壳透传空串会被响亮拒——不可审计的豁免不算豁免）。
+pub fn matrix_override(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let requirement_id = a.req_str("requirement_id")?.trim().to_string();
+    if requirement_id.is_empty() {
+        return Err(IpcError::bad_args("requirement_id 不能为空"));
+    }
+    let status = a.req_str("status")?.trim().to_string();
+    let deviation = a.str("deviation")?.unwrap_or("").trim().to_string();
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发：四重绑定签域（project/requirement/status/理由摘要）
+    let scope = bid_mcp::matrix_override_scope(&project_id, &requirement_id, &status, &deviation);
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "requirement_id": requirement_id,
+        "status": status,
+        "deviation": deviation,
+        "receipt": receipt,
+    });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "set_matrix_override".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "override": tool_out,
+    }))
+}
+
+/// `bid.recover_state` —— VALIDATING+缺章异常态恢复（写面，#243）。
+///
+/// 理由必填非空白（不可审计的恢复不成恢复）；三重域层约束（仅
+/// VALIDATING / 仅缺章 / 理由非空白）+ 审计账全在工具面——非死锁态
+/// 按「恢复」会被 E_STATE 响亮拒（UI 引导，不是故障）。
+pub fn recover_state(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let reason = a.req_str("reason")?.trim().to_string();
+    if reason.is_empty() {
+        return Err(IpcError::bad_args("reason 必填非空白（不可审计的恢复不成恢复）"));
+    }
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({ "project_id": project_id, "reason": reason });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "recover_validating_state".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    // 恢复改写项目状态 → db.json 落盘，指纹变化自动失效缓存（读面刷新重开）。
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "recover": tool_out,
+    }))
+}
+
+// ───────────────────────────────── #603 批 C：补遗豁免面
+
+fn matrix_override_json(o: &bid_domain::matrix::MatrixOverride) -> Value {
+    json!({
+        "status": o.status.as_str(),
+        "deviation": o.deviation,
+        "principal": o.principal,
+        "actor": o.trusted.as_ref().map(|p| json!({
+            "actor_id": p.actor_id,
+            "actor_type": p.actor_type.as_str(),
+            "authentication_method": p.authentication_method,
+        })),
+        "at": o.at,
+    })
+}
+
+/// `bid.addenda` —— 补遗件台账（只读；#603 批 C）。
+///
+/// DomainStore + readiness 直读（bid.gates 同款纪律——MCP 工具面无此
+/// 整面视图）：补遗就绪度（`readiness::{total, ready, not_ready[]}`——
+/// not_ready 含**已确认**件（waived=true——审计面不因放行而消失，
+/// Agent/用户据此知道哪些件是带确认放行的））+ 逐件确认台账
+/// （`waivers`：file_id/reason/at/principal）。读面**无状态窗**：早期态
+/// 「无补遗件」（total=0）本身是有效信息——它是「未发现补遗」
+/// NotProvided 阻塞的素材（全局确认门的输入），不是故障。
+pub fn addenda(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let store = svc.store();
+    let project = store.project().map_err(map_domain_err)?;
+    let statuses = bid_tools::readiness::addendum_statuses(store);
+    let ready = statuses
+        .iter()
+        .filter(|s| s.readiness == bid_tools::readiness::AddendumReadiness::Ready)
+        .count();
+    let not_ready: Vec<Value> = statuses
+        .iter()
+        .filter(|s| s.readiness != bid_tools::readiness::AddendumReadiness::Ready)
+        .map(|s| {
+            json!({
+                "file_id": s.file_id,
+                "name": s.name,
+                "readiness": s.readiness.as_str(),
+                "waived": s.waived,
+                "reason": s.reason,
+            })
+        })
+        .collect();
+    let waivers: Vec<Value> = store
+        .addendum_waivers()
+        .iter()
+        .map(|w| {
+            json!({
+                "file_id": w.file_id,
+                "reason": w.reason,
+                "at": w.at,
+                "principal": w.principal,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "status": project.status.as_str(),
+        },
+        "readiness": {
+            "total": statuses.len(),
+            "ready": ready,
+            "not_ready": not_ready,
+        },
+        "waivers": waivers,
+    }))
+}
+
+/// `bid.addendum_waiver` —— 补遗逐件确认（写面；#603 批 C）。
+///
+/// #184 补遗分级阻塞的人工出口（UI 接线）：某补遗/输入件不处 READY
+/// （FAILED/OCR_PENDING）时起草被拒——人工逐件免责（file_id 级绑定）后
+/// 放行，起草标 RESTRICTED（受限起草，不静默当完整输入）。
+/// 流程（#182 宿主签发面，与 [`gate_pass`] / [`matrix_override`] 同款）：
+/// 壳内真人经 UI 确认（件/理由）→ 壳签 receipt（签域 `addendum_waiver:
+/// {file_id}`——TF-0003 的 receipt 免不了 TF-0004）→ 经
+/// `dispatch_with(record_addendum_waiver)` 走真实工具面（状态窗
+/// FILES_IMPORTED+ / 幽灵件拒 / 空白理由拒全在域层裁决）→ 工具输出原样
+/// 放 `addendum_waiver` 键（recorded 回执 / actor / addendum_readiness /
+/// agent_waivers / human_review_complete）。
+///
+/// 参数：`file_id`、`reason`（必填——不可审计的确认不成确认，壳侧早拒
+/// 空白）、`actor_id`（缺省 `shell-operator`）、`project_version`（CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；幽灵 file_id → `not_found`
+/// （对不存在的件做确认 = 凭空免责）；空白理由 → `bad_args`。
+pub fn addendum_waiver(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let file_id = a.req_str("file_id")?.to_string();
+    let reason = a.req_str("reason")?.to_string();
+    // 壳侧早拒（域层同款口径——不可审计的确认不成确认）
+    if reason.trim().is_empty() {
+        return Err(IpcError::bad_args(
+            "reason 必填——确认理由不得为空白（不可审计的确认不成确认）",
+        ));
+    }
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发面：签域绑本件（TF-0003 的 receipt 免不了 TF-0004）。
+    let scope = bid_mcp::addendum_waiver_scope(&file_id);
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "file_id": file_id,
+        "reason": reason,
+        "receipt": receipt,
+    });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "record_addendum_waiver".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "addendum_waiver": tool_out,
+    }))
+}
+
+/// `bid.no_addendum_confirm` —— 「本项目无补遗」全局确认（写面；#603 批 C）。
+///
+/// #379 拆门的独立写面：NotProvided 阻塞（未发现补遗/澄清件）的唯一
+/// 人工出口。与逐件免责是**两种语义**（坏件带病放行 vs 全项目无补遗
+/// 声明）——壳层结构性隔离为两条命令（互斥校验在工具面：混调用响亮拒）。
+/// 流程（#182 宿主签发面）：壳签 receipt（签域 `no_addendum_confirmed`）
+/// → 经 `dispatch_with(record_addendum_waiver, confirm_no_addendum=true)`
+/// 走真实工具面（域前置裁决：项目已有补遗件时响亮拒——「确认无补遗」
+/// 与事实矛盾，正确出口是逐件确认或修复重传）→ 工具输出原样放
+/// `no_addendum_confirm` 键（confirmed_no_addendum 回执（含 #277 过门
+/// 方式与 human_confirmed）/ addendum_waivers / addendum_readiness /
+/// agent_waivers / human_review_complete）。
+///
+/// 参数：`reason`（必填）、`actor_id`（缺省 `shell-operator`）、
+/// `project_version`（CAS）。
+///
+/// 拒绝面：无 db.json → `not_found`；项目已有补遗件 / 空白理由 →
+/// `bad_args`（域层 E_UNPROCESSABLE 原文——给出正确出口指引）。
+pub fn no_addendum_confirm(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let reason = a.req_str("reason")?.to_string();
+    // 壳侧早拒（域层同款口径——全局确认与逐件 waiver 同构）
+    if reason.trim().is_empty() {
+        return Err(IpcError::bad_args(
+            "reason 必填——确认理由不得为空白（不可审计的确认不成确认）",
+        ));
+    }
+    let actor_id = a
+        .str("actor_id")?
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell-operator".to_string());
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // #182 宿主签发面：全局确认独立签域（与逐件签域分离——A 门 receipt
+    // 免不了 B 门）。
+    let scope = bid_tools::service::no_addendum_confirmed_scope();
+    let receipt = svc.issue_approval_receipt(&actor_id, &scope);
+    let mut args = json!({
+        "project_id": project_id,
+        "reason": reason,
+        "confirm_no_addendum": true,
+        "receipt": receipt,
+    });
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "record_addendum_waiver".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "no_addendum_confirm": tool_out,
+    }))
+}
+
+
 /// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
 /// 借用面：先取后放，`dispatch_with` 要 `&mut BidService`。
 fn project_meta(
@@ -937,6 +1321,297 @@ pub fn coverage(
             },
         },
     }))
+}
+
+/// `bid.validate` —— 标书校验报告（#18：导出前置面）。
+///
+/// 主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面
+/// （与 bid-mcp-stdio 同源裁决——`quality` / `matrix` 先例）。UI 入口
+/// 固定 `scope=all`（sections 细分是代理高级面，不进 UI）。工具面会
+/// 推进项目至 VALIDATING（域层语义，壳不拦截）。无章节树等前置不满足
+/// → E_STATE 透传 `state` 码（UI 引导卡而非故障横幅）。
+pub fn validate(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "validate_bid_document".to_string(),
+            args: json!({ "project_id": project_id, "scope": "all" }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "report": tool_out,
+    }))
+}
+
+/// `bid.export` —— 标书导出落盘（#18：产品出口面）。
+///
+/// 主体经 `bid_mcp::dispatch_with(export_bid_document)` 走真实工具面：
+/// 双前置门（校验过 + 过门确认）由工具面裁决，E_STATE 原文含状态与前置
+/// 说明，壳不复制状态窗（`state` 码透传）。`format` 限 docx | pdf（pdf
+/// 需 Word/LibreOffice 转换通道，环境缺失 → 工具面 bad_args 响亮拒）；
+/// `output_path` 必须是工作区相对路径（工具面校验 `..` 逃逸，壳不重复）。
+/// 幂等：同 (项目, 内容版本, 格式, 路径) 重放直返首次结果（deduplicated）。
+pub fn export(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let format = a.req_str("format")?;
+    let output_path = a.req_str("output_path")?;
+    let dark_bid = a.bool("dark_bid")?.unwrap_or(false);
+    let bidder_name = a.str("bidder_name")?.map(str::to_string);
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({
+        "project_id": project_id,
+        "format": format,
+        "output_path": output_path,
+        "profile": { "dark_bid": dark_bid },
+    });
+    if let Some(n) = bidder_name {
+        args["profile"]["bidder_name"] = json!(n);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "export_bid_document".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "export": tool_out,
+    }))
+}
+
+
+/// `bid.create_project` —— 新建标书项目（写面；#19 导入向导第一步）。
+///
+/// 与只读面的分野：无 db.json 不再是 `not_found`——本命令的职责恰是在
+/// 空工作区起步（`BidService::open` 空库 + `.mang/approval.key` 落盘，
+/// 副作用即目的）。已有项目时走 [`ensure_locked`] 缓存；幂等/越级裁决
+/// 全在工具面（同 external_key 重放 → 静默幂等返回原 project_id；异 key
+/// 再建 → E_STATE 零副作用——UI 分支引导卡而非故障横幅，§109 同口径）。
+///
+/// `external_key` 缺省 = 工作区 canonical 路径（一个工作区一个项目——
+/// UI 重试/重复提交天然幂等，不产生第二个项目；db.json 在工作区根，
+/// 路径键与存储位一一对应）。`mode` / `bid_deadline` 壳侧前置校验
+/// （空工作区里少留无谓副作用——校验失败时连 approval.key 都不生成）。
+pub fn create_project(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let name = a.req_str("name")?;
+    let bid_deadline = a.req_str("bid_deadline")?;
+    let mode = a.req_str("mode")?;
+    if !matches!(mode, "明标" | "暗标") {
+        return Err(IpcError::bad_args(
+            "mode 须为 明标|暗标（契约 §1），向导单选框只出这两个值",
+        ));
+    }
+    // YYYY-MM-DD 粗形校验（月/日语义校验在工具面 parse_ymd——分层不重复）
+    if bid_deadline.len() != 10
+        || bid_deadline.as_bytes()[4] != b'-'
+        || bid_deadline.as_bytes()[7] != b'-'
+        || !bid_deadline.bytes().all(|b| b.is_ascii_digit() || b == b'-')
+    {
+        return Err(IpcError::bad_args(format!(
+            "bid_deadline 须为 YYYY-MM-DD，实际：{bid_deadline}"
+        )));
+    }
+    let notice_ref = a.str("tender_notice_ref")?;
+    let external_key = a
+        .str("external_key")?
+        .map(str::to_string)
+        .unwrap_or_else(|| ws.root_canonical().to_string_lossy().into_owned());
+
+    let mut guard = lock(cache);
+    let svc = ensure_or_open(&mut guard, ws)?;
+
+    let mut args = json!({
+        "name": name,
+        "bid_deadline": bid_deadline,
+        "mode": mode,
+        "external_key": external_key,
+    });
+    if let Some(r) = notice_ref {
+        args["tender_notice_ref"] = json!(r);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "create_bid_project".to_string(),
+            args,
+        },
+    );
+    let out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    let mut v = json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "db": paths::display(&ws.root_canonical().join("db.json")),
+    });
+    if let (Some(dst), Some(src)) = (v.as_object_mut(), out.as_object()) {
+        for (k, val) in src {
+            dst.insert(k.clone(), val.clone());
+        }
+    }
+    Ok(v)
+}
+
+/// `bid.import_files` —— 导入招标文件（写面；#19 导入向导第二步）。
+///
+/// `project_id` 由壳侧从服务态真源注入（单一真源——UI 不自报，防串项目）；
+/// `upload_ref` 为工作区相对路径（fs.tree 的 rel——`/` 分隔）或围栏内
+/// 绝对路径，围栏锚定在工具面 `fs_fence::resolve_read`（BidService::open
+/// 的围栏根即工作区根，相对路径天然落在围栏内）。`filename` 缺省取
+/// upload_ref 基名；`kind` 缺省「附件」（契约 §2 同款缺省）。
+///
+/// 工具面 E_PARTIAL（部分件 parse FAILED）不按错误回：`data` 携带成功面
+/// （per_file / totals / addendum_readiness / input_integrity）——壳侧
+/// 组装 `partial:true` + `item_errors` 的成功响应，向导「成功面 + 失败
+/// 清单」同屏分账（契约 §2：失败件全程禁引，成功件照常入库不回滚）。
+pub fn import_files(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let files = a
+        .get("files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            IpcError::bad_args(
+                "files 缺失或非数组（#19：files:[{upload_ref, filename?, kind?}]）",
+            )
+        })?
+        .clone();
+    if files.is_empty() {
+        return Err(IpcError::bad_args(
+            "files 不得为空（空批次无导入语义——查状态用 bid.state）",
+        ));
+    }
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let project_id = svc
+        .store()
+        .project()
+        .map_err(map_domain_err)?
+        .id
+        .clone();
+
+    let mut specs: Vec<Value> = Vec::with_capacity(files.len());
+    for (i, f) in files.iter().enumerate() {
+        let upload_ref = f
+            .get("upload_ref")
+            .and_then(Value::as_str)
+            .ok_or_else(|| IpcError::bad_args(format!("files[{i}].upload_ref 缺失")))?;
+        let filename = f
+            .get("filename")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                std::path::Path::new(upload_ref)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| upload_ref.to_string())
+            });
+        let mut spec = json!({ "upload_ref": upload_ref, "filename": filename });
+        if let Some(k) = f.get("kind").and_then(Value::as_str) {
+            spec["kind"] = json!(k);
+        }
+        specs.push(spec);
+    }
+
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "import_tender_files".to_string(),
+            args: json!({ "project_id": project_id, "files": specs }),
+        },
+    );
+    let out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => match error {
+            bid_mcp::ToolError::EPartial {
+                what,
+                item_errors,
+                data,
+                ..
+            } => {
+                // #19：部分成功不是故障——成功面原样 + partial 分账字段
+                //（UI 渲染 per_file 表时 parse_status=FAILED 行标红即可）
+                let mut v = data.unwrap_or_else(|| json!({}));
+                if let Some(o) = v.as_object_mut() {
+                    o.insert("present".into(), json!(true));
+                    o.insert("partial".into(), json!(true));
+                    o.insert("partial_what".into(), json!(what));
+                    o.insert("item_errors".into(), json!(item_errors));
+                }
+                return Ok(v);
+            }
+            other => return Err(map_tool_err(other)),
+        },
+    };
+    let mut v = json!({
+        "present": true,
+        "workspace": ws.root_display(),
+    });
+    if let (Some(dst), Some(src)) = (v.as_object_mut(), out.as_object()) {
+        for (k, val) in src {
+            dst.insert(k.clone(), val.clone());
+        }
+    }
+    Ok(v)
+}
+
+/// 写面服务获取（#19 专用）：无 db.json → `BidService::open` 空态起步
+/// （副作用即目的——approval.key 生成属正常建项流程）；有 db.json → 走
+/// [`ensure_locked`] 的指纹缓存。起步条目指纹记 0（假指纹）——写盘后
+/// 下一条命令必然按新 db.json 重开，不吐陈旧态。
+fn ensure_or_open<'a>(
+    cache: &'a mut Option<CachedService>,
+    ws: &Workspace,
+) -> Result<&'a mut bid_tools::service::BidService, IpcError> {
+    if ws.root_canonical().join("db.json").is_file() {
+        return ensure_locked(cache, ws);
+    }
+    let root = ws.root_canonical().to_path_buf();
+    let svc = bid_tools::service::BidService::open(&root).map_err(map_store_err)?;
+    *cache = Some(CachedService {
+        root,
+        db_mtime_ms: 0,
+        db_len: 0,
+        svc,
+    });
+    Ok(&mut cache
+        .as_mut()
+        .expect("上一行刚写入 Some")
+        .svc)
 }
 
 
@@ -1717,6 +2392,279 @@ mod tests {
             t["declarations"].as_u64().unwrap() + t["star_truth"].as_u64().unwrap(),
             "★口径恒等式：total = declarations + truth"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #19：导入向导写面全链（ipc.rs 注册 → bid.rs → bid_mcp 真实工具面）。
+    /// 空工作区起步：state not_found → create_project（隐式幂等键 = 工作区
+    /// 路径）→ 同参重放 deduplicated → import_files（相对路径围栏锚定）
+    /// → state 翻 FILES_IMPORTED + quick_stats.files 可见。
+    /// 假指纹（db_mtime_ms=0）的陈旧态风险在此钉死：建项后立刻读 state
+    /// 必须从新 db.json 恢复（ensure_or_open 的口径）。
+    #[test]
+    fn wizard_create_and_import_roundtrip_19() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("wiz19");
+        let ctx = Ctx::new(ws, std::path::PathBuf::from("/tmp"));
+
+        fn call(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        // 1) 空工作区：只读面无副作用 → not_found（引导先建项）
+        let r = call(&ctx, "bid.state", json!({}));
+        assert_eq!(r["ok"], json!(false), "空工作区 bid.state 应 not_found：{r}");
+        assert_eq!(r["code"], json!("not_found"));
+
+        // 2) 建项（external_key 缺省——工作区路径幂等键）
+        let r = call(&ctx, "bid.create_project", json!({
+            "name": "演示水厂项目",
+            "bid_deadline": "2099-12-31",
+            "mode": "明标",
+        }));
+        assert_eq!(r["ok"], json!(true), "建项应成功：{r}");
+        let pid = r["result"]["project_id"]
+            .as_str()
+            .expect("project_id 回显")
+            .to_string();
+        assert_eq!(r["result"]["status"], json!("DRAFT"));
+        assert!(
+            dir.join("db.json").is_file(),
+            "db.json 落盘（写面副作用即目的）"
+        );
+
+        // 3) 建项后立刻读（假指纹 → 必从新 db.json 重开，不吐陈旧态）
+        let r = call(&ctx, "bid.state", json!({}));
+        assert_eq!(r["ok"], json!(true), "建项后 state 应 present：{r}");
+        assert_eq!(
+            r["result"]["quick_stats"]["files"],
+            json!(0),
+            "导入前 files 计数为 0 可见"
+        );
+
+        // 4) 同参重放 → 幂等返回原 project_id（不建第二个项目）
+        let r = call(&ctx, "bid.create_project", json!({
+            "name": "演示水厂项目",
+            "bid_deadline": "2099-12-31",
+            "mode": "明标",
+        }));
+        assert_eq!(r["ok"], json!(true), "幂等重放不是错误：{r}");
+        assert_eq!(
+            r["result"]["project_id"],
+            json!(pid),
+            "工作区路径幂等键重放返回原 id"
+        );
+        assert_eq!(r["result"]["deduplicated"], json!(true));
+
+        // 5) 导入（工作区相对路径——fs.tree 的 rel 形态）。
+        //    夹具 = corpus-A 主文件（真实招标 docx；引擎是纯 Rust OOXML
+        //    读面，无外部依赖——pdf 面才要 pdfium/poppler，测试不赌环境）
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("files")).unwrap();
+        std::fs::write(dir.join("files").join("A-招标文件.docx"), MIN_DOCX).unwrap();
+        let r = call(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "files/A-招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "导入应成功：{r}");
+        let ids = r["result"]["file_ids"].as_array().expect("file_ids 回显");
+        assert_eq!(ids.len(), 1, "1 件入库：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(1));
+        assert_ne!(
+            r["result"]["totals"]["chunks"],
+            json!(0),
+            "docx 引擎切块应产出 chunks：{r}"
+        );
+
+        // 6) 状态翻 FILES_IMPORTED + files 计数
+        let r = call(&ctx, "bid.state", json!({}));
+        assert_eq!(
+            r["result"]["project"]["status"],
+            json!("FILES_IMPORTED"),
+            "导入推进状态机：{r}"
+        );
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(1));
+
+        // 7) 空批次 → bad_args（空批次无导入语义）
+        let r = call(&ctx, "bid.import_files", json!({ "files": [] }));
+        assert_eq!(r["ok"], json!(false));
+        assert_eq!(r["code"], json!("bad_args"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // ================================ #20 治理出口三件 ================================
+
+    /// packages 只读面 + override/recover 写面的壳侧守门与真实工具面路由。
+    /// 正向死锁豁免（NOT_APPLICABLE 全链）与 VALIDATING 恢复正例待 Windows
+    /// 真机/管线种子——本测覆盖：读面应答形态 / 壳侧预检 / 域层守门透传。
+    #[test]
+    fn governance_exits_read_and_guards() {
+        let (dir, ws) = tmp_ws("gov-20");
+        seed_project(&dir);
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        // ① bid.packages：真实 list_packages 应答（present + packages 键）
+        let frame = call(&ctx, "bid.packages");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let pk = ok_of(&frame);
+        assert_eq!(pk["present"], json!(true), "{frame}");
+        assert!(
+            pk["packages"].is_object(),
+            "工具面 list_packages 回对象形态：{pk}"
+        );
+        assert!(
+            pk["packages"]["items"].as_array().is_some(),
+            "packages.items 恒为数组（识别 0 包也回空数组）：{pk}"
+        );
+
+        // ② bid.matrix_override：壳侧预检——空 requirement_id 拒（不签发不路由）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "  ", "status": "NOT_APPLICABLE" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "{frame}");
+        // 真实工具面守门：不存在行 → 工具面响亮拒（receipt 签发后按行存在性裁决）
+        let frame = call_args(
+            &ctx,
+            "bid.matrix_override",
+            json!({ "requirement_id": "REQ-9999", "status": "NOT_APPLICABLE",
+                    "deviation": "不存在的行——工具面须拒" }),
+        );
+        assert_eq!(
+            frame["ok"],
+            json!(false),
+            "REQ-9999 不存在，工具面必拒：{frame}"
+        );
+
+        // ③ bid.recover_state：壳侧预检（空理由拒）+ 域层三重约束透传
+        let frame = call_args(&ctx, "bid.recover_state", json!({ "reason": "   " }));
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "空理由在壳侧预检：{frame}");
+        // 种子态非 VALIDATING → 工具面三重约束响亮拒（不假成功）
+        let frame = call_args(
+            &ctx,
+            "bid.recover_state",
+            json!({ "reason": "旧版校验在缺章时误推进 VALIDATING——人工恢复" }),
+        );
+        assert_eq!(
+            frame["ok"],
+            json!(false),
+            "非 VALIDATING 态恢复必被域层拒：{frame}"
+        );
+        assert!(
+            err_code_of(&frame) == "state" || err_code_of(&frame) == "bad_args" || err_code_of(&frame) == "io",
+            "守门拒绝映射到可引导错误码：{frame}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // ── #603 批 C：补遗豁免面 ──
+
+    fn addendum_faces_clean_not_found_without_db() {
+        let (dir, _ws) = tmp_ws("nodb-603c");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.addenda");
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        let frame = call_args(
+            &ctx,
+            "bid.addendum_waiver",
+            json!({ "file_id": "TF-0001", "reason": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        let frame = call_args(
+            &ctx,
+            "bid.no_addendum_confirm",
+            json!({ "reason": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(!dir.join(".mang").exists(), "补遗面不得在工作区留副作用");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn no_addendum_confirm_full_flow() {
+        let (dir, _ws) = tmp_ws("flow-603c");
+        seed_matrix_ready_project(&dir);
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+
+        // ① 读面：无补遗件（total=0——早期态有效信息，不是故障）
+        let frame = call(&ctx, "bid.addenda");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let ad = ok_of(&frame).clone();
+        assert_eq!(ad["readiness"]["total"], json!(0), "无补遗件：{ad:#?}");
+        assert_eq!(ad["readiness"]["not_ready"].as_array().map(Vec::len), Some(0));
+        assert_eq!(ad["waivers"].as_array().map(Vec::len), Some(0));
+
+        // ② 写面：全局确认（宿主签发 receipt——human 路径）
+        let frame = call_args(
+            &ctx,
+            "bid.no_addendum_confirm",
+            json!({
+                "reason": "已核对招标文件全册与答疑纪要，本项目无补遗/澄清件",
+                "actor_id": "operator-zhao"
+            }),
+        );
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let nc = ok_of(&frame)["no_addendum_confirm"].clone();
+        assert_eq!(
+            nc["confirmed_no_addendum"]["gate"],
+            "no_addendum_confirmed",
+            "全局确认回执：{nc:#?}"
+        );
+        assert_eq!(nc["confirmed_no_addendum"]["actor"]["actor_type"], "human");
+        assert_eq!(nc["confirmed_no_addendum"]["actor"]["actor_id"], "operator-zhao");
+        assert_eq!(nc["confirmed_no_addendum"]["human_confirmed"], json!(true), "#182 人类签域验签路径：{nc:#?}");
+
+        // ③ gates 读面对账：no_addendum_confirmed 门已过（最新一条 human）
+        let frame = call(&ctx, "bid.gates");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g = ok_of(&frame).clone();
+        let gates = g["gates"].as_array().unwrap().clone();
+        assert_eq!(gates[4]["gate"], "no_addendum_confirmed");
+        assert_eq!(gates[4]["approved"], json!(true), "过门审计账同源：{gates:#?}");
+        assert_eq!(gates[4]["latest_pass"]["actor"], "operator-zhao");
+        assert_eq!(gates[4]["latest_pass"]["method"], "human_receipt");
+        assert_eq!(gates[3]["approved"], json!(false), "逐件门不受全局确认波及（#379 拆门）");
+
+        // ④ #379 拆门对账：全局确认不写逐件台账（waivers 仍空）
+        let frame = call(&ctx, "bid.addenda");
+        let ad = ok_of(&frame).clone();
+        assert_eq!(
+            ad["waivers"].as_array().map(Vec::len),
+            Some(0),
+            "全局确认 ≠ 逐件免责——台账分账：{ad:#?}"
+        );
+
+        // ⑤ 幽灵件 → 域层 ENotFound → not_found（凭空免责拒）
+        let frame = call_args(
+            &ctx,
+            "bid.addendum_waiver",
+            json!({ "file_id": "TF-9999", "reason": "x" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(
+            frame["message"].as_str().unwrap_or("").contains("不存在"),
+            "拒绝文案要指向凭空免责：{frame}"
+        );
+
+        // ⑥ 空白理由 → 壳侧早拒（不进工具面）
+        for (cmd, body) in [
+            ("bid.addendum_waiver", json!({ "file_id": "TF-0001", "reason": "  " })),
+            ("bid.no_addendum_confirm", json!({ "reason": "" })),
+        ] {
+            let frame = call_args(&ctx, cmd, body);
+            assert_eq!(frame["ok"], json!(false), "{cmd} 空白理由应早拒：{frame}");
+            assert_eq!(err_code_of(&frame), "bad_args");
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 

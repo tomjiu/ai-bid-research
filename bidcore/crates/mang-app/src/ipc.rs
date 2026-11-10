@@ -478,6 +478,42 @@ impl Ctx {
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
+            // ── #19：导入向导写面（bid.rs——create_project 空工作区起步
+            //    （ensure_or_open——副作用即目的），经 bid_mcp 真实工具面
+            //    create_bid_project（external_key 缺省 = 工作区路径幂等键）；
+            //    import_files 壳侧注入 project_id（单一真源——UI 不自报），
+            //    E_PARTIAL 转成功面 + partial 分账）────────────────────
+            "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
+
+            "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+            // ── #18 出口闭环（bid.rs——validate / export 均经 bid_mcp 真实
+            //    工具面 validate_bid_document / export_bid_document；
+            //    E_STATE 透传 `state` 码 → UI 引导卡）──────────────────
+            "bid.validate" => crate::bid::validate(&ws, &self.bid, &a),
+
+            "bid.export" => crate::bid::export(&ws, &self.bid, &a),
+
+            // ── #20 治理出口三件（bid.rs——packages 只读；matrix_override /
+            //    recover_state 为写面：receipt 宿主签发（#182 四重绑定签域）
+            //    后经 bid_mcp 真实工具面 set_matrix_override /
+            //    recover_validating_state；裁决全在域层）────────────
+            "bid.packages" => crate::bid::packages(&ws, &self.bid, &a),
+
+            "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
+
+            "bid.recover_state" => crate::bid::recover_state(&ws, &self.bid, &a),
+
+            // ── #603 批 C：补遗豁免（addenda 为 DomainStore+readiness 直读
+            //    台账；两写面走 record_addendum_waiver 工具面——逐件免责
+            //    与全局无补遗确认语义分账，#379）──────────
+            "bid.addenda" => crate::bid::addenda(&ws, &self.bid, &a),
+
+            "bid.addendum_waiver" => crate::bid::addendum_waiver(&ws, &self.bid, &a),
+
+            "bid.no_addendum_confirm" => crate::bid::no_addendum_confirm(&ws, &self.bid, &a),
+
+
+
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
 
