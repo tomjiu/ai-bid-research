@@ -167,3 +167,32 @@ def configure_console_safe() -> list[str]:
             # 非常规流（已 detach/关闭）——跳过，打印侧自行兜底
             continue
     return actions
+
+
+class PathTooLongError(OSError):
+    """路径超出当前平台保守长度上限（Windows MAX_PATH 常见触发）。"""
+
+    def __init__(self, path: Path, limit: int):
+        self.path = path
+        self.limit = limit
+        super().__init__(
+            f"路径过长（{len(str(path))} ≥ {limit} 字符）：{path}\n"
+            f"缓解方式：① 缩短 --output-dir（移到浅目录，如 C:\\work）；"
+            f"② Windows 启用长路径支持"
+            f"（注册表 LongPathsEnabled=1 后重启）；"
+            f"③ 缩短关键词过滤词。"
+        )
+
+
+def ensure_writable_path(path: Path | str) -> Path:
+    """写入前防护（#601 R44）——平台长度上限先行校验。
+
+    Windows 未启用长路径时 ``open()`` 对 >260 路径抛出的
+    ``FileNotFoundError``（而非 ``OSError``）极具误导性——看似
+    「目录不存在」，实为长度超限。本函数在写前给出**可行动**的
+    专用错误；Linux（PATH_MAX 4096）实质放行。
+    """
+    resolved = Path(path).absolute()
+    if path_too_long(resolved):
+        raise PathTooLongError(resolved, max_path_length())
+    return resolved

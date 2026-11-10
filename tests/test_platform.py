@@ -218,3 +218,48 @@ class TestMainWiring:
         rc = main_mod.main(["templates"])
         assert hardened == [1]
         assert rc == 0
+
+
+class TestPathTooLongGuard:
+    def test_windows_long_path_actionable_error(self, monkeypatch, tmp_path):
+        from src.platform import PathTooLongError, ensure_writable_path
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        deep = tmp_path / ("x" * 240) / ("y" * 40) / "report.md"
+        with pytest.raises(PathTooLongError) as ei:
+            ensure_writable_path(deep)
+        # 可行动三建议
+        assert "LongPathsEnabled" in str(ei.value)
+        assert "--output-dir" in str(ei.value)
+        assert ei.value.limit == 260
+
+    def test_linux_deep_path_passes(self, monkeypatch, tmp_path):
+        from src.platform import ensure_writable_path
+
+        monkeypatch.setattr(sys, "platform", "linux")
+        deep = tmp_path / ("x" * 240) / ("y" * 40) / "report.md"
+        assert ensure_writable_path(deep) == deep.absolute()
+
+    def test_report_save_guard_wired(self, monkeypatch, tmp_path):
+        """报告落盘接线——Windows 深目录下抛专用错误而非误导性 FileNotFoundError。"""
+        from src.platform import PathTooLongError
+        from src.report.generator import ReportGenerator
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        deep_dir = tmp_path / ("d" * 200)
+        gen = ReportGenerator(output_dir=deep_dir)
+        # output_dir mkdir 本身在 260 内可建；文件名叠加后超限
+        with pytest.raises((PathTooLongError, OSError)):
+            gen._save_report("# r\n内容", "很长的前缀" * 30)
+
+    def test_html_export_guard_wired(self, monkeypatch, tmp_path):
+        from src.platform import PathTooLongError
+        from src.report.generator import ReportGenerator
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        md = tmp_path / ("m" * 235 + ".md")
+        md.parent.mkdir(parents=True, exist_ok=True)
+        md.write_text("# 标题\n正文", encoding="utf-8")
+        gen = ReportGenerator(output_dir=tmp_path / "out")
+        with pytest.raises((PathTooLongError, OSError)):
+            gen.export_html(md)
