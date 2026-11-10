@@ -301,14 +301,25 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
 
     // ---- 路径围栏
+    // R2（#47 平台区分①）：绝对越界样本平台自适应——Windows 用盘符正斜杠
+    // 形态（C:/…，顺带覆盖混合分隔符的绝对形态），Unix 用根路径形态。
+    // 历史写死 C:/Windows/win.ini：在 Linux 上是合法相对路径（C: 只是
+    // 普通目录名），围栏正确地按相对路径解析成 not_found，用例却期望
+    // outside_workspace——此前 mang-app 在 Linux 不可构建，从未真跑
+    // 暴露（假绿）。AGENTS.md 13.1：平台特定样本必须 cfg 分支。
     let outside_abs = std::env::temp_dir().join("mang-selftest-outside.txt");
     std::fs::write(&outside_abs, "outside").unwrap();
+    let abs_escape: &str = if cfg!(windows) {
+        "C:/Windows/win.ini"
+    } else {
+        "/etc/passwd"
+    };
     let cases = [
         ("fs.read ../", json!({"id":"g1","cmd":"fs.read","path":"../mang-selftest-outside.txt"})),
         ("fs.readBytes ../", json!({"id":"g2","cmd":"fs.readBytes","path":"sub/../../mang-selftest-outside.txt"})),
         ("fs.tree ../", json!({"id":"g3","cmd":"fs.tree","path":".."})),
         ("fs.stat 绝对越界", json!({"id":"g4","cmd":"fs.stat","path": display(&outside_abs)})),
-        ("fs.read 绝对越界", json!({"id":"g5","cmd":"fs.read","path": "C:/Windows/win.ini"})),
+        ("fs.read 绝对越界", json!({"id":"g5","cmd":"fs.read","path": abs_escape})),
     ];
     let mut all_blocked = true;
     let mut detail = Vec::new();
@@ -322,6 +333,23 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     }
     r.check("path-guard 越界全拦", all_blocked, detail.join("，"));
     let _ = std::fs::remove_file(&outside_abs);
+
+    // R2（#47 平台区分①）：盘符形态的平台归类对照——两侧都断言「本平台
+    // 的正确语义」，不是把一侧改成另一侧的期望：Windows 上 C:/… 是
+    // 绝对路径 → 越界拦；Unix 上 C: 是普通目录名 → 围栏内相对解析，
+    // 目标不存在 → not_found（同样是围栏在工作，只是走了相对分支）。
+    let resp = call(&ctx, json!({"id":"g6","cmd":"fs.read","path":"C:/Windows/win.ini"}));
+    let drive_code = err_code(&resp);
+    let (drive_expect, drive_why) = if cfg!(windows) {
+        ("outside_workspace", "Windows：盘符=绝对路径，越界拦")
+    } else {
+        ("not_found", "Unix：C: 是普通目录名，围栏内相对解析后目标不存在")
+    };
+    r.check(
+        "path-guard 盘符形态平台语义",
+        drive_code == drive_expect,
+        format!("C:/Windows/win.ini → {drive_code}（{drive_why}）"),
+    );
 
     // ---- 大文件拒绝
     // (不真的造 50MB，只验证 too_large 的判定入口存在：用超长 name 触发 bad_args 说明参数校验生效)
