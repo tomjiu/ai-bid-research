@@ -707,6 +707,38 @@ class BidDatabase:
                 item["stages"] = None
         return item
 
+    def backup_to(self, target: Union[str, Path]) -> Path:
+        """在线备份到目标文件（R71——SQLite backup API，WAL 安全）。
+
+        与文件拷贝的区别：backup API 走页级拷贝并正确处理
+        WAL/事务中数据（拷贝 ``.db`` 文件会漏 ``-wal`` 里的
+        未 checkpoint 内容——安静丢数据）。
+
+        Args:
+            target: 备份目标路径（父目录自动创建）。
+
+        Returns:
+            备份文件路径。
+
+        Raises:
+            sqlite3.Error: 备份失败（目标被占/磁盘满）。
+            ValueError: 目标与源同文件。
+        """
+        from src.platform import ensure_writable_path
+
+        target_path = Path(target)
+        if target_path.absolute() == Path(self.db_path).absolute()                 and str(self.db_path) != ":memory:":
+            raise ValueError("备份目标不能与源库同文件")
+        ensure_writable_path(target_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        dest = sqlite3.connect(str(target_path))
+        try:
+            with dest:
+                self._conn.backup(dest)
+        finally:
+            dest.close()
+        return target_path
+
     # ------------------------------------------------------------------
     # 生命周期
     # ------------------------------------------------------------------

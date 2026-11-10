@@ -43,6 +43,7 @@ import argparse
 import asyncio
 import json
 import logging
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -350,6 +351,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--status",
         action="store_true",
         help="输出库结构状态（schema 版本 + 各表行数 + PRAGMA）",
+    )
+    db.add_argument(
+        "--backup",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "在线备份库到目标文件（SQLite backup API——WAL 安全，"
+            "比拷贝 .db 文件多保住 -wal 未落盘内容）"
+        ),
     )
     db.add_argument(
         "--diff",
@@ -1006,6 +1016,19 @@ def run_db(args: argparse.Namespace) -> int:
     creating = args.import_file is not None
     if args.diff is not None:
         return _run_snapshot_diff(args)
+    if args.backup is not None:
+        # 幽灵库不静默建库再备份（与 --stats/--status 同口径）
+        if not db_path.exists():
+            _err(f"错误：数据库不存在: {db_path}")
+            return EXIT_DATA
+        with BidDatabase(args.db) as db:
+            try:
+                target = db.backup_to(args.backup)
+            except (sqlite3.Error, ValueError, OSError) as exc:
+                _err(f"错误：备份失败：{exc}")
+                return EXIT_DATA
+        print(f"已备份 → {target}（{target.stat().st_size} 字节）")
+        return 0
     if not creating and not db_path.exists():
         _err(f"错误：数据库不存在: {db_path}")
         return EXIT_DATA
