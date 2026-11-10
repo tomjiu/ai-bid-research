@@ -553,6 +553,27 @@ fn past_deadline_creates_with_warning() {
     assert!(warns.iter().any(|w| w.as_str().unwrap().contains("BID_DEADLINE_PAST")), "{warns:?}");
 }
 
+/// R15（#47 平台区分⑧）：严格公历校验——MCP 面私有宽松 parse_ymd 已删，
+/// 不存在的日历日（2026-02-30 / 2026-04-31）在 create_bid_project 即拒
+/// （#375 A-16 月长收紧此前只在 bid-domain 生效，两套校验分叉——MCP 直调
+/// 面能漏进库）。合法闰日不误伤。
+#[test]
+fn nonexistent_calendar_date_rejected_at_mcp_face() {
+    let mut svc = BidService::new().with_fs_root(fixtures());
+    for bad in ["2026-02-30", "2026-04-31", "2026-13-01", "2026-1-01", "2026/02/01", "2026-11-15T00:00"] {
+        let resp = call(&mut svc, "create_bid_project", json!({
+            "name": "坏日期", "bid_deadline": bad, "mode": "明标", "external_key": "ext-bad-date",
+        }));
+        assert_eq!(err_code(&resp), "E_UNPROCESSABLE", "{bad}: {resp:?}");
+    }
+    // 收紧不误伤：真闰年 2-29 照常建项（无警告——不在过去）
+    let data = ok_result(call(&mut svc, "create_bid_project", json!({
+        "name": "闰日项目", "bid_deadline": "2028-02-29", "mode": "明标", "external_key": "ext-leap",
+    })));
+    assert_eq!(data["status"], "DRAFT");
+    assert!(data["warnings"].as_array().unwrap().is_empty(), "未来闰日无警告：{}", data["warnings"]);
+}
+
 // ---------------------------------------------------------------- 9. 只读面实况
 
 /// get_bid_project_state 缺省读实况（B-1 起不再以 DRAFT 伪造）；显式

@@ -588,6 +588,17 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
 重复提交不建第二个项目）；`mode`（明标|暗标）与 `bid_deadline`（YYYY-MM-DD 粗形）壳侧
 前置校验（校验失败零副作用）。
 
+**日期时区口径（R15，#47 平台区分⑧——bid_deadline 双缺陷收口）**：① **严格公历
+校验单一真源**——`bid_domain::dates::parse_ymd`（#375 A-16 月长收紧：`2026-02-30` 拒）；
+MCP 面私有宽松拷贝（日域 1..=31）已删，`create_bid_project` 对不存在的日历日
+E_UNPROCESSABLE（壳侧仍是形态检查先行——10 字符数字，分层不重复）。② **「今天」
+换本地日历日**——`today_ymd` 旧口径 epoch 直除 86400 = UTC 日，东八区本地 00:00-
+07:59 取到昨天：`BID_DEADLINE_PAST` 漏报一天、性能台账 created_at / 评标基准日 /
+开标日缺省整体前置一档。现口径：chrono `Local` 只供 UTC 偏移秒（Unix TZ 环境
+变量//etc/localtime、Windows 注册表——iana-time-zone 标准路径，已在锁内零新增包），
+日期换算仍走 `civil_from_days` 单一算术真源（`ymd_at_utc_offset` 纯函数锁边界瞬点，
+本地/UTC 至多差 1 天健全性）。ISO 定宽字典序 == 时间序（截止日比较仍是字符串比较）。
+
 ```jsonc
 → { "present": true, "workspace": "D:\\项目B", "db": "D:\\项目B\\db.json",
     "project_id": "PRJ-0001", "status": "DRAFT", "warnings": [] }
@@ -661,8 +672,7 @@ NFC，**`upload_ref`（定位键）原样保留**——必须与磁盘真实文�
 「基名为空」，严格面），本助手是显示回退面（宽松面）——两者刻意不同。归一函数
 `normalize_upload_ref` 深度矩阵锁定三不变量（相对形态输出不含 `\`；幂等；`..` 段数
 不变）；fs_fence 混合形态**共享不变量**（Ok 必在根内 / Err 必 EUnprocessable——任何
-平台不逃逸）+ cfg 双分支对照（Unix 把 `\` 当字面字符、Windows 当分隔词）。后续 R15+
-做日期时区口径。
+平台不逃逸）+ cfg 双分支对照（Unix 把 `\` 当字面字符、Windows 当分隔词）。
 
 ```jsonc
 → { "present": true,
