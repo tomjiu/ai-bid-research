@@ -705,6 +705,7 @@
       createBusy: false, createError: "",
       treeStatus: "idle", treeError: "", files: [], sel: {},
       importBusy: false, importError: "", result: null
+    },
     // #18 出口闭环（校验报告 + 导出落盘）：validate 报告面与 export 写面
     // 分开记——报告可独立重看，导出有自己的 loading/产物回显；两码
     // （state/not_found/bad_args）都走引导卡而非错误横幅
