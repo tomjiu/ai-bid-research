@@ -450,8 +450,16 @@ fn create_bid_project(svc: &mut BidService, args: Value) -> ToolResult {
     }
     let external_key = req_str(&args, "external_key", "create_bid_project")?;
     let notice_ref = opt_str(&args, "tender_notice_ref", "create_bid_project")?;
-    let deadline = parse_ymd(&bid_deadline).ok_or_else(|| ToolError::EUnprocessable {
-        what: format!("bid_deadline 须为 YYYY-MM-DD，实际：{bid_deadline}"),
+    // R15（#47 平台区分⑧）：严格公历校验接域层单一真源（此前本文件私有
+    // parse_ymd 只查日域 1..=31——2026-02-30 这类不存在的日期能从 MCP 面
+    // 漏进库，#375 A-16 的月长收紧只在 bid-domain 生效，两套口径分叉）。
+    // 校验后比对用字符串（ISO 定宽字典序 == 时间序——仓内既定口径），
+    // today 同步换本地日历日（旧 UTC 口径在东八区 0-8 点取昨天，截止日
+    // 刚过的警告漏报一天）。
+    bid_domain::dates::parse_ymd(&bid_deadline).ok_or_else(|| ToolError::EUnprocessable {
+        what: format!(
+            "bid_deadline 须为合法公历日 YYYY-MM-DD（月长收紧：2026-02-30 拒），实际：{bid_deadline}"
+        ),
     })?;
 
     // 状态机裁决：create 是状态机的**入口边**（→ DRAFT）——无项目时无可裁决
@@ -480,7 +488,7 @@ fn create_bid_project(svc: &mut BidService, args: Value) -> ToolResult {
         .create_project(&name, &notice_ref.unwrap_or_default(), &mode, &external_key)
         .map_err(ToolError::from)?;
     let mut warnings = Vec::new();
-    if deadline < today_ymd() {
+    if bid_deadline < bid_domain::dates::today_ymd() {
         warnings.push(format!(
             "BID_DEADLINE_PAST: 投标截止 {bid_deadline} 已过（契约 §1：创建即警告，不阻断）"
         ));
@@ -503,43 +511,13 @@ fn json_type_name(v: &Value) -> &'static str {
     }
 }
 
-/// `YYYY-MM-DD` 解析（前缀口径——截止时刻比对以日为粒度）。
-fn parse_ymd(s: &str) -> Option<(i64, u32, u32)> {
-    let b = s.as_bytes();
-    if b.len() < 10 || b[4] != b'-' || b[7] != b'-' {
-        return None;
-    }
-    let y: i64 = s.get(0..4)?.parse().ok()?;
-    let m: u32 = s.get(5..7)?.parse().ok()?;
-    let d: u32 = s.get(8..10)?.parse().ok()?;
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
-        return None;
-    }
-    Some((y, m, d))
-}
-
-/// 天数 → 公历（Howard Hinnant civil_from_days；壳层手写以避免为一个
-/// 日期比较引入 chrono 重依赖——薄壳零冗余纪律）。
-fn civil_from_days(z: i64) -> (i64, u32, u32) {
-    let z = z + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097; // [0, 146096]
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
-    let mp = (5 * doy + 2) / 153; // [0, 11]
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
-    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32; // [1, 12]
-    (if m <= 2 { y + 1 } else { y }, m, d)
-}
-
-fn today_ymd() -> (i64, u32, u32) {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    civil_from_days(secs.div_euclid(86_400))
-}
+// R15（#47 平台区分⑧）：本文件私有的 parse_ymd / civil_from_days /
+// today_ymd 三份拷贝已删——日期解析与「今天」统一走 bid_domain::dates
+// 单一真源（严格公历 + 本地日历日）。旧私有口径两处分叉坐实：
+// ① 日域 1..=31 宽松（2026-02-30 能从 MCP 面漏进库——#375 A-16 月长
+//   收紧只在 bid-domain 生效，两套校验分叉）；
+// ② epoch 直除 86400 的 UTC 今天（东八区本地 0-8 点取昨天——截止日
+//   刚过的 BID_DEADLINE_PAST 警告漏报一天）。
 
 // ---------------------------------------------------------------- §2 import_tender_files
 
