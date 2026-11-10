@@ -478,6 +478,15 @@ impl Ctx {
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
+            // ── #19：导入向导写面（bid.rs——create_project 空工作区起步
+            //    （ensure_or_open——副作用即目的），经 bid_mcp 真实工具面
+            //    create_bid_project（external_key 缺省 = 工作区路径幂等键）；
+            //    import_files 壳侧注入 project_id（单一真源——UI 不自报），
+            //    E_PARTIAL 转成功面 + partial 分账）────────────────────
+            "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
+
+            "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
 

@@ -353,6 +353,7 @@ const full = await (await fetch(url)).json();  // 与内联时那个帧完全一
                agent_waivers / human_review_complete）… },
     "quick_stats": {
       "requirements": 1120, "evidence": 13, "evidence_bindings": 46,
+      "files": 4,                        // #19：导入文件计数（向导判「DRAFT 且未导入」用）
       "sections": 26, "sections_leaf": 20, "sections_drafted": 12,
       "sections_accepted": 3, "sections_failed": 1, "sections_dirty": 2,
       "target_total_chars": 150000, "actual_total_chars": 81200,
@@ -561,6 +562,37 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
                             "next": "有★漏标——…" } ],
               "total": { "star_total": 50, "declarations": 2,
                          "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
+```
+
+### bid.create_project `{ name, bid_deadline, mode, tender_notice_ref? }`  （写面；#19 导入向导第一步）
+
+空工作区起步（无 db.json 不再 `not_found`——`ensure_or_open` 空态 + `.mang/approval.key`，
+副作用即目的）；经 `bid_mcp::dispatch_with(create_bid_project)` 真实工具面，幂等/越级裁决
+在工具面（同 key 重放 → 静默幂等；异 key 再建 → `state` 码，UI 分支引导卡，§109 同口径）。
+`external_key` **壳侧隐式注入 = 工作区 canonical 路径**（一个工作区一个项目——UI 重试/
+重复提交不建第二个项目）；`mode`（明标|暗标）与 `bid_deadline`（YYYY-MM-DD 粗形）壳侧
+前置校验（校验失败零副作用）。
+
+```jsonc
+→ { "present": true, "workspace": "D:\\项目B", "db": "D:\\项目B\\db.json",
+    "project_id": "PRJ-0001", "status": "DRAFT", "warnings": [] }
+// 幂等重放 → deduplicated:true + 原 project_id（#19：向导重复提交的主路径）
+```
+
+### bid.import_files `{ files:[{ upload_ref, filename?, kind? }] }`  （写面；#19 导入向导第二步）
+
+`project_id` **壳侧注入服务态真源**（UI 不自报，防串项目）；`upload_ref` = 工作区相对
+路径（fs.tree 的 rel）或围栏内绝对路径（围栏锚定在工具面 `fs_fence::resolve_read`）；
+`filename` 缺省取基名、`kind` 缺省「附件」（契约 §2 同款）。**E_PARTIAL 不按错误回**：
+壳侧组装 `partial:true` + `item_errors` 的成功响应（工具面 `data` 携带成功面——失败件
+禁引、成功件照常入库不回滚），向导同屏分账呈现。
+
+```jsonc
+→ { "present": true, "file_ids": ["TF-0001"], "per_file": [ … 契约 §2 同形 … ],
+    "totals": { "files": 1, "chunks": 48, "parse_failed": 0, "partial": 0 },
+    "addendum_readiness": { … }, "input_integrity": { … },
+    "status": "FILES_IMPORTED", "warnings": [] }
+// 部分失败 → 顶层加 "partial": true, "partial_what": "…", "item_errors": [ … ]
 ```
 
 ### recent.load / recent.save `{ items }`

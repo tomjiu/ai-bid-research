@@ -4201,3 +4201,160 @@ html[data-chrome="native"][data-maximized="1"] #app {
     max-width: 1100px;
   }
 }
+
+/* ============ #19：导入向导（空态引导卡） ============ */
+.bid-wizard {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 18px 16px 24px;
+  overflow-y: auto;
+}
+.bid-wiz-card {
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+  border: 1px solid var(--line, #d9dee7);
+  border-radius: 10px;
+  background: var(--bg-elev, #fff);
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bid-wiz-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-dim, #7b8494);
+}
+.bid-wiz-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--line, #c9d0dc);
+  font-size: 11px;
+  color: var(--ink-dim, #7b8494);
+  flex: none;
+}
+.bid-wiz-n.ok {
+  border-color: #2f9e6e;
+  background: #2f9e6e;
+  color: #fff;
+}
+.bid-wiz-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.bid-wiz-title svg { width: 18px; height: 18px; }
+.bid-wiz-sub { font-size: 12px; color: var(--ink-dim, #7b8494); line-height: 1.6; }
+.bid-wiz-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.bid-wiz-field span { color: var(--ink-dim, #7b8494); }
+.bid-wiz-field input,
+.bid-wiz-field select {
+  border: 1px solid var(--line, #c9d0dc);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+  background: var(--bg, #fff);
+  color: inherit;
+}
+.bid-wiz-field input:focus,
+.bid-wiz-field select:focus { outline: none; border-color: #3d6ea5; }
+.bid-wiz-error[data-state="error"] {
+  border: 1px solid #e2a2a2;
+  background: #fbeeee;
+  color: #a04040;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.bid-wiz-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.bid-wiz-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line, #e2e6ee);
+  border-radius: 8px;
+  padding: 6px;
+}
+.bid-wiz-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bid-wiz-file:hover { background: var(--bg-hover, #f3f6fa); }
+.bid-wiz-file[data-on="true"] { background: #eef4fb; }
+.bid-wiz-file input[type="checkbox"] { flex: none; }
+.bid-wiz-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+.bid-wiz-file-meta { color: var(--ink-dim, #8a93a3); font-size: 11px; flex: none; }
+.bid-wiz-file select {
+  flex: none;
+  border: 1px solid var(--line, #c9d0dc);
+  border-radius: 5px;
+  padding: 3px 5px;
+  font-size: 11.5px;
+  background: var(--bg, #fff);
+  color: inherit;
+}
+.bid-wiz-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bid-wiz-count { font-size: 12px; color: var(--ink-dim, #7b8494); flex: 1; }
+.bid-wiz-total { font-size: 12px; color: var(--ink-dim, #7b8494); margin-top: 8px; }
+.bid-wiz-warns { font-size: 12px; margin-top: 6px; }
+.bid-wiz-warns summary { cursor: pointer; color: #a0762a; }
+.bid-wiz-warns div { padding: 3px 0 3px 12px; color: var(--ink-dim, #7b8494); line-height: 1.6; }
+
+/* 导入结果面（右面板） */
+.bid-panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  overflow-y: auto;
+}
+.bid-panel-title { font-size: 14px; font-weight: 600; }
+.bid-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.bid-table th {
+  text-align: left;
+  color: var(--ink-dim, #7b8494);
+  font-weight: 500;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line, #e2e6ee);
+  white-space: nowrap;
+}
+.bid-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft, #eef1f6);
+  white-space: nowrap;
+}
+.bid-table td:first-child { white-space: normal; word-break: break-all; }
+.bid-table tr.is-failed td { background: #fbeeee; }
+
+@media (max-width: 900px) {
+  .bid-wiz-file select { display: none; }
+  .bid-wizard { padding: 12px 10px 16px; }
+}

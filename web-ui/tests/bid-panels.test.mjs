@@ -504,5 +504,99 @@ check(
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- #19：导入向导（空态引导卡——新建项目 + 导入文件） ----------
+check(
+  "#19 壳侧：bid.rs 实现 create_project / import_files 写面",
+  /pub fn create_project\(/.test(bidRs) && /pub fn import_files\(/.test(bidRs),
+  "写面函数被删/改名"
+);
+check(
+  "#19 壳侧：ipc.rs 注册 bid.create_project / bid.import_files",
+  ipcRs.includes('"bid.create_project" => crate::bid::create_project') &&
+    ipcRs.includes('"bid.import_files" => crate::bid::import_files'),
+  "UI 接了壳没接（分发表缺登记）"
+);
+check(
+  "#19 壳侧：经 dispatch_with 走真实工具面（create_bid_project / import_tender_files）",
+  bidRs.includes('"create_bid_project".to_string()') &&
+    bidRs.includes('"import_tender_files".to_string()'),
+  "写面绕开工具面 = 与 bid-mcp-stdio 两套裁决"
+);
+check(
+  "#19 壳侧：E_PARTIAL 转成功面 + partial 分账（不是故障）",
+  /EPartial[\s\S]{0,900}o\.insert\("partial"/.test(bidRs),
+  "部分成功被当错误回——向导无法同屏呈现成功件/失败件"
+);
+check(
+  "#19 壳侧：空工作区起步 ensure_or_open（无 db.json 不再 not_found）",
+  /fn ensure_or_open/.test(bidRs) && /ensure_or_open\(&mut guard, ws\)/.test(bidRs),
+  "create_project 走了只读面的干净拒绝路径"
+);
+check(
+  "#19 壳侧：quick_stats 补 files 计数（判「DRAFT 且未导入」用）",
+  bidRs.includes('"files".into()'),
+  "导入卡判据缺数据面"
+);
+check(
+  "#19 壳侧：全链集成测试在场（空态→建项→幂等→导入→状态推进）",
+  bidRs.includes("fn wizard_create_and_import_roundtrip_19"),
+  "向导回归门被删"
+);
+check(
+  "#19 UI：ipc 调用 bid.create_project / bid.import_files（真实命令名）",
+  /ipc\("bid\.create_project", \{/.test(app) && /ipc\("bid\.import_files", \{/.test(app),
+  "命令名漂移（壳注册与 UI 调用对不上）"
+);
+check(
+  "#19 UI：向导三渲染函数（创建卡 / 导入卡 / 结果面）",
+  /function renderBidWizardCreate\(/.test(app) &&
+    /function renderBidWizardImport\(/.test(app) &&
+    /function renderBidWizardResult\(/.test(app),
+  "向导渲染被删/改名"
+);
+check(
+  "#19 UI：工作台空态分支进向导（不再死胡同错误页）",
+  /if \(!b\.present\) \{[\s\S]{0,300}renderBidWizardCreate\(treeEl\)/.test(app),
+  "空工作区回到错误横幅（§109 引导卡口径被回退）"
+);
+check(
+  "#19 UI：DRAFT 且未导入 → 导入卡（quick_stats.files 判据）",
+  /st19 === "DRAFT" && !\(q19\.files > 0\)/.test(app),
+  "导入卡判据被改（状态机口径漂移）"
+);
+check(
+  "#19 UI：kind 清单 + 扩展名白名单（契约 §2 同源）",
+  app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];') &&
+    app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc|ods)$/i;'),
+  "kind 合法值/可解析扩展名漂移"
+);
+check(
+  "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
+  /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
+  "导入参数形状漂移（壳侧围栏锚定依赖 rel 形态）"
+);
+check(
+  "#19 演示桥：两写面 stub 在场（浏览器预览不报未知命令）",
+  /case "bid\.create_project":/.test(app) && /case "bid\.import_files":/.test(app),
+  "演示模式向导死路"
+);
+for (const sel of [".bid-wiz-card", ".bid-wiz-file", ".bid-table"]) {
+  check(
+    `#19 样式：styles.css 提供 ${sel.trim()} 样式`,
+    css.includes(sel),
+    "向导样式被删"
+  );
+}
+check(
+  "#19 契约：IPC-CONTRACT.md 登记两写面命令",
+  contract.includes("### bid.create_project") && contract.includes("### bid.import_files"),
+  "写面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "#19 契约：bid.state 的 quick_stats 登记 files 计数",
+  /"files": 4,\s*\/\/ #19/.test(contract),
+  "files 计数没进契约样例"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

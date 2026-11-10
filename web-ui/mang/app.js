@@ -533,6 +533,25 @@
               return demoGatePass(m);
             case "bid.coverage":
               return respond(m.id, DEMO_BID.coverage);
+            case "bid.create_project":
+              // #19：演示桥——向导第一步（真实壳经 bid_mcp 工具面幂等建项）
+              return respond(m.id, { present: true, project_id: "PRJ-DEMO-19", status: "DRAFT", warnings: [] });
+            case "bid.import_files": {
+              // #19：演示桥——向导第二步（per_file / totals / 就绪面同形；
+              // 依据请求 files 数组装回显，验证参数面与真实壳一致）
+              const fl = (m.files || []).map((f, i) => ({
+                file_id: "TF-00" + (i + 1), filename: f.filename || f.upload_ref, kind: f.kind || "附件",
+                sha256: "demo", pages: 12, tables: 3, chunks: 48, ocr_tier: "text",
+                parse_status: "ok", deduplicated: false
+              }));
+              return respond(m.id, {
+                present: true, file_ids: fl.map((f) => f.file_id), per_file: fl,
+                totals: { files: fl.length, chunks: fl.length * 48, parse_failed: 0, partial: 0 },
+                addendum_readiness: { total: 0, ready: 0, not_ready: [] },
+                input_integrity: { complete: true, restricted: false, unready: [], waived_unready: [] },
+                status: "FILES_IMPORTED", warnings: []
+              });
+            }
 
             case "fs.tree":
               return respond(m.id, tree);
@@ -663,6 +682,14 @@
     // #603 批 A：治理面（审核门台账 + 过门/追认写面）——与 bidQuality 同款
     // 生命周期（idle/loading/ready/error + code 分支引导卡）
     bidGates: { status: "idle", data: null, error: "", code: "", ts: 0, passing: false, passError: "", passInfo: "", formGate: "", formMode: "" },
+    // #19：导入向导（空态引导卡）——新建项目（bid.create_project）→
+    // 导入招标文件（bid.import_files）。向导是工作台空态的主内容，
+    // 独立于面板态（面板数据由 bid.state 系列管理，向导只管表单/选择/结果）
+    bidWizard: {
+      createBusy: false, createError: "",
+      treeStatus: "idle", treeError: "", files: [], sel: {},
+      importBusy: false, importError: "", result: null
+    },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1159,6 +1186,10 @@
         else if (act === "refresh-quality") ui.loadBidQuality(true);
         else if (act === "refresh-gates") ui.loadBidGates(true);
         else if (act === "workbench-cov") ui.openBidWorkbench("coverage");
+        // #19：空态向导入口（侧栏卡按钮 / 工作台空态共用）
+        else if (act === "wizard") ui.openBidWorkbench("detail");
+        else if (act === "wizard-refresh-tree") ui.loadBidWizardTree(true);
+        else if (act === "wizard-retry-import") ui.submitBidWizardImport();
 
       });
     });
@@ -1174,9 +1205,11 @@
       const notProject = b.error && b.error.indexOf("db.json") >= 0;
       body.innerHTML =
         '<div class="bid-side"><div class="bid-card" data-kind="empty">'
-        + '<div class="bid-card-title">' + (notProject ? "当前工作区不是标书项目" : "读取失败") + "</div>"
+        + '<div class="bid-card-title">' + (notProject ? "当前工作区还不是标书项目" : "读取失败") + "</div>"
         + '<div class="bid-card-sub">' + esc(b.error || "无数据") + "</div>"
         + '<div class="bid-card-actions">'
+        // #19：空工作区给「新建项目」入口（向导第一步）——不再只能切走
+        + (notProject ? '<button class="btn btn-primary" data-bid-act="wizard">' + ICON.bid + "新建标书项目</button>" : "")
         + (notProject ? '<button class="btn" data-bid-act="open-folder">' + ICON.folderOpen + "切换工作区</button>" : "")
         + '<button class="btn" data-bid-act="refresh">重试</button></div>'
         + "</div></div>";
@@ -1326,10 +1359,13 @@
       return;
     }
     if (!b.present) {
+      // #19：空工作区 → 向导第一步（新建标书项目引导卡）——空态不再是
+      // 死胡同错误页；§109 同口径：这是主路径引导，不是故障横幅
       projEl.textContent = "";
       statEl.textContent = "";
-      treeEl.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">未接入标书项目</div><div>' + esc(b.error || "当前工作区无 db.json") + '</div><button class="btn" data-bid-act="refresh">重试</button></div>';
-      bindBidViewActions(treeEl);
+      renderBidWizardCreate(treeEl);
+      const panelEl = host.querySelector("#bid-panel");
+      if (panelEl) panelEl.innerHTML = '<div class="view-state"><div class="view-state-title">新建项目后开始</div><div>填左侧表单创建 db.json——项目元信息（名称/模式/截止）与招标公告编号就位后，进入文件导入</div></div>';
       return;
     }
     const p = (b.data && b.data.project) || {};
@@ -1341,7 +1377,23 @@
     const wbTab = bidWorkbenchTab();
     const activePanel = (wbTab && wbTab.meta && wbTab.meta.panel) || "detail";
     if (!nodes.length) {
-      treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
+      // #19：建项后的向导第二步——DRAFT 且未导入文件时，树区给「导入
+      // 招标文件」卡（fs.tree 工作区文件勾选 + kind 分派）；已导入但未
+      // 建纲（FILES_IMPORTED）给「下一步」引导（对齐 bid.coverage 的
+      // next 语言——单一真源由 MCP 管线持有，UI 只引导）
+      const q19 = (b.data && b.data.quick_stats) || {};
+      const st19 = p.status || "";
+      if (st19 === "DRAFT" && !(q19.files > 0)) {
+        renderBidWizardImport(treeEl, host);
+      } else if (state.bidWizard.result) {
+        // #19：导入刚完成——树区给「下一步」引导（对齐 bid.coverage next 语言），
+        // 右面板保留导入结果面（per_file 逐件表）
+        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>';
+        const panelEl19 = host.querySelector("#bid-panel");
+        if (panelEl19) renderBidWizardResult(panelEl19, state.bidWizard.result);
+      } else {
+        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
+      }
       if (activePanel === "quality") renderBidQualityPanel(host);
       // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
       if (activePanel === "gates") renderBidGatesPanel(host);
@@ -1412,6 +1464,154 @@
     }
     renderBidActivePanel(host);
   }
+  // #19：招标文件业务角色（契约 §2 kind 合法值——与工具面 TENDER_FILE_KINDS 同源；
+  // UI 缺省「附件」，按文件名启发式预选最常见角色）
+  var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];
+  function guessBidFileKind(name) {
+    const n = String(name || "");
+    if (/补遗|澄清|更正/.test(n)) return "补遗";
+    if (/答疑|质疑|回答/.test(n)) return "答疑";
+    if (/图纸/.test(n)) return "图纸";
+    if (/评分|办法/.test(n)) return "评分办法";
+    if (/格式|模板/.test(n)) return "格式模板";
+    if (/招标|采购|比选|竞谈/.test(n)) return "招标文件";
+    return "附件";
+  }
+  // #19：导入候选扩展名白名单（解析管线支持面：docx/xlsx 引擎 + pdf 三降级链
+  // + .doc 转换通道；其余扩展名必 parse FAILED，不列进来免得用户白跑一趟）
+  var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc|ods)$/i;
+
+  // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） ============
+  // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；
+  // E_STATE / not_found 分支复用 §109 引导卡约定：空态是主路径不是故障。
+
+  /** 向导第一步：新建标书项目（bid.create_project——壳侧隐式幂等键 =
+   *  工作区路径，重试/重复提交不会建出第二个项目） */
+  function renderBidWizardCreate(treeEl) {
+    const w = state.bidWizard;
+    const today = new Date();
+    const dl = new Date(today.getTime() + 30 * 86400e3);
+    const dlStr = dl.getFullYear() + "-" + String(dl.getMonth() + 1).padStart(2, "0") + "-" + String(dl.getDate()).padStart(2, "0");
+    treeEl.innerHTML =
+      '<div class="bid-wizard">'
+      + '<div class="bid-wiz-card">'
+      + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">1</span>新建标书项目<span class="bid-wiz-n">2</span>导入招标文件</div>'
+      + '<div class="bid-wiz-title">' + ICON.bid + "从这个工作区开始一个标书项目</div>"
+      + '<div class="bid-wiz-sub">当前目录还没有 db.json——填基本盘即可创建（项目数据落在本工作区，随时可换目录另起）</div>'
+      + '<form id="bid-wiz-form" autocomplete="off">'
+      + '<label class="bid-wiz-field"><span>项目名称 *</span><input name="name" type="text" placeholder="如：市政水厂 EPC 项目" required maxlength="80"></label>'
+      + '<label class="bid-wiz-field"><span>招标模式 *</span><select name="mode"><option value="明标">明标</option><option value="暗标">暗标</option></select></label>'
+      + '<label class="bid-wiz-field"><span>投标截止 *</span><input name="bid_deadline" type="date" value="' + dlStr + '" required></label>'
+      + '<label class="bid-wiz-field"><span>招标公告编号</span><input name="tender_notice_ref" type="text" placeholder="选填——公告/项目编号" maxlength="64"></label>'
+      + (w.createError ? '<div class="bid-wiz-error" data-state="error">' + esc(w.createError) + "</div>" : "")
+      + '<div class="bid-wiz-actions"><button type="submit" class="btn btn-primary"' + (w.createBusy ? " disabled" : "") + ">" + (w.createBusy ? "创建中…" : "创建项目") + "</button></div>"
+      + "</form></div></div>";
+    const form = treeEl.querySelector("#bid-wiz-form");
+    if (form) form.addEventListener("submit", (ev) => { ev.preventDefault(); ui.submitBidWizardCreate(form); });
+  }
+
+  /** 向导第二步：导入招标文件（bid.import_files——工作区文件勾选 + kind 分派） */
+  function renderBidWizardImport(treeEl, host) {
+    const w = state.bidWizard;
+    const selCount = Object.keys(w.sel).length;
+    let bodyHtml;
+    if (w.treeStatus === "loading") {
+      bodyHtml = '<div class="view-state"><div class="view-spinner"></div><div>正在读取工作区文件…</div></div>';
+    } else if (w.treeStatus === "idle") {
+      // 首进导入卡：发起拉取（loadBidWizardTree 置 loading 后重渲染，
+      // 不会重复触发——renderBidWorkbenchIfOpen 是幂等重入）
+      bodyHtml = '<div class="view-state"><div class="view-spinner"></div><div>正在读取工作区文件…</div></div>';
+      ui.loadBidWizardTree();
+    } else if (w.treeStatus === "error") {
+      bodyHtml = '<div class="view-state" data-kind="error"><div class="view-state-title">读取工作区失败</div><div>' + esc(w.treeError) + '</div><button class="btn" data-bid-act="wizard-refresh-tree">重试</button></div>';
+    } else if (!w.files.length) {
+      bodyHtml = '<div class="view-state"><div class="view-state-title">工作区里没有可导入的文件</div><div>把招标文件（.docx / .xlsx / .pdf / .doc）放进当前工作区后点刷新——导入围栏只认本工作区内的文件</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>";
+    } else {
+      let rows = "";
+      for (const f of w.files) {
+        const checked = Object.prototype.hasOwnProperty.call(w.sel, f.rel);
+        // kind 默认值：勾选过的用勾选值，否则按文件名启发式预选（用户可改）
+        const kindDef = checked ? w.sel[f.rel] : guessBidFileKind(f.name);
+        rows +=
+          '<label class="bid-wiz-file" data-on="' + String(checked) + '">'
+          + '<input type="checkbox" data-rel="' + esc(f.rel) + '"' + (checked ? " checked" : "") + ">"
+          + '<span class="bid-wiz-file-name" title="' + esc(f.rel) + '">' + esc(f.name) + "</span>"
+          + '<span class="bid-wiz-file-meta">' + fmtBytes(f.size || 0) + "</span>"
+          + '<select data-kind-for="' + esc(f.rel) + '">'
+          + BID_FILE_KINDS.map((k) => '<option value="' + k + '"' + (kindDef === k ? " selected" : "") + ">" + k + "</option>").join("")
+          + "</select></label>";
+      }
+      bodyHtml =
+        '<div class="bid-wiz-files">' + rows + "</div>"
+        + '<div class="bid-wiz-bar"><span class="bid-wiz-count">已选 ' + selCount + " / " + w.files.length + " 件</span>"
+        + '<button class="btn btn-primary" data-bid-act="wizard-go"' + (w.importBusy || !selCount ? " disabled" : "") + ">" + (w.importBusy ? "解析入库中…" : "导入 " + selCount + " 件") + "</button>"
+        + '<button class="btn" data-bid-act="wizard-refresh-tree" title="重读工作区文件">' + ICON.refresh + "</button></div>";
+    }
+    treeEl.innerHTML =
+      '<div class="bid-wizard">'
+      + '<div class="bid-wiz-card">'
+      + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">2</span>导入招标文件</div>'
+      + '<div class="bid-wiz-title">' + ICON.folderOpen + "导入招标文件</div>"
+      + '<div class="bid-wiz-sub">解析 → 结构化切块 → 证据注册（失败件全程禁引，成功件即时入库）</div>'
+      + bodyHtml
+      + (w.importError ? '<div class="bid-wiz-error" data-state="error">' + esc(w.importError) + "</div>" : "")
+      + "</div></div>";
+    bindBidViewActions(treeEl);
+    const goBtn = treeEl.querySelector('[data-bid-act="wizard-go"]');
+    if (goBtn) goBtn.addEventListener("click", () => ui.submitBidWizardImport());
+    treeEl.querySelectorAll(".bid-wiz-file input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const rel = cb.dataset.rel;
+        if (cb.checked) {
+          const sel = treeEl.querySelector('[data-kind-for="' + CSS.escape(rel) + '"]');
+          state.bidWizard.sel[rel] = sel ? sel.value : guessBidFileKind(rel);
+        } else delete state.bidWizard.sel[rel];
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    treeEl.querySelectorAll(".bid-wiz-file select").forEach((s) => {
+      s.addEventListener("change", () => {
+        const rel = s.dataset.kindFor;
+        if (Object.prototype.hasOwnProperty.call(state.bidWizard.sel, rel)) state.bidWizard.sel[rel] = s.value;
+      });
+    });
+    // 导入结果面（右面板）——成功/部分成功同屏分账
+    const panelEl = host && host.querySelector("#bid-panel");
+    if (panelEl) {
+      if (w.result) renderBidWizardResult(panelEl, w.result);
+      else panelEl.innerHTML = '<div class="view-state"><div class="view-state-title">选择左侧文件开始导入</div><div>勾选招标正本、附件、图纸、补遗——每件分派业务角色（kind），导入后逐件显示解析统计</div></div>';
+    }
+  }
+
+  /** 导入结果（右面板）：per_file 逐件表 + totals + 告警 + 补遗就绪/输入完整性 */
+  function renderBidWizardResult(panelEl, r) {
+    const perFile = r.per_file || [];
+    const totals = r.totals || {};
+    let rows = "";
+    for (const f of perFile) {
+      const failed = String(f.parse_status || "").toLowerCase() === "failed";
+      rows +=
+        '<tr class="' + (failed ? "is-failed" : "") + '">'
+        + "<td>" + esc(f.filename || "—") + "</td><td>" + esc(f.kind || "—") + "</td>"
+        + "<td>" + (f.pages || 0) + "</td><td>" + (f.tables || 0) + "</td><td>" + (f.chunks || 0) + "</td>"
+        + '<td><span class="bid-badge" data-status="' + (failed ? "FAILED" : "OK") + '">' + (failed ? "失败" : "成功") + "</span></td>"
+        + "<td>" + (f.deduplicated ? "已存在" : "新入库") + "</td></tr>";
+    }
+    const warns = r.warnings || [];
+    const integrity = (r.input_integrity && r.input_integrity.unready) || [];
+    const partial = !!r.partial;
+    panelEl.innerHTML =
+      '<div class="bid-panel-card">'
+      + '<div class="bid-panel-title">导入结果' + (partial ? '（部分成功）' : "") + "</div>"
+      + (partial ? '<div class="bid-wiz-error" data-state="error">' + esc(r.partial_what || "部分文件导入失败") + (r.item_errors && r.item_errors.length ? "<br>" + r.item_errors.map(esc).join("<br>") : "") + "</div>" : "")
+      + '<table class="bid-table"><thead><tr><th>文件</th><th>角色</th><th>页</th><th>表</th><th>块</th><th>解析</th><th>幂等</th></tr></thead><tbody>' + rows + "</tbody></table>"
+      + '<div class="bid-wiz-total">共 ' + (totals.files || perFile.length) + " 件 · " + (totals.chunks || 0) + " 块 · 解析失败 " + (totals.parse_failed || 0) + " 件</div>"
+      + (integrity.length ? '<div class="bid-cov-next" data-state="warn"><span>输入完整性</span>' + integrity.map((f) => esc(f.name + "：" + (f.reason || ""))).join("；") + "</div>" : "")
+      + (warns.length ? '<details class="bid-wiz-warns"><summary>' + warns.length + " 条告警</summary>" + warns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草</div>'
+      + "</div>";
+  }
+
   /** 章节详情（右面板）：元信息 + 章节正文预览（chapters/{id}.json 的 content） */
   function renderBidDetail(host, node) {
     const tab = bidWorkbenchTab();
@@ -4264,9 +4464,94 @@
       renderStatusBar();
       await ui.loadTab(tab);
     },
-    /** #313 批 C：拉取自评数据面（bid.quality + bid.score 并行）——工作台「自评」页签用。
-     * 壳侧 state 码（项目未到 MatrixReady+）与 not_found（无 db.json）分别记在
-     * code 字段，渲染层分支成引导卡而非故障。 */
+    /** #19：向导文件面——fs.tree 拉工作区文件（白名单过滤 + 勾选集清洗） */
+    async loadBidWizardTree(force) {
+      if (!state.bridge) return;
+      if (state.bidWizard.treeStatus === "loading" && !force) return;
+      state.bidWizard.treeStatus = "loading";
+      state.bidWizard.treeError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("fs.tree", { depth: 8 }, 3e4);
+        const files = [];
+        const walk = (nodes) => {
+          (nodes || []).forEach((n) => {
+            if (n.kind === "dir") { walk(n.nodes); return; }
+            // 排除项目库件（db.json / chapters/）——它们是产物不是招标输入
+            if (/^db\.json$/i.test(n.name)) return;
+            if (/^chapters\//i.test(n.rel)) return;
+            if (!BID_IMPORT_EXTS.test(n.name)) return;
+            files.push({ rel: n.rel, name: n.name, size: n.size });
+          });
+        };
+        walk(r && r.nodes);
+        files.sort((a, b) => a.rel.localeCompare(b.rel, "zh-Hans-CN"));
+        state.bidWizard.files = files;
+        const relSet = new Set(files.map((f) => f.rel));
+        Object.keys(state.bidWizard.sel).forEach((rel) => { if (!relSet.has(rel)) delete state.bidWizard.sel[rel]; });
+        state.bidWizard.treeStatus = "ready";
+      } catch (err) {
+        state.bidWizard.treeStatus = "error";
+        state.bidWizard.treeError = err && (err.message || err.code) || "fs.tree 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #19：向导第一步提交——bid.create_project（壳侧隐式幂等键 = 工作区
+     *  路径；重复提交不建第二个项目，UI 侧不再另造 external_key） */
+    async submitBidWizardCreate(form) {
+      if (!state.bridge || state.bidWizard.createBusy) return;
+      const fd = new FormData(form);
+      const name = String(fd.get("name") || "").trim();
+      const mode = String(fd.get("mode") || "明标");
+      const deadline = String(fd.get("bid_deadline") || "").trim();
+      const notice = String(fd.get("tender_notice_ref") || "").trim();
+      if (!name) { state.bidWizard.createError = "项目名称必填"; renderBidWorkbenchIfOpen(); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) { state.bidWizard.createError = "投标截止须为日期（YYYY-MM-DD）"; renderBidWorkbenchIfOpen(); return; }
+      state.bidWizard.createBusy = true;
+      state.bidWizard.createError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        await ipc("bid.create_project", {
+          name: name, mode: mode, bid_deadline: deadline,
+          ...(notice ? { tender_notice_ref: notice } : {})
+        }, 3e4);
+        state.bidWizard.createBusy = false;
+        state.bidWizard.result = null;        // 新项目 → 上次导入结果作废
+        state.bidWizard.sel = {};
+        state.bidWizard.treeStatus = "idle";  // 进入第二步时重拉文件列表
+        await ui.loadBid(true);               // present → DRAFT → 导入卡接管
+      } catch (err) {
+        state.bidWizard.createBusy = false;
+        state.bidWizard.createError = err && (err.message || err.code) || "创建失败";
+        renderBidWorkbenchIfOpen();
+      }
+    },
+    /** #19：向导第二步提交——bid.import_files（upload_ref = 工作区相对
+     *  路径；project_id 由壳侧注入真源，UI 不自报） */
+    async submitBidWizardImport() {
+      if (!state.bridge || state.bidWizard.importBusy) return;
+      const sel = state.bidWizard.sel || {};
+      const rels = Object.keys(sel);
+      if (!rels.length) return;
+      state.bidWizard.importBusy = true;
+      state.bidWizard.importError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.import_files", {
+          files: rels.map((rel) => {
+            const f = state.bidWizard.files.find((x) => x.rel === rel) || { name: rel.split("/").pop() };
+            return { upload_ref: rel, filename: f.name, kind: sel[rel] };
+          })
+        }, 6e5);
+        state.bidWizard.importBusy = false;
+        state.bidWizard.result = r || null;
+        await ui.loadBid(true); // FILES_IMPORTED → 树区转「下一步」引导，右面板留结果
+      } catch (err) {
+        state.bidWizard.importBusy = false;
+        state.bidWizard.importError = err && (err.message || err.code) || "导入失败";
+        renderBidWorkbenchIfOpen();
+      }
+    },
     async loadBidQuality(force) {
       if (!state.bridge) return;
       if (state.bidQuality.status === "loading" && !force) return;
