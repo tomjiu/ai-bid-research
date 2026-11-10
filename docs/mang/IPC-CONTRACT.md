@@ -704,6 +704,39 @@ UI 上报右上角三按钮占宽；标题栏右端这一段必须让位（不�
 → { "width": 138 }
 ```
 
+### bid.validate  `{}` —— 标书校验报告（写面：推进 VALIDATING；#18 出口闭环）
+主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面（与
+bid-mcp-stdio 同源裁决），UI 入口固定 `scope=all`（sections 细分是代理高级面）。
+工具面**会推进项目至 VALIDATING**（域层语义，壳不拦截）。无章节树 → E_STATE
+透传 `state` 码（§3.3——UI「校验尚未开放」引导卡）；无 db.json → `not_found`。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "VALIDATING" },
+    "report": { …validate_bid_document 工具输出原样（ok / errors[]（BLOCKER+MAJOR）/
+                warnings[]（MINOR）/ findings[] / counts{blocker,major,minor,
+                deterministic,model} / rules_profile…） } }
+```
+
+### bid.export  `{ format, output_path, dark_bid?, bidder_name? }` —— 标书导出落盘（写面；#18 出口闭环）
+主体经 `bid_mcp::dispatch_with(export_bid_document)` 走真实工具面：双前置门
+（校验通过 + pre_export_confirm 过门确认）由工具面裁决，E_STATE 原文含状态与
+前置说明，透传 `state` 码（UI「导出被前置门拦截」引导卡）。`format` 限
+`docx | pdf`（pdf 需 Word/LibreOffice 转换通道，环境缺失 → `bad_args` 响亮拒）；
+`output_path` 必须是**工作区相对路径**（绝对路径 / 含 `..` → 工具面 `bad_args`，
+防导出产物写任意盘位）。幂等：同 (项目, 内容版本, 格式, 路径, 报价决策) 重放
+直返首次结果（`deduplicated:true`，零 IO）。产物定位：前端拿
+`export.artifact.url`（工作区内绝对路径，`explorer.reveal` 放行）调
+`explorer.reveal`。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "EXPORTED" },
+    "export": { …export_bid_document 工具输出原样（artifact{url,sha256,size} /
+                chapters_written / total_chars / dark_bid? / warnings[] /
+                deduplicated?…） } }
+```
+拒绝面：未过双前置门 → `state`（E_STATE 原文）；format/output_path 非法 →
+`bad_args`；无 db.json → `not_found`。
+
 
 ## 7. 事件（无 id）
 

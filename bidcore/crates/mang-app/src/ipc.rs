@@ -486,6 +486,12 @@ impl Ctx {
             "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
 
             "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+            // ── #18 出口闭环（bid.rs——validate / export 均经 bid_mcp 真实
+            //    工具面 validate_bid_document / export_bid_document；
+            //    E_STATE 透传 `state` 码 → UI 引导卡）──────────────────
+            "bid.validate" => crate::bid::validate(&ws, &self.bid, &a),
+
+            "bid.export" => crate::bid::export(&ws, &self.bid, &a),
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),

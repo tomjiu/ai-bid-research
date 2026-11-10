@@ -942,6 +942,89 @@ pub fn coverage(
     }))
 }
 
+/// `bid.validate` —— 标书校验报告（#18：导出前置面）。
+///
+/// 主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面
+/// （与 bid-mcp-stdio 同源裁决——`quality` / `matrix` 先例）。UI 入口
+/// 固定 `scope=all`（sections 细分是代理高级面，不进 UI）。工具面会
+/// 推进项目至 VALIDATING（域层语义，壳不拦截）。无章节树等前置不满足
+/// → E_STATE 透传 `state` 码（UI 引导卡而非故障横幅）。
+pub fn validate(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "validate_bid_document".to_string(),
+            args: json!({ "project_id": project_id, "scope": "all" }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "report": tool_out,
+    }))
+}
+
+/// `bid.export` —— 标书导出落盘（#18：产品出口面）。
+///
+/// 主体经 `bid_mcp::dispatch_with(export_bid_document)` 走真实工具面：
+/// 双前置门（校验过 + 过门确认）由工具面裁决，E_STATE 原文含状态与前置
+/// 说明，壳不复制状态窗（`state` 码透传）。`format` 限 docx | pdf（pdf
+/// 需 Word/LibreOffice 转换通道，环境缺失 → 工具面 bad_args 响亮拒）；
+/// `output_path` 必须是工作区相对路径（工具面校验 `..` 逃逸，壳不重复）。
+/// 幂等：同 (项目, 内容版本, 格式, 路径) 重放直返首次结果（deduplicated）。
+pub fn export(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let format = a.req_str("format")?;
+    let output_path = a.req_str("output_path")?;
+    let dark_bid = a.bool("dark_bid")?.unwrap_or(false);
+    let bidder_name = a.str("bidder_name")?.map(str::to_string);
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({
+        "project_id": project_id,
+        "format": format,
+        "output_path": output_path,
+        "profile": { "dark_bid": dark_bid },
+    });
+    if let Some(n) = bidder_name {
+        args["profile"]["bidder_name"] = json!(n);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "export_bid_document".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "export": tool_out,
+    }))
+}
+
 
 /// `bid.create_project` —— 新建标书项目（写面；#19 导入向导第一步）。
 ///
