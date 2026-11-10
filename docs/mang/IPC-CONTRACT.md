@@ -106,7 +106,17 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `outside_workspace` | 解析后不在工作区内（`../` 穿越、盘符外绝对路径） | 安全拦截 |
 | `too_large` | 超过该命令的体积上限 | 50MB 的 pdf 用 `fs.read` |
 | `io` | 其它系统 IO 失败 | 磁盘满、权限 |
-| `state` | 工具面 E_STATE 透传：当前项目状态不允许该操作（#313 批 C/D）——UI 应分支「尚未开放」引导卡而非错误横幅 | DRAFT 态项目调 `bid.coverage`（未导入文件） |
+| `state` | 工具面 E_STATE 透传：当前项目状态不允许该操作（#313 批 C/D）——UI 应分支「尚未开放」引导卡而非错误横幅（§3.4 约定） | DRAFT 态项目调 `bid.coverage`（未导入文件） |
+
+### 3.4 早态引导卡约定（E_NOTFOUND / E_STATE → 引导卡，不是错误横幅）【R6，#47 / #19 任务 3】
+
+`not_found`（无 db.json 的空工作区）与 `state`（工具面状态窗未到）都是**正常早态，不是故障**。
+四面板（自评 / 矩阵 / 门台账 / 覆盖报告）统一走 `bidEarlyStateCard` 构造 + `wireBidEarlyStateCard` 接线：
+
+1. **判据单一真源在 code**（`loadBidXxx` 捕获 `err.code`），不在文案里猜状态；
+2. 卡片结构：标题 + 说明 + **主行动**（`data-bid-go-wizard`——切回 detail 页签：无 db.json → 「去新建标书项目」直通向导第一步；未导入 → 「去导入招标文件」直通向导第二步）+ 次行动（重新检查）；
+3. 卡尾带 `bid-cov-next`「下一步」条（与向导结果面/完成态卡同一交互语言，#19 任务 2 口径）；
+4. **禁止** `data-kind="error"` 渲染早态（正常空态当故障 = 误导用户报障）。
 
 ---
 

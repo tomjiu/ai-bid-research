@@ -685,7 +685,7 @@
     // ——面板本地 UI 态，随数据面重置
     bid: {
       status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
-      matrix: { status: "idle", data: null, error: "" },
+      matrix: { status: "idle", data: null, error: "", code: "" },
       mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
       coverage: { status: "idle", data: null, error: "", code: "" },
       cov: { expandedFile: "" }
@@ -1788,6 +1788,31 @@
     );
   }
   /** 自评面板主体（工作台右面板） */
+  /** R6（#47 / #19 任务 3）：早态引导卡统一构造（E_NOTFOUND / E_STATE，
+   * 契约 §3.4）——四面板（quality / matrix / gates / coverage）共用：
+   * 标题 + 说明 + 主行动（去新建项目 / 去导入——切 detail 页签，向导
+   * 就在那）+ 次行动（重新检查）+ bid-cov-next「下一步」条。
+   * 正常空态不是故障：禁止 data-kind="error" 渲染早态。 */
+  function bidEarlyStateCard(o) {
+    return '<div class="view-state"><div class="view-state-title">' + esc(o.title) + "</div>"
+      + "<div>" + esc(o.desc) + "</div>"
+      + '<div><button class="btn btn-primary" data-bid-go-wizard>' + esc(o.cta) + '</button> <button class="btn" data-bid-retry>重新检查</button></div></div>'
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>' + esc(o.next) + "</div>";
+  }
+  /** 早态引导卡接线：主行动切回 detail 页签（向导第一/二步都在那），
+   * 次行动按面板注入重拉函数。 */
+  function wireBidEarlyStateCard(panel, host, retryFn) {
+    const go = panel.querySelector("[data-bid-go-wizard]");
+    if (go) go.addEventListener("click", () => {
+      const t = bidWorkbenchTab();
+      if (!t || !t.meta) return;
+      t.meta.panel = "detail";
+      syncBidTabBar(host, "detail");
+      renderBidWorkbenchPanes(host);
+    });
+    const retry = panel.querySelector("[data-bid-retry]");
+    if (retry) retry.addEventListener("click", retryFn);
+  }
   function renderBidQualityPanel(host) {
     const panel = host.querySelector("#bid-panel");
     if (!panel) return;
@@ -1802,7 +1827,16 @@
       return;
     }
     if (q.code === "not_found") {
-      panel.innerHTML = '<div class="view-state" data-kind="error"><div class="view-state-title">当前工作区不是标书项目</div><div>' + esc(q.error || "无 db.json") + "</div></div>";
+      // R6（#47 / #19 任务 3）：E_NOTFOUND 引导卡（§3.4 约定）——空工作区
+      // 不是故障，主行动直通向导第一步（此前 data-kind="error" 渲染，
+      // 正常空态被当故障横幅——四面板统一口径后修正）
+      panel.innerHTML = '<div class="bid-qual">' + bidEarlyStateCard({
+        title: "当前工作区还不是标书项目",
+        desc: "没有 db.json——新建标书项目并导入招标文件后，这里显示评分、质量摘要与提交就绪清单",
+        cta: "去新建标书项目",
+        next: "新建标书项目（向导第一步）——建项后导入招标文件，自评面板随状态窗逐步开放"
+      }) + "</div>";
+      wireBidEarlyStateCard(panel, host, () => ui.loadBidQuality(true));
       return;
     }
     if (q.code === "state") {
@@ -1995,6 +2029,19 @@
     }
     if (gt.status === "loading") {
       panel.innerHTML = '<div class="bid-gt"><div class="view-state"><div class="view-spinner"></div><div>正在读取门台账…</div></div></div>';
+      return;
+    }
+    if (gt.status === "error" && gt.code === "not_found") {
+      // R6（#47 / #19 任务 3）：E_NOTFOUND 引导卡（§3.4 约定）——gates 读面
+      // 无状态窗，但空工作区（无 db.json）仍是正常空态：主行动直通向导
+      // 第一步（此前走通用错误横幅「审核门台账读取失败」）
+      panel.innerHTML = '<div class="bid-gt">' + bidEarlyStateCard({
+        title: "当前工作区还不是标书项目",
+        desc: "没有 db.json——新建标书项目后，这里显示五门台账（矩阵/大纲/导出前确认/补遗豁免）与追认清单",
+        cta: "去新建标书项目",
+        next: "新建标书项目（向导第一步）——门台账随项目推进逐步可读可过门"
+      }) + "</div>";
+      wireBidEarlyStateCard(panel, host, () => ui.loadBidGates(true));
       return;
     }
     if (gt.status === "error" || !gt.data) {
@@ -2277,6 +2324,31 @@
       panel.innerHTML = '<div class="bid-mx"><div class="view-state"><div class="view-spinner"></div><div>正在读取合规矩阵…</div></div></div>';
       return;
     }
+    if (mx.status === "error" && mx.code === "not_found") {
+      // R6（#47 / #19 任务 3）：E_NOTFOUND 引导卡（§3.4 约定）——空工作区
+      // 不是故障（此前走「矩阵读取失败」错误横幅）
+      panel.innerHTML = '<div class="bid-mx">' + bidEarlyStateCard({
+        title: "当前工作区还不是标书项目",
+        desc: "没有 db.json——新建标书项目并导入招标文件后，这里显示条款响应合规矩阵",
+        cta: "去新建标书项目",
+        next: "新建标书项目（向导第一步）——条款抽取并建矩阵（prepare_outline_and_matrix）后，矩阵面板可用"
+      }) + "</div>";
+      wireBidEarlyStateCard(panel, host, () => ui.loadBidMatrix(true));
+      return;
+    }
+    if (mx.status === "error" && mx.code === "state") {
+      // R6（#47 / #19 任务 3）：E_STATE 引导卡——矩阵未建（工具面状态窗）。
+      // 已导入但未建矩阵的主路径是 MCP 管线 prepare_outline_and_matrix，
+      // UI 只引导不代劳；CTA 切回 detail 页签看导入/建纲引导
+      panel.innerHTML = '<div class="bid-mx">' + bidEarlyStateCard({
+        title: "合规矩阵尚未建立",
+        desc: (mx.error || "当前项目还没建立合规矩阵") + "——先由 MCP 管线抽取条款并建矩阵（prepare_outline_and_matrix），随后这里显示逐条款响应状态",
+        cta: "去查看导入与建纲引导",
+        next: "extract_requirements 抽取条款 → prepare_outline_and_matrix 建矩阵——矩阵就绪（MATRIX_READY）后本面板与自评面板同步开放"
+      }) + "</div>";
+      wireBidEarlyStateCard(panel, host, () => ui.loadBidMatrix(true));
+      return;
+    }
     if (mx.status === "error" || !mx.data) {
       panel.innerHTML =
         '<div class="bid-mx"><div class="view-state" data-kind="error"><div class="view-state-title">矩阵读取失败</div><div>'
@@ -2510,47 +2582,29 @@
       panel.innerHTML = '<div class="bid-cov"><div class="view-state"><div class="view-spinner"></div><div>正在读取覆盖报告…</div></div></div>';
       return;
     }
-    // R5（#47 / #19 任务 2）：早态引导卡对齐向导交互语言——主行动按钮
-    // （去导入/去建项——切回 detail 页签，向导就在那）+ bid-cov-next
-    // 「下一步」条 + 次行动「重新检查」。两侧共用一个接线小函数。
-    const covGoWizard = (label) => {
-      const go = panel.querySelector("[data-cov-go-wizard]");
-      if (go) go.addEventListener("click", () => {
-        const t = bidWorkbenchTab();
-        if (!t || !t.meta) return;
-        t.meta.panel = "detail";
-        syncBidTabBar(host, "detail");
-        renderBidWorkbenchPanes(host);
-      });
-      void label; // 按钮文案在 HTML 里（源级回归断言锚点）
-    };
+    // R5→R6（#47 / #19 任务 2+3）：早态引导卡对齐向导交互语言，并统一到
+    // bidEarlyStateCard / wireBidEarlyStateCard 四面板共用构造（§3.4 约定）
     if (cv.status === "error" && cv.code === "not_found") {
-      // R5（#47）：空工作区（无 db.json）不是错误——E_NOTFOUND 引导卡口径
-      // （§109）：引导去建项（向导第一步在 detail 页签），不再走下面的
-      // 错误横幅（正常空态渲染成故障违反引导卡约定）
-      panel.innerHTML =
-        '<div class="bid-cov"><div class="view-state"><div class="view-state-title">还没有标书项目</div>'
-        + "<div>当前工作区没有 db.json——新建标书项目并导入招标文件后，覆盖报告在这里统计「哪些块没归属」</div>"
-        + '<div><button class="btn btn-primary" data-cov-go-wizard>去新建标书项目</button> <button class="btn" data-cov-retry>重新检查</button></div></div>'
-        + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>新建标书项目（向导第一步）——建项后导入招标文件，覆盖报告自动可用</div></div>';
-      covGoWizard("去新建标书项目");
-      const retry = panel.querySelector("[data-cov-retry]");
-      if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
+      // 空工作区（无 db.json）不是错误——E_NOTFOUND 引导卡口径（§3.4）
+      panel.innerHTML = '<div class="bid-cov">' + bidEarlyStateCard({
+        title: "还没有标书项目",
+        desc: "当前工作区没有 db.json——新建标书项目并导入招标文件后，覆盖报告在这里统计「哪些块没归属」",
+        cta: "去新建标书项目",
+        next: "新建标书项目（向导第一步）——建项后导入招标文件，覆盖报告自动可用"
+      }) + "</div>";
+      wireBidEarlyStateCard(panel, host, () => ui.loadBidCoverage(true));
       return;
     }
     if (cv.status === "error" && cv.code === "state") {
       // 工具面 E_STATE 透传（壳侧 state 码，契约 §3.3）——早态项目引导卡
-      // 而非错误横幅（批 C 自评面同款纪律：单一真源在 code，不在文案）。
-      // R5（#47 / #19 任务 2）：对齐向导交互语言——主行动「去导入」直通
-      // 向导第二步（detail 页签），不再是只有「重新检查」的死文案。
-      panel.innerHTML =
-        '<div class="bid-cov"><div class="view-state"><div class="view-state-title">覆盖报告尚未开放</div>'
-        + "<div>当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，导入后自动可用</div>"
-        + '<div><button class="btn btn-primary" data-cov-go-wizard>去导入招标文件</button> <button class="btn" data-cov-retry>重新检查</button></div></div>'
-        + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>导入招标文件（向导第二步）——extract_requirements 抽取条款、build_outline 建纲之后，覆盖报告在这里给出三态分账</div></div>';
-      covGoWizard("去导入招标文件");
-      const retry = panel.querySelector("[data-cov-retry]");
-      if (retry) retry.addEventListener("click", () => ui.loadBidCoverage(true));
+      // 而非错误横幅。主行动「去导入」直通向导第二步（detail 页签）。
+      panel.innerHTML = '<div class="bid-cov">' + bidEarlyStateCard({
+        title: "覆盖报告尚未开放",
+        desc: "当前项目还没导入招标文件——覆盖报告统计「哪些块没归属」，导入后自动可用",
+        cta: "去导入招标文件",
+        next: "导入招标文件（向导第二步）——extract_requirements 抽取条款、build_outline 建纲之后，覆盖报告在这里给出三态分账"
+      }) + "</div>";
+      wireBidEarlyStateCard(panel, host, () => ui.loadBidCoverage(true));
       return;
     }
     if (cv.status === "error" || !cv.data) {
@@ -4412,7 +4466,7 @@
       // #313 批 A/B/D：标书数据面随根失效（壳侧服务缓存也会按 db.json 指纹重开）
       state.bid = {
         status: "idle", present: false, data: null, outline: null, error: "", ts: 0,
-        matrix: { status: "idle", data: null, error: "" },
+        matrix: { status: "idle", data: null, error: "", code: "" },
         mx: { status: "", cat: "", blockingOnly: false, page: 1, pageSize: 50, expandedId: "" },
         coverage: { status: "idle", data: null, error: "", code: "" },
         cov: { expandedFile: "" }
@@ -4501,6 +4555,7 @@
       if (state.bid.matrix.status === "loading" && !force) return;
       state.bid.matrix.status = "loading";
       state.bid.matrix.error = "";
+      state.bid.matrix.code = "";
       renderBidWorkbenchIfOpen();
       try {
         const r = await ipc("bid.matrix", {}, 6e4);
@@ -4514,6 +4569,7 @@
       } catch (err) {
         state.bid.matrix.data = null;
         state.bid.matrix.status = "error";
+        state.bid.matrix.code = (err && err.code) || "";
         state.bid.matrix.error = err && (err.message || err.code) || "bid.matrix 读取失败";
       }
       renderBidWorkbenchIfOpen();

@@ -154,8 +154,8 @@ check(
   "状态徽章文案缺失"
 );
 check(
-  "工作区切换重置矩阵面（批 A/B 同一重置面）",
-  /matrix: \{ status: "idle", data: null, error: "" \}/.test(app),
+  "工作区切换重置矩阵面（批 A/B 同一重置面；R6 补 code 字段——早态分支判据）",
+  /matrix: \{ status: "idle", data: null, error: "", code: "" \}/.test(app),
   "切工作区后矩阵面板留旧项目数据"
 );
 
@@ -662,26 +662,51 @@ check(
   "完成态卡盖掉刚导入的逐件结果（现场信息降级）"
 );
 
-// ---------- R5（#47 / #19 任务 2）：coverage 早态引导对齐向导交互语言 ----------
+// ---------- R5→R6（#47 / #19 任务 2+3）：早态引导卡对齐向导交互语言 + 四面板统一 ----------
 check(
   "R5 UI：coverage E_NOTFOUND 引导卡（空工作区不再走错误横幅）",
   /cv\.code === "not_found"[\s\S]{0,700}去新建标书项目/.test(app),
-  "空工作区（无 db.json）被渲染成「覆盖报告读取失败」——正常空态当故障（§109 口径违背）"
+  "空工作区（无 db.json）被渲染成「覆盖报告读取失败」——正常空态当故障（§3.4 口径违背）"
 );
 check(
   "R5 UI：coverage E_STATE 卡主行动「去导入招标文件」（直通向导第二步）",
-  /cv\.code === "state"[\s\S]{0,700}data-cov-go-wizard>去导入招标文件/.test(app),
+  /cv\.code === "state"[\s\S]{0,700}cta: "去导入招标文件"/.test(app),
   "早态卡只有「重新检查」死文案（#19 任务 2 的对齐目标缺失）"
 );
 check(
-  "R5 UI：去导入/去建项按钮切回 detail 页签（向导所在页）",
-  /data-cov-go-wizard[\s\S]{0,400}t\.meta\.panel = "detail";[\s\S]{0,120}renderBidWorkbenchPanes\(host\)/.test(app),
+  "R6 UI：早态引导卡统一构造 bidEarlyStateCard + 接线 wireBidEarlyStateCard",
+  /function bidEarlyStateCard\(o\) \{[\s\S]{0,500}data-bid-go-wizard/.test(app) && /function wireBidEarlyStateCard\(panel, host, retryFn\)/.test(app),
+  "四面板各写各的引导卡（交互语言漂移）"
+);
+check(
+  "R6 UI：主行动按钮切回 detail 页签（向导第一/二步都在那）",
+  /function wireBidEarlyStateCard[\s\S]{0,500}t\.meta\.panel = "detail";[\s\S]{0,120}renderBidWorkbenchPanes\(host\)/.test(app),
   "CTA 按钮不切页签（用户找不到向导入口）"
 );
 check(
-  "R5 UI：早态卡带 bid-cov-next「下一步」条（与结果面同款交互语言）",
-  /cv\.code === "state"[\s\S]{0,900}bid-cov-next" data-state="ok"><span>下一步<\/span>导入招标文件（向导第二步）/.test(app),
-  "早态引导缺「下一步」条（交互语言未对齐）"
+  "R6 UI：quality E_NOTFOUND 引导卡（原 data-kind=error 故障横幅修正）",
+  /q\.code === "not_found"[\s\S]{0,600}bidEarlyStateCard\(/.test(app),
+  "自评面板空工作区仍渲染成故障横幅"
+);
+check(
+  "R6 UI：gates E_NOTFOUND 引导卡（原通用错误横幅修正）",
+  /gt\.code === "not_found"[\s\S]{0,600}bidEarlyStateCard\(/.test(app),
+  "门台账面板空工作区仍渲染成故障横幅"
+);
+check(
+  "R6 UI：matrix 补 not_found/state 双分支（原只有通用错误横幅）",
+  /mx\.code === "not_found"[\s\S]{0,600}bidEarlyStateCard\(/.test(app) && /mx\.code === "state"[\s\S]{0,600}bidEarlyStateCard\(/.test(app),
+  "矩阵面板空工作区/矩阵未建仍渲染成故障横幅"
+);
+check(
+  "R6 数据面：loadBidMatrix 捕获 err.code（此前 matrix 无 code 字段——分支判据缺失）",
+  /state\.bid\.matrix\.code = \(err && err\.code\) \|\| ""/.test(app) && /matrix: \{ status: "idle", data: null, error: "", code: "" \}/.test(app),
+  "矩阵面错误码丢失（E_NOTFOUND/E_STATE 判据无源）"
+);
+check(
+  "R6 契约：IPC-CONTRACT §3.4 早态引导卡约定登记",
+  contract.includes("### 3.4 早态引导卡约定") && contract.includes("不是故障") && contract.includes("data-bid-go-wizard"),
+  "四面板统一口径没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
