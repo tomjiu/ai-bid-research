@@ -46,6 +46,8 @@
 | `src/pipeline/`（编排面） | collect→extract→analyze→report 四阶段串联 + `pipeline_runs` 运行台账 + 增量水位 + 断点续跑（R58 `--resume`/`extract_status`） | 研究管道一条命令；台账为审计面（研究可复现），水位只服务增量文件读取；批量写单事务（R62） |
 | `src/platform.py` / `src/locking.py` / `src/colors.py` / `src/progress.py` / `src/exit_codes.py`（平台与运行时基建，R39-R72） | 跨平台检测（win/linux）/文件锁/WAL 探测/控制台加固与颜色/进度/退出码 | **纯 Python 基建，无 Rust 对应**；平台差异唯一权威口径见 `docs/PLATFORM-NOTES.md`；`src/version.py` 为版本唯一真源 |
 | `src/analyze/suppliers.py` / `outliers.py` / `cooccurrence.py` / `regions.py` / `rolling.py` / `relationships.py` / `charts.py`（分析深化，R47-R64） | 供应商画像/预算 IQR 离群/领域词共现/省级归一/滑动窗口环比/重复合作关系/ASCII 图表 | 全部**描述性统计**（离群是统计标记非错误；共现≠因果；重复中标是信号非认定）；省份表为封闭 34 项枚举 |
+| `src/analyze/duplicates.py`（近重复检测，R79-R80） | 项目名归一 + pigeonhole 块倒排候选 + Ukkonen 带限编辑距离 + 传递闭包聚类；报告十六节与 `--export --dedupe` 消费 | **研究信号非事实认定**（一期/二期与改包重发同为 1-2 步编辑——聚族是提示人工复核）；候选对预算 5 万，超限**诚实截断**不装完成 |
+| `src/analyze/quality.py` 语义扩展（R81/R89） | 四类语义审计（预算负/零/超大/非数值、日期逻辑、标识完整/唯一）+ 加权健康分 + 单位错位群体对照 | 健康分是**加权启发**（权重服务研究可信度排序，非认证）；审计揭示不拦截（`data-quality` 发现问题仍退 0，门槛面 `--min-score` 才拦截） |
 
 **判定规则**：任何"投标生产"语义的数据与产物 → Rust 侧是真源；
 Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。

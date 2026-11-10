@@ -46,3 +46,26 @@ class TestUserGuideIncrement:
     def test_platform_notes_cross_reference(self):
         text = DOC.read_text(encoding="utf-8")
         assert "PLATFORM-NOTES.md" in text
+
+
+class TestBatchMDocs:
+    """批 L/M 文档增量契约（R91）。"""
+
+    @pytest.mark.parametrize(
+        "feature,marker",
+        [
+            ("近重复边界声明", "duplicates.py"),
+            ("语义质量边界声明", "语义扩展（R81/R89）"),
+            ("去重导出", "--dedupe"),
+            ("质量门槛", "--min-score"),
+        ],
+    )
+    def test_boundary_and_guide_updated(self, feature, marker):
+        root = Path(__file__).resolve().parent.parent
+        boundary = (root / "docs" / "PYTHON-BOUNDARY.md").read_text(
+            encoding="utf-8"
+        )
+        guide = (root / "docs" / "USER-GUIDE.md").read_text(encoding="utf-8")
+        assert marker in boundary or marker in guide, (
+            f"[{feature}] 标记 [{marker}] 未见于任何文档"
+        )
