@@ -26,10 +26,18 @@
 in : { name, tender_notice_ref?, bid_deadline, mode(明标|暗标), external_key }
 out: { project_id, status: "DRAFT" }
 幂等: external_key 相同 → 返回已有 project_id（E_PARTIAL 不适用，静默幂等）
+日期: bid_deadline 严格 YYYY-MM-DD 且须为真实存在的日历日（#47 R15 平台区分⑧
+      收编单一真源 bid_domain::dates::parse_ymd——#375 A-16 月长收紧对 MCP 直调面
+      同享：2026-02-30 / 2026-04-31 等幻日、前缀时间形态均 E_UNPROCESSABLE；
+      壳侧仍 10 字符形态检查先行——分层不重复）
 警告: bid_deadline 已过 → **不报错**，warnings[] 携带文案
       「BID_DEADLINE_PAST: 投标截止 … 已过（契约 §1：创建即警告，不阻断）」
       （#86 摩擦 #14 清偿：旧版把 BID_DEADLINE_PAST 写在「错误: E_CONFLICT」
       条目下，与实现不符——实现一直是 warning 不阻断，契约以实现为准修订）
+      （「已过」基准 = 机器本地日历日 bid_domain::dates::today_ymd——#47 R15：
+      旧 UTC 口径在东八区本地 00:00-07:59 取昨天，刚过的截止日漏报一天；
+      ISO 定宽字典序比较零换算。本地/UTC 两口径分野与平台时区获取路径
+      详见 dates.rs 模块注记）
 状态: → DRAFT
 ```
 

@@ -84,13 +84,42 @@ pub fn add_days(s: &str, days: i64) -> Option<String> {
     Some(format!("{y:04}-{m:02}-{d:02}"))
 }
 
-/// 今天（系统时钟——仅 CLI/展示消费；测试一律显式传日期，保持确定性）。
+/// 今天（**本地日历日**——R15，#47 平台区分⑧口径修正；系统时钟，测试不
+/// 依赖它，仅 CLI/展示/台账消费）。
+///
+/// **为什么是本地不是 UTC**：消费方全是业务日历日——投标截止过去警告
+/// （`BID_DEADLINE_PAST`）、性能台账 created_at、评标基准日/开标日缺省。
+/// 旧口径 epoch 直除 86400 = UTC 日：东八区本地 00:00-07:59 之间取到
+/// **昨天**——截止日刚过的警告漏报一天、台账日期整体前置一档。本地日历日
+/// 与用户在 UI 日历控件里选的是同一天（JS `new Date()` 即本地）。
+///
+/// 实现：chrono `Local` 只提供 **UTC 偏移秒**（iana-time-zone：Unix 读
+/// TZ 环境变量//etc/localtime，Windows 读注册表——双平台标准路径）；日期
+/// 换算仍走本 crate 的 `civil_from_days`（单一算术真源，chrono 不进日期
+/// 数学）。偏移的换算面 [`ymd_at_utc_offset`] 是纯函数（测试锁边界瞬点）。
 pub fn today_ymd() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let (y, m, d) = civil_from_days(secs.div_euclid(86_400));
+    let offset = chrono::Local::now().offset().local_minus_utc() as i64;
+    ymd_at_utc_offset(secs, offset)
+}
+
+/// 今天（UTC 日——确定性对照面；业务消费一律 [`today_ymd`]，本函数仅供
+/// 测试对照与诊断）。
+pub fn today_ymd_utc() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    ymd_at_utc_offset(secs, 0)
+}
+
+/// epoch 秒 + UTC 偏移秒 → 本地日历日（纯函数：`(secs + offset) / 86400`
+/// 后走 [`civil_from_days`]——`div_euclid` 对负秒（1970 前）同样正确）。
+pub fn ymd_at_utc_offset(secs: i64, offset_secs: i64) -> String {
+    let (y, m, d) = civil_from_days((secs + offset_secs).div_euclid(86_400));
     format!("{y:04}-{m:02}-{d:02}")
 }
 
@@ -176,5 +205,47 @@ mod tests {
         assert_eq!(add_days("2026-12-31", 1).unwrap(), "2027-01-01", "跨年");
         assert_eq!(add_days("2024-02-28", 1).unwrap(), "2024-02-29", "闰日");
         assert_eq!(add_days("bad", 1), None);
+    }
+
+    /// R15（#47 平台区分⑧）：偏移换算矩阵——同一 epoch 瞬点在不同 UTC 偏移
+    /// 下的日历日（纯函数锁边界；东八区本地 0-8 点取昨天的根因就是这层）。
+    #[test]
+    fn ymd_at_utc_offset_matrix() {
+        // 2024-11-09T16:00:00Z：UTC 日 11-09；+8h（北京 11-10 00:00 整）翻日
+        let secs = 1_731_168_000i64;
+        assert_eq!(ymd_at_utc_offset(secs, 0), "2024-11-09");
+        assert_eq!(ymd_at_utc_offset(secs, 8 * 3600), "2024-11-10", "东八区翻日（本地 00:00）");
+        // 前一秒：北京仍是 11-09 23:59:59
+        assert_eq!(ymd_at_utc_offset(secs - 1, 8 * 3600), "2024-11-09");
+        // 西五区（纽约冬令）：本地 11-09 11:00，与 UTC 同日
+        assert_eq!(ymd_at_utc_offset(secs, -5 * 3600), "2024-11-09");
+        // UTC 日界本身：2024-11-10T00:00:00Z 前 1 秒 UTC 仍 11-09
+        assert_eq!(ymd_at_utc_offset(secs + 8 * 3600 - 1, 0), "2024-11-09");
+        assert_eq!(ymd_at_utc_offset(secs + 8 * 3600, 0), "2024-11-10");
+        // 十二时区（UTC+12）同瞬点已是 11-10 04:00；十四时区（基里巴斯 +14）11-10 06:00
+        assert_eq!(ymd_at_utc_offset(secs, 12 * 3600), "2024-11-10");
+        assert_eq!(ymd_at_utc_offset(secs, 14 * 3600), "2024-11-10");
+        // 负偏移大值（UTC-11）：11-09 05:00
+        assert_eq!(ymd_at_utc_offset(secs, -11 * 3600), "2024-11-09");
+        // 1970 前的负秒（div_euclid 向下取整——1969-12-31T23:00Z 在 +1h 下回 1970-01-01）
+        assert_eq!(ymd_at_utc_offset(-3600, 0), "1969-12-31");
+        assert_eq!(ymd_at_utc_offset(-3600, 3600), "1970-01-01");
+        // 半小时偏移（印度 +5:30 / 尼泊尔 +5:45）不落整点也不炸
+        assert_eq!(ymd_at_utc_offset(secs, 5 * 3600 + 1800), "2024-11-09");
+        assert_eq!(ymd_at_utc_offset(secs + 8 * 3600 - 1, 5 * 3600 + 2700), "2024-11-10");
+    }
+
+    /// R15：today_ymd（本地）/ today_ymd_utc（UTC）一致性健全性——任何时区
+    /// 的机器上两者至多差 1 天（时区偏移 ≤ ±14h < 24h；超出即换算坏了）。
+    /// 两个 today 都是合法公历日（parse_ymd 单一真源复验）。
+    #[test]
+    fn today_ymd_local_vs_utc_sanity() {
+        let local = today_ymd();
+        let utc = today_ymd_utc();
+        let (ly, lm, ld) = parse_ymd(&local).expect("本地 today 是合法公历日");
+        let (uy, um, ud) = parse_ymd(&utc).expect("UTC today 是合法公历日");
+        let delta =
+            (days_from_civil(ly, lm, ld) - days_from_civil(uy, um, ud)).abs();
+        assert!(delta <= 1, "本地/UTC 日历日相差 {delta} 天（>1 = 偏移换算坏）：local={local} utc={utc}");
     }
 }

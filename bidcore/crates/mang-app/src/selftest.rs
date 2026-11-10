@@ -1008,6 +1008,37 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
     let _ = std::fs::remove_dir_all(&ws_r14);
 
+    // ---- #47 R15（平台区分⑧）：日期时区口径——严格公历（不存在的日历日
+    //      拒在工具面单一真源）+ 截止日过去的警告（today 换本地日历日——
+    //      旧 UTC 口径在东八区 0-8 点取昨天，刚过截止的警告漏报一天）
+    let ws_r15 = scratch_dir();
+    let resp = call(&ctx, json!({"id":"t-ws-r15","cmd":"workspace.open","path": ws_r15.to_string_lossy()}));
+    r.check(
+        "workspace.open(R15 工作区)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    // 不存在的日历日：壳形态检查（10 字符数字）通过、工具面严格公历拒
+    let resp = call(&ctx, json!({"id":"t-bad-date","cmd":"bid.create_project","name":"坏日期","bid_deadline":"2026-02-30","mode":"明标"}));
+    r.check(
+        "bid.create_project(不存在的日历日拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("err={}", err_code(&resp)),
+    );
+    // 已过截止日：创建即警告 BID_DEADLINE_PAST（本地日历日口径），不阻断
+    let resp = call(&ctx, json!({"id":"t-past-dl","cmd":"bid.create_project","name":"过期项目R15","bid_deadline":"2020-01-01","mode":"明标"}));
+    let cp15 = result(&resp);
+    let warned = cp15["warnings"]
+        .as_array()
+        .map(|w| w.iter().any(|x| x.as_str().unwrap_or("").contains("BID_DEADLINE_PAST")))
+        .unwrap_or(false);
+    r.check(
+        "bid.create_project(过期截止警告)",
+        resp["ok"] == json!(true) && cp15["status"] == json!("DRAFT") && warned,
+        format!("warns={:?}", cp15["warnings"]),
+    );
+    let _ = std::fs::remove_dir_all(&ws_r15);
+
     println!();
     println!(
         "== {} passed, {} failed, {} skipped ==",

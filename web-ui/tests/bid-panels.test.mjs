@@ -29,6 +29,10 @@ const PATHS_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "paths.rs");
 const RECENT_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "recent.rs");
 const SELFTEST_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "selftest.rs");
 const FENCE_TEST = join(ROOT, "bidcore", "crates", "bid-tools", "tests", "fs_fence.rs");
+const DATES_RS = join(ROOT, "bidcore", "crates", "bid-domain", "src", "dates.rs");
+const TOOLS_RS = join(ROOT, "bidcore", "crates", "bid-mcp", "src", "tools.rs");
+const MCP_TEST = join(ROOT, "bidcore", "crates", "bid-mcp", "tests", "import_tender_files_tool.rs");
+const DOMAIN_CARGO = join(ROOT, "bidcore", "crates", "bid-domain", "Cargo.toml");
 const CONTRACT = join(ROOT, "docs", "mang", "IPC-CONTRACT.md");
 
 const app = readFileSync(APP_JS, "utf8");
@@ -39,6 +43,10 @@ const pathsRs = readFileSync(PATHS_RS, "utf8");
 const recentRs = readFileSync(RECENT_RS, "utf8");
 const selftestRs = readFileSync(SELFTEST_RS, "utf8");
 const fenceTest = readFileSync(FENCE_TEST, "utf8");
+const datesRs = readFileSync(DATES_RS, "utf8");
+const toolsRs = readFileSync(TOOLS_RS, "utf8");
+const mcpTest = readFileSync(MCP_TEST, "utf8");
+const domainCargo = readFileSync(DOMAIN_CARGO, "utf8");
 const contract = readFileSync(CONTRACT, "utf8");
 
 let pass = 0;
@@ -1161,6 +1169,54 @@ check(
   "R14 契约：混合分隔符矩阵口径登记（str_basename 与守卫严格/宽松分野）",
   contract.includes("混合分隔符矩阵（R14") && contract.includes("str_basename"),
   "R14 口径没进契约"
+);
+
+// ---------- R15（#47 平台区分⑧）：日期时区口径（bid_deadline 双缺陷） ----------
+check(
+  "R15 域层：today_ymd 本地日历日（chrono Local 只供偏移秒 + civil_from_days 算术真源）",
+  /chrono::Local::now\(\)\.offset\(\)\.local_minus_utc\(\)/.test(datesRs)
+    && /pub fn ymd_at_utc_offset\(secs: i64, offset_secs: i64\) -> String/.test(datesRs)
+    && /pub fn today_ymd_utc\(\) -> String/.test(datesRs),
+  "today 仍 UTC 口径（东八区 0-8 点取昨天——截止警告/台账日期错一天）或纯函数面缺失"
+);
+check(
+  "R15 域层：偏移矩阵 + 本地/UTC 健全性测试在场",
+  /fn ymd_at_utc_offset_matrix/.test(datesRs) && /fn today_ymd_local_vs_utc_sanity/.test(datesRs),
+  "R15 回归门被删"
+);
+check(
+  "R15 域层：chrono 直依赖带零新增包注释（锁内既有——hmac 同款先例）",
+  domainCargo.includes('chrono = "0.4"') && domainCargo.includes("R15"),
+  "chrono 依赖缺注释或缺失（口径不可考）"
+);
+check(
+  "R15 MCP：私有 parse_ymd/civil_from_days/today_ymd 三份拷贝删除（单一真源）",
+  !/^fn parse_ymd\(/m.test(toolsRs) && !/^fn civil_from_days\(/m.test(toolsRs) && !/^fn today_ymd\(/m.test(toolsRs)
+    && toolsRs.includes("bid_domain::dates::parse_ymd(&bid_deadline)"),
+  "MCP 面私有宽松日历校验回潮（2026-02-30 漏进库——#375 收缩分叉）"
+);
+check(
+  "R15 MCP：截止日比较字符串化 + 本地今天",
+  /if bid_deadline < bid_domain::dates::today_ymd\(\)/.test(toolsRs),
+  "截止日比较仍走元组/UTC 今天（口径回潮）"
+);
+check(
+  "R15 测试：不存在的日历日 MCP 面拒（含真闰日不误伤）",
+  /fn nonexistent_calendar_date_rejected_at_mcp_face/.test(mcpTest)
+    && mcpTest.includes("2026-02-30") && mcpTest.includes("2028-02-29"),
+  "严格公历回归门被删"
+);
+check(
+  "R15 selftest：坏日历日拒 + 过期截止警告双项在场",
+  selftestRs.includes("bid.create_project(不存在的日历日拒)")
+    && selftestRs.includes("bid.create_project(过期截止警告)"),
+  "集成自检项缺失"
+);
+check(
+  "R15 契约：日期时区口径登记（严格公历 + 本地日历日 + 零新增包）",
+  contract.includes("日期时区口径（R15") && contract.includes("本地日历日")
+    && contract.includes("iana-time-zone"),
+  "R15 口径没进契约"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
