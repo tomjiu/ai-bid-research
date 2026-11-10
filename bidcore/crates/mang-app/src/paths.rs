@@ -316,6 +316,28 @@ pub fn is_inside(a: &Path, b: &Path) -> bool {
     av[..bv.len()] == bv[..]
 }
 
+/// 字符串基名——双分隔符（`/` 与 `\`）取最后非空段（R14，#47 平台
+/// 区分⑦：混合分隔符矩阵）。
+///
+/// **为什么不用 `Path::file_name`**：std `Path` 按**本平台**分隔符解析——
+/// `Path::new("a\\b.docx")` 在 Unix 上把整串当基名（`\` 不是 Unix 分隔
+/// 符），在 Windows 上返回 `b.docx`。同一存库/传输字符串（recent 台账
+/// 的 path、import 的 filename 回退）在两平台会得出不同答案——跨平台
+/// 字符串数据必须用本助手（与 web-ui `baseName` 同口径，两侧同答）。
+/// **真实本机路径**（read_dir 条目、落位产物）仍用 `Path::file_name`
+/// （平台原生形态，天然正确）。
+///
+/// 语义：`资料\技术标.docx` → `技术标.docx`；尾分隔符取最后**非空**段
+/// （`E:\w\` → `w`——目录形态的显示名）；全分隔符/空串回退整串原样
+/// （调用方自行裁决）。**与 R10 守卫的口径分野**：守卫取「最后一段的
+/// 字面值」（尾分隔符形态得空串 → 拒「基名为空」，不猜意图——严格面）；
+/// 本助手是显示回退面（宽松面），两者刻意不同。
+pub fn str_basename(s: &str) -> &str {
+    s.rsplit(['/', '\\'])
+        .find(|seg| !seg.is_empty())
+        .unwrap_or(s)
+}
+
 /// 读路径时的 IO 错误 → typed error
 pub fn map_io(p: &Path, e: &std::io::Error) -> IpcError {
     io_err(p, e)
@@ -490,5 +512,79 @@ mod tests {
         assert!(guard_windows_max_path(&cjk_ok).is_ok(), "259 个 CJK 字符同样在限内");
         let cjk_bad: String = "标".repeat(260);
         assert!(guard_windows_max_path(&cjk_bad).is_err());
+    }
+
+    /// R14（#47 平台区分⑦）：`str_basename` 金样矩阵——双分隔符全位置
+    /// （表驱动，纯字符串面：两平台同答，无 cfg）
+    #[test]
+    fn str_basename_dual_separator_matrix() {
+        let cases: &[(&str, &str)] = &[
+            // 双分隔符取最后段（两形态同答）
+            ("a\\b.docx", "b.docx"),
+            ("a/b.docx", "b.docx"),
+            // 混合分隔符（一个串里两种——Windows 拷来的形态）
+            ("a\\b/c.docx", "c.docx"),
+            ("a/b\\c.docx", "c.docx"),
+            ("资料\\第一章\\技术标.docx", "技术标.docx"),
+            ("资料/第一章\\技术标.docx", "技术标.docx"),
+            // 盘符 / UNC 形态
+            ("C:\\ws\\x.docx", "x.docx"),
+            ("C:/ws/x.docx", "x.docx"),
+            ("\\\\srv\\share\\x.docx", "x.docx"),
+            ("//srv/share/x.docx", "x.docx"),
+            // 尾分隔符：取最后非空段（目录形态的显示名）
+            ("E:\\w\\", "w"),
+            ("资料/", "资料"),
+            // 连续分隔符：跳空段
+            ("a\\\\b.docx", "b.docx"),
+            ("a//b.docx", "b.docx"),
+            ("a\\/b.docx", "b.docx"),
+            // 无分隔符：整串即基名
+            ("plain.md", "plain.md"),
+            ("招标文件.docx", "招标文件.docx"),
+            // 回退面：全分隔符/空串 → 原样（调用方裁决）
+            ("\\\\", "\\\\"),
+            ("", ""),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(str_basename(raw), *want, "str_basename({raw:?})");
+        }
+    }
+
+    /// R14 cfg 双分支对照（AGENTS.md §13 平台门）：**std `Path::file_name`
+    /// 按平台解析分隔符——同一输入两平台答案不同**（对照组，如实锁定；
+    /// 分歧只在**纯反斜杠**形态：混合串 `a\b/c.docx` 两侧都按 `/` 切出
+    /// `c.docx`，不构成分歧）；`str_basename` 双分隔符——两平台同答
+    /// （修复面，断言无条件跑）。Unix 真跑本分支；Windows 分支在
+    /// Windows CI 跑（本沙箱未验证——如实报告）。
+    #[test]
+    fn path_file_name_diverges_but_str_basename_is_platform_stable() {
+        let pure = "a\\b.docx";
+        #[cfg(unix)]
+        {
+            // Unix：`\` 不是分隔符——file_name 把整串当基名（平台分歧面）
+            assert_eq!(
+                std::path::Path::new(pure).file_name().unwrap().to_string_lossy(),
+                pure,
+                "对照组：std 在 Unix 的行为（分歧存在才是本测试的前提）"
+            );
+        }
+        #[cfg(windows)]
+        {
+            // Windows：`\` 是分隔符——file_name 取最后段
+            assert_eq!(
+                std::path::Path::new(pure).file_name().unwrap().to_string_lossy(),
+                "b.docx",
+                "对照组：std 在 Windows 的行为"
+            );
+        }
+        // 修复面：双分隔符助手两侧同答（无 cfg——这正是它存在的意义）
+        assert_eq!(str_basename(pure), "b.docx");
+        // 混合分隔符形态：std 两平台同答（按 `/` 切）+ 助手同答（按双切）
+        assert_eq!(str_basename("a\\b/c.docx"), "c.docx");
+        assert_eq!(str_basename("a/b\\c.docx"), "c.docx");
+        // R13 交互：组合字符随段走、不拆段（基名面与 NFC 面正交——分层
+        // 不越界；`\` 是本助手的分隔符，组合字符紧贴所属段原样保留）
+        assert_eq!(str_basename("a\\cafe\u{0301}招标.docx"), "cafe\u{0301}招标.docx");
     }
 }

@@ -26,7 +26,9 @@ const CSS = join(ROOT, "web-ui", "mang", "styles.css");
 const BID_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "bid.rs");
 const IPC_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "ipc.rs");
 const PATHS_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "paths.rs");
+const RECENT_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "recent.rs");
 const SELFTEST_RS = join(ROOT, "bidcore", "crates", "mang-app", "src", "selftest.rs");
+const FENCE_TEST = join(ROOT, "bidcore", "crates", "bid-tools", "tests", "fs_fence.rs");
 const CONTRACT = join(ROOT, "docs", "mang", "IPC-CONTRACT.md");
 
 const app = readFileSync(APP_JS, "utf8");
@@ -34,7 +36,9 @@ const css = readFileSync(CSS, "utf8");
 const bidRs = readFileSync(BID_RS, "utf8");
 const ipcRs = readFileSync(IPC_RS, "utf8");
 const pathsRs = readFileSync(PATHS_RS, "utf8");
+const recentRs = readFileSync(RECENT_RS, "utf8");
 const selftestRs = readFileSync(SELFTEST_RS, "utf8");
+const fenceTest = readFileSync(FENCE_TEST, "utf8");
 const contract = readFileSync(CONTRACT, "utf8");
 
 let pass = 0;
@@ -1110,6 +1114,53 @@ check(
   "R13 契约：NFC 归一口径登记（落位/占位键 NFC + upload_ref 原样的分野）",
   contract.includes("NFC 归一（R13") && contract.includes("定位键"),
   "NFC 口径没进契约"
+);
+
+// ---------- R14（#47 平台区分⑦）：混合分隔符矩阵（跨平台字符串基名） ----------
+check(
+  "R14 壳侧：paths::str_basename 双分隔符助手（最后非空段 + 回退原样）",
+  /pub fn str_basename\(s: &str\) -> &str \{[\s\S]{0,220}s\.rsplit\(\['\/', '\\\\'\]\)[\s\S]{0,120}find\(\|seg\| !seg\.is_empty\(\)\)/.test(pathsRs),
+  "跨平台字符串基名助手缺失或语义漂移（std Path::file_name 按平台解析——两侧答案分叉）"
+);
+check(
+  "R14 壳侧：recent 台账 name 回退接 str_basename（Windows 形态路径两侧同答）",
+  recentRs.includes("paths::str_basename(path)"),
+  "recent.rs 回退仍走 Path::file_name（Unix 上 C:\\a\\b.md 整串当基名——跨机台账显示面分裂）"
+);
+check(
+  "R14 壳侧：import_files filename 回退接 str_basename（跨平台字符串不走 std Path）",
+  bidRs.includes("paths::str_basename(upload_ref)"),
+  "import filename 回退仍走 Path::file_name（归一不变量未写死）"
+);
+check(
+  "R14 UI：web-ui baseName 双分隔符（与壳侧 str_basename 同口径）",
+  /Math\.max\(s\.lastIndexOf\("\/"\),\s*s\.lastIndexOf\("\\\\"\)\)/.test(app),
+  "JS baseName 丢双分隔符口径（两侧分叉回潮）"
+);
+check(
+  "R14 测试：归一深度矩阵 + cfg 双分支对照（paths.rs / bid.rs 双面）",
+  /fn r14_mixed_separator_normalize_matrix/.test(bidRs)
+    && /fn str_basename_dual_separator_matrix/.test(pathsRs)
+    && /fn path_file_name_diverges_but_str_basename_is_platform_stable/.test(pathsRs),
+  "R14 回归门被删（金样矩阵/平台对照测试缺失）"
+);
+check(
+  "R14 测试：fs_fence 混合分隔符共享不变量 + cfg 双分支（Unix 字面名 / Windows 分隔词）",
+  /fn mixed_separator_never_escapes_fence/.test(fenceTest)
+    && /fn mixed_separator_unix_backslash_is_literal_character/.test(fenceTest)
+    && /fn mixed_separator_windows_backslash_is_separator/.test(fenceTest),
+  "围栏混合形态矩阵缺失（不逃逸不变量未锁定）"
+);
+check(
+  "R14 selftest：Windows 形态 upload_ref 归一导入 + 两形态同件幂等双项在场",
+  selftestRs.includes("bid.import_files(Windows 形态归一导入)")
+    && selftestRs.includes("bid.import_files(两形态同件幂等)"),
+  "集成自检项缺失"
+);
+check(
+  "R14 契约：混合分隔符矩阵口径登记（str_basename 与守卫严格/宽松分野）",
+  contract.includes("混合分隔符矩阵（R14") && contract.includes("str_basename"),
+  "R14 口径没进契约"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
