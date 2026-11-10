@@ -14,6 +14,7 @@ from src.analyze.dataset import AnalysisDataset
 from src.analyze.buyers import buyer_profiles
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
+from src.analyze.regions import province_distribution
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
 from src.analyze.quality import field_quality
@@ -65,6 +66,7 @@ def build_analysis_payload(
         "supplier_profiles": supplier_profiles(dataset),
         "budget_outliers": budget_outliers(dataset),
         "keyword_cooccurrence": keyword_cooccurrence(dataset),
+        "province_distribution": province_distribution(dataset),
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
@@ -405,6 +407,23 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             _render_table(["词对", "共现数", "示例项目"], rows),
             "",
             "注：共现 ≠ 因果，仅刻画「一起被提及」；共现数 < 2 的孤例词对不展示（无信号）。",
+            "",
+        ]
+
+    province = payload.get("province_distribution") or {}
+    prov_dist = province.get("distribution") or {}
+    if prov_dist:
+        rows = [[name, str(count)] for name, count in prov_dist.items()]
+        sections += [
+            "## 十五、省级归一分布（混杂口径折叠）",
+            "",
+            _render_table(["省级区域", "项目数"], rows),
+            "",
+            (
+                f"解析成功 {province['parsed_count']} 条 / "
+                f"无法定位省级 {province['unknown_count']} 条"
+                "（裸市名/空区域不猜数，不计入本节）。"
+            ),
             "",
         ]
 
