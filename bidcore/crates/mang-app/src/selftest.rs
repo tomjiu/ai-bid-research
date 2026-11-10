@@ -696,6 +696,30 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         format!("{}", err_code(&resp)),
     );
 
+    // ---- #47 R8（#19 拖拽导入）：ingest_drop 落位（壳拖入路径 → 复制进工作区根；
+    //      不依赖 db.json——先拖文件再建项合法；导入仍走 bid.import_files 向导确认）
+    let drop_src = scratch_dir().join("招标文件.docx");
+    std::fs::write(&drop_src, b"PK\x03\x04selftest-drop-payload").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ing","cmd":"bid.ingest_drop","paths":[drop_src.to_string_lossy()]}));
+    let ing = result(&resp);
+    r.check(
+        "bid.ingest_drop(拖入落位)",
+        resp["ok"] == json!(true)
+            && ing["copied"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+            && ing["copied"][0]["rel"].as_str() == Some("招标文件.docx"),
+        format!("copied={}", ing["copied"].as_array().map(|a| a.len()).unwrap_or(0)),
+    );
+    // 幂等重放：同名同内容 → already_present（不按错误回）
+    let resp = call(&ctx, json!({"id":"t-bid-ing2","cmd":"bid.ingest_drop","paths":[drop_src.to_string_lossy()]}));
+    let ing2 = result(&resp);
+    r.check(
+        "bid.ingest_drop(幂等重放)",
+        resp["ok"] == json!(true)
+            && ing2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
+        format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+
     // ---- #194：工作区切换（workspace.open / workspace.current）
     let ws_b = scratch_dir();
     let ws_b_display = Workspace::new(&ws_b).unwrap().root_display();

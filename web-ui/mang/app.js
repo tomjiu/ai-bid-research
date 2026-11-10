@@ -5688,11 +5688,63 @@
      * 这里只在按下位置【不在】菜单栏空白区时临时关掉，避免把侧栏/正文的空白当成拖动。
      */
     onDrop(paths) {
+      // R8（#47 / #19 拖拽导入）：向导半完成态（DRAFT 0 文件）接住壳拖入的
+      // 招标文件——bid.ingest_drop 复制进工作区根（不导入——导入仍走向导
+      // 第二步，用户确认 kind）；非白名单路径照旧 openPath
+      const bR8 = state.bid;
+      const pR8 = (bR8.data && bR8.data.project) || {};
+      const qR8 = (bR8.data && bR8.data.quick_stats) || {};
+      if (bR8.status === "ready" && pR8.status === "DRAFT" && !(qR8.files > 0)) {
+        const base = (x) => String(x).split(/[\\/]/).pop() || "";
+        const bidPaths = paths.filter((x) => BID_IMPORT_EXTS.test(base(x)));
+        const others = paths.filter((x) => !bidPaths.includes(x));
+        others.forEach((p0) => ui.openPath(p0));
+        if (bidPaths.length) ui.ingestDroppedBidFiles(bidPaths);
+        return;
+      }
       paths.forEach((p0) => ui.openPath(p0));
+    },
+    /** R8（#47 / #19）：拖入的招标文件落位工作区——bid.ingest_drop（壳侧
+     *  复制 + 同名幂等 + 白名单裁决）→ 重拉文件列表 + 新落位件自动勾选
+     *  （kind 走启发式预选，用户可改）+ toast 分账（copied/skipped 原因
+     *  透传——不静默吞 skipped）。 */
+    async ingestDroppedBidFiles(paths) {
+      if (!state.bridge || !paths.length) return;
+      try {
+        const r = await ipc("bid.ingest_drop", { paths: paths }, 6e4);
+        const copied = (r && r.copied) || [];
+        const skipped = (r && r.skipped) || [];
+        // 新落位件自动勾选（rel 即文件名——根下复制）——kind 启发式在
+        // renderBidWizardImport 的勾选回调里已同款处理
+        for (const c of copied) {
+          if (c && c.rel) state.bidWizard.sel[c.rel] = guessBidFileKind(c.rel);
+        }
+        // 重拉文件列表（treeStatus 重置 idle → 渲染时自动 loadBidWizardTree）
+        if (state.bidWizard.treeStatus === "ready") state.bidWizard.treeStatus = "idle";
+        if (copied.length) {
+          ui.toast("ok", "已落位 " + copied.length + " 件到工作区——请在向导第二步确认 kind 后导入");
+        }
+        if (skipped.length) {
+          ui.toast("warn", "拖入分账：" + skipped.map((s) => (s.detail || s.reason || "")).join("；"));
+        }
+        renderBidWorkbenchIfOpen();
+      } catch (err) {
+        ui.toast("warn", "拖入落位失败：" + ((err && (err.message || err.code)) || "bid.ingest_drop 失败"));
+      }
     },
     onDroppedFiles(files) {
       files.forEach((f) => {
         const k = kindOf(f.name);
+        // R8（#47 / #19 拖拽导入）：向导半完成态 + 招标后缀 → 诚实引导
+        // （浏览器 drop 的 File 对象拿不到源路径——落位复制只能在壳侧做，
+        // 不静默装作导入成功）
+        const bR8w = state.bid;
+        const pR8w = (bR8w.data && bR8w.data.project) || {};
+        const qR8w = (bR8w.data && bR8w.data.quick_stats) || {};
+        if (bR8w.status === "ready" && pR8w.status === "DRAFT" && !(qR8w.files > 0) && BID_IMPORT_EXTS.test(f.name)) {
+          ui.toast("warn", "浏览器拖放拿不到文件源路径——把 " + f.name + " 复制进当前工作区目录后点「刷新文件列表」，或用桌面壳直接拖入窗口（自动落位）");
+          return;
+        }
         if (k !== "text" && k !== "md") {
           ui.toast("warn", "\u6D4F\u89C8\u5668\u5185\u62D6\u653E\u4EC5\u652F\u6301\u6587\u672C\u6587\u4EF6\uFF1B\u684C\u9762\u58F3\u91CC\u53EF\u76F4\u63A5\u62D6\u5165 " + f.name);
           return;

@@ -1350,6 +1350,180 @@ pub fn import_files(
     Ok(v)
 }
 
+/// R8（#47 / #19）：拖拽导入——壳 drop 事件的绝对路径复制进工作区根。
+/// 只复制不导入（导入仍走 `bid.import_files`——向导第二步里用户确认
+/// kind）；不依赖 db.json（先拖文件再建项同样是合法顺序，故不碰
+/// DomainStore）。同名幂等：目标已存在且 sha256 相同 → skip
+/// （`already_present`）；内容不同 → 自动 `-2`/`-3` 后缀。R9-R16 平台
+/// 硬化专列在此基础做 Win 保留名 / 大小写不敏感去重 / 分隔符统一。
+/// 契约：IPC-CONTRACT.md §bid.ingest_drop。
+pub fn ingest_drop(
+    ws: &Workspace,
+    _cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let paths = a
+        .get("paths")
+        .and_then(Value::as_array)
+        .ok_or_else(|| IpcError::bad_args("paths 缺失或非数组（#19：拖入路径列表）"))?
+        .clone();
+    if paths.is_empty() {
+        return Err(IpcError::bad_args(
+            "paths 不得为空（拖拽批次至少一件——空批次无复制语义）",
+        ));
+    }
+    let root = ws.root_canonical().to_path_buf();
+    let mut copied: Vec<Value> = Vec::new();
+    let mut skipped: Vec<Value> = Vec::new();
+    for (i, pv) in paths.iter().enumerate() {
+        let raw = match pv.as_str() {
+            Some(s) => s.to_string(),
+            None => {
+                skipped.push(json!({
+                    "path": pv.to_string(), "reason": "bad_args",
+                    "detail": format!("paths[{i}] 非字符串")
+                }));
+                continue;
+            }
+        };
+        let src = std::path::Path::new(&raw);
+        // 源必须存在且是文件（目录拖入——R17+ 递归目录导入再做，先明拒）
+        match std::fs::metadata(src) {
+            Ok(m) if m.is_file() => {}
+            Ok(_) => {
+                skipped.push(json!({
+                    "path": raw, "reason": "is_dir",
+                    "detail": "目录暂不支持（R17+ 递归目录导入）"
+                }));
+                continue;
+            }
+            Err(_) => {
+                skipped.push(json!({
+                    "path": raw, "reason": "not_found",
+                    "detail": "拖入路径不存在（可能已被移动/删除）"
+                }));
+                continue;
+            }
+        }
+        // 文件名净化：file_name() 去掉路径部分（目录穿越形态在源侧天然
+        // 失效——目标永远是根下的纯文件名）；空名/点名拒
+        let name = match src
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+        {
+            Some(n) if !n.is_empty() && n != "." && n != ".." => n,
+            _ => {
+                skipped.push(json!({
+                    "path": raw, "reason": "bad_args", "detail": "无有效文件名"
+                }));
+                continue;
+            }
+        };
+        // 后缀白名单（与 UI 的 BID_IMPORT_EXTS 同源口径：docx/xlsx/pdf/doc/ods）
+        let lower = name.to_lowercase();
+        if ![".docx", ".xlsx", ".pdf", ".doc", ".ods"]
+            .iter()
+            .any(|e| lower.ends_with(e))
+        {
+            skipped.push(json!({
+                "path": raw, "reason": "ext_blocked",
+                "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc/ods）")
+            }));
+            continue;
+        }
+        // 同名幂等/冲突后缀
+        match resolve_ingest_dst(&root, &name, src) {
+            Ok(Some(dst)) => {
+                // rel = 实际落位名（冲突后缀形态——原名只作入口键）
+                let landed = dst
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| name.clone());
+                match std::fs::copy(src, &dst) {
+                    Ok(size) => copied.push(json!({
+                        "rel": landed, "name": landed, "size": size
+                    })),
+                    Err(e) => skipped.push(json!({
+                        "path": raw, "reason": "io",
+                        "detail": format!("复制失败：{e}")
+                    })),
+                }
+            }
+            // 目标已存在且内容相同——幂等跳过（不是错误）
+            Ok(None) => skipped.push(json!({
+                "path": raw, "reason": "already_present",
+                "detail": "同名同内容文件已在工作区（幂等跳过）"
+            })),
+            Err(detail) => skipped.push(json!({
+                "path": raw, "reason": "io", "detail": detail
+            })),
+        }
+    }
+    Ok(json!({
+        "present": true,
+        "copied": copied,
+        "skipped": skipped,
+    }))
+}
+
+/// 拖入落位解析：目标不存在 → 直落；已存在且 sha256 相同 → `None`
+/// （幂等跳过）；内容不同 → `{stem}-2/-3/…{ext}` 找空位（同后缀同内容
+/// 的跳位件同样幂等跳过）。
+fn resolve_ingest_dst(
+    root: &std::path::Path,
+    name: &str,
+    src: &std::path::Path,
+) -> Result<Option<std::path::PathBuf>, String> {
+    fn sha_of(p: &std::path::Path) -> Result<String, std::io::Error> {
+        use sha2::{Digest, Sha256};
+        use std::io::Read;
+        let mut f = std::fs::File::open(p)?;
+        let mut h = Sha256::new();
+        let mut buf = [0u8; 65536];
+        loop {
+            let n = f.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            h.update(&buf[..n]);
+        }
+        Ok(hex::encode(h.finalize()))
+    }
+    let src_sha = sha_of(src).map_err(|e| format!("读源失败：{e}"))?;
+    let stem = std::path::Path::new(name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.to_string());
+    let ext = std::path::Path::new(name)
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+    // 直落名：空位直落；同内容幂等跳过
+    let mut cand = root.join(name);
+    if !cand.is_file() {
+        return Ok(Some(cand));
+    }
+    match sha_of(&cand) {
+        Ok(sha) if sha == src_sha => return Ok(None),
+        Ok(_) => {}
+        Err(e) => return Err(format!("读目标失败：{e}")),
+    }
+    // 直落名冲突（异内容）：-2..-999（原名是第一份——第二份从 -2 起，
+    // 不出 -1 形态；同后缀同内容的跳位件同样幂等跳过）
+    for n in 2u32..1000 {
+        cand = root.join(format!("{stem}-{n}{ext}"));
+        if !cand.is_file() {
+            return Ok(Some(cand));
+        }
+        match sha_of(&cand) {
+            Ok(sha) if sha == src_sha => return Ok(None),
+            Ok(_) => continue,
+            Err(e) => return Err(format!("读目标失败：{e}")),
+        }
+    }
+    Err(format!("{name} 同名冲突超过 999 个变体（请整理工作区）"))
+}
+
 /// 写面服务获取（#19 专用）：无 db.json → `BidService::open` 空态起步
 /// （副作用即目的——approval.key 生成属正常建项流程）；有 db.json → 走
 /// [`ensure_locked`] 的指纹缓存。起步条目指纹记 0（假指纹）——写盘后
@@ -2323,5 +2497,96 @@ mod tests {
             "守门拒绝映射到可引导错误码：{frame}"
         );
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// R8（#47 / #19 拖拽导入）：bid.ingest_drop 全径——复制落位 / 同名
+    /// 幂等（sha 同 skip）/ 同名异内容 -2 后缀 / 白名单与目录守卫 /
+    /// 不依赖 db.json（空工作区也可拖）。
+    #[test]
+    fn ingest_drop_copies_idempotent_and_guards() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ingest8");
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        // 拖入源（工作区外——/tmp 下临时文件）
+        let src_dir = std::env::temp_dir().join(format!(
+            "mang-bid-ingest8-src-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let src_docx = src_dir.join("招标文件.docx");
+        std::fs::write(&src_docx, b"PK\x03\x04fake-docx-payload").unwrap();
+        let src_txt = src_dir.join("readme.txt");
+        std::fs::write(&src_txt, b"not a bid file").unwrap();
+
+        // ① 空工作区（无 db.json）也能拖——不碰 DomainStore
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [src_docx.to_string_lossy(), src_txt.to_string_lossy(), src_dir.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "ingest_drop 应成功（分账不按错误回）：{r}");
+        let out = r["result"].clone();
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "只有 docx 落位：{out}");
+        assert_eq!(copied[0]["rel"], json!("招标文件.docx"));
+        assert!(dir.join("招标文件.docx").is_file(), "文件应已复制到工作区根");
+        let skipped = out["skipped"].as_array().unwrap();
+        assert_eq!(skipped.len(), 2, "txt 白名单拒 + 目录拒：{out}");
+        let reasons: Vec<&str> = skipped
+            .iter()
+            .filter_map(|s| s["reason"].as_str())
+            .collect();
+        assert!(reasons.contains(&"ext_blocked"), "txt 应 ext_blocked：{skipped:?}");
+        assert!(reasons.contains(&"is_dir"), "目录应 is_dir：{skipped:?}");
+
+        // ② 同文件再拖——同名同内容幂等 skip（不是错误）
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [src_docx.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "幂等重放不按错误回：{r}");
+        let out = r["result"].clone();
+        assert_eq!(out["copied"].as_array().unwrap().len(), 0, "重放零复制");
+        assert_eq!(
+            out["skipped"][0]["reason"], json!("already_present"),
+            "同名同内容 → already_present：{out}"
+        );
+
+        // ③ 同名不同内容——-2 后缀找空位
+        std::fs::write(&src_docx, b"PK\x03\x04different-content-v2").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [src_docx.to_string_lossy()]
+        }));
+        let out = r["result"].clone();
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "异内容应落 -2 后缀：{out}");
+        assert_eq!(copied[0]["rel"], json!("招标文件-2.docx"));
+        assert!(dir.join("招标文件-2.docx").is_file());
+
+        // ④ 不存在的路径——分账 not_found（不按错误回）
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": ["/definitely/not/there/ghost.docx"]
+        }));
+        assert_eq!(r["ok"], json!(true), "不存在的路径分账不按错误回：{r}");
+        assert_eq!(
+            r["result"]["skipped"][0]["reason"], json!("not_found"),
+            "幽灵路径 → not_found：{}", r["result"]
+        );
+
+        // ⑤ 参数守卫：paths 缺失 / 空数组
+        let r = call_args(&ctx, "bid.ingest_drop", json!({}));
+        assert_eq!(r["ok"], json!(false));
+        assert_eq!(r["code"], json!("bad_args"));
+        let r = call_args(&ctx, "bid.ingest_drop", json!({ "paths": [] }));
+        assert_eq!(r["ok"], json!(false), "空批次拒绝：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(src_dir);
     }
 }
