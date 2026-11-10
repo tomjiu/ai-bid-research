@@ -682,8 +682,12 @@ function readRunFmt(rPr: Element): RunFmt {
         if (v === 'superscript' || v === 'subscript') f.vertAlign = v;
         break;
       }
+      // #24：`none` 是「明确无高亮」的合法枚举值，归一为不设置。
+      // 真实招标 DOCX 实测 3940 处 w:highlight 中 3938 处是 val="none"——
+      // 旧实现把 'none' 当真值存下来，下游解析不了就兑底黄色，整页发黄。
       case 'highlight': {
-        if (val) f.highlight = val.toLowerCase();
+        const hv = (val ?? '').trim().toLowerCase();
+        if (hv && hv !== 'none') f.highlight = hv;
         break;
       }
       default:
@@ -750,7 +754,7 @@ function highlightColor(name: string): string {
     black: '#000000',
     white: '#ffffff',
   };
-  return table[name] ?? '#fff59d';
+  return table[name] ?? '';
 }
 
 /** 段落对齐映射（jc 枚举 → CSS text-align）。 */
@@ -815,7 +819,11 @@ function wrapFmt(doc: Document, inner: Node, fmt: RunFmt, measureOnly: boolean):
   if (fmt.halfPoints !== null) css.push('font-size:' + halfPointsToPx(fmt.halfPoints).toFixed(1) + 'px');
   if (fmt.color) css.push('color:' + fmt.color);
   if (fmt.font) css.push('font-family:' + quoteFamily(fmt.font));
-  if (fmt.highlight) css.push('background-color:' + highlightColor(fmt.highlight));
+  // #24：未知高亮色解析为空串——不再兑底黄色，空色不上样式。
+  if (fmt.highlight) {
+    const hl = highlightColor(fmt.highlight);
+    if (hl) css.push('background-color:' + hl);
+  }
   if (css.length > 0 && !measureOnly) {
     const span = el(doc, 'span');
     span.setAttribute('style', css.join(';'));
