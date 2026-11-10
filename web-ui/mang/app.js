@@ -5627,6 +5627,24 @@
       tab.error = "";
       ui.setStatus({ saved: "busy" });
       const host = ui.ensurePane(tab);
+      // 渲染性能修复（切换/重载累积卡顿）：抹除 pane 前必须先释放上一个
+      // 渲染器。旧实现在「重新加载 / 加载失败重试 / 重开同一标签」时直接
+      // innerHTML 抹除——旧渲染器的清理永远不会执行：
+      //   * docx：window/scroller 滚动监听器残留（window 级的每次滚动都跑
+      //     旧闭包的 querySelectorAll——滚动越用越卡）；媒体 blob URL
+      //     永不 revoke（内存单调涨）
+      //   * pdf：ResizeObserver/IntersectionObserver 不断开（挂着的元素与
+      //     渲染器整棵被观察器引用——无法 GC）；pdf.js 文档/worker 内存
+      //     常驻；canvas 后备存储不释放
+      // 实测（web-ui/scripts/perf-reload-leak.mjs，Chromium 2048px）：
+      // 6 轮 docx↔pdf 重开——现状监听器 remove 恒 0、堆爬到 16MB 不回落；
+      // 先 dispose 后 remove 正常累积、堆稳定 12MB。
+      try {
+        if (tab.dispose) tab.dispose();
+      } catch (err) {
+        console.warn("ang] dispose", err);
+      }
+      tab.dispose = null;
       host.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>\u6B63\u5728\u8BFB\u53D6 ' + esc(tab.name) + "\u2026</div></div>";
       try {
         if (tab.kind === "bidwork") {

@@ -1888,19 +1888,24 @@ export function renderDocx(
     const teardown = (): void => {
       try {
         if (root && root.parentNode) root.parentNode.removeChild(root);
-        if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+        // 宿主标记先摘——本渲染器不再计入「还有谁在用全局样式表」。
+        host.classList.remove('mang-docx');
+        host.removeAttribute('data-mang-renderer');
+        host.removeAttribute('data-mang-theme');
+        // 样式表是全局单例（renderDocx 去重只留一份，内容确定同构）——
+        // 还有其他 docx 渲染器在场时不能摘：重载/关闭 A 标签的 dispose
+        // 不能把 B 标签正在用的纸面样式一起带走（否则 B 只能等自己重渲
+        // 才恢复样式）。
+        if (styleEl && styleEl.parentNode) {
+          const stillInUse =
+            host.ownerDocument && host.ownerDocument.querySelector('[data-mang-renderer="docx"]');
+          if (!stillInUse) styleEl.parentNode.removeChild(styleEl);
+        }
         for (const url of s.blobUrls) URL.revokeObjectURL(url);
       } catch {
         /* disposer 不抛：宿主可能已被整体移除 */
       }
       s.blobUrls.length = 0;
-      try {
-        host.classList.remove('mang-docx');
-        host.removeAttribute('data-mang-renderer');
-        host.removeAttribute('data-mang-theme');
-      } catch {
-        /* 忽略：宿主已失效 */
-      }
     };
     // 同步段已全部发生（DOM/样式表已在位）；只有异步构建可能仍在跑。
     teardown();
