@@ -30,11 +30,14 @@ function cut(startMark, endMark) {
   return src.slice(si, ei);
 }
 
-// 常量段（ZOOM_* 到 clamp，含完整箭头函数体）+ applyFit 方法体
+// 常量段（PDF_TO_CSS_UNITS 起，经 ZOOM_* 到 clamp，含完整箭头函数体）
+// + applyFit 方法体。
+// #34：切片起点从 ZOOM_MIN 前移到 PDF_TO_CSS_UNITS——applyFit 的
+// fit 比例换算引用了它（pt→CSS px），不切进去沙箱会 ReferenceError。
 // 注意：endMark 不能落在 clamp 行内——箭头函数体被切掉的话，
 // 残头 `const clamp = (v, lo, hi) =>` 会把后面的 function 声明吞成
 // 它的函数体，applyFit 从外部作用域消失（踩过的坑）。
-const segConsts = cut("const ZOOM_MIN = 0.25;", "/** 可选资源目录");
+const segConsts = cut("const PDF_TO_CSS_UNITS = 96 / 72;", "/** 可选资源目录");
 const segApplyFit = cut("private applyFit(): void {", "private applyScale(next");
 
 const STRIP = [
@@ -46,13 +49,15 @@ let js = segConsts + "\n" + segApplyFit;
 for (const [re, to] of STRIP) js = js.replace(re, to);
 if (/:\s*(number|void|string|boolean)\b/.test(js)) throw new Error("剥除后仍残留类型注解——更新 STRIP 表");
 
-const { applyFit, clamp, ZOOM_MIN, ZOOM_MAX } = new Function(
-  js + "\nreturn { applyFit, clamp, ZOOM_MIN, ZOOM_MAX };"
+const { applyFit, clamp, ZOOM_MIN, ZOOM_MAX, PDF_TO_CSS_UNITS } = new Function(
+  js + "\nreturn { applyFit, clamp, ZOOM_MIN, ZOOM_MAX, PDF_TO_CSS_UNITS };"
 )();
 
-// —— mock 宿主：A4 页（595×842pt）、视口 1788×900（2048 窗 - 260 侧栏）。
-// applyFit 内部再减 PAGE_GUTTER×2=36 / PAGE_GAP×2=28，可用宽 1752 ——
-// 这就是 issue 里 285%+ 观感的计算路径。 ——
+// —— mock 宿主：A4 页（595×842pt）、视口 1788×900 CSS px（2048 窗 - 260 侧栏）。
+// applyFit 内部再减 PAGE_GUTTER×2=36 / PAGE_GAP×2=28，可用宽 1752px。
+// #34 pt→px 修正后：fit 比例分母是 pt×96/72 的 CSS px（595pt→793.3px），
+// 同一视口下比例比旧口径（pt 当 px 用）小 25%——这是页面实际显示更大的
+// 正确方向（A4 应占约 794px 而非 595px），不是 #25 默认 100% 语义的回归。 ——
 function hostOf(fitMode, extra = {}) {
   const applied = [];
   return Object.assign({
@@ -77,11 +82,18 @@ function hostOf(fitMode, extra = {}) {
 {
   const h = hostOf("fit-width");
   applyFit.call(h);
-  const expect = clamp((1788 - 36) / 595, ZOOM_MIN, ZOOM_MAX); // =1752/595≈2.944→294%（大屏刺眼根源，行为保持）
+  // #34：分母 595pt×96/72≈793.3px（A4 真 CSS 宽）——1752/793.3≈2.209→221%
+  // （旧口径 1752/595≈294% 把 pt 当 px，页面实际只有 595px 宽偏小 25%）
+  const expect = clamp((1788 - 36) / (595 * PDF_TO_CSS_UNITS), ZOOM_MIN, ZOOM_MAX);
   if (h._applied.length !== 1 || Math.abs(h._applied[0] - expect) > 1e-9) throw new Error("② fit-width 计算被改变: " + h._applied);
   const h2 = hostOf("fit-page");
   applyFit.call(h2);
-  const expect2 = clamp(Math.min((1788 - 36) / 595, (900 - 28) / 842), ZOOM_MIN, ZOOM_MAX); // ≈1.036
+  // fit-page 取宽/高两比例的 min：872/(842×96/72)≈0.777→78%（整页进视口）
+  const expect2 = clamp(
+    Math.min((1788 - 36) / (595 * PDF_TO_CSS_UNITS), (900 - 28) / (842 * PDF_TO_CSS_UNITS)),
+    ZOOM_MIN,
+    ZOOM_MAX
+  );
   if (h2._applied.length !== 1 || Math.abs(h2._applied[0] - expect2) > 1e-9) throw new Error("② fit-page 计算被改变: " + h2._applied);
   console.log("② fit-width→" + Math.round(expect * 100) + "% / fit-page→" + Math.round(expect2 * 100) + "% 语义保持 ✅");
 }
