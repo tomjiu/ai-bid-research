@@ -1475,6 +1475,12 @@ function buildStyleSheet(): string {
     '}',
     // 纸面：A4 宽 210mm、内边距 20mm；position:relative 供证据高亮层定位；
     // overflow:visible —— 滚动归宿主外层滚动器（本模块不建滚动容器）。
+    // #34 A 级虚拟化：content-visibility:auto 让屏外纸面跳过布局/绘制，
+    // 标签切换（activateTab hidden 互斥）回切时只重排视口附近 1-2 页。
+    // contain-intrinsic-size 的 auto = 优先用「上次记忆尺寸」，首渲染前
+    // 以 1123px（A4 高 @96dpi）占位；宽度不受影响（本规则 width:100% 非
+    // 内容驱动，尺寸包含不改变显式宽度）。页脚 offsetTop 页码跟踪依赖的
+    // 盒位仍单调（占位高度只影响未渲染页的估算位）。
     SCOPE + ' .mang-docx-page {',
     '  position: relative;',
     '  overflow: visible;',
@@ -1488,6 +1494,8 @@ function buildStyleSheet(): string {
     '  color: var(--mang-fg, #1f2328);',
     '  box-shadow: var(--mang-doc-shadow);',
     '  border-radius: 2px;',
+    '  content-visibility: auto;',
+    '  contain-intrinsic-size: auto 1123px;',
     '}',
     // 页脚页码（低位、低调；纯装饰）。
     SCOPE + ' .mang-docx-page[data-page]::after {',
@@ -1606,11 +1614,13 @@ function buildStyleSheet(): string {
     '  border-radius: 3px;',
     '}',
     // 打印：纸面阴影/页码隐藏（浏览器打印不重复分页——打印走宿主整页）。
+    // #34：打印强制全量渲染（屏外页不跳过），避免打印输出丢页。
     '@media print {',
     '  ' + SCOPE + ' .mang-docx-page {',
     '    box-shadow: none;',
     '    margin: 0;',
     '    max-width: none;',
+    '    content-visibility: visible;',
     '  }',
     '  ' + SCOPE + ' .mang-docx-page[data-page]::after { display: none; }',
     '}',
