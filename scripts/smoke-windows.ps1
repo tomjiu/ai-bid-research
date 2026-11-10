@@ -48,8 +48,13 @@ try {
     & $Python main.py analyze --db ($Db -replace '\\', '/') --output-dir ($Reports -replace '\\', '/')
 
     Write-Host ''
-    Write-Host '== db export：研究快照 =='
+    Write-Host '== db export：研究快照（R88 近重复感知去重双跑） =='
     & $Python main.py db --db ($Db -replace '\\', '/') --export json --out ($Snap -replace '\\', '/')
+    & $Python main.py db --db ($Db -replace '\\', '/') --export json --dedupe --out ((Join-Path $TmpDir 'snap-dedup.json') -replace '\\', '/')
+
+    Write-Host ''
+    Write-Host '== data-quality --min-score 门槛门（R87，应过） =='
+    & $Python main.py data-quality --db ($Db -replace '\\', '/') --min-score 50
 
     Write-Host ''
     Write-Host '== pipeline（无源分析链）→ db --runs：运行台账（R83） =='
@@ -79,6 +84,8 @@ assert '## 目录' in body, '目录缺失（R63）'
 assert '## 十六、近重复公告检测' in body, '近重复节缺失（R80）'
 assert '## 十七、语义质量审计' in body, '语义质量节缺失（R82）'
 assert '\r' not in body, '行尾非 LF（R45 契约违背）'
+dedup = json.loads(Path(r'$(Join-Path $TmpDir 'snap-dedup.json')').read_text(encoding='utf-8'))
+assert isinstance(dedup, list) and len(dedup) <= len(snap), '去重快照异常'
 print(f'断言通过：快照 {len(snap)} 条，报告 {reports[-1].name}')
 "@
 

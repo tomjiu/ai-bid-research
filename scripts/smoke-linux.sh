@@ -40,8 +40,12 @@ step "data-quality：质量巡检（R82，含语义健康分）"
 step "analyze：离线数据报告"
 "$PYTHON" main.py analyze --db "$DB" --output-dir "$REPORTS"
 
-step "db export：研究快照"
+step "db export：研究快照（R88 近重复感知去重双跑）"
 "$PYTHON" main.py db --db "$DB" --export json --out "$SNAP"
+"$PYTHON" main.py db --db "$DB" --export json --dedupe --out "$TMP_DIR/snap-dedup.json"
+
+step "data-quality --min-score 门槛门（R87，应过）"
+"$PYTHON" main.py data-quality --db "$DB" --min-score 50
 
 step "pipeline（无源分析链）→ db --runs：运行台账（R83）"
 "$PYTHON" main.py pipeline --db "$DB" --output-dir "$REPORTS"
@@ -76,7 +80,14 @@ assert "## 十六、近重复公告检测" in body, "近重复节缺失（R80）
 assert "## 十七、语义质量审计" in body, "语义质量节缺失（R82）"
 assert "\r" not in body, "行尾非 LF（R45 契约违背）"
 
-print(f"断言通过：快照 {len(snap)} 条，报告 {reports[-1].name}")
+# R88：去重快照可解析且条数 ≤ 全量（簇内剔除或相等）
+dedup = json.loads(
+    Path(snap_path.parent, "snap-dedup.json").read_text(encoding="utf-8")
+)
+assert isinstance(dedup, list), "去重快照非纯数组（--diff 兼容破坏）"
+assert len(dedup) <= len(snap), "去重后条数反增"
+
+print(f"断言通过：快照 {len(snap)} 条（去重后 {len(dedup)}），报告 {reports[-1].name}")
 PYASSERT
 
 printf '\nSMOKE OK（Linux 离线全链）\n'
