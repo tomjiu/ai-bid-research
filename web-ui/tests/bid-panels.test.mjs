@@ -830,6 +830,16 @@ check(
   "契约文档登记 bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm（#603 批 C）",
   contract.includes("### bid.addenda") && contract.includes("### bid.addendum_waiver") && contract.includes("### bid.no_addendum_confirm"),
   "补遗面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+// ---------- #21 e2e 骨架（静态面）：漏参防御 + 套件纳入 ----------
+check(
+  "#21 矩阵页签分发双参调用（漏传 panel = 运行时 TypeError——e2e 首跑捕获的存量 bug 形态）",
+  /renderBidMatrixPanel\(host, mxPanel\);/.test(app) && !/\brenderBidMatrixPanel\(host\);/.test(app),
+  "renderBidMatrixPanel(host) 单参调用又在场——函数签名是 (host, panel)，漏参必崩"
+);
+check(
+  "#21 e2e 套件在场（run-all glob 自动纳入）",
+  readFileSync(join(ROOT, "web-ui", "tests", "bid-e2e.test.mjs"), "utf8").length > 0,
+  "tests/bid-e2e.test.mjs 被删——运行时断链门消失"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
