@@ -406,6 +406,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="导出条数上限（配合 --export；缺省导出全部命中）",
     )
     db.add_argument(
+        "--runs",
+        type=int,
+        nargs="?",
+        const=10,
+        default=None,
+        metavar="N",
+        help=(
+            "列出最近 N 次管道运行台账（状态/参数/各阶段耗时；"
+            "缺省 N=10）——断点续跑/增量水位可追溯"
+        ),
+    )
+    db.add_argument(
         "--pending",
         action="store_true",
         help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
@@ -1081,6 +1093,9 @@ def run_db(args: argparse.Namespace) -> int:
             print(f"PRAGMA 生效：{db.pragmas}")
             return 0
 
+        if args.runs is not None:
+            return _run_pipeline_runs(db, args.runs)
+
         if args.export:
             return _export_bids(db, args)
 
@@ -1223,6 +1238,47 @@ def run_templates(args: Optional[argparse.Namespace] = None) -> int:
         _ = template  # 模板函数本身通过 PromptTemplates.<name>() 调用
     print("\n调用方式：from src.llm.prompts import PromptTemplates")
     print("渲染样例：python main.py templates --show bid_extraction")
+    return 0
+
+
+def _run_pipeline_runs(db: BidDatabase, limit: int) -> int:
+    """渲染 pipeline_runs 台账（db --runs）。
+
+    每行：ID、状态、开始/结束、关键词、源、阶段链（名@状态+耗时）。
+    耗时只有 done 运行有（failed 在收口时未写 stages——如实显示 ——）。
+    """
+    runs = db.pipeline_runs_list(limit=limit)
+    if not runs:
+        print("（无管道运行记录——pipeline 跑一次就有了）")
+        return 0
+    for run in runs:
+        status = run.get("status", "?")
+        keyword = run.get("keyword") or "——"
+        source = run.get("source") or "（无源）"
+        days = run.get("days")
+        window = f"近 {days} 天" if days else "不限"
+        finished = run.get("finished_at") or "（未收口）"
+        print(
+            f"#{run['id']} [{status}] {run.get('started_at', '?')}"
+            f" → {finished}"
+        )
+        print(f"    关键词「{keyword}」（{window}）｜源 {source}")
+        stages = run.get("stages") or []
+        if stages:
+            chain = " → ".join(
+                f"{s.get('name')}@{s.get('status')}"
+                + (
+                    f"({s['duration_seconds']}s)"
+                    if s.get("duration_seconds") is not None
+                    else ""
+                )
+                for s in stages
+            )
+            print(f"    阶段：{chain}")
+        else:
+            print("    阶段：——（未收口或崩溃于收口前）")
+        if run.get("report_path"):
+            print(f"    报告：{run['report_path']}")
     return 0
 
 
