@@ -29,6 +29,8 @@ class TestUserGuideIncrement:
             ("版本横幅", "--version"),
             ("平台文档指引", "PLATFORM-NOTES"),
             ("冒烟自检", "smoke-linux.sh"),
+            ("质量巡检命令", "data-quality"),
+            ("运行台账", "--runs"),
         ],
     )
     def test_all_new_features_documented(self, feature, marker):
@@ -37,7 +39,7 @@ class TestUserGuideIncrement:
 
     def test_report_sections_listed(self):
         text = DOC.read_text(encoding="utf-8")
-        for section in ("十二", "十三", "十四", "十五"):
+        for section in ("十二", "十三", "十四", "十五", "十六", "十七"):
             assert section in text
 
     def test_platform_notes_cross_reference(self):
