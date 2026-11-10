@@ -196,3 +196,33 @@ def ensure_writable_path(path: Path | str) -> Path:
     if path_too_long(resolved):
         raise PathTooLongError(resolved, max_path_length())
     return resolved
+
+
+def write_text_lf(path: Path | str, content: str, *, encoding: str = "utf-8") -> Path:
+    """平台无关的 LF 行尾写盘（#601 R45）。
+
+    Windows 文本模式缺省把 ``\\n`` 翻译成 ``\\r\\n``——报告/JSONL
+    产物字节随平台漂移，破坏「同一命令同一产物」的确定性契约
+    （golden 对比、二进制 diff、git 噪音全受累）。本函数以
+    ``newline="\\n"`` 钉死不翻译，两平台字节一致。
+
+    返回写入的路径（便于链式引用）。
+    """
+    target = Path(path)
+    with open(target, "w", encoding=encoding, newline="\n") as fh:
+        fh.write(content)
+    return target
+
+
+def read_text_universal(path: Path | str, *, encoding: str = "utf-8") -> str:
+    """平台/来源无关读取（R45 配套）——CRLF/LF/CR 全归一为 LF。
+
+    旧版 Windows 工具导出的 CRLF 文件与新 LF 产物在读取面
+    同语义（``\\r\\n`` → ``\\n``），下游行级解析不再双分支。
+    """
+    text = Path(path).read_text(encoding=encoding)
+    if "\r\n" in text:
+        text = text.replace("\r\n", "\n")
+    if "\r" in text:
+        text = text.replace("\r", "\n")
+    return text

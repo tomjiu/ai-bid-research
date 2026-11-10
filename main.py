@@ -50,7 +50,7 @@ from typing import Any, Optional, Sequence
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
-from src.platform import configure_console_safe
+from src.platform import configure_console_safe, write_text_lf
 from src.report.generator import ReportGenerator
 from src.storage.database import _BID_COLUMNS, BidDatabase
 
@@ -827,7 +827,7 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
     payload = json.dumps(snapshot, ensure_ascii=False, indent=2)
     if out_path is not None:
         try:
-            out_path.write_text(payload + "\n", encoding="utf-8")
+            write_text_lf(out_path, payload + "\n")
         except OSError as exc:
             print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
             return 2

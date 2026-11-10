@@ -263,3 +263,57 @@ class TestPathTooLongGuard:
         gen = ReportGenerator(output_dir=tmp_path / "out")
         with pytest.raises((PathTooLongError, OSError)):
             gen.export_html(md)
+
+
+class TestLineEndingContract:
+    def test_write_text_lf_no_cr_bytes(self, tmp_path):
+        from src.platform import write_text_lf
+
+        target = write_text_lf(tmp_path / "r.md", "# 报告\n第一行\n第二行\n")
+        raw = target.read_bytes()
+        assert b"\r" not in raw
+        assert raw.endswith(b"\n")
+        # 内容不添不减：无尾换行的输入保持无尾换行（不擅自改内容）
+        t2 = write_text_lf(tmp_path / "r2.md", "无尾换行")
+        assert t2.read_bytes() == "无尾换行".encode()
+
+    def test_write_text_lf_pins_newline_param(self, tmp_path, monkeypatch):
+        """钉死契约：open 必须显式 newline='\\n'（Windows 不翻译的根据）。"""
+        import builtins
+        from src.platform import write_text_lf
+
+        captured = {}
+        real_open = builtins.open
+
+        def spy_open(file, mode="r", *args, **kwargs):
+            if "w" in mode:
+                captured.update(kwargs)
+            return real_open(file, mode, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", spy_open)
+        write_text_lf(tmp_path / "spy.md", "x\ny")
+        assert captured.get("newline") == "\n"
+        assert captured.get("encoding") == "utf-8"
+
+    def test_read_text_universal_crlf_folded(self, tmp_path):
+        from src.platform import read_text_universal
+
+        (tmp_path / "crlf.txt").write_bytes("# t\r\nline\r\n".encode())
+        (tmp_path / "cr.txt").write_bytes("# t\rline\r".encode())
+        (tmp_path / "lf.txt").write_bytes("# t\nline\n".encode())
+        assert read_text_universal(tmp_path / "crlf.txt") == "# t\nline\n"
+        assert read_text_universal(tmp_path / "cr.txt") == "# t\nline\n"
+        assert read_text_universal(tmp_path / "lf.txt") == "# t\nline\n"
+
+    def test_report_output_byte_stable_contract(self, tmp_path):
+        """报告产物字节契约：内容相同 → 字节相同（无平台/模式漂移）。"""
+        from src.report.generator import ReportGenerator
+
+        gen1 = ReportGenerator(output_dir=tmp_path / "a")
+        gen2 = ReportGenerator(output_dir=tmp_path / "b")
+        p1 = gen1._save_report("# 摘要\n结论：正常。", "stable")
+        p2 = gen2._save_report("# 摘要\n结论：正常。", "stable")
+        assert p1.read_bytes().replace(
+            p1.stem.encode(), b""
+        ) == p2.read_bytes().replace(p2.stem.encode(), b"")
+        assert b"\r" not in p1.read_bytes()

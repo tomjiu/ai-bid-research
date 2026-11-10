@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from src.llm.client import LLMClient
 from src.llm.prompts import PromptTemplates
-from src.platform import ensure_writable_path
+from src.platform import ensure_writable_path, write_text_lf
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期导入，避免运行时强耦合
     from src.storage.database import BidDatabase
@@ -337,7 +337,7 @@ class ReportGenerator:
         )
         target = source.with_suffix(".html")
         ensure_writable_path(target)
-        target.write_text(html_content, encoding="utf-8")
+        write_text_lf(target, html_content)
         logger.info("HTML 报告已导出: %s", target)
         return target
 
@@ -355,7 +355,7 @@ class ReportGenerator:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self.output_dir / f"{safe_prefix}_{timestamp}.md"
         ensure_writable_path(path)
-        path.write_text(content, encoding="utf-8")
+        write_text_lf(path, content)
         logger.info("报告已保存: %s", path)
         return path
 
