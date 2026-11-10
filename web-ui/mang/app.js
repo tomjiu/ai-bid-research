@@ -466,6 +466,83 @@
     // 同语义：追认后最新条翻 human、agent_waivers 消项、human_review_complete
     // 重算；演示刷新页面即重置，与其它演示面一致）
     const demoGates = JSON.parse(JSON.stringify(DEMO_BID.gates));
+    // #603 批 C：补遗台账演示数据（与真实 bid.addenda 响应同形——
+    // readiness::{total, ready, not_ready[]} + waivers）。演示态 = 2 件
+    // 补遗（1 就绪 + 1 OCR 未完——逐件确认的目标件）；全局确认对它
+    // 响亮拒（#379 语义分账的现场教学：确认无补遗 ≠ 坏件免责）
+    DEMO_BID.addenda = {
+      present: true,
+      workspace: root,
+      project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "DRAFTING" },
+      readiness: { total: 2, ready: 1, not_ready: [ { file_id: "TF-0003", name: "补遗-01（扫描件）", readiness: "OCR_PENDING", waived: false, reason: "OCR 未完成——图像层有字但文本层为空，修复重传或人工确认后放行" } ] },
+      waivers: []
+    };
+    const demoAddenda = JSON.parse(JSON.stringify(DEMO_BID.addenda));
+    function demoAddendumWaiver(m) {
+      const fid = String(m.file_id || "");
+      const reason = String(m.reason || "");
+      if (!reason.trim()) return fail(m.id, "bad_args", "演示模式：reason 必填——确认理由不得为空白（不可审计的确认不成确认）");
+      const f = demoAddenda.readiness.not_ready.find((x) => x.file_id === fid);
+      if (!f) return fail(m.id, "not_found", "演示模式：文件 " + fid + " 不存在（对不存在的件做确认 = 凭空免责）");
+      const at = Math.floor(Date.now() / 1000);
+      f.waived = true;
+      demoAddenda.waivers.push({ file_id: fid, reason: reason, at: at, principal: "human:shell-operator" });
+      // 过门同步（addendum_waiver 门最新一条 human——与真实壳同语义，gates 同源）
+      const g = demoGates.gates.find((x) => x.gate === "addendum_waiver");
+      if (g) {
+        g.approved = true;
+        g.latest_pass = { gate: "addendum_waiver", actor: "shell-operator", actor_type: "human", method: "human_receipt", human_confirmed: true, at: at, reason: reason };
+      }
+      demoGateRevSeq += 1;
+      demoGates.reviews.unshift({ id: "REV-" + String(demoGateRevSeq).padStart(4, "0"), gate: "addendum_waiver", decision: "APPROVED", reviewer: "human:shell-operator", actor: { actor_id: "shell-operator", actor_type: "human", authentication_method: "hmac_receipt_v2" }, findings: [], at: at, reviewed_content_digest: "demo-digest" });
+      demoGates.agent_waivers = demoGates.gates.filter((x) => x.latest_pass && x.latest_pass.human_confirmed === false).map((x) => x.latest_pass);
+      demoGates.human_review_complete = demoGates.agent_waivers.length === 0;
+      return respond(m.id, {
+        present: true,
+        workspace: root,
+        project: demoAddenda.project,
+        addendum_waiver: {
+          recorded: { file_id: fid, reason: reason, at: at, principal: "human:shell-operator", actor: { actor_id: "shell-operator", actor_type: "human", authentication_method: "hmac_receipt_v2" } },
+          addendum_waivers: demoAddenda.waivers.slice(),
+          addendum_readiness: { total: demoAddenda.readiness.total, ready: demoAddenda.readiness.ready, not_ready: demoAddenda.readiness.not_ready.slice() },
+          agent_waivers: demoGates.agent_waivers.slice(),
+          human_review_complete: demoGates.human_review_complete,
+          status: "DRAFTING",
+          project_version: 13
+        }
+      });
+    }
+    function demoNoAddendumConfirm(m) {
+      const reason = String(m.reason || "");
+      if (!reason.trim()) return fail(m.id, "bad_args", "演示模式：reason 必填——确认理由不得为空白（不可审计的确认不成确认）");
+      if (demoAddenda.readiness.total > 0) {
+        return fail(m.id, "bad_args", "演示模式：项目已有补遗/澄清件（共 " + demoAddenda.readiness.total + " 件在场）——「确认本项目无补遗」与事实矛盾。坏件的正确出口是逐件确认（record_addendum_waiver file_id=…）或修复重传；全局确认只适用于「未发现补遗」的阻塞（NotProvided）");
+      }
+      const at = Math.floor(Date.now() / 1000);
+      const g = demoGates.gates.find((x) => x.gate === "no_addendum_confirmed");
+      if (g) {
+        g.approved = true;
+        g.latest_pass = { gate: "no_addendum_confirmed", actor: "shell-operator", actor_type: "human", method: "human_receipt", human_confirmed: true, at: at, reason: reason };
+      }
+      demoGateRevSeq += 1;
+      demoGates.reviews.unshift({ id: "REV-" + String(demoGateRevSeq).padStart(4, "0"), gate: "no_addendum_confirmed", decision: "APPROVED", reviewer: "human:shell-operator", actor: { actor_id: "shell-operator", actor_type: "human", authentication_method: "hmac_receipt_v2" }, findings: [], at: at, reviewed_content_digest: "demo-digest" });
+      demoGates.agent_waivers = demoGates.gates.filter((x) => x.latest_pass && x.latest_pass.human_confirmed === false).map((x) => x.latest_pass);
+      demoGates.human_review_complete = demoGates.agent_waivers.length === 0;
+      return respond(m.id, {
+        present: true,
+        workspace: root,
+        project: demoAddenda.project,
+        no_addendum_confirm: {
+          confirmed_no_addendum: { review_id: "REV-" + String(demoGateRevSeq).padStart(4, "0"), gate: "no_addendum_confirmed", reason: reason, at: at, actor: { actor_id: "shell-operator", actor_type: "human", authentication_method: "hmac_receipt_v2" }, method: "human_receipt", human_confirmed: true },
+          addendum_waivers: demoAddenda.waivers.slice(),
+          addendum_readiness: { total: 0, ready: 0, not_ready: [] },
+          agent_waivers: demoGates.agent_waivers.slice(),
+          human_review_complete: demoGates.human_review_complete,
+          status: "DRAFTING",
+          project_version: 14
+        }
+      });
+    }
     let demoGateRevSeq = 2;
     function demoGatePass(m) {
       const gate = String(m.gate || "");
@@ -524,6 +601,13 @@
               return respond(m.id, DEMO_BID.outline);
             case "bid.matrix":
               return respond(m.id, DEMO_BID.matrix);
+            case "bid.addenda":
+              // #603 批 C：演示桥回可变补遗台账（waiver 会真改——已确认件审计不消失）
+              return respond(m.id, demoAddenda);
+            case "bid.addendum_waiver":
+              return demoAddendumWaiver(m);
+            case "bid.no_addendum_confirm":
+              return demoNoAddendumConfirm(m);
             case "bid.quality":
               return respond(m.id, DEMO_BID.quality);
             case "bid.score":
@@ -758,6 +842,8 @@
     },
     // #20 分包视图（bid.packages 只读拉取缓存——工作台「分包」页签用）
     bidPackages: { status: "idle", data: null, error: "" },
+    // #603 批 C：补遗台账 + 豁免写面（gates 面板补遗门接线用）
+    bidAddenda: { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1562,7 +1648,11 @@
       return;
     }
     if (activePanel === "matrix") {
-      renderBidMatrixPanel(host);
+      // #21 e2e 首跑捕获的存量 bug：此处原为 renderBidMatrixPanel(host)——
+      // 漏传第二参 panel，函数体首屏 panel.innerHTML 直接 TypeError，矩阵
+      // 页签点击无响应。静态断言未拦住（正是 #21 立项的论据）。
+      const mxPanel = host.querySelector("#bid-panel");
+      if (mxPanel) renderBidMatrixPanel(host, mxPanel);
       return;
     }
     // 选中态：保持已选（刷新后仍指向同一节）；初次进入选第一片叶
@@ -2258,11 +2348,69 @@
       + "</div></div>"
     );
   }
+  /** #603 批 C：补遗逐件确认列表（不就绪件 + 内联理由表单 + 已确认审计） */
+  function bidGtAwListHtml(aw) {
+    const d = aw.data || {};
+    const rd = d.readiness || {};
+    const notReady = Array.isArray(rd.not_ready) ? rd.not_ready : [];
+    const waivers = Array.isArray(d.waivers) ? d.waivers : [];
+    let html =
+      '<div class="bid-gt-aw">'
+      + '<div class="bid-gt-form-sub">' + (rd.total
+        ? "不就绪件逐件确认后放行（#184——起草标 RESTRICTED，不静默当完整输入）；已确认件审计不消失。共 " + rd.total + " 件 · 就绪 " + (rd.ready || 0) + "。"
+        : "未发现补遗/澄清件（NotProvided）——本门无可逐件确认的对象；「本项目无补遗」走无补遗全局确认门（#379 语义分账）。") + "</div>";
+    if (aw.status === "loading" || aw.status === "idle") {
+      html += '<div class="bid-gt-form-sub">正在读取补遗台账…</div>';
+    } else if (aw.status === "error") {
+      html += '<div class="bid-gt-form-sub">补遗台账读取失败：' + esc(aw.error || "未知") + "</div>";
+    } else {
+      notReady.forEach((f) => {
+        html +=
+          '<div class="bid-gt-aw-row" data-file="' + esc(f.file_id) + '">'
+          + '<div class="bid-gt-aw-main"><span class="bid-gt-aw-name">' + esc(f.name || f.file_id) + '</span>'
+          + '<span class="bid-gt-aw-meta">' + esc(f.file_id) + " · " + esc(f.readiness || "") + (f.waived ? ' · <span class="bid-gt-aw-waived">已确认放行</span>' : "") + "</span></div>"
+          + '<div class="bid-gt-aw-reason" title="' + esc(f.reason || "") + '">' + esc(f.reason || "") + "</div>";
+        if (!f.waived) {
+          html +=
+            '<div class="bid-gt-aw-actions">'
+            + '<input type="text" class="bid-gt-input" data-aw-reason="' + esc(f.file_id) + '" placeholder="确认理由（必填——不可审计的确认不成确认）">'
+            + '<button class="btn btn-sm btn-primary" data-aw-confirm="' + esc(f.file_id) + '"' + (aw.waiving ? " disabled" : "") + ">确认放行</button>"
+            + "</div>";
+        }
+        html += "</div>";
+      });
+      if (!notReady.length && rd.total) {
+        html += '<div class="bid-gt-form-sub">全部补遗件就绪——无需逐件确认。</div>';
+      }
+      if (waivers.length) {
+        html += '<div class="bid-gt-form-sub">已确认台账（审计面——放行后不消失）：</div>';
+        waivers.forEach((w) => {
+          html += '<div class="bid-gt-aw-audit">' + esc(w.file_id) + " · " + esc(w.principal || "") + " · " + bidGtTime(w.at) + " · " + esc(w.reason || "") + "</div>";
+        });
+      }
+    }
+    html += '<div class="bid-gt-form-actions"><button class="btn btn-sm" data-aw-cancel>收起</button></div></div>';
+    return html;
+  }
+  /** #603 批 C：全局无补遗确认表单（#379——NotProvided 阻塞的唯一出口） */
+  function bidGtNaFormHtml(aw) {
+    return (
+      '<div class="bid-gt-aw">'
+      + '<div class="bid-gt-form-title">' + ICON.shield + " 确认「本项目无补遗」</div>"
+      + '<div class="bid-gt-form-sub">全局显式确认（#379）——仅适用于「未发现补遗/澄清件」的 NotProvided 阻塞；项目已有补遗件时域层响亮拒（那是逐件确认或修复重传的场）。宿主签发回执（#182——Agent 不可伪造），确认即过门 + 审计留痕。</div>'
+      + '<label class="bid-gt-field"><span>确认理由（必填）</span><input type="text" class="bid-gt-input" data-na-reason placeholder="如：已核对招标文件全册与答疑纪要，本项目无补遗/澄清件"></label>'
+      + '<div class="bid-gt-form-actions">'
+      + '<button class="btn btn-sm btn-primary" data-na-confirm' + (aw.waiving ? " disabled" : "") + ">确认无补遗</button>"
+      + '<button class="btn btn-sm" data-na-cancel>取消</button>'
+      + "</div></div>"
+    );
+  }
   /** 审核门面板主体（工作台右面板的 gates 页签） */
   function renderBidGatesPanel(host) {
     const panel = host.querySelector("#bid-panel");
     if (!panel) return;
     const gt = state.bidGates;
+    const aw = state.bidAddenda;
     if (gt.status === "idle") {
       panel.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>正在读取审核门台账…</div></div>';
       ui.loadBidGates();
@@ -2340,6 +2488,9 @@
       }
       html += "</div>";
     }
+    // 写面消息（#603 批 C——补遗豁免，域层拒绝原样透传，不假成功）
+    if (aw.waiveInfo) html += '<div class="bid-gt-msg ok">' + ICON.check + " " + esc(aw.waiveInfo) + "</div>";
+    if (aw.waiveError) html += '<div class="bid-gt-msg err">' + ICON.warning + " " + esc(aw.waiveError) + "</div>";
     // ① agent 豁免追认清单（#277——human_confirmed=false 的门）
     if (waivers.length) {
       html += '<div class="bid-card" data-kind="ratify"><div class="bid-card-title">' + ICON.warning + " Agent 声明过门待追认（" + waivers.length + "）</div>";
@@ -2378,11 +2529,16 @@
         html +=
           '<button class="btn btn-sm" data-gt-open="' + esc(g.gate) + '" data-gt-mode="approve"' + (passing ? " disabled" : "") + ">过门</button>"
           + '<button class="btn btn-sm" data-gt-open="' + esc(g.gate) + '" data-gt-mode="reject"' + (passing ? " disabled" : "") + ">拒审</button>";
+      } else if (g.gate === "addendum_waiver") {
+        html += '<button class="btn btn-sm" data-gt-aw-toggle' + (aw.waiving ? " disabled" : "") + ">逐件确认</button>";
       } else {
-        html += '<span class="bid-gt-batchc" title="record_addendum_waiver 工具面——#603 批 C 接线">写面批 C 待接线</span>';
+        html += '<button class="btn btn-sm" data-gt-na-toggle' + (aw.waiving ? " disabled" : "") + ">确认无补遗</button>";
       }
       html += "</div>";
       if (gt.formGate === g.gate && gt.formMode) html += bidGtFormHtml(g.gate, gt.formMode);
+      // #603 批 C：两补遗门的写面（逐件/全局——#379 语义分账）
+      if (g.gate === "addendum_waiver" && aw.formOpen) html += bidGtAwListHtml(aw);
+      if (g.gate === "no_addendum_confirmed" && aw.formGlobal) html += bidGtNaFormHtml(aw);
       html += "</div>";
     });
     html += "</div>";
@@ -2488,6 +2644,58 @@
         ui.recoverBidState(reason);
       });
     });
+    // ---- #603 批 C：补遗豁免交互（逐件/全局——域层裁决，#379 语义分账）
+    const awToggle = panel.querySelector("[data-gt-aw-toggle]");
+    if (awToggle)
+      awToggle.addEventListener("click", () => {
+        const awS = state.bidAddenda;
+        awS.formOpen = !awS.formOpen;
+        if (awS.formOpen && awS.status === "idle") ui.loadBidAddenda();
+        renderBidGatesPanel(host);
+      });
+    const naToggle = panel.querySelector("[data-gt-na-toggle]");
+    if (naToggle)
+      naToggle.addEventListener("click", () => {
+        state.bidAddenda.formGlobal = !state.bidAddenda.formGlobal;
+        renderBidGatesPanel(host);
+      });
+    panel.querySelectorAll("[data-aw-cancel]").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.bidAddenda.formOpen = false;
+        renderBidGatesPanel(host);
+      })
+    );
+    panel.querySelectorAll("[data-na-cancel]").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.bidAddenda.formGlobal = false;
+        renderBidGatesPanel(host);
+      })
+    );
+    panel.querySelectorAll("[data-aw-confirm]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const fid = btn.dataset.awConfirm;
+        const input = panel.querySelector('[data-aw-reason="' + fid + '"]');
+        const reason = input ? input.value.trim() : "";
+        if (!reason) {
+          state.bidAddenda.waiveError = "确认理由必填（不可审计的确认不成确认）";
+          renderBidGatesPanel(host);
+          return;
+        }
+        ui.waiveBidAddendum(fid, reason);
+      })
+    );
+    const naConfirm = panel.querySelector("[data-na-confirm]");
+    if (naConfirm)
+      naConfirm.addEventListener("click", () => {
+        const input = panel.querySelector("[data-na-reason]");
+        const reason = input ? input.value.trim() : "";
+        if (!reason) {
+          state.bidAddenda.waiveError = "确认理由必填（不可审计的确认不成确认）";
+          renderBidGatesPanel(host);
+          return;
+        }
+        ui.confirmNoAddendum(reason);
+      });
   }
 
   // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
@@ -4906,6 +5114,8 @@
         treeStatus: "idle", treeError: "", files: [], sel: {},
         importBusy: false, importError: "", result: null
       };
+      // #603 批 C：补遗面同理随根失效（不留旧项目数据）
+      state.bidAddenda = { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false };
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
@@ -5359,6 +5569,73 @@
         renderBidWorkbenchIfOpen();
       }
     },
+    /** #603 批 C：补遗件台账（bid.addenda——DomainStore+readiness 直读面） */
+    async loadBidAddenda(force) {
+      if (!state.bridge) return;
+      if (state.bidAddenda.status === "loading" && !force) return;
+      state.bidAddenda.status = "loading";
+      state.bidAddenda.error = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.addenda", {}, 15e3);
+        if (r && r.present) {
+          state.bidAddenda.data = r;
+        } else {
+          state.bidAddenda.data = null;
+          state.bidAddenda.error = "当前工作区无补遗台账";
+        }
+        state.bidAddenda.status = "ready";
+      } catch (err) {
+        state.bidAddenda.data = null;
+        state.bidAddenda.status = "error";
+        state.bidAddenda.error = err && (err.message || err.code) || "bid.addenda 读取失败";
+      }
+      state.bidAddenda.ts = Date.now();
+      renderBidWorkbenchIfOpen();
+    },
+    /** #603 批 C：补遗逐件确认（bid.addendum_waiver——宿主签发 receipt
+     * （#182 签域绑本件）后经真实工具面 record_addendum_waiver 落账）。
+     * 壳侧不校验幽灵件/状态窗——域层裁决原样透传，不假成功。 */
+    async waiveBidAddendum(fileId, reason) {
+      if (!state.bridge || state.bidAddenda.waiving) return;
+      state.bidAddenda.waiving = true;
+      state.bidAddenda.waiveError = "";
+      state.bidAddenda.waiveInfo = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.addendum_waiver", { file_id: fileId, reason: reason }, 3e4);
+        const awo = r && r.addendum_waiver;
+        state.bidAddenda.waiveInfo = "已确认放行 " + fileId + (awo && awo.recorded ? "（起草将标 RESTRICTED——不静默当完整输入）" : "");
+      } catch (err) {
+        state.bidAddenda.waiveError = err && (err.message || err.code) || "bid.addendum_waiver 失败";
+      }
+      state.bidAddenda.waiving = false;
+      // 补遗台账 + 门台账 + 侧栏同源刷新（三处都消费）
+      ui.loadBidAddenda(true);
+      ui.loadBidGates(true);
+      ui.loadBid(true);
+    },
+    /** #603 批 C：全局无补遗确认（bid.no_addendum_confirm——#379 拆门，
+     * 独立签域 no_addendum_confirmed；项目已有补遗件时域层响亮拒） */
+    async confirmNoAddendum(reason) {
+      if (!state.bridge || state.bidAddenda.waiving) return;
+      state.bidAddenda.waiving = true;
+      state.bidAddenda.waiveError = "";
+      state.bidAddenda.waiveInfo = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.no_addendum_confirm", { reason: reason }, 3e4);
+        const nc = r && r.no_addendum_confirm;
+        state.bidAddenda.waiveInfo = nc && nc.confirmed_no_addendum ? "已确认本项目无补遗（过门 + 审计留痕）" : "已确认";
+        state.bidAddenda.formGlobal = false;
+      } catch (err) {
+        state.bidAddenda.waiveError = err && (err.message || err.code) || "bid.no_addendum_confirm 失败";
+      }
+      state.bidAddenda.waiving = false;
+      ui.loadBidAddenda(true);
+      ui.loadBidGates(true);
+      ui.loadBid(true);
+    },
     /** #313 批 A：「标书工作台」伪标签页（不占 recent、不碰文件系统）；
      *  批 C：panel 入参直达指定页签（"quality" = 自评——侧栏面板入口用） */
     async openBidWorkbench(panel) {
@@ -5431,6 +5708,24 @@
       tab.error = "";
       ui.setStatus({ saved: "busy" });
       const host = ui.ensurePane(tab);
+      // 渲染性能修复（切换/重载累积卡顿）：抹除 pane 前必须先释放上一个
+      // 渲染器。旧实现在「重新加载 / 加载失败重试 / 重开同一标签」时直接
+      // innerHTML 抹除——旧渲染器的清理永远不会执行：
+      //   * docx：window/scroller 滚动监听器残留（window 级的每次滚动都跑
+      //     旧闭包的 querySelectorAll——滚动越用越卡）；媒体 blob URL
+      //     永不 revoke（内存单调涨）
+      //   * pdf：ResizeObserver/IntersectionObserver 不断开（挂着的元素与
+      //     渲染器整棵被观察器引用——无法 GC）；pdf.js 文档/worker 内存
+      //     常驻；canvas 后备存储不释放
+      // 实测（web-ui/scripts/perf-reload-leak.mjs，Chromium 2048px）：
+      // 6 轮 docx↔pdf 重开——现状监听器 remove 恒 0、堆爬到 16MB 不回落；
+      // 先 dispose 后 remove 正常累积、堆稳定 12MB。
+      try {
+        if (tab.dispose) tab.dispose();
+      } catch (err) {
+        console.warn("ang] dispose", err);
+      }
+      tab.dispose = null;
       host.innerHTML = '<div class="view-state"><div class="view-spinner"></div><div>\u6B63\u5728\u8BFB\u53D6 ' + esc(tab.name) + "\u2026</div></div>";
       try {
         if (tab.kind === "bidwork") {

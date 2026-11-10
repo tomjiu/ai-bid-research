@@ -888,5 +888,102 @@ check(
   "导出面板样式被删"
 );
 
+// ---------- 壳侧：IPC 命令真实在场（#603 批 C：补遗豁免） ----------
+check(
+  "mang-app bid.rs 提供 addenda / addendum_waiver / no_addendum_confirm",
+  bidRs.includes("pub fn addenda(") && bidRs.includes("pub fn addendum_waiver(") && bidRs.includes("pub fn no_addendum_confirm("),
+  "补遗豁免三面模块被删"
+);
+check(
+  "bid.addenda 走 DomainStore+readiness 直读（addendum_statuses / addendum_waivers 同源）",
+  bidRs.includes("bid_tools::readiness::addendum_statuses") && bidRs.includes("addendum_waivers()"),
+  "补遗状态被第二套实现取代（必须读域层真源）"
+);
+check(
+  "两写面走宿主签发 + 真实工具面（#182 签域分账：addendum_waiver:{file_id} / no_addendum_confirmed）",
+  bidRs.includes("addendum_waiver_scope") && bidRs.includes("no_addendum_confirmed_scope") && bidRs.includes("record_addendum_waiver"),
+  "receipt 签发链被绕过或两语义未分账"
+);
+check(
+  "ipc.rs 分发 bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm",
+  /"bid\.addenda" => crate::bid::addenda\(/.test(ipcRs) && /"bid\.addendum_waiver" => crate::bid::addendum_waiver\(/.test(ipcRs) && /"bid\.no_addendum_confirm" => crate::bid::no_addendum_confirm\(/.test(ipcRs),
+  "补遗面命令没接进 IPC 分发"
+);
+check(
+  "壳侧单测覆盖补遗面（无 db 干净拒 + 全局确认全链 + gates 对账）",
+  bidRs.includes("addendum_faces_clean_not_found_without_db") && bidRs.includes("no_addendum_confirm_full_flow"),
+  "壳侧单测面被删"
+);
+
+// ---------- app.js：#603 批 C——补遗豁免面接线 ----------
+check(
+  "读面调用 bid.addenda + 两写面 bid.addendum_waiver / bid.no_addendum_confirm（真实 IPC）",
+  /ipc\("bid\.addenda", \{\}, 15e3\)/.test(app) && /ipc\("bid\.addendum_waiver", \{ file_id: fileId, reason: reason \}, 3e4\)/.test(app) && /ipc\("bid\.no_addendum_confirm", \{ reason: reason \}, 3e4\)/.test(app),
+  "补遗面 IPC 调用被删或改形"
+);
+check(
+  "两补遗门真按钮接线（逐件确认 / 确认无补遗——替掉批 A 占位符）",
+  !/bid-gt-batchc/.test(app) && /data-gt-aw-toggle/.test(app) && /data-gt-na-toggle/.test(app),
+  "占位符残留或按钮未接线"
+);
+check(
+  "逐件确认列表（不就绪件 + 内联理由 + 已确认审计）",
+  /function bidGtAwListHtml/.test(app) && /data-aw-reason=/.test(app) && /data-aw-confirm=/.test(app) && /已确认台账（审计面——放行后不消失）/.test(app),
+  "逐件列表被删"
+);
+check(
+  "全局无补遗确认表单（#379 语义引导 + 理由必填）",
+  /function bidGtNaFormHtml/.test(app) && /data-na-reason/.test(app) && /data-na-confirm/.test(app) && /仅适用于「未发现补遗/.test(app),
+  "全局确认表单被删"
+);
+check(
+  "理由必填前端预检（与域层同口径——不可审计的确认不成确认）",
+  /确认理由必填（不可审计的确认不成确认）/.test(app),
+  "空白理由会被放行"
+);
+check(
+  "豁免后台账/门台账/侧栏三处同源刷新",
+  /ui\.loadBidAddenda\(true\)/.test(app) && /waiveBidAddendum/.test(app) && /confirmNoAddendum/.test(app),
+  "写面生效后面板不刷新"
+);
+check(
+  "工作区切换时补遗面状态随根失效",
+  /state\.bidAddenda = \{ status: "idle"/.test(app),
+  "旧工作区补遗台账会残留"
+);
+check(
+  "演示桥补三命令 stub + 可变台账（waiver 真改演示态 + #379 诚实拒）",
+  /case "bid\.addenda":/.test(app) && /demoAddendumWaiver/.test(app) && /demoNoAddendumConfirm/.test(app) && /与事实矛盾/.test(app),
+  "演示模式补遗面会空转或假成功"
+);
+
+// ---------- styles.css：#603 批 C 补遗豁免面样式 ----------
+for (const sel of [".bid-gt-aw ", ".bid-gt-aw-row", ".bid-gt-aw-name", ".bid-gt-aw-actions", ".bid-gt-aw-audit"]) {
+  check(
+    `styles.css 提供 ${sel.trim()} 样式`,
+    css.includes(sel.trim()),
+    "补遗面样式被删"
+  );
+}
+
+// ---------- 契约：IPC-CONTRACT.md 登记（#603 批 C） ----------
+check(
+  "契约文档登记 bid.addenda / bid.addendum_waiver / bid.no_addendum_confirm（#603 批 C）",
+  contract.includes("### bid.addenda") && contract.includes("### bid.addendum_waiver") && contract.includes("### bid.no_addendum_confirm"),
+  "补遗面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+
+// ---------- #21 e2e 骨架（静态面）：漏参防御 + 套件纳入 ----------
+check(
+  "#21 矩阵页签分发双参调用（漏传 panel = 运行时 TypeError——e2e 首跑捕获的存量 bug 形态）",
+  /renderBidMatrixPanel\(host, mxPanel\);/.test(app) && !/\brenderBidMatrixPanel\(host\);/.test(app),
+  "renderBidMatrixPanel(host) 单参调用又在场——函数签名是 (host, panel)，漏参必崩"
+);
+check(
+  "#21 e2e 套件在场（run-all glob 自动纳入）",
+  readFileSync(join(ROOT, "web-ui", "tests", "bid-e2e.test.mjs"), "utf8").length > 0,
+  "tests/bid-e2e.test.mjs 被删——运行时断链门消失"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);
