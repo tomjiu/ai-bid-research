@@ -16,6 +16,7 @@ from src.analyze.buyers import buyer_profiles
 from src.analyze.categories import category_distribution
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
+from src.analyze.platforms import platform_source_distribution
 from src.analyze.regions import province_distribution
 from src.analyze.relationships import purchaser_supplier_pairs
 from src.analyze.rolling import rolling_comparison
@@ -54,6 +55,9 @@ def build_analysis_payload(
     Returns:
         JSON 可序列化的分析 payload。
     """
+    # duplicates 先算一次：十六节渲染与二十一节跨平台信号共用
+    # （同一数据同一簇——两处各自重算既浪费又有口径漂移风险）
+    duplicates = find_duplicate_clusters(dataset)
     return {
         "keyword": keyword,
         "days": days,
@@ -78,11 +82,14 @@ def build_analysis_payload(
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
-        "duplicates": find_duplicate_clusters(dataset),
+        "duplicates": duplicates,
         "semantic_health": semantic_health(dataset),
         "response_windows": response_windows(dataset),
         "agency_profiles": agency_profiles(dataset),
         "category_distribution": category_distribution(dataset),
+        "platform_distribution": platform_source_distribution(
+            dataset, duplicate_clusters=duplicates
+        ),
     }
 
 
@@ -694,6 +701,53 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             f"填充 {_fmt_pct(categories['filled_rate'])}（缺 {_fmt_pct(missing_rate)}，七节填充率已揭示）{overflow}。",
             "",
         ]
+
+    # 第二十一节：平台来源（source_url 字段首次进分析面）——
+    # 发布平台分布 + 与十六节簇交叉的跨平台转发实证
+    platforms = payload.get("platform_distribution") or {}
+    if platforms.get("sample_count"):
+        platform_rows = [
+            [
+                entry["platform"],
+                str(entry["count"]),
+                _fmt_money(entry["budget_total"]),
+                _fmt_money(entry["budget_mean"]),
+                entry["latest_date"] or "——",
+            ]
+            for entry in platforms["platforms"]
+        ]
+        sections += [
+            "## 二十一、平台来源分布",
+            "",
+            _render_table(
+                ["发布平台", "项目数", "预算合计(万)", "平均预算(万)", "最近发布"],
+                platform_rows,
+            ),
+            "",
+            f"注：域名归一（小写、去首 www.，其余子域保留）；"
+            f"无可用 URL {platforms['missing_count']} 条如实计缺。",
+            "",
+        ]
+        multi = platforms.get("multi_platform") or {}
+        if multi.get("clusters"):
+            multi_rows = [
+                [
+                    str(example["size"]),
+                    example["normalized"] or "（空）",
+                    "、".join(example["platforms"]),
+                ]
+                for example in multi["examples"]
+            ]
+            sections += [
+                f"### 跨平台转发信号（{multi['clusters']} 簇 / 涉及 {multi['records']} 条）",
+                "",
+                _render_table(
+                    ["簇大小", "归一后项目名", "平台跨度"], multi_rows
+                ),
+                "",
+                "注：同一近重复簇（十六节）成员出现在 ≥2 个平台——多平台转发的**实证**（非猜测）；簇内缺 URL 成员不参与判定。",
+                "",
+            ]
 
     sections += [
         "## 口径说明",

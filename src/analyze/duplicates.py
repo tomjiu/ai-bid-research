@@ -249,8 +249,8 @@ def find_duplicate_clusters(
         ``{"total": N, "clusters": [...], "records_in_clusters": n,
         "duplicate_rate": r, "budget_exhausted": bool}``；
         每个 cluster 为 ``{"size": n, "normalized": str,
-        "members": [{"bid_id", "project_name"}…]}``——按 size 降序、
-        代表名升序（稳定的研究阅读序）。
+        "members": [{"bid_id", "project_name", "source_url"}…]}``
+        ——按 size 降序、代表名升序（稳定的研究阅读序）。
     """
     records = dataset.records
     total = len(records)
@@ -337,6 +337,9 @@ def find_duplicate_clusters(
             {
                 "bid_id": records[i].get("bid_id"),
                 "project_name": records[i].get("project_name"),
+                # R98：携带 source_url（供二十一节跨平台转发信号消费；
+                # 加键不破坏既有消费方——十六节渲染仍只读 bid_id）
+                "source_url": records[i].get("source_url"),
             }
             for i in sorted(idxs)
         ]
