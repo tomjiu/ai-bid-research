@@ -670,6 +670,37 @@ UI 上报右上角三按钮占宽；标题栏右端这一段必须让位（不�
 → { "width": 138 }
 ```
 
+### bid.create_project  `{ name, bid_deadline, mode, tender_notice_ref? }` —— 新建标书项目（写面；#19 导入向导第一步）
+与其他 `bid.*` 命令的关键差异：**无 db.json 是主路径而非错误**——本命令就是
+来创建 db.json 的，不走 ensure_locked；直接 `BidService::open(root)`（空目录
+会落 `.mang/approval.key` 与 `config.json`——写面用户明确意图，读面仍严禁）。
+主体经 `bid_mcp::dispatch_with(create_bid_project)` 真实工具面：`mode` 限
+`明标 | 暗标`；`bid_deadline` 须 `YYYY-MM-DD`（已过 → 工具面警告不阻断）。
+`external_key` **由壳生成**（`shell:<工作区路径>`——同工作区重放幂等返回已有
+项目，换工作区即新键；UI 无需也不应传）。已有项目且异键 → 工具面 guard
+E_STATE 透传 `state` 码。成功后壳作废服务缓存（db.json 指纹已变）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "create": { …create_bid_project 工具输出原样（project_id / status /
+                deduplicated? / project_version / warnings[]…） } }
+```
+
+### bid.import_files  `{ files: [{ upload_ref, filename, kind? }] }` —— 导入招标文件（写面；#19 导入向导第二步）
+经 `ensure_locked`（**db.json 必须已在**——先建项目再导入；未建 → `not_found`
+主路径）+ `dispatch_with(import_tender_files)` 真实工具面。`files[]` 非空数组：
+`upload_ref` = **工作区相对路径**（工具面围栏 canonical 装载，缺失件逐件入
+item_errors 不抢答——围栏外文件前端读不到，UI 引导用户先复制进工作区）；
+`kind` 七枚举（招标文件/附件/图纸/补遗/答疑/评分办法/格式模板，缺省「附件」）。
+逐件回执原样透传（pages/tables/chunks/parse_status/parse_summary/deduplicated）；
+非 DRAFT 追加 → 工具面 `DIRTY_APPEND` 警告；补遗未就绪 → `ADDENDUM_NOT_READY`。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFT" },
+    "import": { …import_tender_files 工具输出原样（new_records / status_after /
+                per_file[] / warnings[] / item_errors[]…） } }
+```
+拒绝面：无 db.json → `not_found`；files 空/非数组 → `bad_args`。
+
 
 ## 7. 事件（无 id）
 

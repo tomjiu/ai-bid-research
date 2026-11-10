@@ -504,5 +504,69 @@ check(
   "治理面命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
 );
 
+// ---------- #19 导入向导：空态建项目 + 导入招标件 ----------
+check(
+  "#19 工作台空态渲染向导（renderBidProjectWizard 分发）",
+  /renderBidProjectWizard\(host\);/.test(app) && /function renderBidProjectWizard/.test(app),
+  "空工作区不再出向导——空态入口断裂"
+);
+check(
+  "#19 向导两步表单（新建项目字段 + 导入文件勾选）",
+  /data-bid-act="wizard-create"/.test(app) && /data-bid-act="wizard-import"/.test(app)
+    && /wiz-name/.test(app) && /data-wiz-file/.test(app),
+  "向导表单或文件勾选被删"
+);
+check(
+  "#19 侧栏空态「新建标书项目」入口（workbench-wizard）",
+  /data-bid-act="workbench-wizard"/.test(app) && app.includes("新建标书项目"),
+  "侧栏入口被删——空工作区无引导"
+);
+check(
+  "#19 bid.create_project IPC 调用（name/bid_deadline/mode）",
+  /ipc\("bid\.create_project", body, 3e4\)/.test(app) && /bid_deadline: w\.deadline/.test(app),
+  "建项目写面接线被回退"
+);
+check(
+  "#19 fs.tree 扫候选（工作区内 pdf/docx/xlsx 过滤 + 项目态排除）",
+  /ipc\("fs\.tree", \{ path: "", depth: 6 \}, 3e4\)/.test(app) && /DOC_EXT/.test(app),
+  "候选扫描接线被回退"
+);
+check(
+  "#19 bid.import_files IPC 调用（upload_ref 工作区相对路径 + filename + kind）",
+  /ipc\("bid\.import_files", \{ files: files \}, 3e5\)/.test(app) && /upload_ref: rel/.test(app),
+  "导入写面接线被回退"
+);
+check(
+  "#19 向导收尾翻入首屏（finishBidWizard → loadBid 重拉项目面）",
+  /finishBidWizard/.test(app) && /await ui\.loadBid\(true\);/.test(app),
+  "向导完成后不重拉项目面——停留在空态"
+);
+check(
+  "#19 壳侧分发：ipc.rs 登记 bid.create_project / bid.import_files",
+  /"bid\.create_project" => crate::bid::create_project\(&ws, &self\.bid, &a\)/.test(ipcRs)
+    && /"bid\.import_files" => crate::bid::import_files\(&ws, &self\.bid, &a\)/.test(ipcRs),
+  "壳侧 IPC 分发缺命令——UI 调用会 unknown_cmd"
+);
+check(
+  "#19 bid.rs 走真实工具面（dispatch_with create_bid_project / import_tender_files）",
+  /tool: "create_bid_project"/.test(bidRs) && /tool: "import_tender_files"/.test(bidRs),
+  "壳侧没经 bid_mcp 真实工具面"
+);
+check(
+  "#19 create_project 不走 ensure_locked（无 db.json 是主路径）",
+  /pub fn create_project\([^)]*\)[^{]*\{[\s\S]*?BidService::open\(&root\)/.test(bidRs),
+  "create_project 又走 ensure_locked——空工作区会 not_found，永远建不出项目"
+);
+check(
+  "#19 契约文档登记 bid.create_project / bid.import_files",
+  contract.includes("### bid.create_project") && contract.includes("### bid.import_files"),
+  "导入向导命令没进契约（docs/mang/IPC-CONTRACT.md 是唯一权威）"
+);
+check(
+  "#19 向导样式（bid-wizard 表单 + 文件列表）",
+  /\.bid-wizard-form/.test(css) && /\.bid-wizard-files/.test(css),
+  "向导样式被删"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

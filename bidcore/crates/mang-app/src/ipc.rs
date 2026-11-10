@@ -478,6 +478,13 @@ impl Ctx {
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
+            // ── #19 导入向导（bid.rs——create_project 不走 ensure_locked：
+            //    无 db.json 是主路径，它就是来建 db.json 的；import_files
+            //    走 ensure_locked + import_tender_files 真实工具面）──────
+            "bid.create_project" => crate::bid::create_project(&ws, &self.bid, &a),
+
+            "bid.import_files" => crate::bid::import_files(&ws, &self.bid, &a),
+
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
 

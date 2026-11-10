@@ -939,6 +939,104 @@ pub fn coverage(
     }))
 }
 
+/// `bid.create_project` —— 新建标书项目（#19：导入向导第一步）。
+///
+/// 与其他 `bid.*` 命令的关键差异：**无 db.json 是主路径而非错误**——
+/// 本命令就是来创建 db.json 的，因此不走 [`ensure_locked`]（它对无
+/// db.json 报 not_found）。这里直接 `BidService::open(root)`：open 在
+/// 空目录会落 `.mang/approval.key` 与 `config.json`——读面严禁这么做
+/// （见文件头注释），写面这是**用户明确意图**（建项目 = 建工作区态）。
+/// 一次性实例不进缓存（`create_project` 是单步写面；后续命令经
+/// ensure_locked 按 db.json 指纹重开，两者不共享内存态）。
+///
+/// `external_key` 由壳生成：`shell:<工作区显示路径>`——同工作区重放
+/// 幂等返回已有项目（工具面 §1 语义），换工作区即新键。已有项目且
+/// 异键 → 工具面 guard_tool E_STATE（非 DRAFT 越级），壳透传 `state` 码。
+pub fn create_project(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let name = a.req_str("name")?;
+    let bid_deadline = a.req_str("bid_deadline")?;
+    let mode = a.req_str("mode")?;
+    let notice_ref = a.str("tender_notice_ref")?.map(str::to_string);
+
+    let root = ws.root_canonical().to_path_buf();
+    let mut svc = bid_tools::service::BidService::open(&root).map_err(map_store_err)?;
+    let external_key = format!("shell:{}", ws.root_display());
+    let mut args = json!({
+        "name": name,
+        "bid_deadline": bid_deadline,
+        "mode": mode,
+        "external_key": external_key,
+    });
+    if let Some(n) = notice_ref {
+        args["tender_notice_ref"] = json!(n);
+    }
+    let reply = bid_mcp::dispatch_with(
+        &mut svc,
+        bid_mcp::ToolCall {
+            tool: "create_bid_project".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    // 创建成功 → 缓存作废（db.json 刚落盘/翻新；下条命令按指纹重开）。
+    // 锁中毒不复位（与文件内 lock() 同口径——指纹面自会触发重开）。
+    *lock(cache) = None;
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "create": tool_out,
+    }))
+}
+
+/// `bid.import_files` —— 导入招标文件（#19：导入向导第二步）。
+///
+/// 经 [`ensure_locked`]（db.json 必须已在——先建项目再导入；未建项目
+/// → not_found 主路径）+ `dispatch_with(import_tender_files)` 真实工具面。
+/// `files[]`：`upload_ref`（工作区相对路径——工具面围栏 canonical 装载，
+/// 缺失件逐件入 item_errors 不抢答）、`filename`、`kind`（七枚举，缺省
+/// 归「附件」）。逐件回执（pages/tables/chunks/parse_status/parse_summary）
+/// 原样透传；非 DRAFT 追加 → 工具面 DIRTY_APPEND 警告照发。
+pub fn import_files(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let files = a
+        .get("files")
+        .cloned()
+        .ok_or_else(|| IpcError::bad_args("缺少参数 files（至少一件：{upload_ref, filename, kind?}）"))?;
+    if !files.is_array() || files.as_array().map(|f| f.is_empty()).unwrap_or(true) {
+        return Err(IpcError::bad_args("files 必须是非空数组"));
+    }
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let meta = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "import_tender_files".to_string(),
+            args: json!({ "project_id": meta.0, "files": files }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": meta.1,
+        "import": tool_out,
+    }))
+}
+
 
 /// 锁毒化不复位（与 ipc.rs `Ctx::ws` 同口径）。
 fn lock(cache: &Mutex<Option<CachedService>>) -> MutexGuard<'_, Option<CachedService>> {

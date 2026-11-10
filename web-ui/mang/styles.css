@@ -4201,3 +4201,80 @@ html[data-chrome="native"][data-maximized="1"] #app {
     max-width: 1100px;
   }
 }
+
+/* ---------- #19 导入向导：两步引导（建项目 → 导入招标件） ---------- */
+.bid-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 22px 26px;
+  max-width: 980px;
+}
+.bid-wizard-form {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px 14px;
+  align-items: center;
+}
+.bid-wizard-form .bid-export-field > span {
+  font-size: 12px;
+  color: var(--fg-muted);
+  text-align: right;
+}
+.bid-wizard-form .bid-export-field > input,
+.bid-wizard-form .bid-export-field > select {
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border, #444c56);
+  border-radius: 6px;
+  background: var(--bg, #22272e);
+  color: var(--fg, #e6edf3);
+}
+.bid-wizard-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.bid-wizard-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bid-wizard-file:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.bid-wizard-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bid-wizard-file-size {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.bid-wizard-file > select {
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid var(--border, #444c56);
+  border-radius: 6px;
+  background: var(--bg, #22272e);
+  color: var(--fg, #e6edf3);
+}
+@media (max-width: 900px) {
+  .bid-wizard-form {
+    grid-template-columns: 1fr;
+  }
+  .bid-wizard-form .bid-export-field > span {
+    text-align: left;
+  }
+}
