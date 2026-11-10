@@ -683,7 +683,12 @@ function readRunFmt(rPr: Element): RunFmt {
         break;
       }
       case 'highlight': {
-        if (val) f.highlight = val.toLowerCase();
+        // Word 会在大量 run 上显式写 <w:highlight w:val="none"/> 表示「无高亮」。
+        // 旧实现把 "none" 也当有效值存下来，渲染时查不到映射就兜底成黄色——
+        // 真实文件里 3938/3940 处 none 全被涂黄（整页背景发黄的真因）。
+        // 这里把 none 归一为「不设置」（不透传给下游）。
+        const hv = (val ?? '').trim().toLowerCase();
+        if (hv && hv !== 'none') f.highlight = hv;
         break;
       }
       default:
@@ -750,7 +755,10 @@ function highlightColor(name: string): string {
     black: '#000000',
     white: '#ffffff',
   };
-  return table[name] ?? '#fff59d';
+  // 未知枚举：返回空串（= 不上色），绝不兜底成黄色。
+  // 兜底成黄色会把「解析不到的颜色」和「用户真的标了黄」混为一谈——
+  // 旧实现正是因此把 w:val="none" 渲染成整页黄底。
+  return table[name] ?? '';
 }
 
 /** 段落对齐映射（jc 枚举 → CSS text-align）。 */
@@ -815,7 +823,10 @@ function wrapFmt(doc: Document, inner: Node, fmt: RunFmt, measureOnly: boolean):
   if (fmt.halfPoints !== null) css.push('font-size:' + halfPointsToPx(fmt.halfPoints).toFixed(1) + 'px');
   if (fmt.color) css.push('color:' + fmt.color);
   if (fmt.font) css.push('font-family:' + quoteFamily(fmt.font));
-  if (fmt.highlight) css.push('background-color:' + highlightColor(fmt.highlight));
+  if (fmt.highlight) {
+    const hl = highlightColor(fmt.highlight);
+    if (hl) css.push('background-color:' + hl);
+  }
   if (css.length > 0 && !measureOnly) {
     const span = el(doc, 'span');
     span.setAttribute('style', css.join(';'));

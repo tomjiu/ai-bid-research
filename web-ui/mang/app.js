@@ -691,12 +691,20 @@
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw Object.assign(new Error("\u8BFB\u53D6\u5927\u54CD\u5E94\u5931\u8D25\uFF08HTTP " + res.status + "\uFF09"), { code: "ipc_file" });
     const text = await res.text();
+    let body;
     try {
-      result.payload = JSON.parse(text);
+      body = JSON.parse(text);
     } catch (e) {
       throw Object.assign(new Error("\u5927\u54CD\u5E94\u4E0D\u662F\u5408\u6CD5 JSON\uFF1A" + e.message), { code: "ipc_file" });
     }
-    return result;
+    // spill 落盘的是**完整响应壳**（ipc.rs::spill_if_large 写的是整个 resp）：
+    //   { id, ok, result: { ...真实结果... } }
+    // 调用方（如 fs.readBytes 读 r.data）期望的却是**解包后的 result 本体**。
+    // 旧实现把壳塞进 result.payload，谁都没读 → 大文件静默变空（PDF「数据为空」）。
+    if (body && typeof body === "object" && body.result && typeof body.result === "object") {
+      return body.result;
+    }
+    return body && typeof body === "object" ? body : result;
   }
   function ipc(cmd, args, timeoutMs) {
     const payload = Object.assign({}, args || {});
