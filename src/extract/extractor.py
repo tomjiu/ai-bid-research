@@ -206,6 +206,8 @@ class AnnouncementExtractor:
         self,
         records: List[AnnouncementRecord],
         raw_texts: Optional[List[Optional[str]]] = None,
+        *,
+        progress=None,
     ) -> BatchExtractionResult:
         """批量抽取（逐条顺序，异常隔离——单条失败不中断整批）。
 
@@ -213,6 +215,8 @@ class AnnouncementExtractor:
             records: 规范化记录列表。
             raw_texts: 与 records 等长的原文列表（可含 ``None``）；
                 缺省时逐条探测 extras。
+            progress: 可选进度回调 ``f(current, total, bid_id)``
+                （R68——每条完成时触发一次，供 CLI 行内进度）。
 
         Returns:
             批量结果（outcomes + failures）。
@@ -226,14 +230,19 @@ class AnnouncementExtractor:
                 f"长度 {len(records)} 不一致"
             )
         result = BatchExtractionResult()
-        for index, record in enumerate(records):
-            text = raw_texts[index] if raw_texts is not None else None
+        for index, record in enumerate(records, start=1):
+            text = raw_texts[index - 1] if raw_texts is not None else None
             try:
                 result.outcomes.append(await self.extract(record, text))
             except ExtractionError as exc:
                 result.failures.append(
                     {"bid_id": record.bid_id, "error": exc.message}
                 )
+            if progress is not None:
+                try:
+                    progress(index, len(records), record.bid_id)
+                except Exception:  # 展示层异常绝不反噬批处理
+                    pass
         return result
 
     # ------------------------------------------------------------------

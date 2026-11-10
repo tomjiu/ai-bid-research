@@ -617,7 +617,18 @@ def run_extract(args: argparse.Namespace) -> int:
 
     client = None if args.no_llm else _build_llm_client_or_none()
     extractor = AnnouncementExtractor(client)
-    batch = asyncio.run(extractor.extract_batch(deduped.unique))
+    # R68：批抽取进度面（tty 行内刷新；非 tty 静默 + DEBUG 日志）
+    from src.progress import ProgressPrinter
+
+    progress_printer = ProgressPrinter(
+        total=len(deduped.unique), label="抽取"
+    )
+    batch = asyncio.run(
+        extractor.extract_batch(
+            deduped.unique, progress=progress_printer.step
+        )
+    )
+    progress_printer.finish()
 
     llm_count = sum(1 for o in batch.outcomes if o.used_llm)
     print(f"抽取完成：LLM {llm_count} 条 / 直通 "
