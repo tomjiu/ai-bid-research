@@ -1680,6 +1680,27 @@ pub fn ingest_drop(
             }));
             continue;
         }
+        // R10（#47 跨平台硬化②）：Windows 保留名/非法字符预检——写面守卫
+        // （落位复制会在工作区创建同名文件；这些名字 Windows 建不出来 →
+        // 工作区不可携）。skip 原因透传给 UI toast（R8 分账通道）——给出
+        // 可操作的改名引导，而不是 Windows 侧日后的神秘失败。
+        if let Some(reason) = win_name_block_reason(&name) {
+            let detail = if reason == "win_reserved" {
+                format!(
+                    "{name} 是 Windows 保留名（CON/PRN/AUX/NUL/COM1-9/LPT1-9，\
+                     含带扩展名形态）——工作区需跨平台可携，请改名后重拖"
+                )
+            } else {
+                format!(
+                    "{name} 含 Windows 非法字符（< > : \" | ? * 或控制字符）\
+                     ——请改名后重拖"
+                )
+            };
+            skipped.push(json!({
+                "path": raw, "reason": reason, "detail": detail
+            }));
+            continue;
+        }
         // 同名幂等/冲突后缀
         match resolve_ingest_dst(&root, &name, src) {
             Ok(Some(dst)) => {
@@ -1771,6 +1792,46 @@ fn resolve_ingest_dst(
         }
     }
     Err(format!("{name} 同名冲突超过 999 个变体（请整理工作区）"))
+}
+
+/// R10（#47 跨平台硬化②）：Windows 文件名兼容性预检——保留名与非法
+/// 字符。**为什么 Linux 壳也拦**：落位复制会在工作区创建同名文件，而这些
+/// 名字在 Windows 上根本建不出来（OS 层即拒）→ 工作区一旦同步/共享到
+/// Windows 就神秘失败。拒的是「跨平台不可携」，不是「Linux 非法」。
+///
+/// 规则（Microsoft 命名约定）：
+/// - 非法字符：`< > : " | ? *` 与控制字符（0x00-0x1F）→ `win_illegal_char`
+/// - 保留名：基名（**第一个 `.` 之前**的段——`CON.sole.docx` 与 `CON.docx`
+///   同样保留）剥尾部空格/圆点后大小写不敏感比对
+///   `CON/PRN/AUX/NUL/COM1-9/LPT1-9` → `win_reserved`
+///
+/// 只作用于**写面**（ingest_drop 落位复制——新建文件名壳侧可控）；读面
+/// （import_files）不动：工作区既有文件的读取在 Linux 上完全合法（R9 同款
+/// 「归一不越权」口径——域层围栏管穿越，本谓词管新建名可携性）。
+fn win_name_block_reason(name: &str) -> Option<&'static str> {
+    // ① 非法字符（含控制字符）。split 无必要——单文件名（file_name() 产物，
+    //    无分隔符），逐字节扫即可；非 ASCII（中文等）按字节扫不会误报
+    //    （多字节 UTF-8 序列每个字节 ≥ 0x80）。
+    if name
+        .bytes()
+        .any(|b| matches!(b, b'<' | b'>' | b':' | b'"' | b'|' | b'?' | b'*') || b < 0x20)
+    {
+        return Some("win_illegal_char");
+    }
+    // ② 保留名：基名取第一个 `.` 之前（无 `.` 则整名）；剥尾部空格/圆点
+    //    （Windows 会剥后比对——"CON. " 与 "CON" 等价）；大小写不敏感。
+    let base = name.split('.').next().unwrap_or(name);
+    let base = base.trim_end_matches(['.', ' ']).to_uppercase();
+    let reserved = matches!(
+        base.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+    );
+    if reserved {
+        return Some("win_reserved");
+    }
+    None
 }
 
 /// R9（#47 跨平台硬化①）：`upload_ref` 分隔符归一——壳侧入口形态归一
@@ -2949,13 +3010,132 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// R10（#47 跨平台硬化②）：Windows 保留名/非法字符预检——纯函数面
+    /// （全平台跑——谓词是纯字符串判定，不依赖平台 FS）+ 写面集成面
+    /// （Linux 上种 Windows 建不出的名字验证拒收；Windows 上这些名字
+    /// OS 层即拒——种不出来，集成段 cfg(unix) 门 + SKIP 横幅，AGENTS.md
+    /// §13.1/13.2 纪律：不为过测试放宽断言，也不伪造环境）。
+    #[test]
+    fn win_reserved_and_illegal_names_blocked_portably() {
+        // ── ① 纯函数面（全平台）：保留名形态 ──
+        // 经典保留名（带扩展名形态——第一个 `.` 之前比对）
+        assert_eq!(win_name_block_reason("CON.docx"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("NUL.pdf"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("AUX.ods"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("PRN.xlsx"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("COM7.docx"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("LPT1.docx"), Some("win_reserved"));
+        // 大小写不敏感 + 多段扩展名（CON.sole.docx 的基名是 CON）
+        assert_eq!(win_name_block_reason("con.docx"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("Com3.docx"), Some("win_reserved"));
+        assert_eq!(win_name_block_reason("CON.sole.docx"), Some("win_reserved"));
+        // 无扩展名整名形态
+        assert_eq!(win_name_block_reason("CON"), Some("win_reserved"));
+        // 尾部空格/圆点形态（Windows 剥后比对）
+        assert_eq!(win_name_block_reason("CON. .docx"), Some("win_reserved"));
+
+        // ── ② 纯函数面：非法字符 ──
+        assert_eq!(win_name_block_reason("报告|v2.docx"), Some("win_illegal_char"));
+        assert_eq!(win_name_block_reason("a<b.docx"), Some("win_illegal_char"));
+        assert_eq!(win_name_block_reason("a>b.docx"), Some("win_illegal_char"));
+        assert_eq!(win_name_block_reason("a:b.docx"), Some("win_illegal_char"));
+        assert_eq!(win_name_block_reason("a\"b.docx"), Some("win_illegal_char"));
+        assert_eq!(win_name_block_reason("a?b.docx"), Some("win_illegal_char"));
+        assert_eq!(win_name_block_reason("a*b.docx"), Some("win_illegal_char"));
+        // 控制字符（0x00-0x1F）
+        assert_eq!(
+            win_name_block_reason("a\x01b.docx"),
+            Some("win_illegal_char")
+        );
+
+        // ── ③ 纯函数面：不误伤（合法名零拦截——跨平台硬化不得变成误报机器）──
+        assert_eq!(win_name_block_reason("招标文件.docx"), None, "中文名合法");
+        assert_eq!(win_name_block_reason("报告 v2.docx"), None, "空格合法");
+        assert_eq!(win_name_block_reason("con-2.docx"), None, "后缀形态基名是 con-2 非 con");
+        assert_eq!(win_name_block_reason("COM10.docx"), None, "COM10 不在保留集（只 1-9）");
+        assert_eq!(win_name_block_reason("aux2.docx"), None, "aux2 非 aux");
+        assert_eq!(win_name_block_reason("LPT.docx"), None, "裸 LPT 非保留名");
+        assert_eq!(win_name_block_reason("会议-纪要.2026.docx"), None, "多段扩展名合法");
+        assert_eq!(win_name_block_reason("①②③.docx"), None, "全角符号合法");
+
+        // ── ④ 写面集成（Linux 可种 Windows 建不出的名字——验证壳侧拒收；
+        //     Windows 种不出这类源文件，cfg(unix) 门 + SKIP 说明）──
+        #[cfg(unix)]
+        {
+            let _g = workspace_files_guard();
+            let (dir, ws) = tmp_ws("win10");
+            let ctx = Ctx::new(ws.clone(), PathBuf::new());
+            fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+                ctx.dispatch(&crate::ipc::Request {
+                    id: json!(1),
+                    cmd: cmd.to_string(),
+                    body: body.as_object().cloned().unwrap_or_default(),
+                })
+            }
+            let src_dir = std::env::temp_dir().join(format!(
+                "mang-bid-win10-src-{}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&src_dir).unwrap();
+            // 三个源：保留名 / 非法字符 / 合法对照（都过白名单——隔离 R10 变量）
+            std::fs::write(src_dir.join("CON.docx"), b"PK\x03\x04con-payload").unwrap();
+            std::fs::write(src_dir.join("报告|v2.docx"), b"PK\x03\x04pipe-payload").unwrap();
+            std::fs::write(src_dir.join("招标文件.docx"), b"PK\x03\x04legal-payload").unwrap();
+
+            let r = call_args(&ctx, "bid.ingest_drop", json!({
+                "paths": [
+                    src_dir.join("CON.docx").to_string_lossy(),
+                    src_dir.join("报告|v2.docx").to_string_lossy(),
+                    src_dir.join("招标文件.docx").to_string_lossy(),
+                ]
+            }));
+            assert_eq!(r["ok"], json!(true), "分账不按错误回：{r}");
+            let out = r["result"].clone();
+            // 合法件照常落位（守卫不误伤主路径）
+            let copied = out["copied"].as_array().unwrap();
+            assert_eq!(copied.len(), 1, "合法件落位：{out}");
+            assert_eq!(copied[0]["rel"], json!("招标文件.docx"));
+            assert!(dir.join("招标文件.docx").is_file(), "合法件已在工作区根");
+            assert!(!dir.join("CON.docx").exists(), "保留名不得落位（工作区不可携）");
+            assert!(!dir.join("报告|v2.docx").exists(), "非法字符名不得落位");
+            // 两件分别以对应原因入 skipped 分账（UI toast 透传可操作引导）
+            let skipped = out["skipped"].as_array().unwrap();
+            assert_eq!(skipped.len(), 2, "分账两件：{out}");
+            let by_reason: std::collections::HashMap<&str, &Value> = skipped
+                .iter()
+                .filter_map(|s| s["reason"].as_str().map(|r| (r, s)))
+                .collect();
+            let win_res = by_reason.get("win_reserved").expect("保留名分账在场");
+            assert!(
+                win_res["detail"].as_str().unwrap_or("").contains("保留名"),
+                "保留名引导文案要可操作：{win_res}"
+            );
+            let win_illegal = by_reason.get("win_illegal_char").expect("非法字符分账在场");
+            assert!(
+                win_illegal["detail"].as_str().unwrap_or("").contains("非法字符"),
+                "非法字符引导文案要可操作：{win_illegal}"
+            );
+
+            let _ = std::fs::remove_dir_all(dir);
+            let _ = std::fs::remove_dir_all(src_dir);
+        }
+        #[cfg(not(unix))]
+        {
+            // SKIP 横幅（AGENTS.md §13.2：SKIP 必须显式可见，不静默跳过）
+            eprintln!(
+                "SKIP [R10 win-name 集成段]：Windows 上 CON.docx 等名字 OS 层即拒——\
+                 种不出源文件；本段在 Unix 跑（谓词面 ①②③ 已全平台覆盖）"
+            );
+        }
+    }
+
     // ── #603 批 C：补遗豁免面 ──
     // （假绿修复：replay 拼接（e8acc3e）丢了 #[test] 属性——两函数在 main 上
     //  从未运行（dead_code 警告是唯一线索）。原提交 20dd6a1 有属性与文档注释，
     //  此处按原样恢复——测试门重新生效。）
 
     /// 无 db.json → 三命令干净 not_found（读/写同款——不落副作用）。
-#[test]
+    #[test]
     fn addendum_faces_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb-603c");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());

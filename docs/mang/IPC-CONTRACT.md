@@ -623,6 +623,14 @@ already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找
 入）；不存在的路径 `not_found`。R9-R16 平台硬化专列在此基础做 Win 保留名 / 大小写不
 敏感去重 / 分隔符统一。
 
+**Windows 名字兼容预检（#47 R10 跨平台硬化②，写面守卫）**：落位名是 Windows 保留名
+（基名——第一个 `.` 之前的段，剥尾部空格/圆点，大小写不敏感——为
+`CON/PRN/AUX/NUL/COM1-9/LPT1-9`，含 `CON.docx` 带扩展名形态）→ `skipped: win_reserved`；
+含 Windows 非法字符（`< > : " | ? *` 或控制字符 0x00-0x1F）→ `skipped: win_illegal_char`。
+两因 detail 均给出改名引导（UI toast 透传）。**Linux 壳同样拦**：这些名字 Linux 上合法、
+但 Windows 建不出来——拒的是「工作区跨平台不可携」，不是「Linux 非法」；读面
+（`bid.import_files`）不受影响（工作区既有文件照常读取）。
+
 ```jsonc
 → { "present": true,
     "copied":  [ { "rel": "招标文件.docx", "name": "招标文件.docx", "size": 12345 } ],

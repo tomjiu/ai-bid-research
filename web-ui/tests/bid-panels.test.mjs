@@ -825,6 +825,37 @@ check(
   "归一规则没进契约（调用方无从知道两形态等价）"
 );
 
+
+// ---------- R10（#47 跨平台硬化②）：Windows 保留名/非法字符预检（写面守卫） ----------
+check(
+  "R10 壳侧：win_name_block_reason 谓词 + ingest_drop 写面接入（skip 原因透传）",
+  /fn win_name_block_reason\(name: &str\) -> Option<&'static str>/.test(bidRs)
+  && /if let Some\(reason\) = win_name_block_reason\(&name\) \{/.test(bidRs)
+  && /"reason": reason, "detail": detail/.test(bidRs),
+  "Windows 保留名/非法字符没有写面预检——落位即埋「工作区同步到 Windows 神秘失败」的雷"
+);
+check(
+  "R10 壳侧：保留名口径（第一个 . 前基名 + 大小写不敏感 + COM1-9/LPT1-9）+ 不误伤反例",
+  /win_name_block_reason\("CON\.sole\.docx"\), Some\("win_reserved"\)/.test(bidRs)
+  && /win_name_block_reason\("con\.docx"\), Some\("win_reserved"\)/.test(bidRs)
+  && /win_name_block_reason\("COM7\.docx"\), Some\("win_reserved"\)/.test(bidRs)
+  && /win_name_block_reason\("COM10\.docx"\), None/.test(bidRs)
+  && /win_name_block_reason\("con-2\.docx"\), None/.test(bidRs)
+  && /win_name_block_reason\("①②③\.docx"\), None/.test(bidRs),
+  "保留名判定误伤合法名（con-2/COM10/全角符号）或漏判带扩展名/大小写形态"
+);
+check(
+  "R10 壳侧：集成单测在场（cfg(unix) 门 + SKIP 横幅——Windows 种不出源文件）",
+  /fn win_reserved_and_illegal_names_blocked_portably[\s\S]{0,4000}#\[cfg\(unix\)\][\s\S]{0,3200}win_reserved[\s\S]{0,600}win_illegal_char[\s\S]{0,800}cfg\(not\(unix\)\)[\s\S]{0,400}SKIP/.test(bidRs),
+  "写面拒收无集成回归门（cfg 平台门缺失 = Windows CI 上静默跳过或假绿）"
+);
+check(
+  "R10 契约：bid.ingest_drop Windows 名字兼容预检口径登记",
+  /Windows 名字兼容预检（#47 R10 跨平台硬化②，写面守卫）/.test(contract)
+  && /win_reserved/.test(contract) && /win_illegal_char/.test(contract),
+  "R10 预检口径没进契约（UI/调用方无从知道 skip 原因语义与跨平台动机）"
+);
+
 // ---------- #18 出口闭环：校验报告 + 确认导出 ----------
 check(
   "#18 工作台头部「校验并导出」按钮（validate-export 动作）",
