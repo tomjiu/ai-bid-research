@@ -75,7 +75,7 @@ class TestLLMClient:
             mock_openai.chat.completions.create = AsyncMock(
                 side_effect=ConnectionError("一直失败")
             )
-            with pytest.raises(LLMError, match="3 次重试"):
+            with pytest.raises(LLMError, match="3 次尝试"):
                 asyncio.run(
                     self.client.chat([{"role": "user", "content": "必败"}])
                 )

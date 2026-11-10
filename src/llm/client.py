@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 import time
 from typing import Any, Dict, List, Optional, Sequence
@@ -43,6 +44,12 @@ class LLMClient:
 
     DEFAULT_MAX_RETRIES = 3
     INITIAL_RETRY_DELAY = 1.0
+    #: 退避上限（防自定义大 retries 时指数爆炸）
+    MAX_RETRY_DELAY = 30.0
+    #: 确定性客户端错误——重试必然同样失败，立即放弃（R59）
+    _NON_RETRYABLE_STATUS = frozenset({400, 401, 403, 404, 422})
+    #: 限流/服务端错误——值得退避重试（其余无状态码的异常视为网络类，可重试）
+    _RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
     def __init__(
         self,
@@ -51,6 +58,7 @@ class LLMClient:
         model: str = "deepseek-chat",
         max_concurrent: int = 5,
         rate_limit: float = 0.5,
+        retry_jitter: bool = True,
     ) -> None:
         """初始化 LLM 客户端。
 
@@ -70,6 +78,7 @@ class LLMClient:
             raise ValueError(f"max_concurrent 必须为正数，收到 {max_concurrent}")
         if rate_limit <= 0:
             raise ValueError(f"rate_limit 必须为正数，收到 {rate_limit}")
+        self.retry_jitter = retry_jitter
 
         self.api_key = (
             api_key
@@ -220,7 +229,12 @@ class LLMClient:
         Raises:
             LLMError: 重试耗尽仍失败时。
         """
-        retries = max_retries or self.DEFAULT_MAX_RETRIES
+        # R59：max_retries 语义修正——0 = 只试一次不重试（原 ``or`` 会
+        # 把显式 0 吞成默认 3）；负数同 0（至少一次尝试）
+        retries = (
+            self.DEFAULT_MAX_RETRIES if max_retries is None
+            else max(1, int(max_retries))
+        )
         delay = self.INITIAL_RETRY_DELAY
         last_exc: Optional[BaseException] = None
 
@@ -236,18 +250,41 @@ class LLMClient:
                     kwargs["response_format"] = response_format
                 response = await self._client.chat.completions.create(**kwargs)
                 return response.choices[0].message.content or ""
-            except Exception as exc:  # noqa: BLE001 - 网络/限流等均可重试
+            except Exception as exc:  # noqa: BLE001 - 网络/限流等可重试
+                status, retry_after = _error_status(exc)
+                if status in self._NON_RETRYABLE_STATUS:
+                    # 确定性失败（鉴权/参数/模型名错）——重试纯浪费
+                    raise LLMError(
+                        f"LLM 调用不可重试失败（HTTP {status}）: {exc}"
+                    ) from exc
                 last_exc = exc
                 logger.warning(
-                    "LLM 调用失败（第 %d/%d 次尝试）: %s", attempt, retries, exc
+                    "LLM 调用失败（第 %d/%d 次尝试，HTTP %s）: %s",
+                    attempt, retries, status or "网络", exc,
                 )
                 if attempt < retries:
-                    await asyncio.sleep(delay)
-                    delay *= 2
+                    wait = (
+                        retry_after  # 服务端明示的等待（429 Retry-After）
+                        if retry_after is not None
+                        else self._backoff_delay(delay)
+                    )
+                    await asyncio.sleep(wait)
+                    delay = min(delay * 2, self.MAX_RETRY_DELAY)
 
         raise LLMError(
-            f"LLM 调用在 {retries} 次重试后仍失败: {last_exc}"
+            f"LLM 调用在 {retries} 次尝试后仍失败: {last_exc}"
         ) from last_exc
+
+    def _backoff_delay(self, delay: float) -> float:
+        """计算本次退避时长（R59）。
+
+        等抖动（equal jitter）：``delay/2 + U(0, delay/2)``——
+        均值等于纯指数、上限封顶纯指数，惊群错峰且时序可控。
+        ``retry_jitter=False`` 时纯指数（测试确定性）。
+        """
+        if not self.retry_jitter:
+            return delay
+        return delay / 2 + random.uniform(0, delay / 2)
 
     @classmethod
     def _extract_json(cls, content: str) -> Any:
@@ -291,3 +328,26 @@ class LLMClient:
             "无法从 LLM 回复中解析出 JSON，回复前 200 字符: "
             f"{content[:200]!r}"
         )
+
+
+def _error_status(exc: BaseException) -> tuple:
+    """从异常提取 (HTTP 状态码, Retry-After 秒)（R59）。
+
+    openai 的 ``APIStatusError`` 带 ``status_code`` 与 ``response``；
+    其他异常（网络层/自定义）两者皆 ``None`` → 视为可重试网络类。
+    """
+    status = getattr(exc, "status_code", None)
+    retry_after = None
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        try:
+            raw = headers.get("retry-after")
+        except Exception:  # headers 非标准映射
+            raw = None
+        if raw is not None:
+            try:
+                retry_after = float(raw)
+            except (TypeError, ValueError):
+                retry_after = None
+    return status, retry_after
