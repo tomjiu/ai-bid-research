@@ -1668,6 +1668,20 @@ pub fn ingest_drop(
                 continue;
             }
         };
+        // #47 R10（跨平台硬化②）：平台名字门——落位前裁决（比后缀白名单更
+        // 基础：名字不可移植时改后缀也救不了）。复用域层单一真源
+        // bid_tools::platform_names（域导入门同一套裁决，零重实现）：Linux
+        // 壳对 CON.docx / 报告.docx␣（尾随空格）/ 招<标>.pdf 照单全收，
+        // 落位后 Windows 壳开不了同库（保留设备名/非法字符/尾随点空格剥离）。
+        if let Some(reason) = bid_tools::platform_names::windows_illegal_reason(&name) {
+            skipped.push(json!({
+                "path": raw, "reason": "platform_illegal_name",
+                "detail": format!(
+                    "{name} 不可跨平台落位（{reason}）——Windows 无法承载该名字；改名后重拖"
+                )
+            }));
+            continue;
+        }
         // 后缀白名单（与 UI 的 BID_IMPORT_EXTS 同源口径：docx/xlsx/pdf/doc/ods）
         let lower = name.to_lowercase();
         if ![".docx", ".xlsx", ".pdf", ".doc", ".ods"]
@@ -2951,6 +2965,7 @@ mod tests {
 
     // ── #603 批 C：补遗豁免面 ──
 
+    #[test]
     fn addendum_faces_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb-603c");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
@@ -2975,6 +2990,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    #[test]
     fn no_addendum_confirm_full_flow() {
         let (dir, _ws) = tmp_ws("flow-603c");
         seed_matrix_ready_project(&dir);
@@ -3053,4 +3069,169 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+
+    /// R10（#47 跨平台硬化②）壳→域全链：fresh DRAFT 项目 + 域导入门——
+    /// `CON.docx` 逐件失败分账（E_PARTIAL：`item_errors` 带 reason 码、
+    /// 不落库不进 `per_file`），同批合法件照常入库（selftest 线项目已
+    /// seed 到 MATRIX_READY 走不了导入，本单测用 fresh 项目补全链）。
+    #[test]
+    fn import_rejects_windows_illegal_names_via_domain_gate() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r10-import");
+        // 建项（DRAFT——导入状态窗允许）
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("名字门导入项目", "PRJ-R10", "明标", "ext-r10-imp")
+                .unwrap();
+        }
+        // 种真实可解析件 + 保留名件（Unix 平台门：Windows 侧制备失败 SKIP）
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        if std::fs::write(dir.join("CON.docx"), MIN_DOCX).is_err() {
+            eprintln!();
+            eprintln!("====================================================================");
+            eprintln!("SKIP: import_rejects_windows_illegal_names_via_domain_gate");
+            eprintln!("reason: PLATFORM_CANNOT_CREATE_FIXTURE: CON.docx（Windows 侧 OS 原生拒建）");
+            eprintln!("补救：在 Linux/Unix 壳真跑");
+            eprintln!("====================================================================");
+            return;
+        }
+        std::fs::write(dir.join("招标文件.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [
+                { "upload_ref": "CON.docx", "kind": "附件" },
+                { "upload_ref": "招标文件.docx", "kind": "招标文件" },
+            ]
+        }));
+        // E_PARTIAL 契约：壳侧组装成功响应（partial 分账），不按错误回
+        assert_eq!(r["ok"], json!(true), "E_PARTIAL 是分账不是错误：{r}");
+        let out = r["result"].clone();
+        assert_eq!(out["partial"], json!(true), "部分失败分账标记：{out}");
+        let errs = out["item_errors"].as_array().cloned().unwrap_or_default();
+        assert!(
+            errs.iter().any(|e| e.as_str().map(|s| {
+                s.contains("CON.docx") && s.contains("windows_reserved_device_name")
+            }).unwrap_or(false)),
+            "CON.docx 逐件失败 + reason 码在 item_errors：{errs:?}"
+        );
+        // per_file 只含有身份件——CON 不落库（无档可报），招标文件正常入库
+        let per = out["per_file"].as_array().cloned().unwrap_or_default();
+        assert!(!per.iter().any(|o| o["filename"] == json!("CON.docx")),
+            "名字门件不进 per_file：{per:?}");
+        let good = per.iter().find(|o| o["filename"] == json!("招标文件.docx"))
+            .expect("合法件照常入库");
+        assert!(good["file_id"].is_string(), "好件有文件身份：{good}");
+        assert_eq!(out["totals"]["files"], json!(1), "只有好件计入 files：{out}");
+
+        // 落库守恒：库内只有好件（CON 无档——sha 幂等键空间不污染）
+        {
+            let svc = bid_tools::service::BidService::open(&dir).unwrap();
+            let files = svc.store().files();
+            assert_eq!(files.len(), 1, "名字门件不落库：{:?}", files.iter().map(|f| f.name.clone()).collect::<Vec<_>>());
+            assert!(files.iter().all(|f| f.name == "招标文件.docx"));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// R10（#47 跨平台硬化②）：落位平台名字门——保留设备名/非法字符/尾随点空格
+    /// 在**复制进工作区之前**拒（skip 分账 reason=platform_illegal_name，不落盘）；
+    /// 合法名照常复制。平台门（AGENTS.md §13.1）：保留名样本仅 Unix 可制备
+    /// （Windows 侧 fs::write 直接被 OS 拒——运行时探测，制备失败打 SKIP 横幅）。
+    #[test]
+    fn ingest_drop_rejects_windows_illegal_names() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ingest10");
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        let src_dir = std::env::temp_dir().join(format!(
+            "mang-bid-ingest10-src-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        // 样本制备（Unix-only 形态——CON.docx / 报告.docx␣ 尾随空格 / 招<标>.pdf）
+        let con_p = src_dir.join("CON.docx");
+        let trailing_p = src_dir.join("报告.docx ");
+        let illegal_p = src_dir.join("招<标>.pdf");
+        let good_p = src_dir.join("招标文件.docx"); // 合法对照
+        let fixtures: [(&std::path::Path, &str); 4] = [
+            (con_p.as_path(), "PK\x03\x04con-payload"),
+            (trailing_p.as_path(), "PK\x03\x04trailing-payload"),
+            (illegal_p.as_path(), "%PDF-1.4 illegal-char-payload"),
+            (good_p.as_path(), "PK\x03\x04good-payload"),
+        ];
+        let mut prep_err = None;
+        for (p, content) in &fixtures {
+            if let Err(e) = std::fs::write(p, content) {
+                prep_err = Some(format!("{}: {e}", p.display()));
+                break;
+            }
+        }
+        if let Some(e) = prep_err {
+            eprintln!();
+            eprintln!("====================================================================");
+            eprintln!("SKIP: ingest_drop_rejects_windows_illegal_names");
+            eprintln!("reason: PLATFORM_CANNOT_CREATE_FIXTURE: {e}");
+            eprintln!("补救：在 Linux/Unix 壳真跑（保留名样本仅 Unix 可制备——Windows 侧");
+            eprintln!("      OS 原生拒绝创建，名字门由文件系统自身代劳）");
+            eprintln!("====================================================================");
+            return;
+        }
+
+        let paths_json: Vec<String> = [con_p.clone(), trailing_p.clone(), illegal_p.clone(), good_p.clone()]
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({ "paths": paths_json }));
+        assert_eq!(r["ok"], json!(true), "分账不按错误回：{r}");
+        let out = r["result"].clone();
+
+        // 三坏名全 skip，reason=platform_illegal_name；好名照常 copied
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "只有合法名落位：{out}");
+        assert_eq!(copied[0]["rel"], json!("招标文件.docx"));
+        let skipped = out["skipped"].as_array().unwrap();
+        assert_eq!(skipped.len(), 3, "三件坏名分账：{out}");
+        for s in skipped {
+            assert_eq!(
+                s["reason"], json!("platform_illegal_name"),
+                "坏名 skip 分账 reason：{s}"
+            );
+        }
+        let details: Vec<&str> = skipped
+            .iter()
+            .map(|s| s["detail"].as_str().unwrap_or(""))
+            .collect();
+        assert!(details.iter().any(|d| d.contains("windows_reserved_device_name")),
+            "CON.docx 保留名 reason 码可见：{details:?}");
+        assert!(details.iter().any(|d| d.contains("windows_trailing_dot_or_space")),
+            "尾随空格 reason 码可见：{details:?}");
+        assert!(details.iter().any(|d| d.contains("windows_illegal_char")),
+            "非法字符 reason 码可见：{details:?}");
+
+        // 落位守恒：工作区只有好件（坏名一个字节都不进）
+        assert!(dir.join("招标文件.docx").is_file());
+        assert!(!dir.join("CON.docx").exists(), "保留名不得落位");
+        assert!(!dir.join("报告.docx ").exists(), "尾随空格名不得落位");
+        assert!(!dir.join("招<标>.pdf").exists(), "非法字符名不得落位");
+
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(src_dir);
+    }
 }

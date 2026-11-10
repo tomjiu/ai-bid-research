@@ -204,3 +204,96 @@ fn ocr_blank_scan_surfaces_per_file_warning() {
     let f = &store.files()[0];
     assert!(f.parse_summary.contains("0 行块"), "summary 面维持既有可见性: {}", f.parse_summary);
 }
+
+/// #47 R10（跨平台硬化②）：Windows 保留名/非法字符件——**文件可读但名字
+/// 不可移植**（Linux 壳放行 `CON.docx`，Windows 壳开不了同库）→ 域层导入
+/// 门逐件失败登记（分账不中止）、不落库（不污染 sha 幂等键空间）、批次中
+/// 好件照常导入。
+///
+/// 平台门（AGENTS.md §13.1）：保留名样本只能在 Unix 制备（Windows 侧
+/// `fs::write("CON.docx")` 直接被 OS 拒）——运行时探测，制备失败打 SKIP
+/// 横幅（13.2：横幅 + 原因 + 补救指引）。
+#[test]
+fn windows_illegal_names_are_item_failures_and_not_recorded() {
+    // ── 样本制备（Unix-only 形态：CON.docx / 报告 .docx 尾随空格 / con 目录段） ──
+    let tmp = std::env::temp_dir().join(format!("r10-names-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).expect("临时目录创建失败");
+    let con = tmp.join("CON.docx");
+    let trailing = tmp.join("报告.docx ");
+    let con_dir_good = tmp.join("con-dir/NUL.xlsx"); // 目录段目录名不在保留表（con-dir）
+    if let Err(e) = (|| -> std::io::Result<()> {
+        std::fs::write(&con, b"PK\x03\x04r10-con")?;
+        std::fs::write(&trailing, b"PK\x03\x04r10-trailing")?;
+        std::fs::create_dir_all(tmp.join("con-dir"))?;
+        std::fs::write(&con_dir_good, b"PK\x03\x04r10-nul")?;
+        Ok(())
+    })() {
+        // Windows/受限环境：OS 拒建保留名样本——本测试的验证对象在
+        // 该平台由文件系统原生保证（根本建不出这种文件），如实 SKIP。
+        eprintln!();
+        eprintln!("====================================================================");
+        eprintln!("SKIP: windows_illegal_names_are_item_failures_and_not_recorded");
+        eprintln!("reason: PLATFORM_CANNOT_CREATE_FIXTURE: {e}");
+        eprintln!("补救：在 Linux/Unix 壳真跑（保留名样本仅 Unix 可制备——Windows 侧");
+        eprintln!("      OS 原生拒绝创建，名字门由文件系统自身代劳）");
+        eprintln!("====================================================================");
+        return;
+    }
+    // 好件样本：真 fixture 拷进围栏根（upload_ref 必须落在受信根内）
+    let good_src = fixtures().join("corpus-A/files/A-招标文件.docx");
+    if skip_if_fixture_missing(
+        "windows_illegal_names_are_item_failures_and_not_recorded",
+        &[&good_src],
+    ) {
+        return;
+    }
+    let good = tmp.join("A-招标文件.docx");
+    std::fs::copy(&good_src, &good).expect("好件拷贝失败");
+
+    let mut svc = BidService::new().with_fs_root(&tmp);
+    svc.store_mut().create_project("p", "R10-NS", "明标", "ext-r10").unwrap();
+    // 相对形态 upload_ref（锚定 roots[0]——rel 计算走围栏真源）
+    let report = svc.import(&[
+        spec(PathBuf::from("CON.docx"), "CON.docx", "招标文件"),
+        spec(PathBuf::from("A-招标文件.docx"), "A-招标文件.docx", "招标文件"),
+        spec(PathBuf::from("con-dir/NUL.xlsx"), "NUL.xlsx", "附件"),
+        spec(PathBuf::from("报告.docx "), "报告.docx ", "附件"),
+    ])
+    .expect("分账语义：名字不可移植是逐件失败不是批次错");
+
+    // 逐件失败 3 件（保留名文件 + 保留名目录内件 + 尾随空格件），好件 1 件成功
+    assert_eq!(report.item_failures, 3, "分账不中止：{:#?}", report.per_file);
+    assert_eq!(report.new_records, 1, "好件照常落库：{:#?}", report.per_file);
+    assert_eq!(svc.store().files().len(), 1, "坏名字件不落库（库内只有好件）");
+    assert!(
+        svc.store().files().iter().all(|f| !f.sha256.is_empty()),
+        "不落空 sha（幂等键空间不污染）"
+    );
+    // per_file 分账面：三坏一好全可见（R3 item_errors 面），错误文案带
+    // 稳定 reason 码（UI 分账明细可定位「为什么这件没进」）
+    assert_eq!(report.per_file.len(), 4);
+    let con_out = report.per_file.iter().find(|o| o.filename == "CON.docx")
+        .expect("保留名件在分账中");
+    assert!(con_out.file_id.is_none(), "无文件身份（未落库）");
+    assert!(
+        con_out.errors.iter().any(|e| e.contains("windows_reserved_device_name")),
+        "保留名 reason 码可见：{:?}", con_out.errors
+    );
+    let nul_out = report.per_file.iter().find(|o| o.filename == "NUL.xlsx")
+        .expect("目录内保留名件在分账中");
+    assert!(
+        nul_out.errors.iter().any(|e| e.contains("windows_reserved_device_name")),
+        "目录内 NUL.xlsx 同拒（rel 段逐段过检）：{:?}", nul_out.errors
+    );
+    let trail_out = report.per_file.iter().find(|o| o.filename == "报告.docx ")
+        .expect("尾随空格件在分账中");
+    assert!(
+        trail_out.errors.iter().any(|e| e.contains("windows_trailing_dot_or_space")),
+        "尾随空格 reason 码可见：{:?}", trail_out.errors
+    );
+    let good_out = report.per_file.iter().find(|o| o.filename == "A-招标文件.docx")
+        .expect("好件在分账中");
+    assert!(good_out.file_id.is_some(), "好件有文件身份");
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

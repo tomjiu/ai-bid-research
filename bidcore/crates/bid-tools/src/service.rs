@@ -1521,10 +1521,43 @@ impl BidService {
             });
         }
         let mut resolved: Vec<ImportSpec> = Vec::with_capacity(specs.len());
+        // #47 R10（跨平台硬化②）：名字不可移植件的逐件失败分账（不进
+        // resolved——不落库不解析；垫在 per_file 首部，分账可见性对齐
+        // R3 的 item_errors 面）
+        let mut name_rejected: Vec<PerFileOutcome> = Vec::new();
         let mut total: u64 = 0;
         for spec in specs {
             let r = resolve_read(&roots, &spec.upload_ref)?;
             let abs = r.absolute();
+            // R10：rel 段平台合法性门（工作区跨平台搬运可生存性）——
+            // Linux 壳对 `CON.docx`/`子目录/NUL.xlsx`/`招<标>.pdf` 照单
+            // 全收，落库后 Windows 壳打不开（保留设备名/保留字符/尾随点
+            // 空格剥离）。文件本身可读，只是名字不可携 → 逐件失败登记
+            // （分账不中止），不进 resolved——不污染 sha 幂等键空间。
+            // 裁决单一真源：platform_names（与壳 ingest_drop 同一套）。
+            if let Some((seg, reason)) =
+                crate::platform_names::first_windows_illegal_component(&r.rel())
+            {
+                name_rejected.push(PerFileOutcome {
+                    file_id: None,
+                    filename: spec.filename.clone(),
+                    sha256: String::new(),
+                    pages: 0,
+                    tables: 0,
+                    chunks: 0,
+                    ocr_blocks: 0,
+                    ocr_tier: "n/a",
+                    parse_status: ParseStatus::Failed,
+                    deduplicated: false,
+                    errors: vec![format!(
+                        "upload_ref 名段「{seg}」不可移植（{reason}）——\
+                         Windows 平台无法承载该名字（保留设备名/非法字符/尾随点空格），\
+                         不落库；改名后重传",
+                    )],
+                    warnings: vec![],
+                });
+                continue;
+            }
             // 大小门（存在才量——缺失件交给下游逐件失败语义，不在这里抢答）
             if let Ok(md) = std::fs::metadata(&abs) {
                 if md.len() > MAX_FILE_BYTES {
@@ -1561,6 +1594,11 @@ impl BidService {
             .map(|ws| ws.join(".mang").join("convert"));
         let report =
             import_files(&mut self.store, &mut self.parsed, &resolved, convert_dir.as_deref());
+        let mut report = report;
+        // R10：名字不可移植件垫前（spec 在场顺序优先，分账里用户先看到
+        // 「为什么这件没进」），item_failures 同步——E_PARTIAL 账面一致。
+        report.item_failures += name_rejected.len();
+        report.per_file.splice(0..0, name_rejected);
         self.auto_checkpoint()?;
         Ok(report)
     }

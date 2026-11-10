@@ -721,6 +721,50 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
     );
+
+    // ---- #47 R10（跨平台硬化②）：落位平台名字门——保留设备名在复制进
+    //      工作区**之前**拒（skip 分账 reason=platform_illegal_name）。
+    //      平台门（AGENTS.md §13）：保留名样本仅 Unix 可制备；Windows 侧
+    //      fs::write 直接被 OS 拒 → 打 SKIP 横幅（13.2），不冒充 PASS。
+    let con_src = scratch_dir().join("CON.docx");
+    let good_src2 = scratch_dir().join("澄清件.docx");
+    match (
+        std::fs::write(&con_src, b"PK\x03\x04selftest-con-payload"),
+        std::fs::write(&good_src2, b"PK\x03\x04selftest-r10-good"),
+    ) {
+        (Ok(()), Ok(())) => {
+            let resp = call(&ctx, json!({"id":"t-bid-ing3","cmd":"bid.ingest_drop","paths":[
+                con_src.to_string_lossy(), good_src2.to_string_lossy()]}));
+            let ing3 = result(&resp);
+            let bad = ing3["skipped"].as_array().and_then(|a| a.first()).cloned()
+                .unwrap_or(json!(null));
+            let good_ok = ing3["copied"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+                && ing3["copied"][0]["rel"].as_str() == Some("澄清件.docx");
+            r.check(
+                "bid.ingest_drop(平台名字门)",
+                resp["ok"] == json!(true)
+                    && bad["reason"].as_str() == Some("platform_illegal_name")
+                    && bad["detail"].as_str().unwrap_or("").contains("windows_reserved_device_name")
+                    && good_ok,
+                format!("skipped_reason={} copied={}",
+                    bad["reason"].as_str().unwrap_or("?"),
+                    ing3["copied"].as_array().map(|a| a.len()).unwrap_or(0)),
+            );
+            // 域导入门同源对账**不走 selftest**：此点项目已 seed 到
+            // MATRIX_READY，import_tender_files 被域层状态窗拒绝（合法——
+            // 名字门与状态窗是两个独立裁决面，不得为测试放宽后者）。
+            // 壳→域全链（fresh DRAFT 项目 + CON.docx 导入 E_PARTIAL 分账）
+            // 由 bid.rs 单测 ingest_import_rejects_windows_illegal_names 覆盖，
+            // 域层本体由 bid-tools 契约测试
+            // windows_illegal_names_are_item_failures_and_not_recorded 覆盖。
+        }
+        (e1, e2) => {
+            println!("SKIP: selftest-bid-r10-platform-names");
+            println!("reason: PLATFORM_CANNOT_CREATE_FIXTURE: CON.docx/澄清件样本制备失败（Windows 侧 OS 原生拒建保留名）");
+            println!("补救：在 Linux/Unix 壳真跑（名字门验证样本仅 Unix 可制备）");
+            let _ = (e1, e2);
+        }
+    }
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));

@@ -12,6 +12,8 @@ pub mod format_spec;
 pub mod fs_fence;
 pub mod llm;
 pub mod placeholder;
+// #47 R10（跨平台硬化②）：文件名 Windows 合法性单一真源——导入面/落位面共用
+pub mod platform_names;
 // #455（审计 A-15）：bidder-profile.json 持久化自 bid-domain/party.rs 迁入——
 // bid-domain 恢复真零 IO；写路径 tmp→fsync→rename 原子纪律（store_io 同款）
 pub mod profile_io;

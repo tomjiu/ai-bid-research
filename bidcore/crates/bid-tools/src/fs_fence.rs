@@ -83,6 +83,18 @@ impl WorkspaceFileRef {
     pub fn root(&self) -> PathBuf {
         display_path(&self.root)
     }
+
+    /// 命中根之下的相对段（display 形态；#47 R10 平台合法性门的对象）。
+    ///
+    /// 工作区跨平台搬运时随库走的是**相对段**（绝对前缀是机器本地形态）——
+    /// `CON.docx`/`子目录/NUL.xlsx` 的不可移植性全在这里暴露。计算复用
+    /// [`strip_root`]（与 [`is_inside`] 同大小写语义：Windows 折叠 / Unix
+    /// 精确）；解析成功后 candidate 必在 root 内，防御面回落显示形态。
+    #[must_use]
+    pub fn rel(&self) -> PathBuf {
+        strip_root(&self.candidate, &self.root)
+            .unwrap_or_else(|| display_path(&self.candidate))
+    }
 }
 
 fn unprocessable(reason: String) -> ToolError {
@@ -300,5 +312,37 @@ mod tests {
             Path::new(r"\\?\C:\ws\x.docx"),
             Path::new("C:\\ws")
         ));
+    }
+}
+
+#[cfg(test)]
+mod rel_tests {
+    use super::*;
+
+    /// #47 R10：rel() = 命中根之下的相对段（平台合法性门的检查对象）。
+    /// Windows 大小写折叠语义与 is_inside 同轨——Unix 精确、无 `\\?\` 前缀。
+    #[test]
+    fn rel_returns_segments_under_root() {
+        let root = PathBuf::from("/ws");
+        let ref_ = WorkspaceFileRef {
+            root: root.clone(),
+            candidate: root.join("子目录/CON.docx"),
+        };
+        assert_eq!(ref_.rel(), PathBuf::from("子目录/CON.docx"));
+        // 根即路径本身 → 空 rel（根级文件名不存在——文件在根下必有段）
+        let root_self = WorkspaceFileRef { root: root.clone(), candidate: root.clone() };
+        assert_eq!(root_self.rel(), PathBuf::from(""));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rel_folds_case_on_windows() {
+        let root = PathBuf::from(r"C:\ws");
+        let ref_ = WorkspaceFileRef {
+            root: root.clone(),
+            candidate: PathBuf::from(r"\\?\C:\WS\CON.DOCX"),
+        };
+        // Windows 组件折叠：verbatim 前缀剥离 + 大小写不敏感剥根
+        assert_eq!(ref_.rel(), PathBuf::from("CON.DOCX"));
     }
 }

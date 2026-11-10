@@ -601,6 +601,12 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
 **分隔符归一（#47 R9 跨平台硬化①，壳侧入口单一真源）**：`\` → `/`、压缩空段与 `.` 段
 （`a//b`、`a/./b` → `a/b`）；`..` 段原样保留（穿越裁决在域层围栏——归一不吞 `..`）；
 绝对路径只换分隔符不压缩；
+**平台名字门（#47 R10 跨平台硬化②，域层单一真源 `bid_tools::platform_names`）**：
+rel 段逐段过 Windows 合法性——保留设备名（`CON`/`PRN`/`AUX`/`NUL`/`COM1-9`/`LPT1-9`/
+`CLOCK$`，到第一个 `.` 为止、大小写不敏感、任意扩展名同罪）、保留字符（`< > : " | ? *` + 控制字符）、
+尾随点/空格（Win32 剥离面）→ **逐件失败分账不落库**（`file_id:null`、空 sha 不污染幂等键
+空间；reason 码 `windows_reserved_device_name` / `windows_illegal_char` /
+`windows_trailing_dot_or_space`；目录段同样受检——目录叫 `CON` 一样不可携）；
 `filename` 缺省取基名、`kind` 缺省「附件」（契约 §2 同款）。**E_PARTIAL 不按错误回**：
 壳侧组装 `partial:true` + `item_errors` 的成功响应（工具面 `data` 携带成功面——失败件
 禁引、成功件照常入库不回滚），向导同屏分账呈现。
@@ -622,6 +628,9 @@ already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找
 `BID_IMPORT_EXTS` 同源（docx/xlsx/pdf/doc/ods）；目录拖入明拒（`is_dir`——R17+ 递归导
 入）；不存在的路径 `not_found`。R9-R16 平台硬化专列在此基础做 Win 保留名 / 大小写不
 敏感去重 / 分隔符统一。
+**平台名字门（#47 R10）**：复制之前裁决（比后缀白名单更基础）——保留设备名/非法字符/
+尾随点空格 → `skipped: { reason: "platform_illegal_name", detail: "…（windows_reserved_device_name 等 reason 码）…" }`，
+不落盘一个字节；与域导入门同源裁决（`bid_tools::platform_names`，零重实现）。
 
 ```jsonc
 → { "present": true,

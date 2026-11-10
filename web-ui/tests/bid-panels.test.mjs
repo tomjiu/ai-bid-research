@@ -825,6 +825,25 @@ check(
   "归一规则没进契约（调用方无从知道两形态等价）"
 );
 
+// ---------- R10（#47 跨平台硬化②）：平台名字门——Win 保留名/非法字符 ----------
+check(
+  "R10 壳侧：落位门复用域层单一真源（platform_names，壳侧零重实现）",
+  /bid_tools::platform_names::windows_illegal_reason/.test(bidRs),
+  "落位门必须走 bid_tools::platform_names（壳侧另写一套裁决即架构回退）"
+);
+check(
+  "R10 壳侧：ingest_drop 落位前平台名字门接线（platform_illegal_name 分账 reason）",
+  /"reason": "platform_illegal_name"/.test(bidRs)
+    && /改名后重拖/.test(bidRs),
+  "保留名/非法字符名落位后 Windows 壳开不了同库——分账 reason 必须可见可定位"
+);
+check(
+  "R10 契约：import_files/ingest_drop 平台名字门登记 + reason 码口径",
+  /平台名字门（#47 R10 跨平台硬化②，域层单一真源/.test(contract)
+    && /windows_reserved_device_name/.test(contract)
+    && /platform_illegal_name/.test(contract),
+  "跨平台名字裁决没进契约（调用方无从知道哪些名字形态被拒、为何被拒）"
+);
 // ---------- #18 出口闭环：校验报告 + 确认导出 ----------
 check(
   "#18 工作台头部「校验并导出」按钮（validate-export 动作）",
