@@ -2951,6 +2951,7 @@ mod tests {
 
     // ── #603 批 C：补遗豁免面 ──
 
+    #[test]
     fn addendum_faces_clean_not_found_without_db() {
         let (dir, _ws) = tmp_ws("nodb-603c");
         let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
@@ -2975,6 +2976,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    #[test]
     fn no_addendum_confirm_full_flow() {
         let (dir, _ws) = tmp_ws("flow-603c");
         seed_matrix_ready_project(&dir);

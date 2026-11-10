@@ -720,6 +720,7 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ing2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
             && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
     // ---- #603 批 B：否决死锁人工豁免（bid.matrix_override + overrides 读面）
     // 读面：overrides 空对象恒在（UI 不赌键在场）
     let resp = call(&ctx, json!({"id":"t-bid-mo0","cmd":"bid.matrix"}));
