@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 from src.colors import ColorPrinter
+from src.exit_codes import EXIT_CODE_TABLE, EXIT_DATA
 from src.collect import dedupe_records, load_records
 from src.collect.sources import SourceError
 from src.llm.prompts import PromptTemplates
@@ -457,14 +458,14 @@ async def run_report(args: argparse.Namespace) -> int:
         if args.input is not None:
             if not args.input.is_file():
                 print(f"错误：分析数据文件不存在: {args.input}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
             try:
                 analysis_data = json.loads(
                     args.input.read_text(encoding="utf-8")
                 )
             except json.JSONDecodeError as exc:
                 print(f"错误：分析数据 JSON 解析失败: {exc}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
         else:
             # 无 --input：尝试从数据库取数
             if db is None:
@@ -473,13 +474,13 @@ async def run_report(args: argparse.Namespace) -> int:
                     "或通过 --db 接入数据库",
                     file=sys.stderr,
                 )
-                return 2
+                return EXIT_DATA
             if db.get_bid(args.bid_id) is None:
                 print(
                     f"错误：数据库中不存在招标编号: {args.bid_id}",
                     file=sys.stderr,
                 )
-                return 2
+                return EXIT_DATA
             analysis_data = None
         report_path = await generator.generate_bid_report(
             args.bid_id, analysis_data
@@ -488,7 +489,7 @@ async def run_report(args: argparse.Namespace) -> int:
         print(
             "错误：请指定 --keyword 或 --bid-id", file=sys.stderr
         )
-        return 2
+        return EXIT_DATA
 
     print(f"报告已生成: {report_path}")
     if args.html:
@@ -516,7 +517,7 @@ def run_collect(args: argparse.Namespace) -> int:
         )
     except (SourceError, ValueError) as exc:
         _err(f"错误：{exc}")
-        return 2
+        return EXIT_DATA
 
     deduped = dedupe_records(loaded.records)
 
@@ -591,7 +592,7 @@ def run_extract(args: argparse.Namespace) -> int:
         client = _build_llm_client_or_none()
         if client is None:
             print("错误：--retry 需要真实 LLM（设 DEEPSEEK_API_KEY）", file=sys.stderr)
-            return 2
+            return EXIT_DATA
         report = asyncio.run(
             _retry_with_client(args.db, client, args.limit)
         )
@@ -608,12 +609,12 @@ def run_extract(args: argparse.Namespace) -> int:
     # 抽取模式：装载→去重→抽取→入库
     if args.source is None:
         print("错误：需要 --source 或 --retry", file=sys.stderr)
-        return 2
+        return EXIT_DATA
     try:
         loaded = load_records(args.source, skip_invalid=not args.strict)
     except (SourceError, ValueError) as exc:
         print(f"错误：{exc}", file=sys.stderr)
-        return 2
+        return EXIT_DATA
 
     deduped = dedupe_records(loaded.records)
     print(f"源装载：读取 {loaded.files_read} 个文件，"
@@ -733,7 +734,7 @@ def _export_analysis_json(payload: Dict[str, Any], target: Path) -> int:
         )
     except OSError as exc:
         print(f"错误：JSON 导出失败：{exc}", file=sys.stderr)
-        return 2
+        return EXIT_DATA
     print(f"分析 JSON 已导出: {target}")
     return 0
 
@@ -761,7 +762,7 @@ def run_analyze(args: argparse.Namespace) -> int:
             )
         except ValueError as exc:
             print(f"错误：{exc}", file=sys.stderr)
-            return 2
+            return EXIT_DATA
         generator = ReportGenerator(output_dir=args.output_dir)
         report_path = generator.generate_comparison_report(comparison)
         print(f"对照报告已生成: {report_path}")
@@ -849,7 +850,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
         )
     except SourceError as exc:
         print(f"错误：{exc}", file=sys.stderr)
-        return 2
+        return EXIT_DATA
 
     for stage in result.stages:
         detail = stage.detail
@@ -930,7 +931,7 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
                     _render(fh)
             except OSError as exc:
                 print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
             print(
                 f"已导出 {len(rows)} 条 → {out_path}（CSV，utf-8-sig）",
                 file=sys.stderr,
@@ -947,7 +948,7 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
             write_text_lf(out_path, payload + "\n")
         except OSError as exc:
             print(f"错误：导出文件不可写: {exc}", file=sys.stderr)
-            return 2
+            return EXIT_DATA
         print(f"已导出 {len(rows)} 条 → {out_path}（JSON）", file=sys.stderr)
     else:
         print(payload)
@@ -965,16 +966,16 @@ def _run_snapshot_diff(args: argparse.Namespace) -> int:
     for path in (old_path, new_path):
         if not path.is_file():
             print(f"错误：快照文件不存在: {path}", file=sys.stderr)
-            return 2
+            return EXIT_DATA
     try:
         old_rows = json.loads(old_path.read_text(encoding="utf-8"))
         new_rows = json.loads(new_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         print(f"错误：快照 JSON 解析失败: {exc}", file=sys.stderr)
-        return 2
+        return EXIT_DATA
     if not isinstance(old_rows, list) or not isinstance(new_rows, list):
         print("错误：快照顶层须为 JSON 数组（db export 产物）", file=sys.stderr)
-        return 2
+        return EXIT_DATA
 
     result = diff_snapshots(old_rows, new_rows)
     print(render_diff_summary(result))
@@ -987,7 +988,7 @@ def _run_snapshot_diff(args: argparse.Namespace) -> int:
             )
         except OSError as exc:
             print(f"错误：diff JSON 导出失败: {exc}", file=sys.stderr)
-            return 2
+            return EXIT_DATA
         print(f"diff JSON 已导出: {args.out}")
     return 0
 
@@ -1007,7 +1008,7 @@ def run_db(args: argparse.Namespace) -> int:
         return _run_snapshot_diff(args)
     if not creating and not db_path.exists():
         _err(f"错误：数据库不存在: {db_path}")
-        return 2
+        return EXIT_DATA
 
     with BidDatabase(db_path) as db:
         if args.status:
@@ -1027,14 +1028,14 @@ def run_db(args: argparse.Namespace) -> int:
                 print(
                     f"错误：导入文件不存在: {args.import_file}", file=sys.stderr
                 )
-                return 2
+                return EXIT_DATA
             try:
                 payload = json.loads(
                     args.import_file.read_text(encoding="utf-8")
                 )
             except json.JSONDecodeError as exc:
                 print(f"错误：导入 JSON 解析失败: {exc}", file=sys.stderr)
-                return 2
+                return EXIT_DATA
             bids = payload if isinstance(payload, list) else [payload]
             saved = db.import_bids(bids)
             print(f"已导入 {saved} 条项目记录 → {db_path}")
@@ -1142,7 +1143,7 @@ def run_templates(args: Optional[argparse.Namespace] = None) -> int:
                 f"（可用：{'、'.join(sorted(templates))}）",
                 file=sys.stderr,
             )
-            return 2
+            return EXIT_DATA
         sample = _TEMPLATE_SAMPLES.get(show, {})
         try:
             rendered = templates[show](**sample)
@@ -1151,7 +1152,7 @@ def run_templates(args: Optional[argparse.Namespace] = None) -> int:
                 f"错误：模板渲染失败（样例参数不匹配）: {exc}",
                 file=sys.stderr,
             )
-            return 2
+            return EXIT_DATA
         print(rendered)
         return 0
 
@@ -1204,6 +1205,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "templates":
         return run_templates(args)
     parser.print_help()
+    print(
+        f"\n{EXIT_CODE_TABLE}"
+        "（详见 docs/USER-GUIDE.md 退出码一节）",
+        file=sys.stderr,
+    )
     return 1
 
 

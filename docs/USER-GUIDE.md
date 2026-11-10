@@ -168,7 +168,8 @@ cargo run -p mang-app
 | `assign_revision` / `advance_revision` / `complete_revision` | 矩阵就绪后 | RT 认领/推进/关单（BLOCKER finding 派生；**全部关单才放行导出**） |
 | `batch_task` / `advance_task` | 矩阵就绪后 | 分工批量派工 / 单件推进（人的进度轴） |
 | `reopen_section` | 起草后 | ACCEPTED 章节重开（→ REVISING + dirty，重过验收链） |
-| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
+| `set_param_responses` | 抽取后 | 技术参数应答写入（偏离表唯一录入面，导出自动判定真偏离） |
+
 **状态机**（越级调用会被拒——`E_STATE`）：
 
 ```
@@ -333,3 +334,16 @@ DOCX 后导入（docx 是本系统真源格式，解析最完整）。
 **Q：重启后进度还在吗？**
 在。工作区三件套：`db.json`（状态机）+ `chapters/*.json`（章内容）+
 `export-manifest.json`(导出幂等)——重启全量恢复，已完成章不重跑。
+
+## 退出码（脚本自动化接口）
+
+`main.py` 退出码稳定承诺（只增不改，`src/exit_codes.py` 唯一权威）：
+
+| 码 | 语义 | 典型场景 |
+| --- | --- | --- |
+| 0 | 成功（含「正常但无数据」与容忍模式坏文件降级——失败已登记） | collect 空目录跳过、analyze 空库报告、坏 JSON 登记 failure 后继续 |
+| 1 | 无子命令（打印帮助面） | `python main.py` 直落 |
+| 2 | 用法错误（argparse 域）或数据/环境错误 | 未知参数、缺必选；源/库不存在、`--strict` 下坏数据、路径超平台上限（R44）、导出目标不可写、`--retry` 缺 API key |
+| 3 | LLM 运行时失败 | 网络重试耗尽、输出不可解析（注意：park 进 pending 的降级路径整体仍为 0——失败已登记待重试） |
+
+冒烟/流水线脚本按上表分支处理；`smoke-*.sh/ps1` 以 `set -e` 语义只认 0。
