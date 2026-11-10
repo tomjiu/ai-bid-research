@@ -370,6 +370,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
     )
     db.add_argument(
+        "--priority",
+        action="store_true",
+        help=(
+            "配合 --pending：按重试价值优先序展示"
+            "（llm_error 先于 rejected，hit_rate 降序）"
+        ),
+    )
+    db.add_argument(
         "--pending-stats",
         action="store_true",
         help="pending 面统计（按状态/原因分组）",
@@ -994,8 +1002,12 @@ def run_db(args: argparse.Namespace) -> int:
                 )
 
         if args.pending:
-            rows = db.list_pending(limit=50)
-            print(f"pending 面待处理 {len(rows)} 条（最近 50 条）：")
+            order = "priority" if args.priority else "fifo"
+            rows = db.list_pending(limit=50, order=order)
+            label = "重试价值优先序" if args.priority else "登记序"
+            print(
+                f"pending 面待处理 {len(rows)} 条（最近 50 条，{label}）："
+            )
             for row in rows:
                 print(
                     f"  [{row['reason']}] {row['bid_id'] or '（缺编号）'}"

@@ -435,21 +435,46 @@ class BidDatabase:
         return cursor.rowcount
 
     def list_pending(
-        self, status: str = "pending", limit: int = 100
+        self,
+        status: str = "pending",
+        limit: int = 100,
+        *,
+        order: str = "fifo",
     ) -> List[Dict[str, Any]]:
         """列出待处理公告（status 过滤）。
 
         Args:
             status: 状态过滤（默认 ``pending``）。
+            limit: 返回上限。
+            order: 排序口径（R61）——
+
+                - ``fifo``（缺省）：created_at, id——登记序，行为
+                  与历史版本一致；
+                - ``priority``：重试价值优先——
+
+                  1. ``llm_error``（瞬态故障）先于 ``rejected``
+                     （校验拒收偏结构性，重试命中期望低）；
+                  2. ``hit_rate`` 降序 NULL 末尾（越接近合格越
+                     值得先重试）；
+                  3. created_at, id 兜底（同优先级保持稳定序）。
 
         Returns:
             记录字典列表（payload 已反序列化）。
         """
-        cursor = self._conn.execute(
+        order_sql = (
             """
+            CASE reason WHEN 'llm_error' THEN 0 ELSE 1 END,
+            hit_rate IS NULL, hit_rate DESC,
+            created_at, id
+            """
+            if order == "priority"
+            else "created_at, id"
+        )
+        cursor = self._conn.execute(
+            f"""
             SELECT * FROM pending_announcements
-            WHERE status = ? ORDER BY created_at, id LIMIT ?
-            """,
+            WHERE status = ? ORDER BY {order_sql} LIMIT ?
+            """,  # noqa: S608——order_sql 为封闭白名单两值
             (status, limit),
         )
         rows = []
