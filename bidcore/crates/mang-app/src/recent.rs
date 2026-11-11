@@ -55,10 +55,16 @@ fn clean_item(v: &Value) -> Option<Value> {
         .and_then(|n| n.as_str())
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            std::path::Path::new(path)
-                .file_name()
-                .map(|f| f.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.to_string())
+            // R14（#47 平台区分⑦）：跨平台字符串基名——recent 台账的 path
+            // 可能是 Windows 形态（`C:\a\b.md`，工作区迁移/跨机同步场景），
+            // `Path::file_name` 在 Unix 会把整串当基名（按本平台分隔符
+            // 解析）；str_basename 双分隔符，与 web-ui baseName 同口径
+            let base = paths::str_basename(path);
+            if base.is_empty() {
+                path.to_string()
+            } else {
+                base.to_string()
+            }
         });
     let kind = match o.get("kind").and_then(|k| k.as_str()) {
         Some("dir") => "dir",
@@ -370,6 +376,32 @@ mod tests {
         assert_eq!(out["count"], json!(1));
         let loaded = load().unwrap();
         assert!(loaded["items"].is_array());
+    }
+
+    /// R14（#47 平台区分⑦）：name 回退的双分隔符矩阵——Windows 形态
+    /// path 无显式 name 时，两侧平台同答（`Path::file_name` 在 Unix 会把
+    /// `C:\a\b.md` 整串当基名——跨机同步的 recent 台账显示面分裂）
+    #[test]
+    fn recent_name_fallback_dual_separator_matrix() {
+        // 纯函数面（clean_item 不落盘——save 才写全局文件，这里零 IO）
+        let cases: &[(&str, &str)] = &[
+            ("C:\\a\\b.md", "b.md"),
+            ("D:/x/资料/y.xlsx", "y.xlsx"),
+            ("E:\\标书\\技术标.docx", "技术标.docx"),
+            // 混合分隔符（一个串里两种）
+            ("F:\\w/s\\z.pdf", "z.pdf"),
+            // 尾分隔符 → 最后非空段（目录形态的显示名）
+            ("E:\\w\\", "w"),
+            // 无分隔符 / 本机形态
+            ("plain.md", "plain.md"),
+            ("招标文件.docx", "招标文件.docx"),
+        ];
+        for (path, want_name) in cases {
+            let v = json!({ "path": path, "openedAt": 5 });
+            let c = clean_item(&v)
+                .unwrap_or_else(|| panic!("clean_item 应接受 {path:?}"));
+            assert_eq!(c["name"], json!(*want_name), "path={path:?}");
+        }
     }
 
     // ── #194：最后工作区记忆 ───────────────────────────────

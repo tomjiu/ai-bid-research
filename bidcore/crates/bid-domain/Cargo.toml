@@ -11,3 +11,8 @@ hex = { workspace = true }
 # #182 TrustedPrincipal 的 receipt 验签（HMAC-SHA256）——0.12 已在 workspace
 # 锁内（Cargo.lock 既有条目），此处提为直接依赖零新增三方。
 hmac = "0.12"
+# R15（#47 平台区分⑧）：本地日历日口径——chrono 0.4 已在 workspace 锁内
+# （ironcalc_base / pdfium-render 传递依赖，iana-time-zone 随附），此处提为
+# 直接依赖零新增三方包。仅用 Local 的 UTC 偏移查询（日期换算仍走本 crate
+# 的 civil_from_days 单一算术真源——chrono 不进日期数学）。
+chrono = "0.4"

@@ -1540,15 +1540,21 @@ pub fn import_files(
         // 失效（同一文件双入库）。
         let upload_ref = normalize_upload_ref(upload_ref_raw);
         let upload_ref = upload_ref.as_str();
+        // R14（#47 平台区分⑦）：filename 回退用双分隔符字符串基名——
+        // std Path::file_name 按本平台分隔符解析（Unix 上 `a\b` 整串当
+        // 基名）；归一后的 upload_ref 只含 `/` 两侧等价，但跨平台字符串
+        // 一律走 str_basename（与 recent.rs / web-ui baseName 同口径）
         let filename = f
             .get("filename")
             .and_then(Value::as_str)
             .map(str::to_string)
             .unwrap_or_else(|| {
-                std::path::Path::new(upload_ref)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| upload_ref.to_string())
+                let base = paths::str_basename(upload_ref);
+                if base.is_empty() {
+                    upload_ref.to_string()
+                } else {
+                    base.to_string()
+                }
             });
         // R10（#47 平台区分③）：基名跨平台守卫——upload_ref 基名与显式
         // filename 双查（Linux 合法的 CON.docx / 报告?.pdf 落库后拷到
@@ -3317,6 +3323,72 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// R14（#47 跨平台硬化⑦）：混合分隔符深度测试矩阵——归一函数表驱动
+    /// 金样 + 三条不变量。纯字符串面：**两平台同答**（函数不触 std Path，
+    /// 平台分歧无从引入——本测试在两侧跑同一断言集即「cfg 双分支对照」
+    /// 的共享底座；平台分歧面见 paths.rs 对照测试与 fs_fence 矩阵）。
+    #[test]
+    fn r14_mixed_separator_normalize_matrix() {
+        let cases: &[(&str, &str)] = &[
+            // 混合分隔符（一个串里两种——Windows 侧拼接/手滑形态）
+            ("a\\b/c.docx", "a/b/c.docx"),
+            ("a/b\\c.docx", "a/b/c.docx"),
+            ("资料\\第一章\\技术标.docx", "资料/第一章/技术标.docx"),
+            ("资料/第一章\\技术标.docx", "资料/第一章/技术标.docx"),
+            // 反斜杠开头 → 绝对形态只换不压（Unix `//x` / Windows UNC 同规）
+            ("\\a/b.docx", "/a/b.docx"),
+            // 连续/混合连续分隔符（相对形态压空段）
+            ("a\\\\b.docx", "a/b.docx"),
+            ("a\\\\/b.docx", "a/b.docx"),
+            ("a/\\\\b.docx", "a/b.docx"),
+            // 尾分隔符 → 压尾空段
+            ("a\\b\\", "a/b"),
+            ("a/b/", "a/b"),
+            // 点段混合
+            (".\\a\\./b.docx", "a/b.docx"),
+            ("./a\\./b.docx", "a/b.docx"),
+            // `..` 保留（反斜杠进、斜杠出——穿越裁决仍归域层）
+            ("a\\../b.docx", "a/../b.docx"),
+            ("a\\..\\b.docx", "a/../b.docx"),
+            ("..\\a\\b.docx", "../a/b.docx"),
+            // 盘符混合（绝对形态：只换分隔符，空段不压——绝对语义保全）
+            ("C:\\w/s\\x.docx", "C:/w/s/x.docx"),
+            ("C:/w\\s.docx", "C:/w/s.docx"),
+            ("C:\\\\w\\\\x.docx", "C://w//x.docx"),
+            // UNC 混合（两形态同归一——盘符/根形态只换不压）
+            ("\\\\srv\\sh/x.docx", "//srv/sh/x.docx"),
+            ("//srv\\sh\\x.docx", "//srv/sh/x.docx"),
+            // CJK 与组合字符（R13 正交：归一不动字符组成）
+            ("cafe\u{0301}\\招标.docx", "cafe\u{0301}/招标.docx"),
+            // 退化形态
+            ("", ""),
+            (".", ""),
+            ("./", ""),
+            ("a", "a"),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(normalize_upload_ref(raw), *want, "normalize({raw:?})");
+        }
+        // 不变量 ①：相对形态输出永不含 `\`（下游 fs_fence/rel 的单一形态）
+        // 不变量 ②：幂等（normalize(normalize(x)) == normalize(x)——两跑同答）
+        // 不变量 ③：`..` 段逐段保留（穿越裁决在域层，归一不得吞段）
+        for (raw, _) in cases {
+            let n = normalize_upload_ref(raw);
+            let absolute = n.starts_with('/') || n.as_bytes().len() >= 2
+                && n.as_bytes()[0].is_ascii_alphabetic()
+                && n.as_bytes()[1] == b':';
+            if !absolute {
+                assert!(!n.contains('\\'), "相对形态输出含反斜杠：{raw:?} → {n:?}");
+            }
+            assert_eq!(normalize_upload_ref(&n), n, "幂等破坏：{raw:?} → {n:?}");
+            let dots_in = raw.replace('\\', "/").matches("../").count()
+                + raw.replace('\\', "/").ends_with("..").then_some(1).unwrap_or(0);
+            let dots_out = n.matches("../").count()
+                + n.ends_with("..").then_some(1).unwrap_or(0);
+            assert_eq!(dots_in, dots_out, "`..` 段数变化（吞段=开洞）：{raw:?} → {n:?}");
+        }
+    }
+
     // ── #603 批 C：补遗豁免面 ──
     // （假绿修复：replay 拼接（e8acc3e）丢了 #[test] 属性——两函数在 main 上
     //  从未运行（dead_code 警告是唯一线索）。原提交 20dd6a1 有属性与文档注释，
@@ -3430,4 +3502,518 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    // ── #47 R14：混合分隔符深度测试矩阵（cfg 双分支对照）──
+    //
+    // 探针已实测定契约（2026-11-10，Linux 本机真跑）：
+    //   · 行尾污染（\r\n / 尾随空格）→ 壳侧 R10 控制字符守卫**请求级早拒**
+    //     （粘贴噪声不落库、不进逐件分账——零副作用）；
+    //   · 前导反斜杠 `\a\b` / 盘符 `C:\x` / UNC `\\srv\share\x` → 归一为
+    //     根相对/绝对形态 → 域层围栏**请求级越界拒**；
+    //   · `..` 段（即使词法上落回围栏内）→ 域层**请求级父级逃逸拒**——
+    //     「同一文件双记录键」的门彻底关死；
+    //   · 目录形态（尾随分隔符指向目录）→ E_PARTIAL 逐件分账失败；
+    //   · NFD 定位键 → 逐字节命中磁盘才成功（R13 口径：定位键原样不归一），
+    //     NFC 拼写视觉同名 → not_found 响亮失败（不落幽灵）。
+    // 矩阵把这些语义钉成回归契约——后续任何归一/守卫改动动了其中一条，
+    // 这里立刻红。
+
+    /// A. 纯函数形态矩阵：`normalize_upload_ref` 的混合/重复/点段/尾随/
+    ///    前导/根形态/全角伪分隔符空间全覆盖。纯字符串变换，双平台同值
+    ///    （非 cfg）。
+    #[test]
+    fn r14_normalize_mixed_separator_shape_matrix() {
+        // 混合分隔符（一串两种分隔交错）
+        assert_eq!(normalize_upload_ref("a\\b/c\\d"), "a/b/c/d");
+        assert_eq!(normalize_upload_ref("a\\\\b\\/c"), "a/b/c");
+        // 点段与两种分隔符交错压缩
+        assert_eq!(normalize_upload_ref(".\\a/./b\\.\\c"), "a/b/c");
+        // 尾随分隔符（空段压缩）
+        assert_eq!(normalize_upload_ref("a\\b\\"), "a/b");
+        assert_eq!(normalize_upload_ref("a//\\\\b"), "a/b");
+        // 前导反斜杠：Windows 盘相对根形态 → 与 Unix 绝对形态同串 `/a/b`
+        //（流程层的围栏拒绝见 r14_outside_root_*——形态层只管换形）
+        assert_eq!(normalize_upload_ref("\\a\\b"), "/a/b");
+        // 根/盘符/UNC 形态：只换分隔符不压缩（压缩会破坏绝对语义）
+        assert_eq!(normalize_upload_ref("/a\\b"), "/a/b");
+        assert_eq!(normalize_upload_ref("\\\\srv\\share\\x.docx"), "//srv/share/x.docx");
+        assert_eq!(normalize_upload_ref("C:\\子目录\\x.docx"), "C:/子目录/x.docx");
+        // `..` 保留（混合分隔符下同样不吞——吞了开穿越洞）
+        assert_eq!(normalize_upload_ref("..\\..\\x"), "../../x");
+        assert_eq!(normalize_upload_ref("子目录\\..\\x"), "子目录/../x");
+        // 全角斜杠／反斜杠是 CJK 字符不是分隔符（**不过度归一**——
+        // 它们在两种平台都是合法文件名字符，动了就破坏真实文件名）
+        assert_eq!(normalize_upload_ref("报告／v2.docx"), "报告／v2.docx");
+        assert_eq!(normalize_upload_ref("子＼x.docx"), "子＼x.docx");
+        // 已归一形态幂等 + 空串
+        assert_eq!(normalize_upload_ref("子目录/批次一/x.docx"), "子目录/批次一/x.docx");
+        assert_eq!(normalize_upload_ref(""), "");
+    }
+
+    /// B1. CJK 深层混合形态全链往返 + 三种拼写交叉幂等：`子目录\批次一/招标
+    ///     文件.docx`（一串两种分隔、两段 CJK 目录）归一后命中真文件；
+    ///     反序混合 `/`↔`\` 与纯 `/` 形态重放都落同一 file_id（sha 幂等，
+    ///     不双入库——R9 归一的原始动机回归门）。
+    #[test]
+    fn r14_mixed_separator_cjk_roundtrip_and_cross_spelling_idempotence() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-cjk");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("混合分隔符矩阵项目", "PRJ-R14", "明标", "ext-r14")
+                .unwrap();
+        }
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("子目录").join("批次一")).unwrap();
+        std::fs::write(
+            dir.join("子目录").join("批次一").join("招标文件.docx"),
+            MIN_DOCX,
+        )
+        .unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        // ① 首拼写：`子目录\批次一/招标文件.docx`（`\` 与 `/` 混用一串）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "子目录\\批次一/招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "混合形态归一后应导入成功：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(1), "1 件入库：{r}");
+        let first_id = r["result"]["file_ids"][0].clone();
+
+        // ② 反序混合拼写（`/` 段在前 `\` 段在后）→ 同 sha 幂等
+        for spelling in [
+            "子目录/批次一\\招标文件.docx",
+            "子目录/批次一/招标文件.docx",
+            "子目录\\\\批次一//招标文件.docx", // 重复分隔符混用（空段压缩）
+        ] {
+            let r = call_args(&ctx, "bid.import_files", json!({
+                "files": [{ "upload_ref": spelling, "kind": "招标文件" }]
+            }));
+            assert_eq!(r["ok"], json!(true), "拼写 {spelling} 幂等重放不是错误：{r}");
+            assert_eq!(
+                r["result"]["per_file"][0]["deduplicated"], json!(true),
+                "拼写 {spelling} 归一后同 rel 同 sha → 幂等标记：{r}"
+            );
+            assert_eq!(
+                r["result"]["file_ids"][0], first_id,
+                "拼写 {spelling} 返回原 file_id（不建新条目）：{r}"
+            );
+        }
+
+        // ③ 库内计数仍 1（四种拼写一轮过后不双入库）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(1), "四种拼写后库内仍 1 件：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// B2. 根外形态双平台对照：前导反斜杠 `\a\b` / UNC `\\srv\share\x` 两侧
+    ///     同串结论分叉但围栏同拒（Unix：归一 `/a/b` 是绝对路径；Windows：
+    ///     std push 语义有根无盘剥目录只留盘 → 盘根越界）——平台中立断言。
+    ///     盘符形态 `C:\ws\x` 是真分叉：Windows 上 is_absolute=true 围栏外
+    ///     请求级拒；Unix 上没有盘符概念，`C:` 冒号名被当作围栏内普通名字
+    ///     → 文件不存在 → E_PARTIAL 逐件 not_found——两侧都响亮失败零入库，
+    ///     机制不同以 cfg 分支各自钉死。
+    #[test]
+    fn r14_outside_root_separator_forms_rejected() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-outroot");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("根外形态矩阵项目", "PRJ-R14O", "明标", "ext-r14o")
+                .unwrap();
+        }
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        // 平台中立面：前导反斜杠 + UNC——归一后都是 `/`-根形态，围栏同拒
+        for form in ["\\a\\b.docx", "\\\\srv\\share\\x.docx"] {
+            let r = call_args(&ctx, "bid.import_files", json!({
+                "files": [{ "upload_ref": form, "kind": "招标文件" }]
+            }));
+            assert_eq!(r["ok"], json!(false), "根外形态 {form} 必须整体拒绝：{r}");
+            assert_eq!(err_code_of(&r), "bad_args", "形态 {form} 的错误面：{r}");
+            assert!(
+                r["message"].as_str().unwrap_or("").contains("越界"),
+                "形态 {form} 文案要指明越界：{r}"
+            );
+        }
+        // 盘符形态：平台真分叉（cfg 双分支对照）
+        #[cfg(unix)]
+        {
+            // Unix 无盘符：`C:/ws/x.docx` is_absolute=false → 围栏内怪名 rel
+            // → 磁盘无此文件 → E_PARTIAL 逐件 not_found（响亮、不连坐、零入库）
+            let r = call_args(&ctx, "bid.import_files", json!({
+                "files": [{ "upload_ref": "C:\\ws\\x.docx", "kind": "招标文件" }]
+            }));
+            assert_eq!(r["ok"], json!(true), "Unix 盘符形态走逐件分账：{r}");
+            assert_eq!(r["result"]["totals"]["files"], json!(0), "Unix 盘符形态零入库：{r}");
+            assert_eq!(r["result"]["totals"]["partial"], json!(1), "逐件失败分账：{r}");
+            assert!(
+                r["result"]["item_errors"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|e| e.as_str().unwrap_or("").contains("No such file")),
+                "Unix 盘符形态如实报文件不存在：{r}"
+            );
+        }
+        #[cfg(windows)]
+        {
+            // Windows 盘符是绝对路径 → 围栏外请求级越界拒
+            let r = call_args(&ctx, "bid.import_files", json!({
+                "files": [{ "upload_ref": "C:\\ws\\x.docx", "kind": "招标文件" }]
+            }));
+            assert_eq!(r["ok"], json!(false), "Windows 盘符形态必须整体拒绝：{r}");
+            assert_eq!(err_code_of(&r), "bad_args", "Windows 盘符形态错误面：{r}");
+            assert!(
+                r["message"].as_str().unwrap_or("").contains("越界"),
+                "Windows 盘符形态文案要指明越界：{r}"
+            );
+        }
+        // 全部根外形态零入库（平台中立总账）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(0), "根外形态零入库：{r}");
+        // 工作区根不被越界请求创建任何目录
+        assert!(!dir.join("a").exists(), "越界请求不得在工作区落 a/ 目录");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// B3. 行尾污染（粘贴形态）：`根文件.docx\r\n` / `根文件.docx ` ——
+    ///     R10 基名守卫把 `\r`/`\n`/控制符当非法字符**请求级早拒**（粘贴
+    ///     噪声永远到不了域层，更不会落库）。对照：干净拼写同文件导入成功
+    ///     ——拒的是噪声不是文件。
+    #[test]
+    fn r14_trailing_paste_noise_rejected_by_basename_guard() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-noise");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("行尾污染矩阵项目", "PRJ-R14N", "明标", "ext-r14n")
+                .unwrap();
+        }
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::write(dir.join("根文件.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        for noisy in ["根文件.docx\r\n", "根文件.docx\n", "根文件.docx\t"] {
+            let r = call_args(&ctx, "bid.import_files", json!({
+                "files": [{ "upload_ref": noisy, "kind": "招标文件" }]
+            }));
+            assert_eq!(r["ok"], json!(false), "粘贴噪声 {noisy:?} 必须早拒：{r}");
+            assert_eq!(err_code_of(&r), "bad_args", "噪声 {noisy:?} 走基名守卫：{r}");
+            assert!(
+                r["message"].as_str().unwrap_or("").contains("非法字符"),
+                "噪声 {noisy:?} 文案要点名非法字符：{r}"
+            );
+        }
+        // 对照组：干净拼写同一文件 → 成功入库（拒的是噪声不是文件本身）
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "根文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "干净拼写对照应成功：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(1), "对照入库 1 件：{r}");
+        // 三次噪声早拒零副作用：库内只有对照组那 1 件
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(1), "噪声早拒零落库：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// B4. `..` 混合分隔符形态：`子目录\..\根文件.docx` 词法上落回围栏内
+    ///     根文件——仍然**请求级父级逃逸拒**（R9 保留 `..` + 域层硬拒的
+    ///     组合语义：不给「同一文件两个记录键」留门）。与 B1 的干净幂等
+    ///     对照：防逃逸语义不松动归一收益。
+    #[test]
+    fn r14_dotdot_mixed_separator_request_level_reject() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-dotdot");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("父级逃逸矩阵项目", "PRJ-R14D", "明标", "ext-r14d")
+                .unwrap();
+        }
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("子目录")).unwrap();
+        std::fs::write(dir.join("子目录").join("招标文件.docx"), MIN_DOCX).unwrap();
+        std::fs::write(dir.join("根文件.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        for escaping in [
+            "子目录\\..\\根文件.docx", // 混合分隔 + ..（词法落回围栏内）
+            "..\\根文件.docx",         // 前导 ..
+            "子目录/../../x.docx",    // 真越界（混合两侧对比面）
+        ] {
+            let r = call_args(&ctx, "bid.import_files", json!({
+                "files": [{ "upload_ref": escaping, "kind": "招标文件" }]
+            }));
+            assert_eq!(r["ok"], json!(false), "逃逸形态 {escaping} 必须拒绝：{r}");
+            assert_eq!(err_code_of(&r), "bad_args", "形态 {escaping} 请求级拒：{r}");
+            assert!(
+                r["message"].as_str().unwrap_or("").contains(".."),
+                "形态 {escaping} 文案要指名父级逃逸：{r}"
+            );
+        }
+        // 三种逃逸形态零入库（根文件与子目录文件都完好未动）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(0), "逃逸形态零入库：{r}");
+        assert!(dir.join("根文件.docx").is_file(), "围栏内真文件不受越界请求影响");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// B5. 目录形态（尾随分隔符指向目录）：E_PARTIAL **逐件分账**失败
+    ///     （`Is a directory`）——不是请求级拒（目录是有效信息形态，
+    ///     分账给 UI 标红重试，不连坐同批其他件）。
+    #[test]
+    fn r14_directory_ref_partial_failure_accounting() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-dirref");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("目录形态矩阵项目", "PRJ-R14T", "明标", "ext-r14t")
+                .unwrap();
+        }
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("子目录")).unwrap();
+        std::fs::write(dir.join("根文件.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        // 同批：一个目录形态 + 一个正常文件 → 正常件入库不被连坐
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [
+                { "upload_ref": "子目录\\", "kind": "招标文件" },
+                { "upload_ref": "根文件.docx", "kind": "招标文件" },
+            ]
+        }));
+        assert_eq!(r["ok"], json!(true), "部分成功不是请求级失败：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(1), "正常件入库：{r}");
+        assert_eq!(r["result"]["totals"]["partial"], json!(1), "目录件分账：{r}");
+        assert!(
+            r["result"]["item_errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e.as_str().unwrap_or("").contains("Is a directory")),
+            "目录件错误要如实报 Is a directory：{r}"
+        );
+        // 库内只有正常件
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(1), "分账后库内 1 件：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// B6. NFD 定位键字节精确契约（R13 口径 × 混合分隔符）：磁盘 NFD 名文件
+    ///     ——NFD 精确拼写命中入库（filename 元数据显示 NFC 形态）；NFC
+    ///     拼写视觉同名 → not_found 响亮失败。两者都不得落幽灵记录。
+    #[test]
+    fn r14_nfd_locator_exact_bytes_contract() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-nfd");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("NFD 定位矩阵项目", "PRJ-R14U", "明标", "ext-r14u")
+                .unwrap();
+        }
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        // 磁盘放 NFD 形态（cafe + U+0301 组合符——macOS Finder 拖进来的典型形态）
+        let nfd_name = "cafe\u{0301}.docx";
+        std::fs::write(dir.join(nfd_name), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        // ① NFC 拼写先来（视觉同名异字节）→ not_found 响亮失败
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "caf\u{e9}.docx", "kind": "附件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "逐件失败走 partial 分账：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(0), "NFC 拼字不命中：{r}");
+        assert!(
+            r["result"]["item_errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e.as_str().unwrap_or("").contains("No such file")),
+            "NFC 拼写要如实报找不到文件：{r}"
+        );
+
+        // ② NFD 精确拼写 → 逐字节命中入库；filename 元数据显示 NFC 形态
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "cafe\u{0301}.docx", "kind": "附件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "NFD 精确拼写应成功：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(1), "NFD 命中 1 件：{r}");
+        assert_eq!(
+            r["result"]["per_file"][0]["filename"], json!("caf\u{e9}.docx"),
+            "filename 元数据 NFC 归一显示（R13：定位键原样/显示名归一）：{r}"
+        );
+        let first_id = r["result"]["file_ids"][0].clone();
+
+        // ③ 混合分隔符路径下同契约 + **跨路径 sha 幂等**：子目录里的同内容
+        //    NFD 名文件再导 → 域层 sha256-only 去重（R8 语义：同一内容
+        //    = 同一文件，与落位路径无关）——no-op 返回原 file_id，不建
+        //    第二条记录。NFD 定位命中 ✓ 与 sha 幂等 ✓ 一并钉死。
+        std::fs::create_dir_all(dir.join("子目录")).unwrap();
+        std::fs::write(dir.join("子目录").join(nfd_name), MIN_DOCX).unwrap();
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "子目录\\cafe\u{0301}.docx", "kind": "附件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "混合分隔 + NFD 精确拼写应命中：{r}");
+        assert_eq!(
+            r["result"]["per_file"][0]["deduplicated"], json!(true),
+            "同 sha 跨路径 → 域层幂等 no-op（sha256-only 去重键）：{r}"
+        );
+        assert_eq!(
+            r["result"]["file_ids"][0], first_id,
+            "跨路径同内容返回原 file_id（不建新档）：{r}"
+        );
+
+        // ④ 库内仍 1 件（NFC 错拼失败零幽灵 + 同内容跨路径不双入库）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(1), "NFD 契约下库内 1 件：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// C1. cfg 双分支对照（Unix 真制备面）：基名**字面含反斜杠**的文件
+    ///     `深子/a\b.docx` ——Unix 合法可制备。此时任何 upload_ref 拼写都
+    ///     无法定位它：`深子\a\b.docx` 归一成 `深子/a/b.docx` 指向**另一个
+    ///     真文件**（嵌套目录里的 b.docx）。断言：导入命中的是嵌套文件、
+    ///     字面反斜杠文件永不被入库（upload_ref 语义在 Unix 上对这类名字
+    ///     结构性不可达——如实文档化，不装作可定位）。
+    ///     Windows 对照见 C2：`\` 是分隔符，同名文件**结构性制备不了**。
+    #[cfg(unix)]
+    #[test]
+    fn r14_unix_backslash_literal_name_ambiguity() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r14-bslit");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("反斜杠字面名项目", "PRJ-R14B", "明标", "ext-r14b")
+                .unwrap();
+        }
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        // 两个真实文件：A=基名字面含 `\`；B=嵌套目录同名
+        std::fs::create_dir_all(dir.join("深子")).unwrap();
+        std::fs::write(dir.join("深子").join("a\\b.docx"), b"literal-backslash-A").unwrap();
+        std::fs::create_dir_all(dir.join("深子").join("a")).unwrap();
+        std::fs::write(dir.join("深子").join("a").join("b.docx"), MIN_DOCX).unwrap();
+        let ctx = Ctx::new(ws, PathBuf::new());
+
+        // `深子\a\b.docx` → 归一 `深子/a/b.docx` → 命中嵌套文件 B
+        let r = call_args(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "深子\\a\\b.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "归一语义应命中嵌套真文件：{r}");
+        assert_eq!(r["result"]["totals"]["files"], json!(1), "嵌套文件入库：{r}");
+        // sha 证明导入的是 B（MIN_DOCX），不是字面反斜杠文件 A（不同内容）
+        let per = r["result"]["per_file"][0].clone();
+        assert_eq!(per["filename"], json!("b.docx"), "入库基名是 b.docx：{per}");
+        assert_eq!(per["pages"], json!(0), "MIN_DOCX 解析面（pages=0）在场即 B：{per}");
+        // 字面反斜杠文件 A 不在库（结构性不可达——Unix 平台边界如实文档）
+        let r = call_args(&ctx, "bid.state", json!({}));
+        assert_eq!(r["result"]["quick_stats"]["files"], json!(1), "字面反斜杠文件未入库：{r}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// C2. cfg 双分支对照（Windows 侧）：`\` 是路径分隔符——`深子\a\b.docx`
+    ///     与 `深子/a/b.docx` 是**同一个文件**（CreateFile 双分隔同义）。
+    ///     C1 里 Unix 上制备的「基名字面含 `\`」文件在 Windows 上不可能
+    ///     存在。本测试用纯 std 断言平台语义（无工作区副作用）——与 C1
+    ///     互为镜像：同一条 ref 字符串，两平台的解析语义与可达集合。
+    #[cfg(windows)]
+    #[test]
+    fn r14_windows_backslash_is_separator_identity() {
+        let d = std::env::temp_dir().join(format!(
+            "mang-r14-win-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(d.join("深子\\a")).unwrap();
+        std::fs::write(d.join("深子\\a\\b.docx"), b"win-identity").unwrap();
+        // 双分隔拼写指向同一文件（`\` 是分隔符不是名字字符）
+        let via_back = std::fs::read(d.join("深子\\a\\b.docx")).unwrap();
+        let via_fwd = std::fs::read(d.join("深子/a/b.docx"))
+            .expect("Windows 上 `/` 与 `\\` 同义——同一文件必须可读");
+        assert_eq!(via_back, via_fwd);
+        // 「基名字面含 `\`」的文件结构性制备不了（名字里的 `\` 就是分隔符）
+        assert!(d.join("深子").join("a\\b.docx").exists(), "路径语义即分隔（与 C1 对照）");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    // ── #47 R15 补口（平台区分⑧）：截止日==今天/明天的本地口径边界 ──
+    // #73 已钉远过去（2020-01-01）告警与幻日拒收；本测试钉**最锐利边界**——
+    // deadline==今天在本地日历日口径下不告警（旧 UTC 口径在东八区 0-8 点会把
+    // 「今天」错判成昨天：该告警的告，不该告的也告/该告的漏告——两侧都要钉）。
+    // 幻日/前缀形态已由 #73 的 bid-mcp 单测 + selftest 覆盖，此处不重复。
+
+    /// 边界三面：昨日→告警（回归门）/ 今天→不告警（午夜跨日竞态重验豁免）/
+    /// 明天→不告警。告警文案与契约 §1 引文逐字对账。
+    #[test]
+    fn r15_deadline_today_tomorrow_local_boundary() {
+        let today = bid_domain::dates::today_ymd();
+        let yesterday = bid_domain::dates::add_days(&today, -1).unwrap();
+        let tomorrow = bid_domain::dates::add_days(&today, 1).unwrap();
+
+        // ① 昨日截止 → BID_DEADLINE_PAST 在场 + 契约 §1 文案逐字在场
+        let (dir, ws) = tmp_ws("r15b-past");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "R15补口 昨日项目", "bid_deadline": yesterday, "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "过期截止是警告不是错误（契约 §1 不阻断）：{r}");
+        let warns = r["result"]["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(
+            warns
+                .iter()
+                .any(|w| w.as_str().unwrap_or("").contains("BID_DEADLINE_PAST")),
+            "昨日截止必须告警：{r}"
+        );
+        assert!(
+            warns
+                .iter()
+                .any(|w| w.as_str().unwrap_or("").contains("契约 §1：创建即警告，不阻断")),
+            "告警文案与契约 §1 引文一致（文档-实现逐字对账）：{r}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+
+        // ② 今天截止 → 不告警（本地日历日口径的核心边界；午夜跨日竞态：
+        //    工具面取的 today 若已前进到下一天，则豁免重验——不是口径回归）
+        let (dir, ws) = tmp_ws("r15b-today");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "R15补口 今日项目", "bid_deadline": today, "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "合法建项：{r}");
+        let saw_past = r["result"]["warnings"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .any(|w| w.as_str().unwrap_or("").contains("BID_DEADLINE_PAST"));
+        assert!(
+            !saw_past || bid_domain::dates::today_ymd() != today,
+            "「今天」截止不告警（旧 UTC 口径的错判形态之一就是不告/误告翻转；仅恰逢跨日豁免）：{r}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+
+        // ③ 明天截止 → 不告警（跨日竞态下 deadline==新今天，仍不告警——恒安全）
+        let (dir, ws) = tmp_ws("r15b-tmrw");
+        let ctx = Ctx::new(ws, PathBuf::new());
+        let r = call_args(&ctx, "bid.create_project", json!({
+            "name": "R15补口 明日项目", "bid_deadline": tomorrow, "mode": "明标"
+        }));
+        assert_eq!(r["ok"], json!(true), "合法建项：{r}");
+        let warns = r["result"]["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(
+            !warns
+                .iter()
+                .any(|w| w.as_str().unwrap_or("").contains("BID_DEADLINE_PAST")),
+            "明日截止不告警：{r}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

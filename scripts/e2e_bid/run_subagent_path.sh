@@ -65,6 +65,11 @@ build_stdio() {
 
 write_llm_json() {
     mkdir -p "$WS/.mang"
+    # max_tokens_cap：第三批 3 章形态的历史值 8192 对规模轮不够——单章
+    # 手稿可达 3-4 万中文字（~5-6 万 tokens），8192 会触发引擎「LLM 生成
+    # 失控」守卫（completion_tokens > 2×cap 整章废弃——SEC-0030 52907
+    # tokens 实测被拒）。规模轮缺省放大到 131072；环境变量可覆盖。
+    local max_cap="${BID_SUBAGENT_MAX_TOKENS_CAP:-131072}"
     cat > "$WS/.mang/llm.json" <<EOF
 {
   "api_base": "http://127.0.0.1:$PORT/v1",
@@ -72,10 +77,10 @@ write_llm_json() {
   "model": "subagent-author-v1",
   "timeout_secs": 60,
   "temperature": 0.3,
-  "max_tokens_cap": 8192
+  "max_tokens_cap": $max_cap
 }
 EOF
-    echo "[driver] llm.json → http://127.0.0.1:$PORT/v1（model=subagent-author-v1）"
+    echo "[driver] llm.json → http://127.0.0.1:$PORT/v1（model=subagent-author-v1，max_tokens_cap=$max_cap）"
 }
 
 start_relay() {  # $1 = mode, $2 = 额外参数(--content-map 文件，可空)

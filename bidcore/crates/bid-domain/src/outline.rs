@@ -1059,6 +1059,30 @@ pub fn derive_outline_with_mappings(
             push_group_leaves(&mut leaves, g, g, rs, chunk_size);
         }
     }
+    // ---------------------------------------------------------------- 叶标题唯一化
+    // 规模轮实测缺陷（100w 字 + MAX_REQS_PER_LEAF=1）：同 clause_no 的多条
+    // REQ 被拆进同组的不同 chunk → 条款号路径各自生成「{组}（条款 5.1.1）」
+    // ——标题重名。chunk_title 的组序兜底只覆盖「条款号/页码都缺失」路径，
+    // 条款号在场时不防重（设计意图「docx 标题恰一次不变量（GI ①）要求各
+    // 叶可区分」在此形态下失守；中继按标题路由的串章防线也会 panic）。
+    // 修复：叶清单收口后全局查重，重名者从第二个起追加「（第N组 M条）」
+    // 消歧——措辞复用既有兜底（不用「块」字样，#252 硬约束④），组序全局
+    // 递增天然唯一；首个保留原形（常态零影响——默认配额下重名不出现）。
+    {
+        let mut seen: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        for leaf in leaves.iter_mut() {
+            let n = seen.entry(leaf.title.clone()).or_insert(0);
+            *n += 1;
+            if *n > 1 {
+                leaf.title = format!(
+                    "{}（第{}组 {}条）",
+                    leaf.title,
+                    *n,
+                    leaf.req_ids.len()
+                );
+            }
+        }
+    }
     let scoring_build = crate::scoring_outline::build_scoring_sections(reqs);
     let mut mappings: Vec<crate::scoring_outline::MappingIntent> = Vec::new();
     let mut scoring_nodes: Vec<OutlineNode> = Vec::new();
@@ -2272,6 +2296,43 @@ mod tests {
         assert!(validate_outline(&nodes).is_ok());
         let again = derive_outline(&reqs, spec, &mut counting_ids());
         assert_eq!(nodes, again, "语义分组确定性：同输入双推导全等");
+    }
+
+    /// 规模轮缺陷回归（100w 字 + MAX_REQS_PER_LEAF=1 实测）：同 clause_no 的
+    /// 多条 REQ（语义表+评分表同条款多行抽取的常态形态）拆进同组不同
+    /// chunk → 条款号路径各自生成「技术参数（条款 5.1.1）」标题重名。
+    /// 修复后：全叶标题互异（GI ①「docx 标题恰一次」的叶可区分前提），
+    /// 重名者从第二个起追加「（第N组 M条）」组序消歧；覆盖/树校验不受影响。
+    #[test]
+    fn leaf_titles_unique_same_clause_at_scale() {
+        let mut reqs: Vec<Requirement> = Vec::new();
+        for i in 0..5 {
+            reqs.push(req_with_anchor(
+                &format!("REQ-{i:04}"), "技术参数", Some("5.1.1"),
+                &format!("第三章 投标人须知 > 五、技术参数（{i}）"),
+                "5.1.1 服务器 CPU 核数 ≥ 32",
+            ));
+        }
+        let spec = OutlineSpec { target_total_chars: 40_000, max_reqs_per_leaf: 1 };
+        let nodes = derive_outline(&reqs, spec, &mut counting_ids());
+        let titles: Vec<&str> = nodes.iter().filter(|x| x.parent_id.is_some())
+            .map(|x| x.title.as_str()).collect();
+        // 核心断言 1：全叶标题互异（重名 = GI ① 失守 / 中继路由串章）
+        let uniq: std::collections::HashSet<&str> = titles.iter().copied().collect();
+        assert_eq!(titles.len(), uniq.len(), "叶标题必须互异：{titles:?}");
+        // 核心断言 2：消歧形态——首块保留条款号原形，后续带「（第N组 M条）」
+        let base = titles.iter()
+            .filter(|t| **t == "技术参数（条款 5.1.1）")
+            .collect::<Vec<_>>();
+        assert_eq!(base.len(), 1, "首块保留原形：{titles:?}");
+        assert!(titles.iter().filter(|t| t.starts_with("技术参数")).skip(1)
+            .all(|t| t.contains("（第") && t.contains("组 1条）")),
+            "后续块组序消歧：{titles:?}");
+        // 守恒面：5 条全覆盖 + 树不变量
+        let bound: std::collections::HashSet<&str> = nodes.iter()
+            .flat_map(|x| x.requirement_ids.iter()).map(|s| &s[..]).collect();
+        assert_eq!(bound.len(), 5, "REQ 全覆盖");
+        assert!(validate_outline(&nodes).is_ok());
     }
 
     /// GT sections.jsonl 六章节（人工树走 set_outline——全 level-1 平铺也合法）。
