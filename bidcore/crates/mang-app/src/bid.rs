@@ -1601,6 +1601,145 @@ pub fn coverage(
     }))
 }
 
+/// ★漏标明细文本截断上限（chars 计——含 NFKC 变体★的中文条款文本，
+/// 120 chars 足够定位与人工核对，防 IPC 膨胀；截断追加「…」标记）。
+const STAR_GAP_TEXT_MAX_CHARS: usize = 120;
+
+/// `bid.star_gaps` —— ★漏标明细读面（#47 R27 / #88 Q2：「报出来之后
+/// 谁处理？用户能看到吗？」——coverage() 只取计数丢弃明细，本面把明细
+/// 兑现为 UI 可达，导出兜底的数据源）。
+///
+/// 逐文件循 `get_star_coverage`（#285）真实工具面，与 coverage() 同源
+/// 单真源（不另写一套判定）。响应 `star_gaps` 键：
+///   * `files[]`：**只有漏标文件**（star_missing > 0）——每件含 missing
+///     明细（工具面 MAX_STAR_DETAIL=100 条封顶 + `missing_truncated` 旗
+///     原样透传）、`warnings`（REQ 空引导 / 表格行装配提示）、`next`
+///     （补标引导）；壳侧每条 text 截断 120 chars（防 IPC 膨胀——
+///     coverage() 「明细走工具面」的注释在此兑现为按需加载面）；
+///   * `total`：star_truth / star_captured / star_missing /
+///     files_with_gaps 汇总（与 coverage().star.total 同口径可对账）；
+///   * `checked_files`：已检文件数（**含**无漏标件——分母诚实，不把
+///     看不见当没有）；
+///   * `all_clear`：全部已检文件无漏标（导出兜底 UI 的直通行据）。
+///
+/// 无 db.json → 干净 not_found；DRAFT 态（未导入）工具面
+/// get_coverage_report E_STATE 透传为壳侧 `state` 码（契约 §3.3——UI
+/// 分支出「尚未开放」引导卡）。服务缓存语义同 [`coverage`]。
+pub fn star_gaps(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+
+    // 文件清单单真源：get_coverage_report（DRAFT 态在此 E_STATE 透传）
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "get_coverage_report".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let cov = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    let files = cov
+        .get("files")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    // 逐文件 get_star_coverage——只保留有漏标的文件（明细 + warnings + next）
+    let mut gap_files: Vec<Value> = Vec::new();
+    let (mut g_truth, mut g_capt, mut g_miss) = (0u64, 0u64, 0u64);
+    let mut checked = 0u64;
+    for f in &files {
+        let Some(fid) = f.get("file_id").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let reply = bid_mcp::dispatch_with(
+            svc,
+            bid_mcp::ToolCall {
+                tool: "get_star_coverage".to_string(),
+                args: json!({ "project_id": project_id, "file_id": fid }),
+            },
+        );
+        let out = match reply {
+            bid_mcp::ToolReply::Ok(out) => out.result,
+            bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+        };
+        checked += 1;
+        let cnt = |k: &str| out.get(k).and_then(|v| v.as_u64()).unwrap_or(0);
+        g_truth += cnt("star_truth");
+        g_capt += cnt("star_captured");
+        g_miss += cnt("star_missing");
+        if cnt("star_missing") == 0 {
+            continue; // 无漏标件不进 gaps（计数仍入汇总——checked_files 分母诚实）
+        }
+        // missing 明细：工具面输出逐条透传，text 壳侧截断（chars 计）
+        let missing_detail: Vec<Value> = out
+            .get("missing")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|m| {
+                let text = m.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                let mut cut = text.chars().count();
+                if cut > STAR_GAP_TEXT_MAX_CHARS {
+                    cut = STAR_GAP_TEXT_MAX_CHARS;
+                }
+                let text_cut: String = text.chars().take(cut).collect();
+                let text_final = if text.chars().count() > STAR_GAP_TEXT_MAX_CHARS {
+                    format!("{text_cut}…")
+                } else {
+                    text_cut
+                };
+                json!({
+                    "page": m.get("page").cloned().unwrap_or(Value::Null),
+                    "line": m.get("line").cloned().unwrap_or(Value::Null),
+                    "block_idx": m.get("block_idx").cloned().unwrap_or(json!(0)),
+                    "stars": m.get("stars").cloned().unwrap_or(json!(1)),
+                    "locator": m.get("locator").cloned().unwrap_or(json!("")),
+                    "text": text_final,
+                    "reason": m.get("reason").cloned().unwrap_or(json!("")),
+                })
+            })
+            .collect();
+        gap_files.push(json!({
+            "file_id": fid,
+            "file_name": out.get("file_name").cloned().unwrap_or(Value::Null),
+            "star_truth": cnt("star_truth"),
+            "star_captured": cnt("star_captured"),
+            "star_missing": cnt("star_missing"),
+            "missing": missing_detail,
+            "missing_truncated": out.get("missing_truncated").cloned().unwrap_or(json!(false)),
+            "warnings": out.get("warnings").cloned().unwrap_or(json!([])),
+            "next": out.get("next").cloned().unwrap_or(Value::Null),
+        }));
+    }
+
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "star_gaps": {
+            "files": gap_files,
+            "total": {
+                "star_truth": g_truth,
+                "star_captured": g_capt,
+                "star_missing": g_miss,
+                "files_with_gaps": gap_files.len() as u64,
+            },
+            "checked_files": checked,
+            "all_clear": g_miss == 0,
+        },
+    }))
+}
+
 /// `bid.validate` —— 标书校验报告（#18：导出前置面）。
 ///
 /// 主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面
@@ -3153,6 +3292,126 @@ mod tests {
             t["declarations"].as_u64().unwrap() + t["star_truth"].as_u64().unwrap(),
             "★口径恒等式：total = declarations + truth"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #47 R27（#88 Q2）：DRAFT 态（建项未导入）——`bid.star_gaps` 与
+    /// coverage 同口径：工具面 get_coverage_report E_STATE 透传为壳侧
+    /// `state` 码（契约 §3.3——UI 分支出「尚未开放」引导卡）。
+    #[test]
+    fn star_gaps_state_gate_before_import() {
+        let (dir, _ws) = tmp_ws("stargapdraft");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("未导入项目", "PRJ-SG", "明标", "ext-r27-sg").unwrap();
+            svc.checkpoint().unwrap();
+        }
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.star_gaps");
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(
+            err_code_of(&frame), "state",
+            "DRAFT 态应透传工具面 E_STATE 为壳侧 state 码：{frame}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #47 R27（#88 Q2「用户能看到吗」）：真件★漏标明细面——wenming
+    /// 真实招标 PDF（manifest 登记 star_count=8）导入后**不抽取**（REQ 空
+    /// → 全部真值★计漏标——诚实口径，与工具面 #285 同款）。断言：
+    /// gaps 只含有漏标文件 / 明细逐条字段齐全（block_idx/locator/text
+    /// 截断/reason）/ 汇总恒等式 / warnings 引导先抽取 / all_clear=false。
+    /// fixture 缺位时跳过（CI 真件跑全量——与 coverage 真件测试同守卫）。
+    #[test]
+    fn star_gaps_reads_real_missing_detail() {
+        let fixtures = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../fixtures/real-tender-batch1")
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("real-tender-batch1 目录不存在或不可解析：{e}"));
+        let wdir = fixtures.join("wenming-longjiang-230001");
+        let mut pdf = None;
+        if let Ok(rd) = std::fs::read_dir(&wdir) {
+            for e in rd.flatten() {
+                if e.path().extension().and_then(|s| s.to_str()) == Some("pdf") {
+                    pdf = Some(e.path());
+                    break;
+                }
+            }
+        }
+        let Some(pdf) = pdf else {
+            eprintln!("SKIP：wenming fixture 缺位（{}）——真件面留给 CI", wdir.display());
+            return;
+        };
+        let pdf_name = pdf.file_name().unwrap().to_string_lossy().to_string();
+        let (dir, _ws) = tmp_ws("stargapreal");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir)
+                .unwrap()
+                .with_fs_root(&fixtures);
+            let (pid, _) = svc
+                .create_project("星标漏标测试项目", "PRJ-SGR", "明标", "ext-r27-sgr")
+                .unwrap();
+            let import = bid_mcp::dispatch_with(
+                &mut svc,
+                bid_mcp::ToolCall {
+                    tool: "import_tender_files".to_string(),
+                    args: json!({ "project_id": pid, "files": [{
+                        "upload_ref": pdf.to_string_lossy(),
+                        "filename": pdf_name,
+                        "kind": "招标文件"
+                    }] }),
+                },
+            );
+            match import {
+                bid_mcp::ToolReply::Ok(_) => {}
+                bid_mcp::ToolReply::Err { error, .. } => panic!("导入失败：{error}"),
+            }
+            // 不抽取、不标记——REQ 空 → 全部真值★计漏标（工具面诚实口径）
+            svc.checkpoint().unwrap();
+        }
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = call(&ctx, "bid.star_gaps");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g = ok_of(&frame).clone();
+        assert_eq!(g["present"], json!(true));
+        assert_eq!(g["project"]["name"], "星标漏标测试项目");
+        let sg = &g["star_gaps"];
+        // wenming 是当前工作区唯一文件且（manifest 8★）应有真值★漏标
+        let gaps = sg["files"].as_array().expect("star_gaps.files 恒为数组");
+        assert_eq!(gaps.len(), 1, "唯一导入件有漏标——gaps 应恰含该文件：{sg}");
+        let f0 = &gaps[0];
+        assert_eq!(f0["file_name"], json!(pdf_name));
+        let truth = f0["star_truth"].as_u64().expect("star_truth 恒在");
+        let miss = f0["star_missing"].as_u64().expect("star_missing 恒在");
+        assert!(truth > 0, "wenming 件 manifest 登记 star_count=8——真值★应非零：{f0}");
+        assert_eq!(miss, truth, "未抽取（REQ 空）——全部真值★计漏标：{f0}");
+        // 明细逐条字段齐全（诚实面——#88 Q2「用户能看到吗」）
+        let missing = f0["missing"].as_array().expect("missing 明细恒为数组");
+        assert!(!missing.is_empty(), "有漏标必有明细：{f0}");
+        assert!(missing.len() <= 100, "工具面 MAX_STAR_DETAIL=100 封顶：{}", missing.len());
+        for m in missing {
+            assert!(m["block_idx"].is_u64(), "block_idx 恒在（定位补标用）：{m}");
+            assert!(m["locator"].is_string(), "locator 恒在：{m}");
+            let text = m["text"].as_str().unwrap_or("");
+            assert!(!text.is_empty(), "text 恒非空：{m}");
+            assert!(text.chars().count() <= 121, "text 壳侧截断（120+省略号）：{m}");
+            assert!(m["reason"].is_string(), "reason 恒在：{m}");
+        }
+        // 漏标数 = Σ missing[].stars（明细与计数不漏不重）
+        let stars_sum: u64 = missing.iter().map(|m| m["stars"].as_u64().unwrap_or(0)).sum();
+        assert_eq!(stars_sum, miss, "明细 stars 合计 = star_missing：{f0}");
+        // warnings：REQ 空引导（先抽取再查）
+        let warns = f0["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(
+            warns.iter().any(|w| w.as_str().unwrap_or("").contains("先抽取")),
+            "REQ 空应有「先抽取」引导：{warns:?}"
+        );
+        // 汇总恒等 + 全局面
+        let t = &sg["total"];
+        assert_eq!(t["star_missing"].as_u64().unwrap(), miss, "汇总 = 唯一文件漏标数：{t}");
+        assert_eq!(t["files_with_gaps"].as_u64().unwrap(), 1);
+        assert_eq!(sg["checked_files"].as_u64().unwrap(), 1, "已检文件数含无漏标件：{sg}");
+        assert_eq!(sg["all_clear"], json!(false), "有漏标不清：{sg}");
         let _ = std::fs::remove_dir_all(dir);
     }
 

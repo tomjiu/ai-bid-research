@@ -498,6 +498,12 @@ impl Ctx {
 
             "bid.coverage" => crate::bid::coverage(&ws, &self.bid, &a),
 
+            // ── #47 R27（#88 Q2）：★漏标明细读面（bid.rs——逐文件
+            //    get_star_coverage 明细透出，text 壳侧截断 120 chars 防
+            //    IPC 膨胀；导出兜底 UI 呈现义务的数据源——工具面 export
+            //    语义不动，壳零裁决）──────────────────────────────
+            "bid.star_gaps" => crate::bid::star_gaps(&ws, &self.bid, &a),
+
             // ── #19：导入向导写面（bid.rs——create_project 空工作区起步
             //    （ensure_or_open——副作用即目的），经 bid_mcp 真实工具面
             //    create_bid_project（external_key 缺省 = 工作区路径幂等键）；

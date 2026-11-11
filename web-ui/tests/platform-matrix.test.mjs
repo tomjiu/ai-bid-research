@@ -172,5 +172,33 @@ check(
   "清单引用的真源函数缺失（实现被改名/删除）"
 );
 
+// ---------- 七、R27（★漏标明细读面——平台无关面登记锁定） ----------
+check(
+  "R27 清单行：★漏标明细读面在回归矩阵（平台无关声明 + 实测账双行）",
+  new RegExp("\\| R27 \\| ★漏标明细读面（平台无关）").test(MATRIX)
+    && MATRIX.includes("star_gaps_reads_real_missing_detail")
+    && MATRIX.includes("cargo check -p mang-app --target x86_64-pc-windows-gnu"),
+  "R27 矩阵行/实测账被删（平台无关声明失去权威登记）"
+);
+check(
+  "R27 真源锚：star_gaps 函数 + 截断常量在清单与源码双侧在场",
+  MATRIX.includes("STAR_GAP_TEXT_MAX_CHARS")
+    && bidRs.includes("pub fn star_gaps(")
+    && bidRs.includes("const STAR_GAP_TEXT_MAX_CHARS: usize = 120;"),
+  "★漏标明细真源函数/截断常量缺失（实现被改名/删除）"
+);
+check(
+  "R27 平台无关面锁定：star_gaps 无 cfg 分支（纯数据透出——分叉即漂移）",
+  cfgFree(bidRs, "star_gaps"),
+  "读面出现 cfg 分支 = 平台语义分叉（口径破坏——R27 登记为平台无关）"
+);
+check(
+  "R27 测试锚：cargo 双测 + selftest 项真实在场",
+  bidRs.includes("fn star_gaps_reads_real_missing_detail()")
+    && bidRs.includes("fn star_gaps_state_gate_before_import()")
+    && selftestRs.includes("bid.star_gaps(未导入件空态)"),
+  "R27 测试锚被删/改名（清单与实现脱钩）"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);
