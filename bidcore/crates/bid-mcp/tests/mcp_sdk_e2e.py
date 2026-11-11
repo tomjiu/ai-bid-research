@@ -64,6 +64,15 @@ EXPECTED_TOOLS = {
     "advance_task",
     "reopen_section",
     "set_param_responses",
+    # #318 评分细则逐条响应覆盖检查（只读诊断）——TOOL_NAMES 44 后增量，
+    # py 契约面未随工具面增长同步（CI 队列停摆未拦截，本批对齐 50）
+    "check_scoring_coverage",
+    # #585 业绩库四工具 + #61 分包清单（TOOL_NAMES 50 对齐）
+    "list_packages",
+    "register_performance",
+    "list_performance",
+    "recommend_performance",
+    "write_performance_section",
 }
 
 server_bin = sys.argv[1] if len(sys.argv) > 1 else "bid-mcp-server"
