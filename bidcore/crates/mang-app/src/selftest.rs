@@ -238,6 +238,22 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         result(&resp)["path"] == json!("sub") && result(&resp)["nodes"].as_array().unwrap().iter().all(|n| n["name"] == "deep"),
         format!("{}", result(&resp)["path"]),
     );
+    // ---- #47 R18：fs.tree 截断诚实面——深度上限截到有内容的目录必须
+    //      亮 truncated 旗（旧实现静默空——消费方把「看不见」当「没有」：
+    //      向导宣称「工作区里没有可导入的文件」）；全量可见时不虚报。
+    //      自检工作区 sub/deep/note.txt 三层：depth=1 截断 sub 展开 → 亮旗。
+    let resp18 = call(&ctx, json!({"id":"t-tree18","cmd":"fs.tree","depth":1}));
+    let tree18 = result(&resp18);
+    r.check(
+        "fs.tree 深度截断亮旗",
+        tree18["truncated"] == json!(true),
+        format!("truncated={}", tree18["truncated"]),
+    );
+    r.check(
+        "fs.tree 全量不虚报截断",
+        tree["truncated"] == json!(false),
+        format!("truncated={}", tree["truncated"]),
+    );
 
     // ---- fs.read
     let resp = call(&ctx, json!({"id":"t-read","cmd":"fs.read","path":"技术标.md"}));

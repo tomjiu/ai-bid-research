@@ -829,7 +829,7 @@
     // 独立于面板态（面板数据由 bid.state 系列管理，向导只管表单/选择/结果）
     bidWizard: {
       createBusy: false, createError: "",
-      treeStatus: "idle", treeError: "", files: [], sel: {},
+      treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
       importBusy: false, importError: "", result: null
     },
     // #18 出口闭环（校验报告 + 导出落盘）：validate 报告面与 export 写面
@@ -1715,6 +1715,15 @@
     if (form) form.addEventListener("submit", (ev) => { ev.preventDefault(); ui.submitBidWizardCreate(form); });
   }
 
+  /** R18（#47）：截断诚实横幅——fs.tree 超限（节点预算 4000 / 深度 8）
+   * 时文件清单只是「可见部分」，宣称「全部」或「没有」都是说谎。非阻断
+   * 警示面（data-state="warn"——区别于 error：截断不是失败）。 */
+  function bidWizTruncBanner(truncated) {
+    return truncated
+      ? '<div class="bid-wiz-error" data-state="warn">文件列表超出读取上限被截断——下面只是可见部分，深层目录或未列出的文件可能还有：要导入的文件不在列表里时，直接把它拖进窗口落位，或移动到工作区根后刷新。</div>'
+      : "";
+  }
+
   /** 向导第二步：导入招标文件（bid.import_files——工作区文件勾选 + kind 分派） */
   function renderBidWizardImport(treeEl, host) {
     const w = state.bidWizard;
@@ -1730,7 +1739,10 @@
     } else if (w.treeStatus === "error") {
       bodyHtml = '<div class="view-state" data-kind="error"><div class="view-state-title">读取工作区失败</div><div>' + esc(w.treeError) + '</div><button class="btn" data-bid-act="wizard-refresh-tree">重试</button></div>';
     } else if (!w.files.length) {
-      bodyHtml = '<div class="view-state"><div class="view-state-title">工作区里没有可导入的文件</div><div>把招标文件（.docx / .xlsx / .pdf / .doc）放进当前工作区后点刷新——导入围栏只认本工作区内的文件</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>";
+      // R18（#47）：截断时不得宣称「没有」——看不见 ≠ 不存在
+      bodyHtml = w.treeTruncated
+        ? '<div class="view-state"><div class="view-state-title">无法确认工作区没有可导入文件</div><div>文件列表被截断（超出读取上限），深层目录里的文件未显示。把要导入的文件直接拖进窗口落位，或移动到工作区根后刷新。</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>"
+        : '<div class="view-state"><div class="view-state-title">工作区里没有可导入的文件</div><div>把招标文件（.docx / .xlsx / .pdf / .doc）放进当前工作区后点刷新——导入围栏只认本工作区内的文件</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>";
     } else {
       let rows = "";
       for (const f of w.files) {
@@ -1747,7 +1759,8 @@
           + "</select></label>";
       }
       bodyHtml =
-        '<div class="bid-wiz-files">' + rows + "</div>"
+        bidWizTruncBanner(w.treeTruncated)
+        + '<div class="bid-wiz-files">' + rows + "</div>"
         + '<div class="bid-wiz-bar"><span class="bid-wiz-count">已选 ' + selCount + " / " + w.files.length + " 件</span>"
         + '<button class="btn btn-primary" data-bid-act="wizard-go"' + (w.importBusy || !selCount ? " disabled" : "") + ">" + (w.importBusy ? "解析入库中…" : "导入 " + selCount + " 件") + "</button>"
         + '<button class="btn" data-bid-act="wizard-refresh-tree" title="重读工作区文件">' + ICON.refresh + "</button></div>";
@@ -3605,11 +3618,18 @@
       return;
     }
     const rows = renderTreeNodes(state.tree.nodes, 0, []);
+    // R18（#47）：截断诚实面——侧栏树与向导同款口径：截断时不得宣称
+    // 「工作区是空的」，列表态亮警示横幅（深层内容未显示）
+    const trunc18 = !!(state.tree && state.tree.truncated);
     if (!rows.length) {
-      host.innerHTML = '<div class="panel-empty">\u5DE5\u4F5C\u533A\u662F\u7A7A\u7684</div>';
+      host.innerHTML = trunc18
+        ? '<div class="panel-empty">无法确认工作区是空的——文件树超出读取上限被截断，深层内容未显示</div>'
+        : '<div class="panel-empty">\u5DE5\u4F5C\u533A\u662F\u7A7A\u7684</div>';
       return;
     }
-    host.innerHTML = '<div class="tree" role="tree">' + rows.join("") + "</div>";
+    host.innerHTML =
+      (trunc18 ? '<div class="tree-trunc-warn">部分文件未显示——文件树超出读取上限被截断（深层目录未展开）</div>' : "")
+      + '<div class="tree" role="tree">' + rows.join("") + "</div>";
     const treeEl = host.querySelector(".tree");
     treeEl.addEventListener("click", (e) => {
       const row = e.target.closest("[data-rel]");
@@ -5116,7 +5136,7 @@
       // （与上面 bid/bidQuality/bidGates 同列，漏列即跨根泄漏）
       state.bidWizard = {
         createBusy: false, createError: "",
-        treeStatus: "idle", treeError: "", files: [], sel: {},
+        treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
         importBusy: false, importError: "", result: null
       };
       // #603 批 C：补遗面同理随根失效（不留旧项目数据）
@@ -5252,9 +5272,14 @@
       if (state.bidWizard.treeStatus === "loading" && !force) return;
       state.bidWizard.treeStatus = "loading";
       state.bidWizard.treeError = "";
+      state.bidWizard.treeTruncated = false; // 重拉时清旗（与 treeError 同生命周期）
       renderBidWorkbenchIfOpen();
       try {
         const r = await ipc("fs.tree", { depth: 8 }, 3e4);
+        // R18（#47）：截断诚实面——fs.tree 超节点/深度上限时 truncated=true。
+        // 旧实现在此丢弃旗标：深层/超大工作区的文件清单静默不完整，
+        // 向导宣称「工作区里没有可导入的文件」误导用户（实际只是看不见）。
+        state.bidWizard.treeTruncated = !!(r && r.truncated);
         const files = [];
         const walk = (nodes) => {
           (nodes || []).forEach((n) => {
@@ -5275,6 +5300,7 @@
       } catch (err) {
         state.bidWizard.treeStatus = "error";
         state.bidWizard.treeError = err && (err.message || err.code) || "fs.tree 读取失败";
+        state.bidWizard.treeTruncated = false; // 失败面不走截断口径（错误自有横幅）
       }
       renderBidWorkbenchIfOpen();
     },

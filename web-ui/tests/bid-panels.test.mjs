@@ -594,6 +594,23 @@ check(
   "白名单重新混入解析面必拒的扩展名（导入必失败件——service.rs 只路由 docx/xlsx/pdf/doc）"
 );
 check(
+  "R18 UI：向导消费 fs.tree 截断旗（诚实面接线）",
+  /state\.bidWizard\.treeTruncated = !!\(r && r\.truncated\)/.test(app) &&
+    /bidWizTruncBanner\(w\.treeTruncated\)/.test(app) &&
+    /无法确认工作区没有可导入文件/.test(app),
+  "截断旗被丢弃——深层/超大工作区清单静默不完整，向导宣称「没有可导入文件」误导回归"
+);
+check(
+  "R18 UI：侧栏文件树同款截断诚实面",
+  /无法确认工作区是空的——文件树超出读取上限被截断/.test(app) && /tree-trunc-warn/.test(app),
+  "侧栏宣称「工作区是空的」误导回归"
+);
+check(
+  "R18 样式：截断警示横幅双面（向导 warn 态 + 侧栏 tree-trunc-warn）",
+  css.includes('.bid-wiz-error[data-state="warn"]') && css.includes(".tree-trunc-warn"),
+  "截断警示样式被删（横幅裸奔）"
+);
+check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
   "导入参数形状漂移（壳侧围栏锚定依赖 rel 形态）"
