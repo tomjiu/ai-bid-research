@@ -737,3 +737,45 @@ fn decision_none_fields_skip_comparison() {
     let none = bid_tools::export::ExportDecision::default();
     assert!(bid_tools::validate::decision_consistency_findings(&s, &none).is_empty());
 }
+
+// ---------------------------------------------------------------- 门 1k：格式件核对
+
+#[test]
+fn format_docs_outside_standard_forms_warn() {
+    // 格式要求 REQ 指名七件外的件（履约保函）→ 告警；投标函（七件内）不告警
+    let s = store_with(
+        vec![
+            req("REQ-0001", "格式要求", "投标文件须含《投标函》，法定代表人签字并盖章", false),
+            req("REQ-0002", "格式要求", "中标后须提供《履约保函》，金额为合同价 10%", false),
+        ],
+        "明标",
+    );
+    let ws = bid_tools::validate::format_docs_checklist(&s);
+    assert!(
+        ws.iter().any(|w| w.contains("履约保函") && w.contains("REQ-0002")),
+        "七件外指名件 → 告警: {ws:?}"
+    );
+    assert!(
+        ws.iter().all(|w| !w.contains("REQ-0001")),
+        "投标函在七件内 → 零告警: {ws:?}"
+    );
+}
+
+#[test]
+fn format_docs_all_covered_zero_warnings() {
+    let s = store_with(
+        vec![req("REQ-0001", "格式要求", "投标文件格式：投标函、授权委托书、法定代表人身份证明均须提供", false)],
+        "明标",
+    );
+    assert!(bid_tools::validate::format_docs_checklist(&s).is_empty());
+}
+
+#[test]
+fn non_format_reqs_not_scanned() {
+    // 商务要求类 REQ 提到件名不进核对面（格式章是核对真源——防误报）
+    let s = store_with(
+        vec![req("REQ-0001", "商务要求", "履约阶段须提交《履约保函》", false)],
+        "明标",
+    );
+    assert!(bid_tools::validate::format_docs_checklist(&s).is_empty());
+}

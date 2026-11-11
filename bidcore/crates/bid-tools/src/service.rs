@@ -1844,6 +1844,12 @@ impl BidService {
                 ),
             });
         }
+        // ---- 1k. 格式件核对清单（#88 审计 F-06——可见面：格式要求类 REQ
+        //      指名的件不在七件标准面 → 告警不拦；硬化待件名抽取产品化）。
+        for w in crate::validate::format_docs_checklist(self.store()) {
+            warnings.push(w);
+        }
+
         // ---- 2. format-spec（读盘优先，derive 兜底）
         let spec = self.load_or_derive_format_spec(&mut warnings)?;
         let anonymize_effective = match anonymize {
