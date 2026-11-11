@@ -3922,6 +3922,23 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
     } else {
         None
     };
+    // ---- #88 F-02 残余收口（审计 P0-1 原文）：显式暗标（dark_bid=true）但
+    //      bidder_name 缺失/空白——此前仅告警后继续（旧告警点，本批移除）：
+    //      anonymize=None/Some("") 在服务层退化为不脱敏，darkbid 九类泄露面
+    //      （正文/docProps/修订作者/批注作者/EXIF/输出路径…）整线静默跳过，
+    //      产出带身份的裸「明标」件。改响亮拒（fail-closed，与导出门 1c/1d/1e
+    //      同款纪律）：显式要暗标而无名可脱 = 暗标不可达；安全出路只有补名重导，
+    //      或不传 dark_bid 显式改走明标导出。参数前置校验——置于幂等键之前
+    //      （非法参数不进缓存键，也不吃旧键缓存）。
+    if dark_bid && bidder_name.as_deref().map(str::trim).unwrap_or("").is_empty() {
+        return Err(ToolError::EUnprocessable {
+            what: format!(
+                "{TOOL}: 暗标模式缺投标人名称（dark_bid=true 且 profile.bidder_name 缺失或空白）——\
+                 正文/docProps/修订/批注/EXIF/输出路径九类泄露面将无防线，拒绝导出（#88 F-02 残余）；\
+                 补 profile.bidder_name 后重导，或不传 dark_bid 走明标导出"
+            ),
+        });
+    }
     // ---- #88 F-01：★漏标豁免（显式理由——非空才生效；进幂等键：豁免与否
     //      是不同的导出裁决，不能吃旧键缓存跳过门）。
     let waive_star_missing: Option<String> = match args.get("waive_star_missing") {
@@ -3984,18 +4001,8 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
     }
 
     // ---- 转发业务（服务层：双前置门 + format-spec + 导出 + 推进 EXPORTED）
-    if dark_bid
-        && bidder_name
-            .as_deref()
-            .map(str::trim)
-            .unwrap_or("")
-            .is_empty()
-    {
-        warnings_pre.push(
-            "暗标模式但 profile.bidder_name 缺失——正文未做公司名脱敏（补 bidder_name 后重导）"
-                .into(),
-        );
-    }
+    //      （F-02 残余：dark_bid 空名的前置拒已上提到幂等键之前——参数
+    //      前置校验语义，非法参数不进键不吃缓存）
     let ws = svc
         .workspace_dir()
         .ok_or_else(|| ToolError::EUnprocessable {

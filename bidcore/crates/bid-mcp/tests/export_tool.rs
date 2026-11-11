@@ -3,7 +3,9 @@
 //! 验收面（Lead 指令 + 契约 §8）：
 //! - 双前置门：blocking 矩阵行未清零 → E_UNPROCESSABLE 带清单；
 //! - format-spec：.mang/format-spec.json 读盘优先 / 条款提取兜底 / 基线降级；
-//! - 暗标：公司名 → 「投标人」（正文 + 章标题）；bidder 空 → warning；
+//! - 暗标：公司名 → 「投标人」（正文 + 章标题）；dark_bid=true 而
+//!   bidder_name 缺失/空白 → 响亮拒（#88 F-02 残余收口——E_UNPROCESSABLE，
+//!   旧「告警后明标裸导」语义废除）；
 //! - 幂等：同 (content_version, format, dark_bid, path) 重放 deduplicated；
 //! - 状态推进 EXPORTED（Drafting 起合法链）；EXPORTED 重导放行；
 //! - pdf → 诚实拒；路径逃逸 → 拒；
@@ -433,18 +435,56 @@ fn export_dark_bid_anonymizes_company_name() {
     let _ = dir;
 }
 
+/// #88 F-02 残余收口：dark_bid=true 而 bidder_name 缺失/空白 → 响亮拒
+/// （fail-closed——九类泄露面无防线不出库；审计 P0-1 原文）。旧语义
+/// （仅告警后明标裸导——warns 后缀同名前身）由此门替代；暗标正式
+/// 脱敏导出见 [`export_dark_bid_anonymizes_company_name`]。
 #[test]
-fn export_dark_bid_missing_bidder_warns() {
+fn export_dark_bid_missing_bidder_rejects() {
     let (mut svc, pid, _) = svc_drafted("dark-empty", false);
-    let r = ok_result(call(&mut svc, "export_bid_document", json!({
+    let call_args = |profile: Value| json!({
         "project_id": pid, "format": "docx", "output_path": "out/d.docx",
-        "profile": { "dark_bid": true },
-    })));
-    let warnings = r["warnings"].as_array().unwrap();
+        "profile": profile,
+    });
+    // ① 显式 dark_bid=true、bidder_name 缺失 → 拒（幂等键之前的参数前置校验）
+    let r = call(&mut svc, "export_bid_document", call_args(json!({ "dark_bid": true })));
+    assert_eq!(err_code(&r), "E_UNPROCESSABLE");
+    let msg = err_text(&r);
     assert!(
-        warnings.iter().any(|w| w.as_str().unwrap().contains("bidder_name")),
-        "暗标漏配必须响亮告警: {warnings:?}"
+        msg.contains("F-02") && msg.contains("bidder_name"),
+        "拒因必须自证口径（F-02 残余 + 指名补名通道）: {msg}"
     );
+    // ② dark_bid=true、bidder_name 空白串 → 同拒（覆盖 Some("") 形态——工具层经
+    //    服务臂的传递路径）
+    let r = call(&mut svc, "export_bid_document",
+        call_args(json!({ "dark_bid": true, "bidder_name": "   " })));
+    assert_eq!(err_code(&r), "E_UNPROCESSABLE");
+    // ③ 对照组：不传 dark_bid 的明标导出不受本门影响（既有行为零变化）
+    let ok = ok_result(call(&mut svc, "export_bid_document", call_args(json!({}))));
+    assert!(ok["artifact"]["url"].is_string(), "明标导出不受暗标名门影响");
+}
+
+/// #88 F-02 残余（服务臂——双层防御的直调面）：服务层 export_document
+/// 直调 anonymize=Some(空白) 同样响亮拒（工具层前置拒之外的第二道）。
+#[test]
+fn export_service_layer_rejects_blank_anonymize() {
+    let (mut svc, _pid, dir) = svc_drafted("dark-svc-arm", false);
+    let out = dir.join("out/svc-arm.docx");
+    let e = svc
+        .export_document(
+            "docx",
+            Some("   "),
+            &out,
+            &bid_tools::export::ExportDecision::default(),
+            &bid_tools::service::FatalGapWaivers::default(),
+        )
+        .expect_err("服务臂必须拒空白 anonymize（匿名化没有跳过语义）");
+    let msg = match e {
+        bid_domain::ToolError::EUnprocessable { reason } => reason,
+        other => panic!("服务臂预期 EUnprocessable（F-02 残余），实际: {other:?}"),
+    };
+    assert!(msg.contains("F-02"), "拒因自证口径: {msg}");
+    assert!(!out.exists(), "拒绝时零产物落盘（fail-closed）");
 }
 
 // ---------------------------------------------------------------- 4. format-spec 装载优先级

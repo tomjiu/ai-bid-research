@@ -441,7 +441,12 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        生效。unmapped_scoring_items 非空时门 1h 拒导出；人工确认未映射
        可接受（无评分项语料误抽等）才传，理由进 warnings 审计面。
        空串/缺省 = 不豁免；非字符串 → 响亮拒),
-       profile:{dark_bid? , template?}, options:{tracked_changes?, watermark?}, project_version }
+       profile:{dark_bid? , bidder_name? , template?}（#88 F-02 残余收口：
+       dark_bid=true 而 bidder_name 缺失/空白 → E_UNPROCESSABLE 响亮拒
+       ——无名可脱 = 暗标不可达：九类泄露面（正文/docProps/修订/批注/
+       EXIF/输出路径）无防线不出库；补名重导，或不传 dark_bid 显式走
+       明标。参数前置校验——在幂等键之前（非法参数不进键不吃旧缓存））,
+       options:{tracked_changes?, watermark?}, project_version }
 嵌入: #68 阶段 3——章正文支持 md 块语法（无语法内容与旧版字节级同输出）：
      - 表格：连续 | 行（首行表头 + |---| 分隔行 + 数据行）→ docx 表格
        （表头加粗；分隔行是排版指令不进正文；无分隔行的 | 行回退普通段落）
@@ -473,12 +478,16 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
        携带同一事实 + 响应面 machine-readable 清单。真人补 human receipt
        重过对应门后（追认，导出**前**——EXPORTED 是审核门终态）最新一条翻
        human → 横幅消失、human_review_complete=true，审计账两条并存可追溯。
-暗标: （#317 端到端清理）profile.dark_bid=true 且 bidder_name 在场 → 导出产物
-     落盘前过暗标清理链：扫描 6 类泄露（正文/页眉页脚公司名、docProps 作者、
-     修订/批注作者、联系方式/EXIF/路径）→ 自动清理（docProps 清零+修订批注
+暗标: （#317 端到端清理 + #88 F-02 残余收口）profile.dark_bid=true 且
+     bidder_name 在场 → 导出产物落盘前过暗标清理链：扫描 6 类泄露（正文/
+     页眉页脚公司名、docProps 作者、修订/批注作者、联系方式/EXIF/路径）→
+     自动清理（docProps 清零+修订批注
      作者匿名化+页眉页脚名字替换——zip 部件级过渡实现，引擎 G3 产品化后
      迁移）→ 复验 **BLOCKER 归零才落盘**（残余 → E_UNPROCESSABLE 附清单——
      如正文公司名跨 run 切分等人工处置面）；WARNING 进 manual_review 清单。
+     dark_bid=true 而 bidder_name 缺失/空白 → **前置响亮拒**（旧「告警后置
+     None 明标裸导」语义废除——审计 P0-1；工具层幂等键前 + 服务层直调面
+     双层防御，匿名化没有「跳过」语义）。
      docx-rs 默认 core.xml 作者 `unknown` 由本链清零（修前即泄漏面）。
 六表: （#117 三真源 + #122 接线）①项目概况表（恒生成——REQ 参数+项目面，
       缺栏落【待填】）；②技术参数偏离表（有「技术参数」类 REQ 才生成——
@@ -540,6 +549,9 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
        防线是 opt-in 的，不开等于没有）；mode=明标 而 REQ 文本含暗标
        要求词面（正向短语非否定形命中；数据面含补遗条款文本）→
        W_DARK_BID_UNDECLARED 告警不拦（声明缺位提示，升级面 Lead 裁决）。
+       （F-02 残余收口：显式 dark_bid=true 而 bidder_name 缺失/空白的第三
+       形态——mode=明标 时 1f 只告警——由幂等键前的参数前置拒兜底，见
+       in: profile 注）
      · 1g 补遗 DIRTY 门（#88 审计 F-08——两分级）：有 pending 改写指令的
        DIRTY 章节（E_SECTION_DIRTY）→ 拒——正文确证 stale（S-4：按补遗
        后口径评审负偏离）；解决通道 = rewrite_section_partial 逐指令改写
