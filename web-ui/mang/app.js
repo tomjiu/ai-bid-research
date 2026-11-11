@@ -1665,8 +1665,13 @@
     renderBidActivePanel(host);
   }
   // #19：招标文件业务角色（契约 §2 kind 合法值——与工具面 TENDER_FILE_KINDS 同源；
-  // UI 缺省「附件」，按文件名启发式预选最常见角色）
-  var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];
+  // UI 缺省「附件」，按文件名启发式预选最常见角色）。
+  // R23（#47）：值域 7→9 对齐 #473——工具面早已并入「报价文件」「扫描件」
+  //（B1/B2 抽取分支的 kind 判据，bid-mcp tools.rs），但 UI 只出 7 值：
+  // 不叫 B1/B2 前缀的报价/扫描件在向导里选不到对应 kind，#473 给的
+  // kind 路径对向导不可达（注释宣称的「同源」失实）。本面对齐后
+  // 双向等值门（bid-panels R23）锁死四面（工具面/契约/UI/测试）。
+  var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板", "报价文件", "扫描件"];
   function guessBidFileKind(name) {
     const n = String(name || "");
     if (/补遗|澄清|更正/.test(n)) return "补遗";
