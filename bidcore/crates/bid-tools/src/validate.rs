@@ -1052,6 +1052,147 @@ pub fn unmapped_scoring_findings(store: &DomainStore) -> Vec<ValidationFinding> 
     }]
 }
 
+/// #88 审计 F-05（勘误后半面）：全局一致性冲突门（导出门 1i 消费）。
+///
+/// #423 的四类跨面冲突（金额/工期/术语/承诺——正文↔正文 + 参数账↔正文）
+/// 此前只在 check_bid_quality 只读诊断里可见，不进导出门——漏跑检查则
+/// 冲突带病导出（评标发现前后不一致 → 按不利解释/澄清失败 → 扣分乃至
+/// 废标）。本门独立复算（run_review_from_store 单一真源——与
+/// check_bid_quality 恒同口径），Blocker 冲突即拒。**无豁免通道**：
+/// 冲突是客观不一致，修复 = 改稿对齐（与写作验收门 1c 同款纪律）。
+pub fn global_conflict_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    let outcome = crate::review_wire::run_review_from_store(store);
+    outcome
+        .findings
+        .iter()
+        .filter(|f| f.kind.is_global() && f.severity == crate::check::CheckSeverity::Blocker)
+        .map(|f| ValidationFinding {
+            rule_code: "E_GLOBAL_CONFLICT".into(),
+            severity: "BLOCKER",
+            section_id: Some(f.section_id.clone()),
+            requirement_id: None,
+            message: format!(
+                "跨章一致性冲突（{}）：{}——评标发现前后不一致按不利解释（#88 F-05）；改稿对齐后重试（check_bid_quality 可查全量冲突面）",
+                conflict_label(f.kind),
+                f.message,
+            ),
+        })
+        .collect()
+}
+
+/// #88 审计 F-05（决策面对账——导出门 1j 消费）。
+///
+/// `ExportDecision` 按设计不入库（「调用方显式给出，不入库、不猜测」——
+/// review_wire.rs 自述边界），检查工具看不到它；**导出时点**是决策与
+/// 参数账对账的唯一时机。比对面（保守——只做确定性可比的行）：
+/// - **工期**：`decision.duration_days`（日历天）vs 参数账工期行
+///   （param_name 含「工期」，response_value 首个数字——天/日历天口径）；
+/// - **报价**：`decision.bid_amount`（元）vs 参数账报价/总价行
+///   （param_name 含「报价|总价」，response_value 数字带万/亿单位归一）。
+/// 任一确定性可比且数值不等 → 冲突（报价表 500 万 vs 正文 480 万 =
+/// 评标澄清失败级事故）。decision 字段缺省（None）→ 不比（未定不是
+/// 冲突——落【待填】是既有降级面）。**无豁免通道**：数值不一致只能改齐。
+pub fn decision_consistency_findings(
+    store: &DomainStore,
+    decision: &crate::export::ExportDecision,
+) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    // ---- 工期：decision.duration_days vs 参数账工期行
+    if let Some(dur) = decision.duration_days {
+        for row in store.param_responses() {
+            if !row.param_name.contains("工期") {
+                continue;
+            }
+            let Some(days) = first_number(&row.response_value) else {
+                continue;
+            };
+            if days != f64::from(dur) {
+                out.push(ValidationFinding {
+                    rule_code: "E_DECISION_CONFLICT".into(),
+                    severity: "BLOCKER",
+                    section_id: None,
+                    requirement_id: Some(row.requirement_id.clone()),
+                    message: format!(
+                        "决策对账冲突（工期）：导出决策 {dur} 天 vs 参数行 {}「{}」响应 {}——报价/工期跨面不一致评标按不利解释（#88 F-05 决策面）；改齐后重试",
+                        row.id, row.param_name, row.response_value,
+                    ),
+                });
+            }
+        }
+    }
+    // ---- 报价：decision.bid_amount vs 参数账报价/总价行（万/亿归一到元）
+    if let Some(amount) = decision.bid_amount {
+        for row in store.param_responses() {
+            if !(row.param_name.contains("报价") || row.param_name.contains("总价")) {
+                continue;
+            }
+            let Some(v) = amount_yuan(&row.response_value) else {
+                continue;
+            };
+            if (v - amount).abs() > 0.5 {
+                out.push(ValidationFinding {
+                    rule_code: "E_DECISION_CONFLICT".into(),
+                    severity: "BLOCKER",
+                    section_id: None,
+                    requirement_id: Some(row.requirement_id.clone()),
+                    message: format!(
+                        "决策对账冲突（报价）：导出决策 {amount} 元 vs 参数行 {}「{}」响应 {}（≈{v} 元）——报价表与正文不一致 = 澄清失败级事故（#88 F-05 决策面）；改齐后重试",
+                        row.id, row.param_name, row.response_value,
+                    ),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// 冲突类别的中文标签（check_global 内联映射的只读复刻——不入公面
+/// 免得给 CheckKind 加方法面）。
+fn conflict_label(kind: crate::check::CheckKind) -> &'static str {
+    use crate::check::CheckKind;
+    match kind {
+        CheckKind::AmountConflict => "金额冲突",
+        CheckKind::ScheduleConflict => "工期冲突",
+        CheckKind::TermConflict => "术语冲突",
+        CheckKind::CommitmentConflict => "承诺冲突",
+        _ => "冲突",
+    }
+}
+
+/// 字符串首个数字（整数/小数——工期「540 天」/「18 个月」→ 540/18）。
+fn first_number(text: &str) -> Option<f64> {
+    let mut start: Option<usize> = None;
+    let mut end = 0usize;
+    for (i, c) in text.char_indices() {
+        if c.is_ascii_digit() {
+            if start.is_none() {
+                start = Some(i);
+            }
+            end = i + c.len_utf8();
+        } else if c == '.' && start.is_some() {
+            end = i + 1;
+        } else if start.is_some() {
+            break;
+        }
+    }
+    let s = &text[start?..end];
+    let t = s.trim_end_matches('.');
+    t.parse::<f64>().ok()
+}
+
+/// 金额归一：首个数字 + 万/亿单位 → 元（「500 万」→ 5_000_000；
+/// 「3.5亿」→ 350_000_000；裸数字按元）。无数字 → None。
+fn amount_yuan(text: &str) -> Option<f64> {
+    let n = first_number(text)?;
+    if text.contains('亿') {
+        Some(n * 100_000_000.0)
+    } else if text.contains('万') {
+        Some(n * 10_000.0)
+    } else {
+        Some(n)
+    }
+}
+
 // ---------------------------------------------------------------- #241 裁定：提交就绪面
 
 /// 提交就绪清单项（机器可读的逐条补件面——供 Agent/Human 逐项消除）。
