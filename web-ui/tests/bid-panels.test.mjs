@@ -675,6 +675,33 @@ check(
     /' \+ esc\(shown\) \+ "<\/span>"/.test(app),
   "深层文件退回只显基名——sub/图纸/A 与 成图/A 两行不可区分（勾错件无从察觉）"
 );
+// R22（#47）：白名单跨面等值门——壳常量 INGEST_DROP_EXTS（bid.rs）与 UI
+// 的 BID_IMPORT_EXTS（app.js）是同一口径的两份声明（R17 收口三面同改）。
+// R17 的两个独立锚只能各自钉「长这样」，改一面不改另一面时各自仍绿——
+// 本门提取两面真值**双向比对**：任一方向的差集非空即红（真单一真源）。
+{
+  const shellConst = bidRs.match(/const INGEST_DROP_EXTS: &\[&str\] = &\[([^\]]+)\]/);
+  const uiIdx = app.indexOf("var BID_IMPORT_EXTS =");
+  const uiLine = uiIdx >= 0 ? app.slice(uiIdx, app.indexOf(";", uiIdx)) : "";
+  const uiGroup = uiLine.match(/\(([^)]+)\)\$/);
+  check(
+    "R22 白名单：两面声明锚在场（壳常量 + UI 正则）",
+    !!shellConst && !!uiGroup,
+    "INGEST_DROP_EXTS（bid.rs）或 BID_IMPORT_EXTS（app.js）改名/删除——提取失败"
+  );
+  if (shellConst && uiGroup) {
+    const shellExts = (shellConst[1].match(/"\.([a-z]+)"/g) || [])
+      .map((s) => s.slice(2, -1));
+    const uiExts = uiGroup[1].split("|").map((s) => s.replace(/^\./, "").trim()).filter(Boolean);
+    const onlyShell = shellExts.filter((e) => !uiExts.includes(e));
+    const onlyUi = uiExts.filter((e) => !shellExts.includes(e));
+    check(
+      `R22 白名单：跨面等值（壳 ${shellExts.length} 类 = UI ${uiExts.length} 类，双向零差）`,
+      onlyShell.length === 0 && onlyUi.length === 0,
+      `壳有 UI 无：[${onlyShell}]；UI 有壳无：[${onlyUi}]——改一面必须同步另一面（R17 三面同改纪律）`
+    );
+  }
+}
 check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),

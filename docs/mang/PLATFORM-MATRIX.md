@@ -17,13 +17,14 @@
 | **cfg 双分支对照** | 平台语义**本质分叉**的断言面：Linux/Windows 各断一面 | `#[cfg(unix)]` / `#[cfg(windows)]` 成对 | R14 反斜杠语义、R2 越界样本形态 |
 | **平台启发式** | 运行时探测（文件系统/时区），双平台标准路径 | 探测函数 + 回退 | R15 时区偏移（iana-time-zone）、is_inside 组件比较 |
 
-## 二、回归矩阵（9 面）
+## 二、回归矩阵（10 面——R17 后缀白名单入列）
 
-### ② 系列：硬化专列（R9-R15）
+### ② 系列：硬化专列（R9-R15 + R17）
 
 | # | 面 | 行为口径 | 实现真源 | 测试锚 | 平台运行面 |
 |---|---|---|---|---|---|
 | R9 | upload_ref 分隔符归一 | `\`→`/`；相对形态压缩空段/`.` 段；`..` 保留（域层围栏裁决）；绝对形态只换分隔符不压缩 | `mang-app/src/bid.rs` `normalize_upload_ref` | cargo `upload_ref_separator_normalized_and_idempotent`；selftest `bid.import_files(Windows 形态归一导入)` + `bid.import_files(两形态同件幂等)` | 双平台（字符串面无平台分叉） |
+| R17 | 后缀白名单对齐解析面 | **双平台同拒（非 cfg）**：白名单 = 解析路由真支持面四类（docx/xlsx/pdf/doc——`.ods` 等落位必败件在壳侧拒之门外，ext_blocked 分账 + detail 指明合法四类，混拖批次不连坐）；壳/UI 两面声明同源 | `mang-app/src/bid.rs` `INGEST_DROP_EXTS`（壳单一真源）+ `web-ui/mang/app.js` `BID_IMPORT_EXTS`（同源声明） | cargo `ingest_drop_ods_blocked_as_unsupported_parse_face`；selftest `bid.ingest_drop(.ods 摘除对齐解析面)`；bid-panels R17 白名单锚 + R22 跨面等值门（壳表=UI 表双向零差） | 双平台同拒（字符串判定无 cfg——改一面不改另一面即等值门红） |
 | R10 | 基名可移植守卫 | Windows 保留设备名/非法字符（含基名内 `/` `\`）/尾部点空格——**双平台同拒**；import 请求级 `bad_args`、ingest 批次分账 | `mang-app/src/paths.rs` `guard_portable_basename` | cargo `guard_portable_basename_table` + `import_files_rejects_non_portable_basename`；selftest `bid.import_files(保留名基 bad_args)` + `bid.ingest_drop(保留名守卫)` | 双平台同拒（预演 Windows 语义——Linux 合法 `CON.docx` 也拒） |
 | R11 | 大小写不敏感占位 | 落位判定按 NTFS upcase 折叠预演：`A.docx` 在场时 `a.docx` 同占位；同内容 `already_present`（Dup 指名不猜）、异内容 `-2` 后缀 | `mang-app/src/bid.rs` `IngestSlot`（占位键 `nfc(name).to_lowercase()`） | cargo `ingest_drop_case_insensitive_dedupe`；selftest `bid.ingest_drop(大小写变体幂等)` | 双平台同拒（占位语义预演） |
 | R12 | MAX_PATH 预检 | 落位/rel 估算超 259 字符（Win32 上限 260 含 NUL，CJK 按字符计）→ ingest 分账 `path_too_long` / import `bad_args` | `mang-app/src/paths.rs` `guard_windows_max_path` | cargo `guard_windows_max_path_boundary` + `ingest_drop_maxpath_guard`；selftest `bid.ingest_drop(MAX_PATH 预检)` | 双平台同拒 |
