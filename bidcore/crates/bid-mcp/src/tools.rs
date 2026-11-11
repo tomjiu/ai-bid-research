@@ -4078,11 +4078,35 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
     } else {
         None
     };
+    // ---- #88 F-01：★漏标豁免（显式理由——非空才生效；进幂等键：豁免与否
+    //      是不同的导出裁决，不能吃旧键缓存跳过门）。
+    let waive_star_missing: Option<String> = match args.get("waive_star_missing") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_star_missing 须为非空理由（空串 = 不豁免——fail-closed 不放水；确认漏标可接受请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_star_missing 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
     let ikey = format!(
-        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}",
+        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}:{}",
         svc.store().content_version(),
         dark_bid,
         anonymize.unwrap_or(""),
+        waive_star_missing.as_deref().unwrap_or(""),
     );
     if let Some(first) = svc.store().idempotent_hit(&ikey).cloned() {
         let mut out = first;
@@ -4118,7 +4142,15 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         })?;
     }
     let outcome = svc
-        .export_document(&format, anonymize, &abs_out, &decision)
+        .export_document(
+            &format,
+            anonymize,
+            &abs_out,
+            &decision,
+            &bid_tools::service::FatalGapWaivers {
+                star_missing: waive_star_missing,
+            },
+        )
         .map_err(ToolError::from)?;
 
     // ---- 契约 §8 out 组装

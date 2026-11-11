@@ -760,6 +760,203 @@ pub fn placeholder_evidence_findings(store: &DomainStore) -> Vec<ValidationFindi
     out
 }
 
+// ---------------------------------------------------------------- #88 审计收口：致命项门 findings
+
+/// #88 审计 F-01/S-1：★实质性条款响应门（导出门 1e 消费）。
+///
+/// 两个子面（均为 BLOCKER——★条款不响应/负偏离 = 评标委员会直接否决
+/// = 废标级，`matrix.rs` Lead 裁决「★不参与 blocking 派生」后，导出面
+/// 的分级收口落在此门）：
+/// - **子面 a（`E_STAR_UNRESPONDED`——已抽取未响应）**：矩阵行
+///   `substantive=true`（标记面 Agent 判定 ∪ 抽取面★检测双路写入）且
+///   响应态非 RESPONDED、亦非合法人工豁免。放行面只有两个：
+///   RESPONDED（证据+章节在位，或正文实写——#241 文本事实口径）；
+///   NotApplicable + 合法豁免三要件（NOT_APPLICABLE + 非空偏离说明 +
+///   可信 Human receipt，复用 [`is_legitimate_placeholder_exemption`]
+///   裁决——与占位门 1d 同款纪律）。**Partial 也不放行**：证据在绑但
+///   无归属章节 = 响应未进文档正文（导出只吃章节面——证据不落正文的
+///   ★响应等于没写）。PENDING_EVIDENCE（占位）在占位门 1d 已拦
+///   必选行，这里拦★非必选行的同型面。
+///   豁免通道：无参数豁免——人工裁决走既有矩阵覆写三要件
+///   （`set_matrix_override`）。
+/// - **子面 b（`E_STAR_MISSING`——漏标面）**：parsed 文件
+///   `star_missing > 0`（★真值块未产生任何 REQ = 条款漏抽取，响应无从
+///   谈起）。与 `get_star_coverage` 同源同口径（`star_scan::star_coverage`
+///   单一真源；file 匹配腿 `source_file == name ∪ anchors 含 name`）。
+///   豁免通道：`export_bid_document.waive_star_missing`（显式非空理由
+///   ——样板句误判/表格装配假阳性等人工确认场景，理由进 warnings 审计面）。
+pub fn star_gate_findings(
+    store: &DomainStore,
+    parsed: &[bid_parse::ParsedFile],
+) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    // ---- 子面 a：已抽取★ REQ 未响应（读持久化矩阵——与门 1a 同口径）
+    for row in store.matrix() {
+        if !row.substantive {
+            continue;
+        }
+        if row.status == ResponseStatus::Responded {
+            continue;
+        }
+        let legit_na = row.status == ResponseStatus::NotApplicable
+            && store
+                .matrix_overrides()
+                .get(&row.requirement_id)
+                .map(is_legitimate_placeholder_exemption)
+                .unwrap_or(false);
+        if legit_na {
+            continue;
+        }
+        let status_face = match row.status {
+            ResponseStatus::NotResponded => "未响应（无证据无章节）",
+            ResponseStatus::Partial => "仅证据在绑、无归属章节（响应未进文档正文）",
+            ResponseStatus::PendingEvidence => "仅占位/待核验材料（占位不构成★响应）",
+            ResponseStatus::NotApplicable => {
+                "人工不适用覆写但豁免三要件不全（缺偏离说明或可信 Human receipt）"
+            }
+            ResponseStatus::Responded => unreachable!("RESPONDED 已 continue"),
+        };
+        out.push(ValidationFinding {
+            rule_code: "E_STAR_UNRESPONDED".into(),
+            severity: "BLOCKER",
+            section_id: row.response_section.clone(),
+            requirement_id: Some(row.requirement_id.clone()),
+            message: format!(
+                "★实质性条款 {}（{}）{}——★不响应=实质性条款漏响应，废标级（#88 F-01）；补章节响应/补绑证据，或人工不适用三要件豁免（NOT_APPLICABLE+偏离说明+Human receipt）",
+                row.requirement_id, row.id, status_face,
+            ),
+        });
+    }
+    // ---- 子面 b：漏标面（★真值块无对应 REQ——与 get_star_coverage 同源）
+    for pf in parsed {
+        let reqs_of_file: Vec<bid_domain::Requirement> = store
+            .requirements()
+            .iter()
+            .filter(|r| {
+                r.source_file == pf.name || r.anchors.iter().any(|a| a.file == pf.name)
+            })
+            .cloned()
+            .collect();
+        let cov = bid_parse::star_scan::star_coverage(pf, &reqs_of_file);
+        if cov.missing_stars > 0 {
+            out.push(ValidationFinding {
+                rule_code: "E_STAR_MISSING".into(),
+                severity: "BLOCKER",
+                section_id: None,
+                requirement_id: None,
+                message: format!(
+                    "《{}》：{} 处★真值块无对应 REQ（漏抽取——响应无从谈起，#88 F-01 子面 b）；get_star_coverage 查块级明细后补标（submit_block_marks substantive=true），或确认可接受后 export 传 waive_star_missing（非空理由）显式豁免",
+                    pf.name, cov.missing_stars,
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// 暗标要求正向词面（#88 F-02——corpus-A 3.3.3 / GT-24 语料形）。
+/// 否定形不单列词表：按匹配位前置字（不/非/无/未/莫）就地判定，见
+/// [`dark_bid_required_in`]（「商务标不采用暗标评审」类反例不得误拦）。
+const DARK_BID_POSITIVE: &[&str] = &[
+    "采用暗标", "暗标评审", "暗标方式", "暗标制作", "暗标格式", "暗标要求",
+];
+
+/// 条款文本是否含暗标评审要求（正向词面存在**非否定形**命中）。
+///
+/// 保守面：仅「暗标」二字不成证据（「暗标外其他章节…」的间接提及不拦）。
+/// 否定形判定用**短语剥除**：先把「否定字 + 正向短语」整段剥掉再匹配——
+/// 单看匹配位前置字会漏判二级命中（「商务标**不**采用暗标评审」里
+/// 「暗标评审」的前置字是「用」不是「不」，但整段同样被「不」否定）。
+/// 混合句（「商务标不采用暗标评审；技术标部分采用暗标评审」）剥除后
+/// 第二个命中仍在 → 要求在场（corpus-A 3.3.3 即肯定句式）。
+fn dark_bid_required_in(text: &str) -> bool {
+    const NEGATORS: &[&str] = &["无需", "不用", "不", "非", "无", "未", "莫"];
+    let mut cleaned = text.to_string();
+    for neg in NEGATORS {
+        for p in DARK_BID_POSITIVE {
+            let pat = format!("{neg}{p}");
+            if cleaned.contains(&pat) {
+                cleaned = cleaned.replace(&pat, "◇"); // 否定形占位（不再命中）
+            }
+        }
+    }
+    DARK_BID_POSITIVE.iter().any(|p| cleaned.contains(*p))
+}
+
+/// #88 审计 F-02/S-2：暗标联动门（导出门 1f 消费）。
+///
+/// `dark_bid_active` = 导出启用了暗标模式（anonymize 有效——
+/// `profile.dark_bid=true` 且 bidder_name 非空）。启用时零 findings。
+/// 未启用时按项目 mode 分级（`BidProject.mode`——M1 透传、导出面
+/// 消费的既定设计位）：
+/// - **mode=暗标 → `E_DARK_BID_REQUIRED`（BLOCKER）**：项目自声明暗标
+///   而导出明标 = 自相矛盾，fail-closed。darkbid.rs 防线（九类泄露面
+///   + BLOCKER 复验归零）是 opt-in 的——门再好没开等于没有。
+/// - **mode=明标 且 REQ 文本含暗标要求词面 → `W_DARK_BID_UNDECLARED`
+///   （MINOR 告警）**：招标文件有暗标条款而项目登记为明标——声明缺位
+///   的响亮提示（不硬拦：既有明标项目/契约兼容；Lead 裁决后可升 BLOCKER）。
+///
+/// 词面数据源：REQ anchors 摘录 ∪ 补遗条款文本（`addendum_requirement`
+/// ——补遗引入的暗标要求同样在场）。
+pub fn dark_bid_gate_findings(
+    store: &DomainStore,
+    dark_bid_active: bool,
+) -> Vec<ValidationFinding> {
+    if dark_bid_active {
+        return Vec::new();
+    }
+    let mode = store.project().map(|p| p.mode.clone()).unwrap_or_default();
+    if mode == "暗标" {
+        return vec![ValidationFinding {
+            rule_code: "E_DARK_BID_REQUIRED".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: "项目 mode=暗标 但本次导出未启用暗标模式——\
+                      启用暗标导出（profile.dark_bid=true + bidder_name）后重试\
+                      （#88 F-02：暗标评审泄露=废标级，防线是 opt-in 的，不开等于没有）"
+                .into(),
+        }];
+    }
+    // 明标 + 暗标条款在场 → 未声明告警（不拦——升级面由 Lead 裁决）
+    let req_text = |r: &bid_domain::Requirement| {
+        let mut t = r
+            .anchors
+            .iter()
+            .map(|a| a.excerpt.as_str())
+            .collect::<Vec<_>>()
+            .join("；");
+        if let Some(addendum) = r.params.get(bid_domain::rewrite::PARAM_KEY) {
+            if let Some(s) = addendum.as_str() {
+                t.push('；');
+                t.push_str(s);
+            }
+        }
+        t
+    };
+    let hits: Vec<String> = store
+        .requirements()
+        .iter()
+        .filter(|r| dark_bid_required_in(&req_text(r)))
+        .map(|r| r.id.clone())
+        .collect();
+    if hits.is_empty() {
+        return Vec::new();
+    }
+    vec![ValidationFinding {
+        rule_code: "W_DARK_BID_UNDECLARED".into(),
+        severity: "MINOR",
+        section_id: None,
+        requirement_id: None,
+        message: format!(
+            "招标文件含暗标评审条款（{}）而项目 mode=明标、导出未启用暗标——\
+             若本项目实际需暗标评审，用 profile.dark_bid=true + bidder_name 重导\
+             （#88 F-02：泄露=废标；当前为告警不拦）",
+            hits.join("、"),
+        ),
+    }]
+}
+
 // ---------------------------------------------------------------- #241 裁定：提交就绪面
 
 /// 提交就绪清单项（机器可读的逐条补件面——供 Agent/Human 逐项消除）。
