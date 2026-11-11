@@ -504,6 +504,13 @@ impl Ctx {
             //    语义不动，壳零裁决）──────────────────────────────
             "bid.star_gaps" => crate::bid::star_gaps(&ws, &self.bid, &a),
 
+            // ── #47 R28（#88 Q3）：★漏标补标直通（bid.rs——单块最小
+            //    单元 submit_block_marks：marks=[requirement] +
+            //    requirements=[{block_idx, statement, substantive:true}]；
+            //    纯 mark 不产生 REQ，锚定必须走 requirements。工具面
+            //    单真源裁决（区间/原子落库/#244 标满义务）──────────
+            "bid.star_mark" => crate::bid::star_mark(&ws, &self.bid, &a),
+
             // ── #19：导入向导写面（bid.rs——create_project 空工作区起步
             //    （ensure_or_open——副作用即目的），经 bid_mcp 真实工具面
             //    create_bid_project（external_key 缺省 = 工作区路径幂等键）；

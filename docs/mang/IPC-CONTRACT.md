@@ -614,6 +614,23 @@ E_STATE 透传为 `state` 码（§3.3——UI 分支「尚未开放」卡）。
                    "checked_files": 2, "all_clear": false } }
 ```
 
+### bid.star_mark `{ file_id, block_idx, statement, reason?, mandatory? }`  （写面；#47 R28 / #88 Q3）
+★漏标单块补标直通——`dispatch_with(submit_block_marks)` 真实工具面，壳侧只组装
+参数：`marks=[{from:to:block_idx, verdict:"requirement"}]` +
+`requirements=[{block_idx, statement, substantive:true}]`（**纯 mark 不产生 REQ——
+锚定必须走 requirements**）。工具面单真源裁决：区间校验 / 原子落库 / #219 二步
+（submitted 落**旁路账本**——`submitted_requirements`，重跑 `extract_requirements`
+才并入主 REQ 账本，★captured 生效链即此；`next` 原样透传）+ #244 标满义务
+（已开始标记的文件必须标满才能建纲——UI 诚实提示）。
+壳侧前置早拒（零副作用）：`file_id` 空 / `block_idx` 负 / `statement` 空。
+无 db.json → `not_found`；工具面 E_STATE 透传 `state` 码（§3.3）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "REQUIREMENTS_EXTRACTED" },
+    "star_mark": { …submit_block_marks 工具输出原样（marks_accepted:1 /
+                    requirements_accepted:1 / total_blocks / coverage / next）… } }
+```
+
 ### bid.create_project `{ name, bid_deadline, mode, tender_notice_ref? }`  （写面；#19 导入向导第一步）
 
 空工作区起步（无 db.json 不再 `not_found`——`ensure_or_open` 空态 + `.mang/approval.key`，

@@ -1385,6 +1385,8 @@
         else if (act === "confirm-export") ui.runBidExport();
         // R27（#88 Q2）：★漏标明细入口（coverage 面板 / 明细错误卡重试共用）
         else if (act === "star-gaps-detail") ui.loadBidStarGaps(true);
+        // R28（#88 Q3）：★漏标单块补标直通（dataset 三参：file/block/text）
+        else if (act === "star-mark") ui.runBidStarMark(String(btn.dataset.bidFile || ""), Number(btn.dataset.bidBlock || 0), String(btn.dataset.bidText || ""));
         else if (act === "reveal-artifact") ui.revealBidArtifact();
         else if (act === "workbench-packages") ui.openBidWorkbench("packages");
 
@@ -3470,7 +3472,11 @@
           html += '<div class="bid-star-gate-file"><div class="bid-star-gate-fname">' + esc(gf.file_name || gf.file_id || "") + " · 漏标 " + fmtChars(Number(gf.star_missing || 0)) + " / 真值 " + fmtChars(Number(gf.star_truth || 0)) + "</div>";
           const ms = Array.isArray(gf.missing) ? gf.missing : [];
           for (const m of ms) {
-            html += '<div class="bid-star-gate-item"><span class="bid-star-gate-loc">块 ' + fmtChars(Number(m.block_idx || 0)) + (m.page ? " · 第" + fmtChars(Number(m.page)) + "页" : "") + (m.line ? " 行" + fmtChars(Number(m.line)) : "") + "</span><span class=\"bid-star-gate-text\">" + esc(m.text || "") + "</span><span class=\"bid-star-gate-reason\">" + esc(m.reason || "") + "</span></div>";
+            // R28：明细行「补标」按钮——dataset 三参（file/block/text），
+            // data-bid-act 委托直通 bid.star_mark（拦截卡不加——空间留给清单）
+            html += '<div class="bid-star-gate-item"><span class="bid-star-gate-loc">块 ' + fmtChars(Number(m.block_idx || 0)) + (m.page ? " · 第" + fmtChars(Number(m.page)) + "页" : "") + (m.line ? " 行" + fmtChars(Number(m.line)) : "") + "</span><span class=\"bid-star-gate-text\">" + esc(m.text || "") + "</span><span class=\"bid-star-gate-reason\">" + esc(m.reason || "") + "</span>"
+              + '<div class="bid-star-gate-act"><button class="btn btn-sm" data-bid-act="star-mark" data-bid-file="' + esc(gf.file_id || "") + '" data-bid-block="' + fmtChars(Number(m.block_idx || 0)) + '" data-bid-text="' + esc(m.text || "") + '" title="submit_block_marks 单块补标（substantive=true）——重跑抽取后生效">补标</button><span class="dim">补标后重跑抽取生效；已开始标记的文件需标满才能建纲（#244）</span></div>'
+              + "</div>";
           }
           if (gf.missing_truncated) {
             html += '<div class="bid-star-gate-more">⚠ 明细超 100 条被工具面截断——补标后重跑抽取再查</div>';
@@ -5793,6 +5799,29 @@
         state.bidStarGaps.error = err && (err.message || err.code) || "bid.star_gaps 读取失败";
       }
       renderBidWorkbenchIfOpen();
+    },
+    /** #47 R28（#88 Q3「误判可纠正」标记半边）：★漏标单块补标直通
+     * （bid.star_mark 写面 → submit_block_marks 真实工具面）。受理后
+     * 重拉 star_gaps + coverage（面板计数同步）。诚实提示：submitted
+     * 落旁路账本，重跑抽取（extract）才并入主 REQ 账本——工具面 next
+     * 语义原样，壳不自创分叉；#244 标满义务（已开始标记的文件必须标
+     * 满才能建纲）同步透出。 */
+    async runBidStarMark(fileId, blockIdx, text) {
+      if (!state.bridge) return;
+      if (!fileId || !text) {
+        ui.setStatus({ message: "补标参数缺失（file/text）——请从漏标明细行的「补标」按钮触发" });
+        return;
+      }
+      try {
+        const r = await ipc("bid.star_mark", { file_id: fileId, block_idx: blockIdx, statement: text }, 6e4);
+        const sm = (r && r.star_mark) || {};
+        const acc = Number(sm.requirements_accepted || 0);
+        ui.setStatus({ message: "★补标已受理（块 " + blockIdx + "，REQ 关键点 " + acc + " 条）——重跑抽取后生效（已开始标记的文件需标满才能建纲）" });
+        await ui.loadBidStarGaps(true);
+        if (state.bid.coverage && state.bid.coverage.status !== "idle") ui.loadBidCoverage(true);
+      } catch (err) {
+        ui.setStatus({ message: "补标失败：" + ((err && (err.message || err.code)) || "未知") });
+      }
     },
     /** #20：拉取分包清单（bid.packages 只读——工作台「分包」页签）。 */
     async loadBidPackages(force) {

@@ -1532,5 +1532,65 @@ check(
   "★漏标卡排版类被删（拦截卡/明细卡裸奔）"
 );
 
+// R28（#47 / #88 Q3「误判可纠正」标记半边）：★漏标补标直通。三面：
+// ①壳侧 bid.star_mark 写面（submit_block_marks 单块最小单元——marks +
+//   requirements[substantive]；纯 mark 不产生 REQ）②UI 明细行「补标」
+//   按钮（dataset 三参委托）③诚实面：submitted 旁路账本 + 重跑抽取
+//   生效链 + #244 标满义务提示。
+check(
+  "R28 壳侧：bid.star_mark 注册 + submit_block_marks 组装（substantive 锚定）",
+  /"bid\.star_mark" => crate::bid::star_mark\(&ws, &self\.bid, &a\),/.test(ipcRs)
+    && /tool: "submit_block_marks"\.to_string\(\),/.test(bidRs)
+    && /"substantive": true,/.test(bidRs)
+    && /"requirements": \[\{/.test(bidRs),
+  "补标直通命令被删/绕开 requirements 锚（纯 mark = 落库不生效的分叉）"
+);
+check(
+  "R28 壳侧：前置早拒三分支（file 空/块负/statement 空）",
+  /file_id 不能为空（★补标目标文件/.test(bidRs)
+    && /block_idx 必须是非负整数/.test(bidRs)
+    && /statement 不能为空/.test(bidRs),
+  "写面前置校验缺面（坏参数直进工具面）"
+);
+check(
+  "R28 壳侧：真件受理链 + 早拒双测试在场",
+  /fn star_mark_captures_missing_star\(\)/.test(bidRs)
+    && /fn star_mark_bad_args_early_reject\(\)/.test(bidRs)
+    && /submitted 关键点落库/.test(bidRs)
+    && /submitted 未并入前漏标不动/.test(bidRs),
+  "R28 壳侧回归门被删（旁路账本落库对账面丢失）"
+);
+check(
+  "R28 selftest：早拒双项",
+  selftestRs.includes("bid.star_mark(负块号早拒)")
+    && selftestRs.includes("bid.star_mark(空文件号早拒)"),
+  "集成自检项缺失"
+);
+check(
+  "R28 UI：runBidStarMark 接线（bid.star_mark IPC + 受理提示 + 双面板刷新）",
+  /async runBidStarMark\(fileId, blockIdx, text\) \{/.test(app)
+    && /await ipc\("bid\.star_mark", \{ file_id: fileId, block_idx: blockIdx, statement: text \}, 6e4\)/.test(app)
+    && /await ui\.loadBidStarGaps\(true\);/.test(app)
+    && /重跑抽取后生效/.test(app),
+  "补标执行函数被删/受理后不刷新（用户看不到面板同步）"
+);
+check(
+  "R28 UI：明细行补标按钮（dataset 三参 + 委托路由）",
+  /data-bid-act="star-mark" data-bid-file="/.test(app)
+    && /else if \(act === "star-mark"\) ui\.runBidStarMark\(String\(btn\.dataset\.bidFile \|\| ""\), Number\(btn\.dataset\.bidBlock \|\| 0\), String\(btn\.dataset\.bidText \|\| ""\)\);/.test(app),
+  "补标按钮/路由被删（R27 next 引导再次指向走不到的入口）"
+);
+check(
+  "R28 UI：诚实面提示（旁路账本生效链 + #244 标满义务）",
+  /已开始标记的文件需标满才能建纲（#244）/.test(app)
+    && /补标后重跑抽取生效/.test(app),
+  "标满义务/生效链提示丢失（用户误以为补标即时生效）"
+);
+check(
+  "R28 样式：明细行按钮区在场",
+  /\.bid-star-gate-act \{/.test(css),
+  "补标按钮排版类被删"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);
