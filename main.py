@@ -951,6 +951,15 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 f"（新 {detail['new']} / 更新 {detail['updated']}），"
                 f"去重 {detail['deduped']}，失败 {len(stage.failures)}"
             )
+            # R103/R101：真实变化明示——不倒退合并的补缺/修正字段数
+            # 与批内完备性补全件数（零变化零噪音）
+            if detail.get("updated_filled") or detail.get("updated_changed"):
+                line += (
+                    f"；更新实质：补缺 {detail['updated_filled']}"
+                    f" / 修正 {detail['updated_changed']} 个字段"
+                )
+            if detail.get("merged_fields"):
+                line += f"；批内补全 {detail['merged_fields']} 件"
         elif stage.name == "extract":
             line = (
                 f"抽取 {detail['extracted']} 条"

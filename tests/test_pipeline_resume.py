@@ -241,3 +241,43 @@ class TestPendingResolution:
             assert db.extract_status_of("不存在") is None
         finally:
             db.close()
+
+
+class TestResumeSweepMerge:
+    """R103：补抽行同样 merge_bid——源侧新字段不因崩溃残留而丢。"""
+
+    def test_resume_merges_source_side_fields(self, tmp_path, source):
+        db_path = tmp_path / "rm.db"
+        pipeline = ResearchPipeline(
+            db_path, extractor=_crash_extractor(), output_dir=tmp_path / "o",
+        )
+        with pytest.raises(RuntimeError):
+            pipeline.run(source, keyword="补抽合并")
+        # 崩溃后源被更新（补遗）：新增截止日与中标人
+        (source / "a.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "bid_id": "RS-001",
+                        "project_name": "智慧城市续跑验证",
+                        "content": "预算 300万元，发布日期 2026年11月1日",
+                        "deadline": "2026-12-01",
+                        "winner": "甲公司",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        pipeline2 = ResearchPipeline(
+            db_path, extractor=_extractor(), output_dir=tmp_path / "o2",
+        )
+        result = pipeline2.run(resume=True)
+        assert result.stage("collect").detail["recovered_raw"] == 1
+        db = BidDatabase(db_path)
+        try:
+            row = db.get_bid("RS-001")
+            assert row["deadline"] == "2026-12-01"  # 源侧新字段不丢
+            assert row["winner"] == "甲公司"
+        finally:
+            db.close()
