@@ -1597,7 +1597,8 @@ impl BidService {
     ///       只读不拦；无豁免通道，修复 = 改稿对齐）；
     ///    j. 决策对账门（#88 审计 F-05 决策面——`decision_consistency_findings`：
     ///       导出时点 decision（工期/报价）vs 参数账确定性比对——决策按
-    ///       设计不入库，导出是唯一对账时机；无豁免——数值只能改齐）；    ///    j-2. 决策对账门·正文面（#88 F-05 决策面的注入扩展——agent-q7vx
+    ///       设计不入库，导出是唯一对账时机；无豁免——数值只能改齐）；
+    ///    j-2. 决策对账门·正文面（#88 F-05 决策面的注入扩展——agent-q7vx
     ///       #105：决策值临时注入 run_review 比对面（DECISION 合成行），
     ///       章正文 vs 决策值冲突同拒——参数面（1j）之外的正文覆盖；
     ///       无豁免通道）；
@@ -1609,7 +1610,8 @@ impl BidService {
     ///       `waive_format_placeholder` 显式理由豁免）；
     ///    m. 超篇幅可配置门（#88 修复 8a/F-09——超带超阈值（默认 +50%，
     ///       `max_overrun_pct` 可配）→ 拒；`waive_length_overrun` 显式
-    ///       理由豁免）；    /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
+    ///       理由豁免）；
+    /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
     ///    缺失 → `derive_from_requirements`（从格式条款提取；零命中 → 基线
     ///    + warning，Lead 铁律「不硬编码」的降级面）；
     /// 2b. #117：主体信息装载（工作区 bidder-profile.json；缺档 → 空档 +
