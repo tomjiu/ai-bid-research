@@ -312,7 +312,8 @@ fn e2e_artifacts_synth_tender() {
     }
     let _ = svc.store_mut().build_matrix().unwrap();
 
-    // ---- ⑤.5 #117 任务 1：表格数据面补齐（四真源——都是投标方的真实输入，
+    // ---- ⑤.5 #117 任务 1：表格数据面补齐
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：评分项映射（记审前——#474）（四真源——都是投标方的真实输入，
     //      不是编造：业绩证据台账、参数响应账、主体信息档、报价决策）
     let t55 = Instant::now();
     // (a) 业绩证据（3 条——MIN_PERFORMANCE_COUNT 门槛；带发包人/金额/完成日期
@@ -1222,4 +1223,49 @@ fn chrono_like_stamp(secs: u64) -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     format!("{y:04}{m:02}{d:02}-{h:02}{mi:02}{sec:02}")
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道）。
+/// 须在记审**之前**（#474 计分面摘要）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

@@ -527,6 +527,7 @@ fn input_schema(name: &str) -> Value {
                     }
                 },
                 "waive_star_missing": {"type": "string", "description": "#88 ★漏标豁免理由（非空生效——star_missing>0 时 fail-closed 拒导出；人工确认漏标可接受（样板句误判/表格装配假阳性等）才传，理由进 warnings 审计面。不传/空串 = 不豁免）"},
+                "waive_unmapped_scoring": {"type": "string", "description": "#88 评分项未映射豁免理由（非空生效——unmapped_scoring_items 非空时 fail-closed 拒导出；人工确认未映射可接受（无评分项语料误抽等）才传，理由进 warnings 审计面。不传/空串 = 不豁免）"},
                 "project_version": pv
             },
             "required": ["project_id", "format", "output_path"]

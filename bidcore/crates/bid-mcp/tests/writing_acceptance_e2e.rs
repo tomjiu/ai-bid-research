@@ -196,6 +196,7 @@ fn acceptance_setup(tag: &str) -> (BidService, String, PathBuf) {
         svc.store_mut().bind_evidence(&eid, rid, "2026-12-31").unwrap();
     }
     let _ = svc.store_mut().build_matrix().unwrap();
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：评分项映射（记审前——#474）
     use bid_domain::review::{Decision, Gate};
     for gate in [Gate::MatrixApproval, Gate::OutlineApproval] {
         svc.store_mut()
@@ -604,4 +605,54 @@ fn writing_acceptance_export_independent_of_review_approval() {
     assert!(et.contains("写作验收门"), "同门拒（非矩阵/审核面）: {et}");
     assert!(!et.contains("E_CHARS_BELOW_MIN"), "已起草叶 in-band，不误报篇幅: {et}");
     assert!(!ws.join("out/投标文件-空叶.docx").exists(), "零半成品");
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道；映射到
+/// 首叶 = Agent 映射动作的最小建模）。须在记审**之前**（#474 计分面摘要）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    // 本文件映射到**末叶**：短稿测试的 victim=leaves[0]（首叶）须保持
+    // 非评分叶——W_CHARS_BELOW_MIN 的锚面（MAJOR 语义）才不被映射翻成
+    // 评分叶的 E 面（#253 门禁分级语义在测试里显式区分两锚）。
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        let leaves: Vec<&bid_domain::outline::OutlineNode> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter(|n| !parents.contains(&n.id))
+            .collect();
+        leaves.last().map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

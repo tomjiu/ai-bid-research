@@ -599,6 +599,7 @@ fn svc_drafted_validity(tag: &str) -> (BidService, String, std::path::PathBuf) {
         svc.store_mut().bind_evidence(&eid, rid, "2026-12-31").unwrap();
     }
     let _ = svc.store_mut().build_matrix().unwrap();
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：REQ-0004 评分项映射（记审前——#474）
     // 夹具基线：翻转前 REQ-0004 = Partial（证据在位无章节，非阻塞）→ 门 1a 放行
     assert!(
         svc.store().check_export_ready().is_ok(),
@@ -790,4 +791,49 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
     })));
     assert_eq!(c["deduplicated"], json!(true), "同名重放 → 幂等命中（语义不回归）");
     assert_eq!(b["artifact"]["sha256"], c["artifact"]["sha256"]);
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道；映射到
+/// 首叶 = Agent 映射动作的最小建模）。须在记审**之前**（#474 计分面摘要）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

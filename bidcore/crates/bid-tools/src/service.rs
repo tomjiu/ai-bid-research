@@ -1568,7 +1568,7 @@ impl BidService {
     /// `export_bid_document` 业务半边（#59 阶段 2 + #117 任务 1 表格接线）。
     ///
     /// 步骤：
-    /// 1. **六前置门**（防废标的最后关口——fail-closed）：
+    /// 1. **八前置门**（防废标的最后关口——fail-closed）：
     ///    a. 矩阵 blocking 行清零（`check_export_ready`——必选未响应/待补不得
     ///       导出，#245 后 PENDING_EVIDENCE 必选行也在此面）；
     ///    b. 审核 BLOCKER findings 清零（`export_allowed`——T-7 闸门）；
@@ -1586,6 +1586,12 @@ impl BidService {
     ///    f. 暗标联动门（#88 审计 F-02——`dark_bid_gate_findings`：mode=暗标
     ///       而导出未启用暗标 → 拒（自相矛盾 fail-closed）；mode=明标 而
     ///       REQ 含暗标条款 → 响亮告警不拦——声明缺位提示，升级面 Lead 裁决）；
+    ///    g. 补遗 DIRTY 门（#88 审计 F-08——`dirty_gate_findings`：改写指令
+    ///       未处置的 DIRTY 章节 → 拒（正文确证 stale，S-4）；证据换版
+    ///       失效信号（无指令）→ 告警不拦——解决通道 reopen+重起草）；
+    ///    h. 评分项未映射门（#88 审计 F-07——`unmapped_scoring_findings`：
+    ///       unmapped_scoring_items 非空 → 拒（按缺项计零）；
+    ///       `waive_unmapped_scoring` 显式非空理由豁免，理由进 warnings）；
     /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
     ///    缺失 → `derive_from_requirements`（从格式条款提取；零命中 → 基线
     ///    + warning，Lead 铁律「不硬编码」的降级面）；
@@ -1755,6 +1761,48 @@ impl BidService {
                 return Err(ToolError::EUnprocessable { reason: f.message });
             }
             warnings.push(f.message);
+        }
+        // ---- 1g. 补遗 DIRTY 门（#88 审计 F-08——两分级：有 pending 指令 =
+        //      补遗 stale 拒；无指令 = 证据换版失效信号告警不拦）。
+        let dirty_f = crate::validate::dirty_gate_findings(self.store());
+        let dirty_blockers: Vec<&crate::validate::ValidationFinding> = dirty_f
+            .iter()
+            .filter(|f| f.severity == "BLOCKER")
+            .collect();
+        if !dirty_blockers.is_empty() {
+            let detail = dirty_blockers
+                .iter()
+                .map(|f| f.section_id.as_deref().unwrap_or("?"))
+                .collect::<Vec<_>>()
+                .join("、");
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "DIRTY 门未过：{} 个章节补遗改写指令未处置（{detail}）——正文按旧口径起草，按补遗后口径评审负偏离（#88 F-08/S-4）；rewrite_section_partial 逐指令改写或 dismiss_rewrite_directive 裁定后重导",
+                    dirty_blockers.len(),
+                ),
+            });
+        }
+        for f in dirty_f {
+            warnings.push(f.message);
+        }
+        // ---- 1h. 评分项未映射门（#88 审计 F-07——独立复算；显式豁免面）
+        let unmapped_f = crate::validate::unmapped_scoring_findings(self.store());
+        if !unmapped_f.is_empty() {
+            let waived = waivers
+                .unmapped_scoring
+                .as_deref()
+                .map(|r| !r.trim().is_empty())
+                .unwrap_or(false);
+            if waived {
+                warnings.push(format!(
+                    "#88 豁免：评分项未映射经显式豁免跳过（理由：{}）——审计面记录；upsert_scoring_mapping 映射通道仍开放",
+                    waivers.unmapped_scoring.as_deref().unwrap_or("").trim(),
+                ));
+            } else {
+                return Err(ToolError::EUnprocessable {
+                    reason: unmapped_f[0].message.clone(),
+                });
+            }
         }
 
         // ---- 2. format-spec（读盘优先，derive 兜底）
@@ -2047,6 +2095,9 @@ impl Default for BidService {
 pub struct FatalGapWaivers {
     /// ★漏标面（E_STAR_MISSING）人工确认豁免——非空理由生效。
     pub star_missing: Option<String>,
+    /// 评分项未映射面（E_SCORING_UNMAPPED）人工确认豁免——非空理由生效
+    ///（#88 门 1h：无评分项语料误抽确认等场景；映射通道 upsert_scoring_mapping 仍开放）。
+    pub unmapped_scoring: Option<String>,
 }
 
 /// 项目推进 EXPORTED 的合法链补齐（#59 阶段 2——export 的成功后半边）。
