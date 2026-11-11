@@ -827,7 +827,10 @@ check(
 );
 check(
   "R4 UI：完成态优先级——刚导入现场（result）仍走逐件表",
-  /else if \(state\.bidWizard\.result\) \{[\s\S]{0,500}renderBidWizardResult\(panelEl19, state\.bidWizard\.result\)/.test(app),
+  // R25 后邻近界 500→1200：result 分支新增树区「重导失败件」入口
+  //（failedR25 计算 + 按钮行），renderBidWizardResult 仍在同分支内——
+  // 优先级语义不变，只是分支体变长。
+  /else if \(state\.bidWizard\.result\) \{[\s\S]{0,1200}renderBidWizardResult\(panelEl19, state\.bidWizard\.result\)/.test(app),
   "完成态卡盖掉刚导入的逐件结果（现场信息降级）"
 );
 
@@ -1370,6 +1373,58 @@ check(
   contract.includes("日期时区口径（R15") && contract.includes("本地日历日")
     && contract.includes("iana-time-zone"),
   "R15 口径没进契约"
+);
+
+// R25（#47）：导入卡重入——q19.files>0 后导入卡不可达死区的补链。
+// 三面：①结果面/树区部分失败给「重导失败件」入口（失败件预勾选）
+// ②完成态给「补导文件」入口（补遗/澄清函新批次）③重入可退出。
+// 源级锚定（UI 面——shell 协议零改动，无壳侧锚）。
+check(
+  "R25 状态：bidWizard.reentry 字段在场（null/重导/补导三态）",
+  /reentry: null/.test(app) && /w\.reentry \? '<button class="btn" data-bid-act="wizard-exit-reentry">返回<\/button>' : ""/.test(app),
+  "重入模式字段/退出按钮被删（重入后无退出径）"
+);
+check(
+  "R25 渲染：files>0 也允许显式回导入卡（重入分支优先于完成态）",
+  /else if \(state\.bidWizard\.reentry\) \{[\s\S]{0,400}renderBidWizardImport\(treeEl, host\);/.test(app) &&
+    /if \(panelElR25 && state\.bidWizard\.result\) renderBidWizardResult\(panelElR25, state\.bidWizard\.result\);/.test(app),
+  "重入分支被删——部分失败/补导又变死区（q19.files>0 后导入卡永不再现）"
+);
+check(
+  "R25 动作：三个重入动作接线（retry-failed / supplement / exit）",
+  /else if \(act === "wizard-retry-failed"\) ui\.enterBidWizardReentry\("retry-failed"\);/.test(app) &&
+    /else if \(act === "wizard-supplement"\) ui\.enterBidWizardReentry\("supplement"\);/.test(app) &&
+    /else if \(act === "wizard-exit-reentry"\) ui\.exitBidWizardReentry\(\);/.test(app),
+  "重入动作路由被删（按钮点了没反应）"
+);
+check(
+  "R25 入口①：结果面部分失败给重导按钮（失败计数同 partial 判据）",
+  /failedRows\.length \? '<div class="bid-wiz-bar"><button class="btn btn-primary" data-bid-act="wizard-retry-failed">'/.test(app) &&
+    /failedR25\.length \? '<div style="margin-top:10px"><button class="btn" data-bid-act="wizard-retry-failed">'/.test(app),
+  "「修复后重新导入即可」的话无 UI 路径兑现（结果面/树区重导入口被删）"
+);
+check(
+  "R25 入口②：完成态卡给补导按钮（FILES_IMPORTED 后新批次可达）",
+  /data-bid-act="wizard-supplement">' \+ ICON\.plus \+ "补导文件<\/button>/.test(app) && /plus: '<svg/.test(app),
+  "补遗/澄清函补导入口被删（向导生命周期断链回潮）"
+);
+check(
+  "R25 预勾选：retry-failed 只选 FAILED 件（upload_ref 对齐 rel，不在场即跳过）",
+  /if \(String\(f\.parse_status \|\| ""\)\.toLowerCase\(\) !== "failed"\) continue;/.test(app) &&
+    /const rel = f\.upload_ref \|\| f\.filename \|\| "";/.test(app) &&
+    /if \(rel && w\.files\.some\(\(x\) => x\.rel === rel\)\) \{[\s\S]{0,200}next\[rel\] = guessBidFileKind/.test(app),
+  "失败件预勾选逻辑漂移（把成功件也带上 = 重复导入整批）"
+);
+check(
+  "R25 补导口径：supplement 清空旧勾选 + 重入强制重拉文件列表",
+  /w\.sel = \{\}; \/\/ 补导：新批次从空选开始/.test(app) &&
+    /w\.treeStatus = "idle"; \/\/ 渲染时自动 loadBidWizardTree 重拉/.test(app),
+  "补导带旧勾选残留（已入库件被重复提交）/列表吃缓存（修复后的文件不可见）"
+);
+check(
+  "R25 收口：导入完成后退出重入（结果面接管，失败件可再入——循环到全绿）",
+  /state\.bidWizard\.reentry = null;/.test(app) && /新结果若仍有失败件，重导入口随结果面再现/.test(app),
+  "导入后滞留重入态（或退出重入的清理被删）"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
