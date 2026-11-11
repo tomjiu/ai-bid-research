@@ -1052,6 +1052,70 @@ pub fn unmapped_scoring_findings(store: &DomainStore) -> Vec<ValidationFinding> 
     }]
 }
 
+/// #88 审计 F-06：格式件核对清单（导出 warnings 消费——先可见后硬化）。
+///
+/// 招标文件「投标文件格式」章要求的件 vs 导出七件（`StandardForm` 固定
+/// 面）+ 附表：从**格式要求类 REQ** 文本提取被指名的件（《X》书名号形态
+/// ∪ 件名词表），不在七件覆盖面内的 → 告警（「请人工确认附页/单独装订/
+/// 补 profile」）。形式评审缺件是实务最高频废标原因——本面先做**可见性**
+/// （不拦：词面匹配有假阳/假阴面，硬化待件名抽取产品化后 Lead 裁决）。
+///
+/// 覆盖面（七件的关键词归一）：投标函/法定代表人身份证明/授权委托书/
+/// 投标保证金（退还申请）/资格声明/无重大违法记录声明/廉洁承诺书。
+pub fn format_docs_checklist(store: &DomainStore) -> Vec<String> {
+    const COVERED: &[(&str, &str)] = &[
+        ("投标函", "投标函"),
+        ("法定代表人身份证明", "法定代表人身份证明书"),
+        ("授权委托书", "授权委托书"),
+        ("投标保证金", "投标保证金退还申请"),
+        ("资格声明", "资格声明"),
+        ("无重大违法", "无重大违法记录声明"),
+        ("廉洁承诺", "廉洁承诺书"),
+    ];
+    let mut missing: Vec<String> = Vec::new();
+    for r in store.requirements().iter().filter(|r| r.category == "格式要求") {
+        let text: String = r
+            .anchors
+            .iter()
+            .map(|a| a.excerpt.as_str())
+            .chain(r.params.get(bid_domain::rewrite::PARAM_KEY).and_then(|v| v.as_str()))
+            .collect::<Vec<_>>()
+            .join("；");
+        // 《X》书名号形态（格式章指名件的最常见形态）
+        let mut names: Vec<String> = text
+            .split('《')
+            .skip(1)
+            .filter_map(|seg| seg.split('》').next().map(str::to_string))
+            .collect();
+        // 「提供/附 X 函/书/声明/证明/表」词面（无书名号形态的保守补充）
+        for kw in ["投标函", "授权委托书", "法定代表人身份证明", "资格声明",
+                   "无重大违法记录声明", "廉洁承诺书", "履约保函", "财务审计报告",
+                   "信用证明", "业绩证明"] {
+            if text.contains(kw) {
+                names.push(kw.to_string());
+            }
+        }
+        for n in names {
+            let n = n.trim();
+            if n.is_empty() {
+                continue;
+            }
+            // 在七件覆盖面内（关键词归一比对）→ 不告警
+            if COVERED.iter().any(|(k, _)| n.contains(k)) {
+                continue;
+            }
+            let line = format!(
+                "招标文件指名「{n}」（REQ {} 格式要求）不在导出七件标准面内——请人工确认（附页/单独装订/主体信息补全后重导）",
+                r.id,
+            );
+            if !missing.contains(&line) {
+                missing.push(line);
+            }
+        }
+    }
+    missing
+}
+
 /// #88 审计 F-05（勘误后半面）：全局一致性冲突门（导出门 1i 消费）。
 ///
 /// #423 的四类跨面冲突（金额/工期/术语/承诺——正文↔正文 + 参数账↔正文）
