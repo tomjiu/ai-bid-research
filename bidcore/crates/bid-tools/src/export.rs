@@ -131,6 +131,10 @@ pub struct ExportDecision {
     /// 项目官方名称（招标文件口径；缺省回落 store 项目名 + 告警——内部名≠官方名）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
+    /// 项目编号（#88 修复 7：显式决策面——招标文件口径的编号；缺省回落
+    /// REQ 参数账 model 键（抽取面），两者皆缺 → 投标函抬头【待填】→ 门 1k 拒）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_no: Option<String>,
     /// 投标工期（日历天；None = 未定 → 投标函工期栏【待填】）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_days: Option<u32>,
@@ -419,7 +423,19 @@ fn build_export_forms(
             n
         }
     };
-    let project_no = req_param_by_excerpt(store, "项目编号", "model").unwrap_or_default();
+    let project_no = decision
+        .project_no
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| req_param_by_excerpt(store, "项目编号", "model"))
+        .unwrap_or_default();
+    if project_no.is_empty() {
+        warnings.push(
+            "项目编号未捕获（profile.project_no 缺省且 REQ 参数账无 model 键）——投标函抬头/落款将落【待填】（#88 F-06：门 1k 拒；显式传 profile.project_no 或补抽取）".into(),
+        );
+    }
     if decision.duration_days.is_none() {
         warnings
             .push("投标工期未随导出给出（profile.duration_days）——投标函工期栏将落【待填】".into());
@@ -641,7 +657,8 @@ fn build_overview_table(
 }
 
 /// 摘要含 `keyword` 且 `params[param_key]` 在场的首个 REQ → 参数字符串值。
-fn req_param_by_excerpt(store: &DomainStore, keyword: &str, param_key: &str) -> Option<String> {
+/// `pub(crate)`：#88 修复 7 门 1k 复用（投标函项目编号数据源——单一真源）。
+pub(crate) fn req_param_by_excerpt(store: &DomainStore, keyword: &str, param_key: &str) -> Option<String> {
     store
         .requirements()
         .iter()

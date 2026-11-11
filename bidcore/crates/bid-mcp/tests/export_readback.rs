@@ -33,6 +33,39 @@ use serde_json::{json, Value};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 // ---------------------------------------------------------------- 常量与纪律
 
 /// CJK 占非空白字符的比例下限（同 `bid-parse/tests/numbering_corpus.rs`）。
@@ -125,6 +158,7 @@ struct Fixture {
 fn fixture(tag: &str, target_chars: u32) -> Fixture {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(
         &mut svc,
         "create_bid_project",
@@ -380,6 +414,7 @@ fn export_profile() -> Value {
             { "item": "售后服务（三年质保）", "unit": "项", "quantity": 1.0, "unit_price": 300_000.0 }
         ],
         "project_name": "某市第一人民医院智慧病房物联网平台建设项目",
+        "project_no": "ZFCG-2026-RB",
         "duration_days": 180,
         "validity_days": 90,
         "deposit_amount": 300_000.0,
@@ -764,7 +799,9 @@ fn readback_docx_dark_bid_scrubbed_and_structure_intact() {
         json!({
             "project_id": fx.pid, "format": "docx",
             "output_path": "out/回读-暗标.docx",
-            "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司" },
+            "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司",
+                "bid_amount": 15_800_000.0, "duration_days": 180, "validity_days": 90,
+                "legal_rep_gender": "男", "project_no": "ZFCG-2026-RB" },
         }),
     ));
     let doc = read_docx(Path::new(r["artifact"]["url"].as_str().unwrap()));
@@ -1246,6 +1283,7 @@ fn readback_xlsx_channel_currently_refused_honestly() {
         &mut fx.svc,
         "export_bid_document",
         json!({
+        "profile": b4_profile(),
             "project_id": fx.pid, "format": "xlsx",
             "output_path": "out/回读.xlsx",
         }),

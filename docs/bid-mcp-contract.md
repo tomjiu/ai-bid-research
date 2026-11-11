@@ -441,6 +441,17 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        生效。unmapped_scoring_items 非空时门 1h 拒导出；人工确认未映射
        可接受（无评分项语料误抽等）才传，理由进 warnings 审计面。
        空串/缺省 = 不豁免；非字符串 → 响亮拒),
+       waive_format_placeholder?(#88 F-06 硬化面（agent-q7vx #105）：三件套
+       数据缺位豁免理由——非空字符串生效。门 1l 拒导出时，无法定授权
+       委托（法定代表人亲签）/确认带【待填】导出等人工场景才传；理由进
+       warnings 审计面。空串/缺省 = 不豁免；非字符串 → 响亮拒),
+       waive_length_overrun?(#88 F-09（#105）：超篇幅豁免理由——非空字符串
+       生效。门 1m 拒导出时，评标办法不设页数限制等人工场景才传；理由进
+       warnings 审计面。空串/缺省 = 不豁免；非字符串 → 响亮拒),
+       max_overrun_pct?(#88 F-09（#105）：超篇幅阈值（%——判据 chars×100 >
+       target×(100+pct)，整数算术严格大于）。正整数 1..=10000；缺省 50
+       （审计建议值）；实质停用传 10000。页数硬约束项目收紧/无页数约束
+       项目放宽——阈值是调用方裁决面；非正整数/超值域 → 响亮拒),
        profile:{dark_bid? , template?}, options:{tracked_changes?, watermark?}, project_version }
 嵌入: #68 阶段 3——章正文支持 md 块语法（无语法内容与旧版字节级同输出）：
      - 表格：连续 | 行（首行表头 + |---| 分隔行 + 数据行）→ docx 表格
@@ -455,6 +466,10 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
 out: { artifact:{url, sha256, size}, content_version_snapshot,
        evidence_validity:{ #88 F-10 证据体检单（常驻——四态计数 + Expiring 明细）
          active, expiring, expired, superseded, expiring_detail:[{ev_id, title, valid_until}] },
+       extraction_health:{ #88 F-14（#105）：抽取健康度（常驻——导出成功 ≠
+         抽取充分，回执同步携带诚实面；coverage_scan 单一真源，与建纲门
+         同源扫描）face_files, marked_files, regex_fallback_files,
+         excluded_blocks, requirements },
        precheck:{blockers:0, waived:[]},
        （waived 恒空——预留字段，无通用豁免通道；#508）
        tables_written, table_kinds:[...], forms_written, form_titles:[...],
@@ -492,9 +507,10 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
       申请/五资格声明/六无重大违法记录声明/七廉洁承诺书（BidderProfile
       真源；缺字段标【待填】；标题 Heading2 样式段——防关键词假阳性）。
 幂等: (project_id, content_version, format, profile, output_path, decision_fp,
-     waive_star_missing, waive_unmapped_scoring) 相同 → 返回缓存 artifact
+     waive_star_missing, waive_unmapped_scoring, waive_format_placeholder,
+     waive_length_overrun, max_overrun_pct) 相同 → 返回缓存 artifact
      （#117：报价决策指纹入键——换报价重导是新导出；#88：豁免与否是不同
-     的导出裁决，不吃旧键跳门）
+     的导出裁决，不吃旧键跳门；#105：新豁免/阈值同理入键）
 门禁: 三门 Approved + 全 RT DONE 之外，#180 起另校验**审核内容绑定**：
      pre_export_confirm 最后一条 Approved 的 reviewed_content_digest
      （章节树摘要——结构定位 + 叶正文）≠ 当前 → E_UNPROCESSABLE
@@ -565,6 +581,26 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
        要求类 REQ 指名的件（《X》书名号 ∪ 件名词表）不在导出七件标准面
        （StandardForm）内 → warnings 逐件告警（形式评审缺件 = 实务最高频
        废标原因；硬化待件名抽取产品化后 Lead 裁决）。
+     · 1j-2 决策对账门·正文面（#88 F-05 决策面的注入扩展——agent-q7vx
+       #105）：决策值（投标总报价/工期）临时注入 run_review 比对面
+       （合成 DECISION 行，不落库），**章正文 vs 决策值**同维度不同值 →
+       拒（AMOUNT_DIMS 增「投标总报价」前提词）；只取 DECISION 相关
+       findings（非决策冲突归 1i，不双报）；**无豁免通道**——数值只能改齐。
+     · 1l 三件套数据缺位门（#88 F-06 硬化面（#105）——审计修复优先序
+       第 1 位）：投标函/法定代表人身份证明/授权委托书的**数据字段**
+       缺位（字段级确定性检查，与构造器入参同源——设计性空位【签字/
+       日期/年龄】等人工现场填写位不误拦；与 1k 可见面互补：1k 查「件
+       在不在」、1l 查「件的数据字段填没填」）→ 拒；解决通道 = 补
+       bidder-profile.json / 导出 profile 决策字段（project_no 显式
+       决策面 > REQ 参数账 model 键兜底），或 waive_format_placeholder
+       非空理由显式豁免（理由进 warnings）。
+     · 1m 超篇幅可配置门（#88 F-09（#105））：单叶正文字数超配额
+       max_overrun_pct%（缺省 50；整数算术严格大于——恰等阈值放行）→
+       E_CHARS_OVER_LIMIT 拒（#47 规模轮实测带外率 70.8%/最大 +58.8%的
+       系统性超带在页数受限/暗标场景扣分或截断）；解决通道 = 压缩正文 /
+       调大 max_overrun_pct / waive_length_overrun 显式豁免；带内仍走
+       W_CHARS_OFF_TARGET MINOR（双层信号不冲突）；零配额叶不判（与
+       规则 4 同口径）。
 状态: → READY_TO_EXPORT → EXPORTED
 ```
 

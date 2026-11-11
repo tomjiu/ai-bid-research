@@ -218,6 +218,9 @@ fn full_decision() -> ExportDecision {
             note: String::new(),
         }],
         project_name: Some("智慧病房物联网平台建设项目".into()),
+        // project_no 保持 None——REQ 参数账兜底路径由本测试的夹具验证
+        //（显式决策面路径见 fatal_gates_b4.rs）
+        project_no: None,
         duration_days: Some(180),
         validity_days: Some(90),
         deposit_amount: Some(300_000.0),

@@ -30,6 +30,30 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn repo_root() -> PathBuf {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     // #183 围栏：词法 `..` 会被围栏预拒——受信夹具根统一 canonical 绝对路径
@@ -145,6 +169,7 @@ fn e2e_artifacts_synth_tender() {
     ));
     std::fs::create_dir_all(&ws).unwrap();
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(files_dir());
+    b4_write_profile(&ws);
 
     // run-id 目录（+ latest 刷新）
     let stamp = SystemTime::now()
@@ -665,7 +690,9 @@ fn e2e_artifacts_synth_tender() {
                 "validity_days": 90,
                 "deposit_amount": 300_000.0,
                 "legal_rep_gender": "男",
+                "project_no": "ZFCG-2026-ART",
             },
+            "max_overrun_pct": 10000,
         }),
     ));
     let docx_url = export_docx["artifact"]["url"].as_str().unwrap().to_string();
@@ -931,7 +958,9 @@ fn e2e_artifacts_synth_tender() {
                     "validity_days": 90,
                     "deposit_amount": 300_000.0,
                     "legal_rep_gender": "男",
+                    "project_no": "ZFCG-2026-ART",
                 },
+                "max_overrun_pct": 10000,
             }),
         ));
         let u = e["artifact"]["url"].as_str().unwrap().to_string();

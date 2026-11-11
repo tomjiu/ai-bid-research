@@ -38,6 +38,41 @@ use serde_json::{json, Value};
 use std::io::Read;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        // 语料 REQ 原文工期 90 日历天——决策与正文同值（门 1i 对账面：
+        // 夹具不制造自相矛盾的两个数）
+        "duration_days": 90,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn fixtures() -> PathBuf {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/corpus-A/files");
     // #183 围栏：词法 `..` 会被围栏预拒——受信夹具根统一 canonical 绝对路径
@@ -112,6 +147,7 @@ fn leaf_ids(svc: &BidService) -> Vec<String> {
 fn acceptance_setup(tag: &str) -> (BidService, String, PathBuf) {
     let ws = ws_dir(tag);
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(fixtures());
+    b4_write_profile(&ws);
 
     // ① 建项目（MCP §1）
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
@@ -290,6 +326,8 @@ fn writing_acceptance_full_flow_docx_out() {
 
     // ⑧ 导出（MCP §8——成品 docx）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-写作验收.docx",
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();
@@ -434,6 +472,8 @@ fn writing_acceptance_short_draft_blocked_from_export() {
 
     // ⑧ 导出被拒（面 1：PreExportConfirm 未 Approved → E_STATE）
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-短稿.docx",
     }));
     assert_eq!(err_code(&reply), "E_STATE", "未过导出确认门: {reply:?}");
@@ -444,6 +484,8 @@ fn writing_acceptance_short_draft_blocked_from_export() {
         .record_review(Gate::PreExportConfirm, &bid_domain::TrustedPrincipal::human("wa-lead"), Decision::Approved, vec![], None)
         .unwrap();
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-短稿.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "RT 未关单必须拒导出: {reply:?}");
@@ -481,6 +523,8 @@ fn writing_acceptance_short_draft_blocked_from_export() {
         .record_review(Gate::PreExportConfirm, &bid_domain::TrustedPrincipal::human("wa-lead"), Decision::Approved, vec![], None)
         .unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-修复后.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "修复闭环后导出成功");
@@ -548,6 +592,8 @@ fn writing_acceptance_export_independent_of_review_approval() {
     assert!(svc.store().open_blockers().is_empty(), "零 findings 记审不派生 RT——RT 闸面为空");
 
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-直接批准.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "篇幅不足即使直接批准也拒: {reply:?}");
@@ -575,6 +621,8 @@ fn writing_acceptance_export_independent_of_review_approval() {
          None)
         .unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-直接批准-修复.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "修复重审后导出成功");
@@ -597,6 +645,8 @@ fn writing_acceptance_export_independent_of_review_approval() {
          None)
         .unwrap();
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-空叶.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "空叶即使直接批准也拒: {reply:?}");

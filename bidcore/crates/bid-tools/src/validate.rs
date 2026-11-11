@@ -1204,7 +1204,190 @@ pub fn decision_consistency_findings(
                         row.id, row.param_name, row.response_value,
                     ),
                 });
-            }
+            }        }
+    }
+    out
+}
+
+// ---------------- #88 批次 4（#105 rebase 对齐 main #102/#103 编号后）：门 1l/1m
+
+/// #88 审计 F-06/P0-4（审计修复优先序第 1 位）：三件套数据缺位门
+/// （导出门 1l 消费——#105 rebase 对齐：main #103 已把 1k 用作格式件核对清单可见面）。
+///
+/// 投标函 / 法定代表人身份证明 / 授权委托书是**形式审查首查件**——
+/// 数据字段缺位时成品落【待填】原样导出（既有口径「比编造好」是对的，
+/// 但只告警不拦 = 用户不看 warnings 就装订投标 → 报价缺项/身份缺项
+/// 废标级）。本门把三件的**数据字段**缺位升为 BLOCKER。
+///
+/// 字段级检查（非成品全文扫【】）的口径理由：三件模板自带**设计性
+/// 空位**（【签字人姓名】【出具日期】【年龄】等人工现场填写位）——
+/// 全文扫描会把每份合法标书都拦下；字段级检查与「成品数据字段缺位」
+/// 的语义精确对齐（构造器消费什么字段，门就查什么字段——单一真源）。
+///
+/// 字段清单（与 [`crate::export::build_export_forms`] 的构造入参同源）：
+/// - 投标函：投标人名称（profile.company_name）、项目编号（REQ 参数
+///   账）、投标总报价 / 工期 / 投标有效期（决策面，0/None = 未定）；
+/// - 法定代表人身份证明：姓名 / 身份证号 / 职务 / 公司 / 注册地址
+///   （profile）+ 性别（决策 legal_rep_gender——不能从身份证号推断）；
+/// - 授权委托书：委托人（= 法定代表人）+ 受托人姓名 / 身份证号
+///   （profile.agent/agent_id——无法定授权的场景走显式豁免）。
+///
+/// 解决通道：补 `bidder-profile.json` / 补导出 profile 决策字段，或
+/// `export_bid_document.waive_format_placeholder` 非空理由显式豁免
+/// （理由进 warnings 审计面——循 star_missing 先例）。
+pub fn format_placeholder_gate_findings(
+    store: &DomainStore,
+    profile: &bid_domain::party::BidderProfile,
+    decision: &crate::export::ExportDecision,
+) -> Vec<ValidationFinding> {
+    // 投标函抬头数据源（与 build_export_forms 同源解析：显式决策 >
+    // REQ 参数账 model 键——单一真源，门与成品不漂移）
+    let project_no = decision
+        .project_no
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| crate::export::req_param_by_excerpt(store, "项目编号", "model"))
+        .unwrap_or_default();
+    let mut out = Vec::new();
+
+    // ---- 投标函（决策三栏 + 抬头两面）
+    let mut missing: Vec<&str> = Vec::new();
+    if profile.company_name.trim().is_empty() {
+        missing.push("投标人名称（bidder-profile.json.company_name）");
+    }
+    if project_no.trim().is_empty() {
+        missing.push("项目编号（profile.project_no 缺省且 REQ 参数账无 model 键——抽取未捕获）");
+    }
+    if !(decision.bid_amount.map(|v| v.is_finite() && v > 0.0).unwrap_or(false)) {
+        missing.push("投标总报价（profile.bid_amount）");
+    }
+    if decision.duration_days.unwrap_or(0) == 0 {
+        missing.push("工期（profile.duration_days）");
+    }
+    if decision.validity_days.unwrap_or(0) == 0 {
+        missing.push("投标有效期（profile.validity_days）");
+    }
+    if !missing.is_empty() {
+        out.push(ValidationFinding {
+            rule_code: "E_FORMAT_PLACEHOLDER".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: format!(
+                "投标函数据缺位——{}（成品将落【待填】= 报价缺项/抬头缺项废标级，#88 F-06/P0-4）；补 bidder-profile.json 与导出 profile 决策字段，或 waive_format_placeholder 显式豁免",
+                missing.join("、"),
+            ),
+        });
+    }
+
+    // ---- 法定代表人身份证明（profile 五字段 + 决策性别）
+    let mut missing: Vec<&str> = Vec::new();
+    if profile.legal_rep.trim().is_empty() {
+        missing.push("法定代表人姓名（legal_rep）");
+    }
+    if decision.legal_rep_gender.as_deref().map(str::trim).unwrap_or("").is_empty() {
+        missing.push("性别（profile.legal_rep_gender——身份证明书要求原文写出）");
+    }
+    if profile.legal_rep_id.trim().is_empty() {
+        missing.push("身份证号（legal_rep_id）");
+    }
+    if profile.legal_rep_position.trim().is_empty() {
+        missing.push("职务（legal_rep_position）");
+    }
+    if profile.company_name.trim().is_empty() {
+        missing.push("出具单位名称（company_name）");
+    }
+    if profile.address.trim().is_empty() {
+        missing.push("注册地址（address）");
+    }
+    if !missing.is_empty() {
+        out.push(ValidationFinding {
+            rule_code: "E_FORMAT_PLACEHOLDER".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: format!(
+                "法定代表人身份证明数据缺位——{}（成品将落【待填】= 形式审查瑕疵，#88 F-06/P0-4）；补 bidder-profile.json，或 waive_format_placeholder 显式豁免",
+                missing.join("、"),
+            ),
+        });
+    }
+
+    // ---- 授权委托书（委托人 + 受托人两面）
+    let mut missing: Vec<&str> = Vec::new();
+    if profile.legal_rep.trim().is_empty() {
+        missing.push("委托人/法定代表人姓名（legal_rep）");
+    }
+    if profile.agent.trim().is_empty() {
+        missing.push("受托人姓名（agent）");
+    }
+    if profile.agent_id.trim().is_empty() {
+        missing.push("受托人身份证号（agent_id）");
+    }
+    if !missing.is_empty() {
+        out.push(ValidationFinding {
+            rule_code: "E_FORMAT_PLACEHOLDER".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: format!(
+                "授权委托书数据缺位——{}（成品将落【待填】= 签署权限链断裂废标级，#88 F-06/P0-4）；补 bidder-profile.json（无法定授权委托、由法定代表人亲签的场景请 waive_format_placeholder 显式豁免）",
+                missing.join("、"),
+            ),
+        });
+    }
+    out
+}
+
+/// #88 审计 F-09/P1-7：超篇幅可配置门（导出门 1m 消费——#105 rebase 对齐：main #102 已把 1j 用作决策对账参数面）。
+///
+/// 既有分治（validate 规则 4 上界）：超带 = `W_CHARS_OFF_TARGET` MINOR
+/// 纯提示——#47 规模轮实测 120 叶带外率 70.8%（最大 +58.8%），系统性
+/// 超带在页数受限/暗标评标场景**扣分或截断**，纯提示 = 无防护。
+/// 本门把「超带超阈值」升 BLOCKER，阈值可配（默认 50%——审计建议值）：
+///
+/// - 判据（整数算术，严格大于）：`chars × 100 > target × (100 + pct)`；
+/// - `pct` 是**调用方裁决面**（`export_bid_document.max_overrun_pct`，
+///   1..=10000）：收紧（如 20）/放宽（如 200）都合法——页数硬约束的
+///   项目收紧、无页数约束的项目放宽，产品不替用户定；
+/// - 阈值内超带仍走既有 MINOR 提示（20%~阈值之间双层信号，不冲突）；
+/// - 豁免：`waive_length_overrun` 非空理由显式豁免（理由进 warnings
+///   审计面——「评标办法不设页数限制」类人工确认场景）。
+///
+/// `target_chars == 0`（无配额叶）不判（与规则 4 同口径：没有目标就
+/// 没有带外）；空正文由 E_SECTION_EMPTY 承载，不双报。
+pub fn length_overrun_gate_findings(
+    store: &DomainStore,
+    max_overrun_pct: u32,
+) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    for node in store.sections() {
+        if node.target_chars == 0 {
+            continue;
+        }
+        let Some(content) = node.content.as_deref() else {
+            continue;
+        };
+        if content.trim().is_empty() {
+            continue; // 空章归 E_SECTION_EMPTY，不双报
+        }
+        let chars = content.chars().count();
+        let target = node.target_chars as usize;
+        // 严格大于：恰等于阈值（如 +50% 整）放行——带内上沿不误伤
+        if chars.saturating_mul(100) > target.saturating_mul(100 + max_overrun_pct as usize) {
+            let over_pct = chars.saturating_mul(100).saturating_sub(target.saturating_mul(100)) / target;
+            out.push(ValidationFinding {
+                rule_code: "E_CHARS_OVER_LIMIT".into(),
+                severity: "BLOCKER",
+                section_id: Some(node.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节「{}」正文字数 {chars} 超出配额 {target} 达 +{over_pct}%（阈值 +{max_overrun_pct}%，#88 F-09）——页数受限/暗标评标场景超长按违反编制要求扣分或截断；压缩正文或调大 max_overrun_pct，或 waive_length_overrun 显式豁免",
+                    node.title,
+                ),
+            });
         }
     }
     out
@@ -1256,7 +1439,6 @@ fn amount_yuan(text: &str) -> Option<f64> {
         Some(n)
     }
 }
-
 // ---------------------------------------------------------------- #241 裁定：提交就绪面
 
 /// 提交就绪清单项（机器可读的逐条补件面——供 Agent/Human 逐项消除）。
