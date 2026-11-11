@@ -585,6 +585,41 @@
         }
       });
     }
+    // R25（#47）：建纲流演示态——早期相位（e2e 用：window.__demoBidPhase =
+    // "early" 切入 FILES_IMPORTED 零章节起步；缺省 full = 既有 DRAFTING 完整
+    // 演示面零位移）。phase 随抽取/建纲真改——与真实壳的状态机同序。
+    let demoBuildFlow = { phase: "imported", reqs: 53 };
+    function demoBidEarlyState() {
+      const p = demoBuildFlow.phase;
+      const status = p === "imported" ? "FILES_IMPORTED" : p === "extracted" ? "REQUIREMENTS_EXTRACTED" : "MATRIX_READY";
+      return {
+        present: true,
+        workspace: root,
+        db: root + "\\db.json",
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", code: "", mode: "明标", status },
+        state: { status, allowed_next_tools: [], terminal: false, dirty_sections: [], pending_rewrite_directives: [], content_binding: { sections_digest: "demo-digest", content_version: 2 }, agent_waivers: [], human_review_complete: true },
+        quick_stats: { requirements: p === "imported" ? 0 : demoBuildFlow.reqs, evidence: 0, evidence_bindings: 0, sections: p === "built" ? 3 : 0, sections_leaf: p === "built" ? 2 : 0, sections_drafted: 0, sections_accepted: 0, sections_failed: 0, sections_dirty: 0, target_total_chars: p === "built" ? 30000 : 0, actual_total_chars: 0, pages_estimate: p === "built" ? 20 : 0, files: 2 }
+      };
+    }
+    function demoBidEarlyOutline() {
+      const built = demoBuildFlow.phase === "built";
+      return {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "MATRIX_READY" },
+        nodes: built
+          ? [
+              { id: "SEC-E01", parent_id: null, title: "第一章 技术方案", level: 1, order: 1, status: "PENDING", dirty: false, target_chars: 30000, actual_chars: 0, req_count: 10, is_leaf: false, has_content: false, content_attempt: 0, chapter_file: null },
+              { id: "SEC-E02", parent_id: "SEC-E01", title: "1.1 技术参数响应", level: 2, order: 2, status: "PENDING", dirty: false, target_chars: 18000, actual_chars: 0, req_count: 6, is_leaf: true, has_content: false, content_attempt: 0, chapter_file: null },
+              { id: "SEC-E03", parent_id: "SEC-E01", title: "1.2 资格与商务", level: 2, order: 3, status: "PENDING", dirty: false, target_chars: 12000, actual_chars: 0, req_count: 4, is_leaf: true, has_content: false, content_attempt: 0, chapter_file: null }
+            ]
+          : [],
+        stats: built
+          ? { sections: 3, sections_leaf: 2, sections_drafted: 0, sections_accepted: 0, sections_failed: 0, sections_dirty: 0, target_total_chars: 30000, actual_total_chars: 0, pages_estimate: 20 }
+          : { sections: 0, sections_leaf: 0, sections_drafted: 0, sections_accepted: 0, sections_failed: 0, sections_dirty: 0, target_total_chars: 0, actual_total_chars: 0, pages_estimate: 0 }
+      };
+    }
+    const demoEarly = () => window.__demoBidPhase === "early";
     return {
       mode: "demo",
       post(msg) {
@@ -596,9 +631,11 @@
             case "app.info":
               return respond(m.id, { version: "0.1.0-demo", workspace: root, ui_dir: "", exe: "mang-app.exe" });
             case "bid.state":
-              return respond(m.id, DEMO_BID.state);
+              // R25（#47）：早期相位（e2e 切入）——FILES_IMPORTED 起步的
+              // 建纲流现场；缺省 full（既有 DRAFTING 完整面零位移）
+              return respond(m.id, demoEarly() ? demoBidEarlyState() : DEMO_BID.state);
             case "bid.outline":
-              return respond(m.id, DEMO_BID.outline);
+              return respond(m.id, demoEarly() ? demoBidEarlyOutline() : DEMO_BID.outline);
             case "bid.matrix":
               return respond(m.id, DEMO_BID.matrix);
             case "bid.addenda":
@@ -608,6 +645,82 @@
               return demoAddendumWaiver(m);
             case "bid.no_addendum_confirm":
               return demoNoAddendumConfirm(m);
+            // ---- R25（#47）：建纲流三面（真实壳 = extract_requirements /
+            //      recommend_length_profile / build_outline 工具面；演示桥
+            //      同形回包 + phase 真改——抽取/建纲后 bid.state 重读即见）
+            case "bid.extract": {
+              demoBuildFlow.phase = "extracted";
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "FILES_IMPORTED" },
+                extract: {
+                  counts: { total: demoBuildFlow.reqs, added: demoBuildFlow.reqs, by_category: { tech_param: 30, qualification: 7, scoring: 6, commercial: 4, format: 3, veto: 3 } },
+                  merge: { regex_total: demoBuildFlow.reqs, regex_dropped_covered: 0, agent_requirements: 0, uncovered_blocks: 12, coverage_complete: false, regex_kept_unbacked_requirement: 0 },
+                  star_summary: { total: 4, captured: 4, missing: 0, declarations: 1 },
+                  conflicts: [],
+                  missing_sequence: [],
+                  packages: { detected: 2, items: [
+                    { id: "PKG-A", label: "一标段：设备采购", kind: "标段", number: "1", req_count: 42, sources: ["A-招标文件.docx"] },
+                    { id: "PKG-B", label: "二标段：安装服务", kind: "标段", number: "2", req_count: 18, sources: ["A-招标文件.docx"] }
+                  ], shared_req_count: 6 },
+                  warnings: ["UNCOVERED_BLOCKS: 12 块未标记（正则已兜底补漏——用 get_coverage_report 查看后 submit_block_marks 补标，重跑 extract 更准）"],
+                  status: "REQUIREMENTS_EXTRACTED",
+                  project_version: 2
+                }
+              });
+            }
+            case "bid.length_profile":
+              // R25（#47）：推荐面演示（真实壳 = recommend_length_profile——
+              // 信号/理由/四档 alternatives 与工具面同形）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "REQUIREMENTS_EXTRACTED" },
+                recommendation: {
+                  project_id: "PRJ-0001",
+                  recommended_profile: "standard",
+                  profile_label: "标准档（80 万字）",
+                  target_chars: 800000,
+                  approx_pages: 534,
+                  confidence: "medium",
+                  reasons: ["评分细则 36 条（≥30 → 加档）", "★实质性条款 4 条（≥3 → 加档）"],
+                  from_tender_spec: null,
+                  alternatives: [
+                    { profile: "practical", label: "精简档（40 万字）", chars: 400000, pages: 267, when: "预算 ≤500 万或评分细则 ≤15 条" },
+                    { profile: "standard", label: "标准档（80 万字）", chars: 800000, pages: 534, when: "常规工程/货物采购" },
+                    { profile: "conservative", label: "稳健档（120 万字）", chars: 1200000, pages: 800, when: "评分细则 ≥30 或 ★条款 ≥3" },
+                    { profile: "maximum", label: "最大档（250 万字）", chars: 2500000, pages: 1667, when: "复杂 EPC / 多专业交叉" }
+                  ],
+                  signals: { scoring_detail_count: 36, star_count: 4, budget_yuan: 32000000, tender_type: "工程", explicit_limit_chars: null },
+                  next: "把建议 + 理由 + alternatives 呈现给用户确认后 build_outline(length_profile=…)——决策权在用户，推荐可被覆盖"
+                }
+              });
+            case "bid.build_outline": {
+              // R25（#47）：分包 ≥2 时必须选包（工具面同构拒绝——EUnprocessable
+              //      透传壳侧 bad_args 码）；选包后 phase → built
+              if (!m.package) {
+                return fail(m.id, "bad_args", "build_outline: 检测到 2 个分包（PKG-A(一标段：设备采购)、PKG-B(二标段：安装服务)）——必须传 package 选定投哪个包（共用条款自动进纲）；「投全部」= 每包各建一个项目分别建纲。用 list_packages 查看识别结果与证据");
+              }
+              demoBuildFlow.phase = "built";
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "REQUIREMENTS_EXTRACTED" },
+                outline_build: {
+                  counts: { sections: 3, leaves: 2, requirements: 18, total_requirements: demoBuildFlow.reqs, total_target_chars: 30000, matrix_rows: 18, matrix_blocking: 2 },
+                  package: { selected: { id: String(m.package), label: "一标段：设备采购", kind: "标段", number: "1" }, auto_selected: false, shared_req_count: 6 },
+                  leaf_quotas: [
+                    { section_id: "SEC-E02", title: "1.1 技术参数响应", target_chars: 18000 },
+                    { section_id: "SEC-E03", title: "1.2 资格与商务", target_chars: 12000 }
+                  ],
+                  warnings: [],
+                  effective_profile: m.length_profile || null,
+                  status: "MATRIX_READY",
+                  project_version: 3
+                }
+              });
+            }
             case "bid.quality":
               return respond(m.id, DEMO_BID.quality);
             case "bid.score":
@@ -844,6 +957,16 @@
     bidPackages: { status: "idle", data: null, error: "" },
     // #603 批 C：补遗台账 + 豁免写面（gates 面板补遗门接线用）
     bidAddenda: { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false },
+    // R25（#47）：建纲流（向导深水区——导入后直达章节树）。抽取写面 +
+    // 篇幅推荐缓存 + 建纲写面；树区空态卡消费（独立于 bidWizard——那是
+    // 导入现场，这是导入后的下一段生命周期）
+    bidBuild: {
+      extractBusy: false, extractError: "", extractInfo: "", extractWarns: [],
+      recStatus: "idle", recError: "", rec: null,
+      profileSel: "", packageSel: "",
+      pkgStatus: "idle", packages: null,
+      buildBusy: false, buildError: "", buildInfo: ""
+    },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1351,6 +1474,10 @@
         // #19：空态向导入口（侧栏卡按钮 / 工作台空态共用）
         else if (act === "wizard") ui.openBidWorkbench("detail");
         else if (act === "wizard-refresh-tree") ui.loadBidWizardTree(true);
+        // R25（#47）：建纲流三动作（树区空态卡——抽取 / 重试推荐 / 建纲）
+        else if (act === "build-extract") ui.submitBidExtract();
+        else if (act === "build-refresh-rec") { ui.loadBidLengthProfile(true); ui.loadBidBuildPackages(true); }
+        else if (act === "build-go") ui.submitBidBuildOutline();
         else if (act === "wizard-retry-import") ui.submitBidWizardImport();
         // #18 出口闭环：工具栏「校验并导出」（切页签 + 触发校验）/ 重新校验 /
         // 确认导出 / 产物定位
@@ -1562,20 +1689,22 @@
       if (st19 === "DRAFT" && !(q19.files > 0)) {
         renderBidWizardImport(treeEl, host);
       } else if (state.bidWizard.result) {
-        // #19：导入刚完成——树区给「下一步」引导（对齐 bid.coverage next 语言），
-        // 右面板保留导入结果面（per_file 逐件表）
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>';
+        // R25（#47）：导入刚完成——树区建纲流卡（原「由 Agent 走 MCP」死
+        // 文案收口为可操作入口：抽取 → 选档 → 建纲），右面板保留导入
+        // 结果面（per_file 逐件表）
+        renderBidBuildFlow(treeEl, q19);
         const panelEl19 = host.querySelector("#bid-panel");
         if (panelEl19) renderBidWizardResult(panelEl19, state.bidWizard.result);
       } else if (q19.files > 0) {
         // R4（#47）：向导完成态首屏——重开工作区场景（无进行中向导）：
-        // 已导入未建纲，树区给 quick_stats 驱动的「已入库」引导，右面板
-        // 完成态卡（不再是泛泛「大纲未建立」占位——数据同源 bid.state）
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库（' + (q19.files || 0) + " 件）</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>";
+        // 已导入未建纲，树区给建纲流卡（R25），右面板完成态卡（不再是
+        // 泛泛「大纲未建立」占位——数据同源 bid.state）
+        renderBidBuildFlow(treeEl, q19);
         const panelEl19 = host.querySelector("#bid-panel");
         if (panelEl19 && activePanel === "detail") renderBidWizardDone(panelEl19, b);
       } else {
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
+        // 无文件无条款的罕见残态（如建项后被外部清库）——诚实占位在卡内
+        renderBidBuildFlow(treeEl, q19);
       }
       if (activePanel === "quality") renderBidQualityPanel(host);
       // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
@@ -1879,7 +2008,7 @@
       + fails
       + (integrity.length ? '<div class="bid-cov-next" data-state="warn"><span>输入完整性</span>' + integrity.map((f) => esc(f.name + "：" + (f.reason || ""))).join("；") + "</div>" : "")
       + (warns.length ? '<details class="bid-wiz-warns"><summary>' + warns.length + " 条告警</summary>" + warns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
-      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草</div>'
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——左侧「抽取条款」一键入册（确定性规则抽取），随后选篇幅档建纲，这里显示章节树</div>'
       + "</div>";
   }
 
@@ -1904,8 +2033,135 @@
       + "<tr><td>模式</td><td>" + esc(p.mode || "—") + "</td></tr>"
       + "<tr><td>状态</td><td>" + esc(bidProjectStatusZh(p.status || "")) + "</td></tr>"
       + "</tbody></table>"
-      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草——建纲后左侧显示章节树与本面板详情</div>'
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>左侧抽取条款并选篇幅档建纲——建纲后这里显示章节树与本面板详情（矩阵 / 门 / 自评页签同步可用）</div>'
       + "</div>";
+  }
+
+  /** R25（#47）：建纲流卡——树区空态主内容（向导深水区：导入后直达
+   * 章节树）。两相位由 quick_stats 同源数据驱动：
+   * ① files>0 且 requirements==0 → 抽取卡（bid.extract 写面——确定性
+   *    规则抽取，无 LLM：评分细则/资格条件/技术参数/★标记）
+   * ② requirements>0 → 推荐卡（bid.length_profile 只读：推荐档 + 理由 +
+   *    信号面 + 四档 alternatives——#287「决策权在用户，推荐可被覆盖」
+   *    的 UI 兑现）+ 建纲写面（bid.build_outline——明写限值直接采用 /
+   *    档位选择 / 分包选择器 detected≥2 时必选）
+   * 成功后 loadBid(true) 重载——章节树呈现，本卡自然退场。 */
+  function renderBidBuildFlow(treeEl, q19) {
+    const bb = state.bidBuild;
+    const files = q19.files || 0;
+    const reqs = q19.requirements || 0;
+    if (!files && !reqs) {
+      treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——导入并抽取条款后，这里显示章节层级、字数进度与状态标记</div></div>';
+      return;
+    }
+    if (reqs === 0) {
+      // 相位①：抽取卡（files>0 且未抽取）
+      treeEl.innerHTML =
+        '<div class="bid-wizard">'
+        + '<div class="bid-wiz-card">'
+        + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">✓</span>导入招标文件<span class="bid-wiz-n">3</span>抽取条款 · 建纲</div>'
+        + '<div class="bid-wiz-title">' + ICON.bid + "抽取条款</div>"
+        + '<div class="bid-wiz-sub">已入库 ' + files + " 件——确定性规则抽取（无需 AI）：评分细则 / 资格条件 / 技术参数 / ★标记逐条入册，为建纲与合规矩阵供料</div>"
+        + (bb.extractInfo ? '<div class="bid-wiz-error" data-state="ok">' + esc(bb.extractInfo) + "</div>" : "")
+        + (bb.extractWarns && bb.extractWarns.length ? '<details class="bid-wiz-warns" open><summary>' + bb.extractWarns.length + " 条告警（零抽取 / 漏标等——逐条可读，不伪装成功）</summary>" + bb.extractWarns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
+        + (bb.extractError ? '<div class="bid-wiz-error" data-state="error">' + esc(bb.extractError) + "</div>" : "")
+        + '<div class="bid-wiz-actions"><button class="btn btn-primary" data-bid-act="build-extract"' + (bb.extractBusy ? ' disabled="disabled"' : "") + ">" + (bb.extractBusy ? "抽取中…" : "抽取条款") + "</button></div>"
+        + "</div></div>";
+      bindBidViewActions(treeEl);
+      return;
+    }
+    // 相位②：推荐 + 建纲卡（requirements>0 且无章节树）
+    let bodyHtml = "";
+    if (bb.recStatus === "idle") {
+      bodyHtml = '<div class="view-state"><div class="view-spinner"></div><div>正在测算篇幅推荐…</div></div>';
+      ui.loadBidLengthProfile();
+    } else if (bb.recStatus === "loading") {
+      bodyHtml = '<div class="view-state"><div class="view-spinner"></div><div>正在测算篇幅推荐…</div></div>';
+    } else if (bb.recStatus === "error") {
+      bodyHtml = '<div class="view-state" data-kind="error"><div class="view-state-title">篇幅推荐读取失败</div><div>' + esc(bb.recError) + '</div><button class="btn" data-bid-act="build-refresh-rec">重试</button></div>';
+    } else {
+      const rec = bb.rec || {};
+      const alts = rec.alternatives || [];
+      const signals = rec.signals || {};
+      const spec = rec.from_tender_spec || null; // 明写限值（档位选择让位明写值）
+      let selHtml = "";
+      if (spec) {
+        selHtml = '<div class="bid-wiz-error" data-state="warn">招标文件明写篇幅：' + fmtChars(rec.target_chars) + " 字（≈" + (rec.approx_pages || 0) + " 页）——建纲将直接采用明写值，无需选档</div>";
+      } else {
+        selHtml = '<div class="bid-build-profs">'
+          + alts.map((a) => {
+            const key = String(a.profile || "");
+            const checked = bb.profileSel === key;
+            const isRec = String(rec.recommended_profile || "") === key;
+            return '<label class="bid-build-prof" data-on="' + checked + '">'
+              + '<input type="radio" name="bid-build-prof" value="' + esc(key) + '"' + (checked ? ' checked="checked"' : "") + ">"
+              + '<span class="bid-build-prof-main"><span class="bid-build-prof-label">' + esc(a.label || key) + (isRec ? ' <span class="bid-build-rec-tag">推荐</span>' : "") + "</span>"
+              + '<span class="bid-build-prof-when">' + esc(a.when || "") + "</span></span>"
+              + '<span class="bid-build-prof-chars">' + fmtChars(a.chars) + " 字<br>≈" + (a.pages || 0) + " 页</span>"
+              + "</label>";
+          }).join("")
+          + "</div>";
+      }
+      // 推荐理由 + 信号行（原始值随行回显——决策可核对，#287 口径）
+      const reasons = (rec.reasons || []).map(String);
+      const reasonsHtml = reasons.length
+        ? '<div class="bid-build-reasons">' + reasons.map((x) => "<div>· " + esc(x) + "</div>").join("") + "</div>"
+        : "";
+      const sigBits = [];
+      if (signals.scoring_detail_count != null) sigBits.push("评分细则 " + signals.scoring_detail_count + " 条");
+      if (signals.star_count != null) sigBits.push("★标记 " + signals.star_count + " 条");
+      if (signals.budget_yuan) sigBits.push("预算 " + fmtChars(signals.budget_yuan) + " 元");
+      if (signals.tender_type) sigBits.push("类型 " + esc(String(signals.tender_type)));
+      if (spec) sigBits.push("明写限值 " + fmtChars(spec) + " 字");
+      const sigHtml = sigBits.length ? '<div class="bid-build-signals">信号：' + sigBits.join(" · ") + "</div>" : "";
+      // 分包选择器（detected≥2 时必选——不选包建纲会被工具面拒，UI 先挡）
+      let pkgHtml = "";
+      if (bb.pkgStatus === "idle") ui.loadBidBuildPackages();
+      if (bb.pkgStatus === "ready" && bb.packages) {
+        const det = bb.packages.detected || 0;
+        if (det >= 2) {
+          const items = bb.packages.items || [];
+          pkgHtml = '<div class="bid-build-pkgs"><div class="bid-build-pkgs-title">选择投标分包（检测到 ' + det + " 包——建纲必须选定，共用条款自动进纲）</div>"
+            + items.map((p) => {
+              const on = bb.packageSel === p.id;
+              return '<label class="bid-build-pkg" data-on="' + on + '">'
+                + '<input type="radio" name="bid-build-pkg" value="' + esc(p.id) + '"' + (on ? ' checked="checked"' : "") + ">"
+                + "<span>" + esc(p.label || p.id) + "</span><span class=\"bid-build-pkg-meta\">" + (p.req_count || 0) + " 条</span></label>";
+            }).join("")
+            + "</div>";
+        } else if (det === 1) {
+          const only = (bb.packages.items || [])[0] || {};
+          pkgHtml = '<div class="bid-build-signals">检测到 1 个分包：' + esc(only.label || "") + "——建纲时自动选定</div>";
+        }
+      }
+      const needPkg = !!(bb.pkgStatus === "ready" && bb.packages && (bb.packages.detected || 0) >= 2);
+      const buildDisabled = bb.buildBusy || (!spec && !bb.profileSel) || (needPkg && !bb.packageSel);
+      bodyHtml = selHtml + reasonsHtml + sigHtml + pkgHtml
+        + (bb.buildError ? '<div class="bid-wiz-error" data-state="error">' + esc(bb.buildError) + "</div>" : "")
+        + '<div class="bid-wiz-actions"><button class="btn btn-primary" data-bid-act="build-go"' + (buildDisabled ? ' disabled="disabled"' : "") + ">" + (bb.buildBusy ? "建纲中…" : "建纲") + "</button></div>";
+    }
+    treeEl.innerHTML =
+      '<div class="bid-wizard">'
+      + '<div class="bid-wiz-card">'
+      + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">✓</span>导入<span class="bid-wiz-n ok">✓</span>抽取<span class="bid-wiz-n">4</span>选档建纲</div>'
+      + '<div class="bid-wiz-title">' + ICON.bid + "选择篇幅档位，建立章节树</div>"
+      + '<div class="bid-wiz-sub">已抽取 ' + fmtChars(reqs) + " 条条款——推荐档只是建议（可改选），建纲同时生成合规矩阵</div>"
+      + (bb.extractInfo ? '<div class="bid-wiz-error" data-state="ok">' + esc(bb.extractInfo) + "</div>" : "")
+      + bodyHtml
+      + "</div></div>";
+    bindBidViewActions(treeEl);
+    treeEl.querySelectorAll('input[name="bid-build-prof"]').forEach((rb) => {
+      rb.addEventListener("change", () => {
+        state.bidBuild.profileSel = rb.value;
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    treeEl.querySelectorAll('input[name="bid-build-pkg"]').forEach((rb) => {
+      rb.addEventListener("change", () => {
+        state.bidBuild.packageSel = rb.value;
+        renderBidWorkbenchIfOpen();
+      });
+    });
   }
 
   /** 章节详情（右面板）：元信息 + 章节正文预览（chapters/{id}.json 的 content） */
@@ -2897,7 +3153,8 @@
   /** #20 分包面板（工作台右面板的 packages 页签——bid.packages 只读）
    *  多标段/多包识别（#316）：包清单 + 逐包条款数 + 选包状态 + 共用条款。
    *  只读面：选包动作不在本面板（选包 = build_outline 传 package 参数——
-   *  管线动作，走 MCP；面板只呈现识别结果与 usage 提示，不伪装可写）。 */
+   *  管线动作；R25 起选包入口在树区建纲流卡的分包选择器——本面板保持
+   *  只读呈现，不伪装可写）。 */
   function renderBidPackagesPanel(host) {
     const panel = host.querySelector("#bid-panel");
     if (!panel) return;
@@ -3033,7 +3290,7 @@
       + '<div class="bid-mx-sum">共 ' + fmtChars(d.total) + " 条 · 筛选后 " + fmtChars(filtered.length) + " 条 · 阻断 " + fmtChars(sum.blocking || 0) + " · ★实质性 " + fmtChars(star.total != null ? star.total : sum.substantive || 0) + (star.total > 0 ? "（已响应 " + fmtChars(star.responded || 0) + "/" + fmtChars(star.total) + "）" : "") + " · 缺证据 " + fmtChars(sum.evidence_missing || 0) + "</div>";
     if (!rows.length) {
       html +=
-        '<div class="view-state"><div class="view-state-title">条款集为空</div><div>MCP 管线 extract_requirements 之后，这里显示 REQ × 响应状态 × 证据 × 章节的合规矩阵</div></div>';
+        '<div class="view-state"><div class="view-state-title">条款集为空</div><div>抽取条款（工作台左侧建纲流卡）之后，这里显示 REQ × 响应状态 × 证据 × 章节的合规矩阵</div></div>';
     } else if (!filtered.length) {
       html += '<div class="view-state"><div class="view-state-title">当前筛选无匹配行</div><div>换个状态/类别，或取消「只看阻断」</div></div>';
     } else {
@@ -5169,6 +5426,14 @@
       };
       // #603 批 C：补遗面同理随根失效（不留旧项目数据）
       state.bidAddenda = { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false };
+      // R25（#47）：建纲流态同理随根失效（推荐/选择/抽取现场是旧项目的）
+      state.bidBuild = {
+        extractBusy: false, extractError: "", extractInfo: "", extractWarns: [],
+        recStatus: "idle", recError: "", rec: null,
+        profileSel: "", packageSel: "",
+        pkgStatus: "idle", packages: null,
+        buildBusy: false, buildError: "", buildInfo: ""
+      };
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
@@ -5232,6 +5497,101 @@
       state.bid.status = "ready";
       state.bid.ts = Date.now();
       renderBidViewIfVisible();
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：拉取篇幅推荐（bid.length_profile 只读——树区推荐卡用）。
+     * 默认选中推荐档（#287：决策权在用户，推荐可被覆盖——radio 可改选） */
+    async loadBidLengthProfile(force) {
+      if (!state.bridge) return;
+      const bb = state.bidBuild;
+      if (bb.recStatus === "loading" && !force) return;
+      bb.recStatus = "loading";
+      bb.recError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.length_profile", {}, 15e3);
+        bb.rec = (r && r.recommendation) || null;
+        bb.recStatus = "ready";
+        if (bb.rec && !bb.profileSel) bb.profileSel = String(bb.rec.recommended_profile || "");
+      } catch (err) {
+        bb.recStatus = "error";
+        bb.recError = err.message || String(err);
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：拉取分包识别（建纲选包用——detected≥2 时选择器必选；
+     * 与分包面板的 bidPackages 缓存分立：生命周期不同步，不共享） */
+    async loadBidBuildPackages(force) {
+      if (!state.bridge) return;
+      const bb = state.bidBuild;
+      if (bb.pkgStatus === "loading" && !force) return;
+      bb.pkgStatus = "loading";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.packages", {}, 15e3);
+        bb.packages = (r && r.packages) || null;
+        bb.pkgStatus = "ready";
+      } catch (err) {
+        bb.pkgStatus = "error";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：抽取条款（bid.extract 写面——确定性规则抽取，无 LLM）。
+     * 成功后 loadBid(true) 重载——状态翻 REQUIREMENTS_EXTRACTED，树区
+     * 自然切到推荐卡。零抽取是响亮警告不是成功（#196）——逐条透出。 */
+    async submitBidExtract() {
+      const bb = state.bidBuild;
+      if (bb.extractBusy) return;
+      bb.extractBusy = true;
+      bb.extractError = "";
+      bb.extractInfo = "";
+      bb.extractWarns = [];
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.extract", {}, 120e3);
+        const ex = (r && r.extract) || {};
+        const total = (ex.counts && ex.counts.total) || 0;
+        bb.extractInfo = total > 0 ? "已抽取 " + total + " 条条款" : "抽取结果为 0 条（见下方告警——排查文件 kind / 扫描件 / 条款结构）";
+        bb.extractWarns = (ex.warnings || []).map(String);
+        await ui.loadBid(true);
+      } catch (err) {
+        bb.extractError = err.message || String(err);
+      }
+      bb.extractBusy = false;
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：建纲（bid.build_outline 写面）。明写限值在场时直接采用
+     * （target_total_chars），否则用用户选档（默认推荐档）；分包 ≥2 时
+     * 必须已选包（按钮门已挡——防御再查一次）。成功后 loadBid(true)
+     * 重载——章节树呈现，本卡自然退场。 */
+    async submitBidBuildOutline() {
+      const bb = state.bidBuild;
+      if (bb.buildBusy) return;
+      const args = {};
+      const rec = bb.rec || {};
+      if (rec.from_tender_spec) {
+        args.target_total_chars = rec.target_chars;
+      } else if (bb.profileSel) {
+        args.length_profile = bb.profileSel;
+      }
+      const pkgs = bb.packages;
+      if (pkgs && (pkgs.detected || 0) >= 2) {
+        if (!bb.packageSel) return;
+        args.package = bb.packageSel;
+      }
+      bb.buildBusy = true;
+      bb.buildError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.build_outline", args, 120e3);
+        const ob = (r && r.outline_build) || {};
+        const c = ob.counts || {};
+        bb.buildInfo = "章节树已建立：" + (c.sections || 0) + " 章 / " + (c.leaves || 0) + " 叶 · 矩阵 " + (c.matrix_rows || 0) + " 行";
+        await ui.loadBid(true);
+      } catch (err) {
+        bb.buildError = err.message || String(err);
+      }
+      bb.buildBusy = false;
       renderBidWorkbenchIfOpen();
     },
     /** #313 批 B：拉取合规矩阵（bid.matrix——壳内聚合工具面分页后的全量行） */

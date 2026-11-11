@@ -1087,6 +1087,96 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     );
     let _ = std::fs::remove_dir_all(&ws_r15);
 
+    // ---- #47 R25（向导深水区）：建纲流全链——全新 DRAFT 工作区，导入 →
+    //      抽取（bid.extract，确定性规则）→ 推荐（bid.length_profile，四档
+    //      alternatives + 信号面）→ 建纲（bid.build_outline，practical 档）→
+    //      bid.outline 章节树呈现。UI 断档收口的自测面锁定——此前这三步
+    //      只能走 MCP 管线（树区空态明文「由 Agent 走」）。
+    let ws_r25 = scratch_dir();
+    std::fs::create_dir_all(ws_r25.join("files")).unwrap();
+    std::fs::write(
+        ws_r25.join("files").join("A-招标文件.docx"),
+        include_bytes!("../../../tests/fixtures/wizard19-min.docx"),
+    )
+    .unwrap();
+    let resp = call(&ctx, json!({"id":"t-ws-r25","cmd":"workspace.open","path": ws_r25.to_string_lossy()}));
+    r.check(
+        "workspace.open(R25 建纲流工作区)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-cp25","cmd":"bid.create_project","name":"R25 建纲流","bid_deadline":"2026-12-31","mode":"明标"}));
+    r.check(
+        "bid.create_project(R25 起步)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-im25","cmd":"bid.import_files","files":[{"upload_ref":"files/A-招标文件.docx","kind":"招标文件"}]}));
+    let im25 = result(&resp);
+    r.check(
+        "bid.import_files(R25 入库)",
+        resp["ok"] == json!(true) && im25["totals"]["files"] == json!(1),
+        format!("totals={:?}", im25["totals"]["files"]),
+    );
+    // 抽取：确定性规则 → REQ 面 + 状态推进（零抽取是警告不是错误；夹具实测 >0）
+    let resp = call(&ctx, json!({"id":"t-bid-ex25","cmd":"bid.extract"}));
+    let ex25 = result(&resp);
+    let ex_total = ex25["extract"]["counts"]["total"].as_u64().unwrap_or(0);
+    r.check(
+        "bid.extract(确定性抽取)",
+        resp["ok"] == json!(true)
+            && ex_total >= 1
+            && ex25["extract"]["status"] == json!("REQUIREMENTS_EXTRACTED"),
+        format!("total={ex_total}"),
+    );
+    // 状态对账：quick_stats.requirements 同源可见（树区空态卡的两相位判据）
+    let resp = call(&ctx, json!({"id":"t-bid-st25","cmd":"bid.state"}));
+    let st25 = result(&resp);
+    r.check(
+        "bid.state(抽取后对账)",
+        resp["ok"] == json!(true)
+            && st25["project"]["status"] == json!("REQUIREMENTS_EXTRACTED")
+            && st25["quick_stats"]["requirements"].as_u64() == Some(ex_total),
+        format!("reqs={:?}", st25["quick_stats"]["requirements"]),
+    );
+    // 推荐：四档 alternatives + 信号面（#287 呈现义务的壳面直通）
+    let resp = call(&ctx, json!({"id":"t-bid-lp25","cmd":"bid.length_profile"}));
+    let lp25 = result(&resp);
+    let alts25 = lp25["recommendation"]["alternatives"].as_array().map(|a| a.len()).unwrap_or(0);
+    r.check(
+        "bid.length_profile(推荐+四档)",
+        resp["ok"] == json!(true)
+            && lp25["recommendation"]["recommended_profile"].is_string()
+            && alts25 == 4
+            && lp25["recommendation"]["signals"]["scoring_detail_count"].is_u64(),
+        format!("alts={alts25}"),
+    );
+    // 建纲：practical 档 → 章节树 + 矩阵一体（prepare_outline_and_matrix）
+    let resp = call(&ctx, json!({"id":"t-bid-bo25","cmd":"bid.build_outline","length_profile":"practical"}));
+    let bo25 = result(&resp);
+    r.check(
+        "bid.build_outline(建纲+矩阵一体)",
+        resp["ok"] == json!(true)
+            && bo25["outline_build"]["counts"]["sections"].as_u64().unwrap_or(0) >= 1
+            && bo25["outline_build"]["counts"]["matrix_rows"].as_u64().unwrap_or(0) >= 1
+            && bo25["outline_build"]["status"] == json!("MATRIX_READY"),
+        format!(
+            "sections={:?} matrix={:?}",
+            bo25["outline_build"]["counts"]["sections"],
+            bo25["outline_build"]["counts"]["matrix_rows"]
+        ),
+    );
+    // 大纲呈现：节点非空（UI 章节树数据源——建纲流卡的退场条件）
+    let resp = call(&ctx, json!({"id":"t-bid-ol25","cmd":"bid.outline"}));
+    let ol25 = result(&resp);
+    let nodes25 = ol25["nodes"].as_array().map(|a| a.len()).unwrap_or(0);
+    r.check(
+        "bid.outline(章节树呈现)",
+        resp["ok"] == json!(true) && nodes25 >= 1,
+        format!("nodes={nodes25}"),
+    );
+    let _ = std::fs::remove_dir_all(&ws_r25);
+
     println!();
     println!(
         "== {} passed, {} failed, {} skipped ==",

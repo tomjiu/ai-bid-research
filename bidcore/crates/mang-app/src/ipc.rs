@@ -537,7 +537,15 @@ impl Ctx {
 
             "bid.no_addendum_confirm" => crate::bid::no_addendum_confirm(&ws, &self.bid, &a),
 
+            // ── #47 R25：建纲流三面（向导深水区——导入后直达章节树）。
+            //    extract（写面，确定性规则抽取）→ length_profile（只读
+            //    推荐）→ build_outline（写面：档位/明写字数/分包选择）；
+            //    全部经 bid_mcp::dispatch_with 走真实工具面，壳零裁决 ──
+            "bid.extract" => crate::bid::extract(&ws, &self.bid, &a),
 
+            "bid.length_profile" => crate::bid::length_profile(&ws, &self.bid, &a),
+
+            "bid.build_outline" => crate::bid::build_outline(&ws, &self.bid, &a),
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),
