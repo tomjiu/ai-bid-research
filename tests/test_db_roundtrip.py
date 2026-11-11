@@ -160,3 +160,79 @@ class TestCsvRoundTrip:
         text = raw.decode("utf-8-sig")
         header = next(csv.reader([text.splitlines()[0]]))
         assert header[0] == "bid_id"
+
+
+class TestImportNoClobber:
+    """R104 db --import：对既有行不倒退合并（库内更完整记录胜出）。"""
+
+    def test_sparse_import_preserves_richer_db_rows(
+        self, tmp_path, capsys
+    ):
+        """库内完整行 + 稀疏导入 → 保值 + 分账渲染。"""
+        from src.storage.database import BidDatabase
+
+        db_path = tmp_path / "rich.db"
+        with BidDatabase(db_path) as db:
+            db.save_bid(
+                {
+                    "bid_id": "IMP-1",
+                    "project_name": "智慧管网",
+                    "budget": 500.0,
+                    "winner": "甲公司",
+                }
+            )
+        sparse = tmp_path / "sparse.json"
+        sparse.write_text(
+            json.dumps(
+                [{"bid_id": "IMP-1", "project_name": "智慧管网"}],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        code = main_mod.main(
+            ["db", "--db", str(db_path), "--import", str(sparse)]
+        )
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "已导入 0 条项目记录" in out  # 无实质写入
+        with BidDatabase(db_path) as db:
+            row = db.get_bid("IMP-1")
+        assert row["budget"] == 500.0  # 稀疏导入不抹库
+        assert row["winner"] == "甲公司"
+
+    def test_enriched_import_fills_and_reports(self, tmp_path, capsys):
+        """增补导入：补缺入账 + 分账渲染。"""
+        from src.storage.database import BidDatabase
+
+        db_path = tmp_path / "lean.db"
+        with BidDatabase(db_path) as db:
+            db.save_bid(
+                {"bid_id": "IMP-2", "project_name": "智慧水利", "region": "江苏"}
+            )
+        enriched = tmp_path / "enriched.json"
+        enriched.write_text(
+            json.dumps(
+                [
+                    {
+                        "bid_id": "IMP-2",
+                        "project_name": "智慧水利",
+                        "region": "江苏",
+                        "budget": 300.0,
+                        "deadline": "2026-12-31",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        code = main_mod.main(
+            ["db", "--db", str(db_path), "--import", str(enriched)]
+        )
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "已导入 1 条项目记录" in out
+        assert "更新 1：补缺 2 / 修正 0 个字段" in out
+        with BidDatabase(db_path) as db:
+            row = db.get_bid("IMP-2")
+        assert row["budget"] == 300.0
+        assert row["deadline"] == "2026-12-31"

@@ -458,7 +458,7 @@ class BidDatabase:
         return old_val
 
     def import_bids(self, bids: List[Dict[str, Any]]) -> int:
-        """批量导入项目记录（R62：单事务原子化）。
+        """批量导入项目记录（R62：单事务原子化，盲覆盖语义）。
 
         Args:
             bids: 项目数据字典列表。
@@ -470,12 +470,49 @@ class BidDatabase:
             **原子语义**：任一行失败整体回滚（此前逐条 commit
             的部分落盘语义已废止——批量导入要么全成要么全无，
             调用方无需自行清理半成品）。
+
+            已存在 id 的行**整体覆盖**（save_bid upsert）——
+            显式重建库的工具语义。日常增量入账走
+            :meth:`merge_bids`（不倒退）。
         """
         saved = 0
         with self.transaction():
             for bid in bids:
                 saved += self.save_bid(bid)
         return saved
+
+    def merge_bids(self, bids: List[Dict[str, Any]]) -> Dict[str, int]:
+        """批量不倒退合并导入（R104——单事务原子化，同 R62 口径）。
+
+        逐条 :meth:`merge_bid` 语义（传入空缺不覆盖库内值、
+        传入有值新证据胜），聚合分账返回。
+
+        Args:
+            bids: 项目数据字典列表。
+
+        Returns:
+            聚合分账：``inserted``/``merged``/``unchanged``（条数）
+            + ``filled``/``changed``/``preserved``（字段数，跨条累计；
+            inserted/unchanged 条贡献 0）。
+
+        Note:
+            **原子语义**：任一行失败整体回滚（与 import_bids 同）。
+        """
+        stats = {
+            "inserted": 0,
+            "merged": 0,
+            "unchanged": 0,
+            "filled": 0,
+            "changed": 0,
+            "preserved": 0,
+        }
+        with self.transaction():
+            for bid in bids:
+                result = self.merge_bid(bid)
+                stats[result["action"]] += 1
+                for key in ("filled", "changed", "preserved"):
+                    stats[key] += result[key]
+        return stats
 
     def all_bid_ids(self) -> set:
         """全库 bid_id 集合（批量去重的单查询面，R62——消 N+1）。"""

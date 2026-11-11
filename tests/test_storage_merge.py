@@ -207,3 +207,58 @@ class TestMergeBid:
             "某代理",
             "甲",
         )
+
+
+class TestMergeBidsBatch:
+    """merge_bids 批量不倒退导入（R104）。"""
+
+    def test_aggregate_accounting(self, db: BidDatabase):
+        """三形态混合批：inserted/merged/unchanged + 字段分账聚合。"""
+        db.merge_bid(_bid("B-1", "项目一", budget=100.0, winner="甲"))
+        stats = db.merge_bids(
+            [
+                _bid("B-1", "项目一", budget=100.0),  # unchanged（同值）
+                _bid("B-2", "项目二", budget=50.0),    # inserted
+                _bid(                                   # merged（补 deadline）
+                    "B-1",
+                    "项目一",
+                    budget=100.0,
+                    winner="甲",
+                    deadline="2026-12-01",
+                ),
+            ]
+        )
+        assert stats == {
+            "inserted": 1,
+            "merged": 1,
+            "unchanged": 1,
+            "filled": 1,
+            "changed": 0,
+            "preserved": 0,
+        }
+        assert db.get_bid("B-1")["deadline"] == "2026-12-01"
+
+    def test_atomic_rollback_on_bad_row(self, db: BidDatabase):
+        """坏行（缺必填）整体回滚——与 import_bids R62 同口径。"""
+        db.merge_bid(_bid("A-1", "项目零", budget=1.0))
+        with pytest.raises(KeyError):
+            db.merge_bids(
+                [
+                    _bid("A-2", "项目新", budget=2.0),
+                    {"project_name": "缺编号坏行"},
+                ]
+            )
+        # A-2 的插入已回滚（要么全成要么全无）
+        assert db.get_bid("A-2") is None
+        assert db.get_bid("A-1")["budget"] == 1.0
+
+    def test_empty_batch(self, db: BidDatabase):
+        """空批零动作，全计数为 0。"""
+        assert db.merge_bids([]) == {
+            "inserted": 0,
+            "merged": 0,
+            "unchanged": 0,
+            "filled": 0,
+            "changed": 0,
+            "preserved": 0,
+        }

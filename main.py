@@ -634,8 +634,16 @@ def run_collect(args: argparse.Namespace) -> int:
         return 0
 
     with BidDatabase(args.db) as db:
-        saved = db.import_bids([r.to_bid_row() for r in deduped.unique])
-    print(f"已入库 {saved} 条 → {args.db}")
+        stats = db.merge_bids([r.to_bid_row() for r in deduped.unique])
+    written = stats["inserted"] + stats["merged"]
+    line = f"已入库 {written} 条 → {args.db}"
+    if stats["merged"]:
+        # R104：不倒退合并的实质分账明示（零变化零噪音）
+        line += (
+            f"（更新 {stats['merged']}：补缺 {stats['filled']}"
+            f" / 修正 {stats['changed']} 个字段；{stats['unchanged']} 条无变化）"
+        )
+    print(line)
     return 0
 
 
@@ -1197,8 +1205,17 @@ def run_db(args: argparse.Namespace) -> int:
                 print(f"错误：导入 JSON 解析失败: {exc}", file=sys.stderr)
                 return EXIT_DATA
             bids = payload if isinstance(payload, list) else [payload]
-            saved = db.import_bids(bids)
-            print(f"已导入 {saved} 条项目记录 → {db_path}")
+            stats = db.merge_bids(bids)
+            written = stats["inserted"] + stats["merged"]
+            line = f"已导入 {written} 条项目记录 → {db_path}"
+            if stats["merged"]:
+                # R104：导入对既有行不倒退合并——库内更完整记录胜出
+                line += (
+                    f"（更新 {stats['merged']}：补缺 {stats['filled']}"
+                    f" / 修正 {stats['changed']} 个字段；"
+                    f"{stats['unchanged']} 条无变化）"
+                )
+            print(line)
 
         if args.query:
             rows = db.query_bids(keyword=args.query, days=args.days)
