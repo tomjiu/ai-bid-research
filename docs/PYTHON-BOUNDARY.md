@@ -40,6 +40,8 @@
 | Python 模块 | 职责 | 边界说明 |
 |---|---|---|
 | `src/collect/`（采集面） | 本地源（JSON/JSONL/CSV）装载→规范化→三级去重 | 默认离线本地文件源，**不内置生产级网络爬虫**；`AnnouncementRecord` 是管道唯一规范化入口；CSV 源表头别名自动归一（R31） |
+| `src/collect/dedupe.py` 完备性合并（R101） | 同件后到证据填充保留者空缺字段（字段级 coalesce：冲突值 keep-first）+ `merged_fields` 分账 + 合并后证据键补登记（新指纹/新链接第三件不逃逸） | 同 dedup 键 = 同一公告证据，字段填充是**证据合并非臆造**；冲突值同批快照无时间性故 keep-first（跨批更新走 `merge_bid` 时序语义）；已收编 unique 不做级联回溯重裁（登记先到优先，如实登记的边界） |
+| `src/storage/database.py` `merge_bid`/`merge_bids`（R102/R104） | 不倒退合并写入：传入空缺不覆盖库内值、传入有值新证据胜；批量单事务原子 + filled/changed/preserved 三分账 | 稀疏源重导**不抹库**（save_bid 盲覆盖保留为显式重建库工具语义）；跨批新证据胜出是变更公告修正的合法更新口径；unchanged 零写入（total_changes 可验）；`budget=0.0` 是记录在案值非空缺（十七节审计揭示，合并面不吞证据） |
 | `src/collect/sanity.py`（健全性规则，R33） | 跨字段启发式告警：日期倒挂/可疑长周期/未来发布/零预算 | **告警不拒收**（区别于必填校验拒收面）；命中≠错误，研究数据质量信号随记录 `warnings` 携带 |
 | `src/extract/`（抽取面） | 公告原文→LLM 结构化抽取→schema 校验→合并入库；失败进 `pending_announcements` 降级面可重试 | 抽取走研究提示词（`PromptTemplates.bid_extraction`）；「LLM 补全不覆盖」——源字段强证据，模型只填缺 |
 | `src/analyze/`（分析面） | 预算分位/区域/趋势/关键词频次与月度演化（R37）/竞争密度/采购人画像（R35）/预算×区域交叉分桶（R36） | 全部**描述性统计与启发式估算**（密度分层/HHI/分桶均为研究经验口径），报告明示「估算」口径，不冒充事实 |
