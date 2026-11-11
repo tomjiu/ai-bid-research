@@ -1568,7 +1568,7 @@ impl BidService {
     /// `export_bid_document` 业务半边（#59 阶段 2 + #117 任务 1 表格接线）。
     ///
     /// 步骤：
-    /// 1. **四前置门**（防废标的最后关口——fail-closed）：
+    /// 1. **六前置门**（防废标的最后关口——fail-closed）：
     ///    a. 矩阵 blocking 行清零（`check_export_ready`——必选未响应/待补不得
     ///       导出，#245 后 PENDING_EVIDENCE 必选行也在此面）；
     ///    b. 审核 BLOCKER findings 清零（`export_allowed`——T-7 闸门）；
@@ -1579,6 +1579,13 @@ impl BidService {
     ///       = 合法人工豁免（NOT_APPLICABLE + 偏离说明 + 可信 Human
     ///       receipt，见 `validate::is_legitimate_placeholder_exemption`），
     ///       与 1c 同为独立复算门、不消费记审面）；
+    ///    e. ★实质性条款响应门（#88 审计 F-01——`star_gate_findings`：★
+    ///       未响应/仅占位/Partial 无章节均拒；豁免=矩阵覆写三要件。
+    ///       子面 b 漏标（star_missing>0）拒——`waive_star_missing` 显式
+    ///       非空理由豁免，理由进 warnings 审计面）；
+    ///    f. 暗标联动门（#88 审计 F-02——`dark_bid_gate_findings`：mode=暗标
+    ///       而导出未启用暗标 → 拒（自相矛盾 fail-closed）；mode=明标 而
+    ///       REQ 含暗标条款 → 响亮告警不拦——声明缺位提示，升级面 Lead 裁决）；
     /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
     ///    缺失 → `derive_from_requirements`（从格式条款提取；零命中 → 基线
     ///    + warning，Lead 铁律「不硬编码」的降级面）；
@@ -1599,6 +1606,7 @@ impl BidService {
         anonymize: Option<&str>,
         output_path: &std::path::Path,
         decision: &crate::export::ExportDecision,
+        waivers: &FatalGapWaivers,
     ) -> Result<crate::export::ExportOutcome, ToolError> {
         // ---- 0. format 面（docx 直达；pdf 走 docx 链 + soffice 转换——
         //      其他诚实拒）
@@ -1670,8 +1678,86 @@ impl BidService {
             });
         }
 
-        // ---- 2. format-spec（读盘优先，derive 兜底）
+        // ---- 1e. ★实质性条款响应门（#88 审计 F-01——独立复算，不消费记审面；
+        //      与 1c/1d 同款纪律：审核批准也不放行）。两子面分级豁免：
+        //      子面 a（E_STAR_UNRESPONDED）无参数豁免——人工裁决走既有
+        //      矩阵覆写三要件（门在 findings 侧已认）；子面 b（E_STAR_MISSING
+        //      漏标）可显式豁免——`waive_star_missing` 非空理由，理由进
+        //      warnings 审计面（样板句误判/表格装配假阳性的人工确认场景）。
         let mut warnings: Vec<String> = Vec::new();
+        let star_f = crate::validate::star_gate_findings(self.store(), &self.parsed);
+        let star_unresp: Vec<&crate::validate::ValidationFinding> = star_f
+            .iter()
+            .filter(|f| f.rule_code == "E_STAR_UNRESPONDED")
+            .collect();
+        if !star_unresp.is_empty() {
+            let detail = star_unresp
+                .iter()
+                .map(|f| {
+                    format!(
+                        "{}@{}",
+                        f.rule_code,
+                        f.requirement_id.as_deref().unwrap_or("PROJECT")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("、");
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "★响应门未过：{} 处实质性条款未有效响应（{detail}）——★不响应=废标级（#88 F-01）；补章节响应/补绑证据后重试，或 set_matrix_override 人工不适用三要件豁免（NOT_APPLICABLE+偏离说明+Human receipt）",
+                    star_unresp.len(),
+                ),
+            });
+        }
+        let star_miss: Vec<&crate::validate::ValidationFinding> = star_f
+            .iter()
+            .filter(|f| f.rule_code == "E_STAR_MISSING")
+            .collect();
+        if !star_miss.is_empty() {
+            let waived = waivers
+                .star_missing
+                .as_deref()
+                .map(|r| !r.trim().is_empty())
+                .unwrap_or(false);
+            if waived {
+                let files = star_miss
+                    .iter()
+                    .map(|f| f.message.split('：').next().unwrap_or("?"))
+                    .collect::<Vec<_>>()
+                    .join("、");
+                warnings.push(format!(
+                    "#88 豁免：★漏标（{files}）经显式豁免跳过（理由：{}）——审计面记录；补标通道 get_star_coverage + submit_block_marks 仍开放",
+                    waivers.star_missing.as_deref().unwrap_or("").trim(),
+                ));
+            } else {
+                let detail = star_miss
+                    .iter()
+                    .map(|f| f.message.clone())
+                    .collect::<Vec<_>>()
+                    .join("；");
+                return Err(ToolError::EUnprocessable {
+                    reason: format!(
+                        "★响应门未过：{} 件文件存在★漏标（真值块无对应 REQ）——{detail}（#88 F-01）",
+                        star_miss.len(),
+                    ),
+                });
+            }
+        }
+        // ---- 1f. 暗标联动门（#88 审计 F-02——mode 声明强制 + 未声明响亮
+        //      提示）。dark_bid_active 口径 = anonymize 有效（Some 且非空白
+        //      ——与下方 2 的 anonymize_effective 同源判定，空名 dark_bid
+        //      等于没开，一并拦在 BLOCKER 面）。
+        let dark_bid_active = anonymize
+            .map(|b| !b.trim().is_empty())
+            .unwrap_or(false);
+        for f in crate::validate::dark_bid_gate_findings(self.store(), dark_bid_active) {
+            if f.severity == "BLOCKER" {
+                return Err(ToolError::EUnprocessable { reason: f.message });
+            }
+            warnings.push(f.message);
+        }
+
+        // ---- 2. format-spec（读盘优先，derive 兜底）
         let spec = self.load_or_derive_format_spec(&mut warnings)?;
         let anonymize_effective = match anonymize {
             Some(bidder) if bidder.trim().is_empty() => {
@@ -1945,6 +2031,22 @@ impl Default for BidService {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// #88 审计 F-01/F-02：致命项门（导出门 1e/1f）的显式豁免面。
+///
+/// 设计纪律（与 `bid_open_date` 的 opt-in 取舍同族，但方向相反——门是
+/// 默认 fail-closed，豁免是显式 opt-out）：
+/// - **非空理由才生效**：空串/缺省 = 不豁免（fail-closed 不放水）；
+/// - **理由进 warnings 审计面**：豁免不是静默跳过——导出响应携带同一
+///   事实（与 #277 agent 过门横幅同款「可见性」纪律）；
+/// - **粒度对齐门**：`star_missing` 只豁免漏标子面 b；子面 a
+///   （E_STAR_UNRESPONDED 已抽取未响应）与暗标门（mode=暗标 未启用）
+///   无参数豁免——修复通道是补响应/开暗标，不是绕过。
+#[derive(Debug, Clone, Default)]
+pub struct FatalGapWaivers {
+    /// ★漏标面（E_STAR_MISSING）人工确认豁免——非空理由生效。
+    pub star_missing: Option<String>,
 }
 
 /// 项目推进 EXPORTED 的合法链补齐（#59 阶段 2——export 的成功后半边）。

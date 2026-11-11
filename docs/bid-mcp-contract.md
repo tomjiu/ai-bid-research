@@ -428,6 +428,10 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        翻转非空进 warnings 审计面）。未提供但存在带 valid_until 的证据 →
        响亮告警「时效未裁决」，不硬拒（契约兼容）；非法日期/非字符串 →
        E_UNPROCESSABLE 响亮拒),
+       waive_star_missing?(#88 F-01：★漏标豁免理由——非空字符串生效。
+       star_missing>0 时门 1e 子面 b 拒导出；人工确认漏标可接受（样板句
+       误判/表格装配假阳性等）才传，理由进 warnings 审计面。空串/缺省
+       = 不豁免（fail-closed 不放水）；非字符串 → 响亮拒),
        profile:{dark_bid? , template?}, options:{tracked_changes?, watermark?}, project_version }
 嵌入: #68 阶段 3——章正文支持 md 块语法（无语法内容与旧版字节级同输出）：
      - 表格：连续 | 行（首行表头 + |---| 分隔行 + 数据行）→ docx 表格
@@ -475,8 +479,9 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
 七件: 附件一投标函/二法定代表人身份证明书/三授权委托书/四投标保证金退还
       申请/五资格声明/六无重大违法记录声明/七廉洁承诺书（BidderProfile
       真源；缺字段标【待填】；标题 Heading2 样式段——防关键词假阳性）。
-幂等: (project_id, content_version, format, profile, output_path, decision_fp) 相同
-     → 返回缓存 artifact（#117：报价决策指纹入键——换报价重导是新导出）
+幂等: (project_id, content_version, format, profile, output_path, decision_fp,
+     waive_star_missing) 相同 → 返回缓存 artifact（#117：报价决策指纹入键
+     ——换报价重导是新导出；#88：豁免与否是不同的导出裁决，不吃旧键跳门）
 门禁: 三门 Approved + 全 RT DONE 之外，#180 起另校验**审核内容绑定**：
      pre_export_confirm 最后一条 Approved 的 reviewed_content_digest
      （章节树摘要——结构定位 + 叶正文）≠ 当前 → E_UNPROCESSABLE
@@ -486,7 +491,7 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
      自身/导出推进一律 bump——必误报）：过门后导入无关件、状态推进、
      不改正文重复导出均不受影响；#180 前旧快照的空摘要记录跳过判定
      （宽容载入，旧数据的洞保留——重新过门即补上绑定）。
-     **四前置门全量清单（#245 补齐 1d）**：
+     **六前置门全量清单（#245 补齐 1d；#88 增 1e/1f）**：
      · 1a 矩阵门：blocking 行清零（必选未响应**或 PENDING_EVIDENCE 待补**
        ——占位绑定不清阻塞。#241 裁定（2026-11-05）：正文有实质响应
        （归属章节 content 非空）且无有效证据无占位 → RESPONDED 不阻断
@@ -506,6 +511,22 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
        Responded 等普通状态覆写即使由 Human 发起也不豁免），篇幅不足
        没有——只能补写）。解决通道：①导入真实材料重新登记（换版升级，
        绑定自动迁移）；②合法人工豁免。
+     · 1e ★实质性条款响应门（#88 审计 F-01——★不参与 blocking 派生的
+       Lead 裁决后，导出面收口）：★不响应 = 废标级。两子面均独立复算、
+       不消费记审面：
+       子面 a（E_STAR_UNRESPONDED）：矩阵行 substantive=true 且状态非
+       RESPONDED、亦非三要件豁免（Partial 仅证据无章节 = 响应未进正文
+       也拒；PENDING_EVIDENCE 占位也拒）。豁免通道 = 既有矩阵覆写三
+       要件（无参数豁免）；
+       子面 b（E_STAR_MISSING）：parsed 文件 star_missing>0（★真值块
+       无对应 REQ = 漏抽取，与 get_star_coverage 同源同口径）→ 拒；
+       豁免 = waive_star_missing 非空理由（理由进 warnings 审计面）。
+     · 1f 暗标联动门（#88 审计 F-02——mode 声明强制 + 未声明响亮提示）：
+       mode=暗标 而导出未启用暗标（profile.dark_bid≠true 或 bidder_name
+       空）→ E_DARK_BID_REQUIRED 拒（自相矛盾 fail-closed——darkbid.rs
+       防线是 opt-in 的，不开等于没有）；mode=明标 而 REQ 文本含暗标
+       要求词面（正向短语非否定形命中；数据面含补遗条款文本）→
+       W_DARK_BID_UNDECLARED 告警不拦（声明缺位提示，升级面 Lead 裁决）。
 状态: → READY_TO_EXPORT → EXPORTED
 ```
 
