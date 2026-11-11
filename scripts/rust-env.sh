@@ -9,8 +9,11 @@
 #   ① 装rustup（minimal + stable，~21MB 下载 / ~1.5G 装后）
 #   ② 配 mdcore 认证（git url.insteadOf——bid-engine 的 git 依赖需要）
 #   ③ 磁盘纪律：CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
+#      CARGO_INCREMENTAL=0
 #      （debuginfo 关闭后链接产物 ~40MB vs ~300MB；9.9G 盘装得下全树测试。
-#      实测教训：开着 debuginfo 链接第 ~30 个测试二进制即 Bus error/ENOSPC）
+#      实测教训：开着 debuginfo 链接第 ~30 个测试二进制即 Bus error/ENOSPC；
+#      增量目录单独即可打满盘——INCREMENTAL=0 必须与 DEBUG=0 并用，
+#      mdcore 仓 #152 同日实证 [2026-11-11]）
 #   ④ （可选，mang-app 面才需要）optroot：apt download + dpkg -x 解
 #      gtk/webkit2gtk dev 树到 ~/.optroot——无 sudo 的 sysroot 自愈
 #
@@ -61,11 +64,12 @@ fi
 
 # ---- ③ 磁盘纪律（环境变量形态——用法：source 本文件或 eval 输出）------------
 log "③ 磁盘纪律提示：cargo 测试统一用："
-log "   CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p <crate> -j1"
-log "   （-j1 防链接期并发爆盘；盘余 <1G 时先清 target/debug/incremental 与顶层二进制）"
+log "   CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p <crate> -j1"
+log "   （-j1 防链接期并发爆盘；INCREMENTAL=0 防增量目录打满盘；盘余 <1G 时清顶层测试二进制）"
 log "   环境变量已导出（若 source 执行）："
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
+export CARGO_INCREMENTAL=0
 
 # ---- ④ optroot（mang-app 的 gtk/webkit sysroot，无 sudo 自愈）--------------
 if [ "${1:-}" = "--with-gtk" ]; then
@@ -89,6 +93,7 @@ mang-app 面运行前导出：
   OPTROOT=$HOME/.optroot
   export PKG_CONFIG_PATH="$OPTROOT/usr/lib/x86_64-linux-gnu/pkgconfig:$OPTROOT/usr/share/pkgconfig"
   export LD_LIBRARY_PATH="$OPTROOT/usr/lib/x86_64-linux-gnu:$OPTROOT/usr/lib"
+  export LIBRARY_PATH="$OPTROOT/usr/lib/x86_64-linux-gnu"
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p mang-app -j1
 ENVECHO
 fi
