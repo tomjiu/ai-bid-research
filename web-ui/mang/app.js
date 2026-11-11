@@ -1532,7 +1532,8 @@
     } else if (view === "star") renderStarView(body);
     else renderSettingsView(body);
   }
-  // ============ #313 批 A：标书数据面（bid.state / bid.outline → 侧栏视图 + 标书工作台） =====  // 数据来源：壳侧 bid.state（经 bid_mcp::dispatch_with 走 get_bid_project_state 真实工具面
+  // ============ #313 批 A：标书数据面（bid.state / bid.outline → 侧栏视图 + 标书工作台） ============
+  // 数据来源：壳侧 bid.state（经 bid_mcp::dispatch_with 走 get_bid_project_state 真实工具面
   // + project 元信息 + quick_stats）与 bid.outline（DomainStore 直读章节树）。
   // 契约：docs/mang/IPC-CONTRACT.md §6。合规矩阵/自评/覆盖报告 = 批 B/C/D（占位禁用态）。
   function bidStatusZh(s) {
@@ -1997,7 +1998,8 @@
   // bid-panels 白名单锚）。
   var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc)$/i;
 
-  // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） =====  // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；
+  // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） ============
+  // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；
   // E_STATE / not_found 分支复用 §109 引导卡约定：空态是主路径不是故障。
 
   /** 向导第一步：新建标书项目（bid.create_project——壳侧隐式幂等键 =
@@ -2414,7 +2416,8 @@
         });
     }
   }
-  // ============ #313 批 B：矩阵面板（bid.matrix） =====  // 数据来源：壳侧 bid.quality（check_bid_quality 真实工具面——summary /
+  // ============ #313 批 B：矩阵面板（bid.matrix） ============
+  // 数据来源：壳侧 bid.quality（check_bid_quality 真实工具面——summary /
   // submission_readiness / global_conflicts / negative_deviations / artifact）与
   // bid.score（score_document——diagnostic_only / technical / commercial / price /
   // total / by_item）。契约：docs/mang/IPC-CONTRACT.md §6。
@@ -2836,7 +2839,8 @@
     bindBidViewActions(panel);
   }
 
-  // ============ #603 批 A：审核门面板（bid.gates → 五门台账 + 追认 + 人工过门） =====  // 数据来源：壳侧 bid.gates（DomainStore 直读——五门 approved/latest_pass/
+  // ============ #603 批 A：审核门面板（bid.gates → 五门台账 + 追认 + 人工过门） ============
+  // 数据来源：壳侧 bid.gates（DomainStore 直读——五门 approved/latest_pass/
   // agent_waivers/human_review_complete/reviews）；写面 bid.gate_pass（宿主
   // 签发 receipt #182 → record_review_gate 真实工具面）。门序/状态窗裁决
   // 全在域层——壳侧拒绝文案原样透传成引导，不假成功。
@@ -3228,7 +3232,8 @@
       });
   }
 
-  // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） =====  // 数据来源：壳侧 bid.matrix（经 bid_mcp::dispatch_with 走 get_compliance_matrix
+  // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
+  // 数据来源：壳侧 bid.matrix（经 bid_mcp::dispatch_with 走 get_compliance_matrix
   // 真实工具面，壳内聚合 cursor 分页后的全量行）。行字段 = 工具输出原样透传；
   // 筛选（状态/类别/只看阻断）、分页、导出都在全量行上做——徽章计数与表格同一真源。
   var BID_MX_STATUS_ZH = {
@@ -3862,7 +3867,8 @@
       .then((r) => ui.toast("ok", "已导出 " + rows.length + " 条 → " + ((r && r.rel) || rel) + "（Excel 可直接打开）"))
       .catch((err) => ui.toast("error", "导出失败：" + ((err && err.message) || err)));
   }
-  // ============ #313 批 B 矩阵面板 END =====
+  // ============ #313 批 B 矩阵面板 END ============
+
   // ============ #313 批 D：覆盖报告面板（bid.coverage → 三态分账 + ★条款覆盖 + 逐文件表） =====
   // 数据来源：壳侧 bid.coverage（经 bid_mcp::dispatch_with 走 get_coverage_report
   // 真实工具面，工具输出原样透传 + 壳侧三态分账 summary + 逐文件 get_star_coverage
@@ -4111,10 +4117,12 @@
       })
     );
   }
-  // ============ #313 批 D 覆盖报告面板 END =====
+  // ============ #313 批 D 覆盖报告面板 END ============
 
 
-  // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 =====  /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
+
+  // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 ============
+  /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
   function collectOutline(tab) {
     if (!tab) return [];
     const pane = document.getElementById("pane-" + tab.id);
@@ -4384,7 +4392,8 @@
     if (btn) btn.addEventListener("click", () => ui.refreshTree());
   }
 
-  // ============ #42 阶段 7：版本快照（自动 30s 检查 + 改动面板 + 预览/回滚） =====  /** 只有文本文件入快照（issue #42 §八：源头是 md，二进制不做） */
+  // ============ #42 阶段 7：版本快照（自动 30s 检查 + 改动面板 + 预览/回滚） ============
+  /** 只有文本文件入快照（issue #42 §八：源头是 md，二进制不做） */
   function snapshotablePath(p) {
     return /\.(md|markdown|txt)$/i.test(p || "");
   }
@@ -4399,7 +4408,8 @@
     return String(p).replace(/\\/g, "/");
   }
 
-  // ============ #42 阶段 8：来源标注浮层（覆盖层，绝不修改文件） =====  /** 给已渲染的 tab 挂标注层：.view-scroll 内绝对定位（随内容滚动），
+  // ============ #42 阶段 8：来源标注浮层（覆盖层，绝不修改文件） ============
+  /** 给已渲染的 tab 挂标注层：.view-scroll 内绝对定位（随内容滚动），
    *  角标锚在目标块右下角；点角标开来源详情浮层（认校验三态可点）。 */
   function attachAnnotations(tab) {
     const pane = document.getElementById("pane-" + tab.id);
@@ -4895,7 +4905,8 @@
       if (it) ui.openPath(it.dataset.path);
     });
   }
-  // ============ #76 设置面板：诊断状态（MCP / LLM / 格式规范 / 关于） =====  // DIAG 是设置视图的缓存态：renderSettingsView 先用缓存渲染（无则占位），
+  // ============ #76 设置面板：诊断状态（MCP / LLM / 格式规范 / 关于） ============
+  // DIAG 是设置视图的缓存态：renderSettingsView 先用缓存渲染（无则占位），
   // 再异步拉真实状态、视图仍在设置页时就地补齐。demo 模式拉不到就显示
   // 「演示模式」占位——不伪造宿主数据。
   var DIAG = { mcp: null, llm: null, fspec: null, llmTest: null, llmTestBusy: false, llmSaving: false };
