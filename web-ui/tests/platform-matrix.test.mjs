@@ -84,6 +84,7 @@ const cargoAnchors = [
   ["R15 本地/UTC 健全性", datesRs, "today_ymd_local_vs_utc_sanity"],
   ["R15 月长边界", datesRs, "parse_ymd_month_length_edges"],
   ["R15 MCP 面拒坏日历日", mcpTest, "nonexistent_calendar_date_rejected_at_mcp_face"],
+  ["R17 白名单四类（.ods 摘除）", bidRs, "ingest_drop_ods_blocked_as_unsupported_parse_face"],
 ];
 for (const [label, src, fn] of cargoAnchors) {
   check(
@@ -109,6 +110,7 @@ const selftestAnchors = [
   "workspace.open(R15 工作区)",
   "bid.create_project(不存在的日历日拒)",
   "bid.create_project(过期截止警告)",
+  "bid.ingest_drop(.ods 摘除对齐解析面)",
 ];
 for (const name of selftestAnchors) {
   check(
