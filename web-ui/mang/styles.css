@@ -4646,6 +4646,18 @@ html[data-chrome="native"][data-maximized="1"] #app {
   cursor: pointer;
   line-height: 1.6;
 }
+/* #47 R28：明细行补标按钮区（行内右侧——按钮 + 生效提示语） */
+.bid-star-gate-act {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+.bid-star-gate-act .dim {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
 @media (max-width: 900px) {
   .bid-export-form {
     grid-template-columns: 1fr;

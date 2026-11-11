@@ -664,6 +664,22 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         ),
     );
 
+    // #47 R28（#88 Q3）：★补标直通——参数早拒面（负 block_idx / 空
+    // file_id：bad_args 零副作用不进工具面；真件受理链在 bid.rs 单测
+    // star_mark_captures_missing_star——含 submitted 旁路账本落库对账）
+    let resp = call(&ctx, json!({"id":"t-bid-sm1","cmd":"bid.star_mark","file_id":"TF-0001","block_idx":-1,"statement":"x"}));
+    r.check(
+        "bid.star_mark(负块号早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-sm2","cmd":"bid.star_mark","file_id":"","block_idx":3,"statement":"x"}));
+    r.check(
+        "bid.star_mark(空文件号早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+
     // ---- #313 批 C：自评数据面（bid.quality / bid.score）
     // 早态（REQUIREMENTS_EXTRACTED，矩阵未建）→ 工具面 E_STATE 透传为
     // 壳侧 `state` 码（UI 据此分支「尚未开放」引导卡，不是故障）

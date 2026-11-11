@@ -1740,6 +1740,102 @@ pub fn star_gaps(
     }))
 }
 
+/// `bid.star_mark` `{ file_id, block_idx, statement, reason?, mandatory? }`
+/// —— ★漏标补标直通（#47 R28 / #88 Q3「抽取结果可视化核对——误判
+/// 可纠正」的标记半边；R27 明细区 next 引导的可达兑现）。
+///
+/// 单块最小单元：`dispatch_with(submit_block_marks)` 真实工具面，壳侧
+/// 只组装参数（**纯 mark 不产生 REQ**——锚定必须走 requirements[]，
+/// substantive=true 是★语义；statement 默认取漏标明细文本——用户看到
+/// 的正是这段文字，确认即补标）。工具面单真源裁决一切：区间校验 /
+/// 原子落库 / #244 标满义务（**已开始标记的文件必须标满才能建纲**——
+/// 补标即开启该义务，UI 侧诚实提示，`next` 字段原样透传）。
+///
+/// 壳侧前置早拒（零副作用不进工具面）：file_id 空 / block_idx 负 /
+/// statement 空。无 db.json → `not_found`；工具面 E_STATE 透传 `state`
+/// 码（契约 §3.3）。响应 `star_mark` 键 = 工具输出原样
+/// （marks_accepted / requirements_accepted / total_blocks / coverage /
+/// next）。
+pub fn star_mark(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    // 壳侧前置校验（写面纪律：校验失败零副作用）
+    let file_id = a
+        .get("file_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if file_id.is_empty() {
+        return Err(IpcError::bad_args("file_id 不能为空（★补标目标文件——star_gaps 明细的 file_id）"));
+    }
+    let block_idx = match a.get("block_idx") {
+        Some(Value::Number(n)) => {
+            if let Some(u) = n.as_u64() {
+                u
+            } else {
+                return Err(IpcError::bad_args("block_idx 必须是非负整数（块号——star_gaps 明细的 missing[].block_idx）"));
+            }
+        }
+        _ => return Err(IpcError::bad_args("block_idx 必填（块号——star_gaps 明细的 missing[].block_idx）")),
+    };
+    let statement = a
+        .get("statement")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if statement.is_empty() {
+        return Err(IpcError::bad_args("statement 不能为空（条款陈述——默认取漏标明细文本）"));
+    }
+    let reason = a
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| "★漏标补标（UI 直通——R28）")
+        .to_string();
+    let mandatory = a.get("mandatory").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "submit_block_marks".to_string(),
+            args: json!({
+                "project_id": project_id,
+                "file_id": file_id,
+                "marks": [{
+                    "from": block_idx,
+                    "to": block_idx,
+                    "verdict": "requirement",
+                    "reason": reason,
+                }],
+                "requirements": [{
+                    "block_idx": block_idx,
+                    "statement": statement,
+                    "substantive": true,
+                    "mandatory": mandatory,
+                }],
+            }),
+        },
+    );
+    let out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "star_mark": out,
+    }))
+}
+
 /// `bid.validate` —— 标书校验报告（#18：导出前置面）。
 ///
 /// 主体经 `bid_mcp::dispatch_with(validate_bid_document)` 走真实工具面
@@ -3412,6 +3508,156 @@ mod tests {
         assert_eq!(t["files_with_gaps"].as_u64().unwrap(), 1);
         assert_eq!(sg["checked_files"].as_u64().unwrap(), 1, "已检文件数含无漏标件：{sg}");
         assert_eq!(sg["all_clear"], json!(false), "有漏标不清：{sg}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #47 R28：★漏标补标直通——真件链闭环（wenming 8★）：导入不抽取
+    /// （全漏）→ `bid.star_mark` 单块补标（substantive=true 锚定）→ 重查
+    /// `bid.star_gaps` 漏标下降 / 已捕获上升。工具面 submit_block_marks
+    /// 单真源裁决（区间校验/原子落库），壳侧零分叉。
+    #[test]
+    fn star_mark_captures_missing_star() {
+        let fixtures = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../fixtures/real-tender-batch1")
+            .canonicalize()
+            .unwrap_or_else(|e| panic!("real-tender-batch1 目录不存在或不可解析：{e}"));
+        let wdir = fixtures.join("wenming-longjiang-230001");
+        let mut pdf = None;
+        if let Ok(rd) = std::fs::read_dir(&wdir) {
+            for e in rd.flatten() {
+                if e.path().extension().and_then(|s| s.to_str()) == Some("pdf") {
+                    pdf = Some(e.path());
+                    break;
+                }
+            }
+        }
+        let Some(pdf) = pdf else {
+            eprintln!("SKIP：wenming fixture 缺位（{}）——真件面留给 CI", wdir.display());
+            return;
+        };
+        let pdf_name = pdf.file_name().unwrap().to_string_lossy().to_string();
+        let (dir, _ws) = tmp_ws("starmark");
+        let file_id;
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir)
+                .unwrap()
+                .with_fs_root(&fixtures);
+            let (pid, _) = svc
+                .create_project("补标直通测试项目", "PRJ-SM", "明标", "ext-r28-sm")
+                .unwrap();
+            let import = bid_mcp::dispatch_with(
+                &mut svc,
+                bid_mcp::ToolCall {
+                    tool: "import_tender_files".to_string(),
+                    args: json!({ "project_id": pid, "files": [{
+                        "upload_ref": pdf.to_string_lossy(),
+                        "filename": pdf_name,
+                        "kind": "招标文件"
+                    }] }),
+                },
+            );
+            match import {
+                bid_mcp::ToolReply::Ok(out) => {
+                    file_id = out.result["file_ids"][0]
+                        .as_str()
+                        .expect("file_ids[0] 恒在")
+                        .to_string();
+                }
+                bid_mcp::ToolReply::Err { error, .. } => panic!("导入失败：{error}"),
+            }
+            svc.checkpoint().unwrap();
+        }
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        // 1) 基线：未抽取全漏（R27 同口径）
+        let frame = call(&ctx, "bid.star_gaps");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g0 = ok_of(&frame)["star_gaps"].clone();
+        let miss0 = g0["total"]["star_missing"].as_u64().expect("基线漏标数");
+        assert!(miss0 > 0, "未抽取应全漏：{g0}");
+        let m0 = g0["files"][0]["missing"][0].clone();
+        let block_idx = m0["block_idx"].as_u64().expect("missing[0].block_idx");
+        let text = m0["text"].as_str().unwrap_or("").to_string();
+        assert!(!text.is_empty(), "漏标明细文本非空（补标 statement 用）");
+
+        // 2) 补标：bid.star_mark（单块 substantive=true——红：命令未注册）
+        let frame = ctx.dispatch(&crate::ipc::Request {
+            id: json!(1),
+            cmd: "bid.star_mark".to_string(),
+            body: serde_json::Map::from_iter([
+                ("file_id".to_string(), json!(file_id)),
+                ("block_idx".to_string(), json!(block_idx)),
+                ("statement".to_string(), json!(text)),
+            ]),
+        });
+        assert_eq!(frame["ok"], json!(true), "补标应成功：{frame}");
+        let sm = ok_of(&frame)["star_mark"].clone();
+        assert_eq!(sm["marks_accepted"], json!(1), "单块 mark 受理：{sm}");
+        assert_eq!(sm["requirements_accepted"], json!(1), "单条 REQ 关键点受理（substantive 锚定）：{sm}");
+        // 工具面 next 语义原样：submitted 落旁路账本，重跑抽取才并入主
+        // REQ 账本（captured 生效链——#219 二步设计，壳不自创分叉）
+        assert!(
+            sm["next"].as_str().unwrap_or("").contains("submit_block_marks") || sm["next"].as_str().unwrap_or("").contains("未判定"),
+            "工具面 next 引导在场：{sm}"
+        );
+
+        // 3) 落库对账（跨实例持久化——auto_checkpoint 已落盘）：submitted
+        //    旁路账本长度 1 + substantive=true + statement 原样
+        {
+            let svc2 = bid_tools::service::BidService::open(&dir).unwrap();
+            let sub = svc2.store().submitted_requirements_of(&file_id);
+            assert_eq!(sub.len(), 1, "submitted 关键点落库：{sub:?}");
+            assert!(sub[0].substantive, "★语义 substantive=true：{sub:?}");
+            assert_eq!(sub[0].statement, text, "statement 原样（UI 所见即所补）");
+            assert_eq!(sub[0].block_idx, block_idx as usize, "块号锚定：{sub:?}");
+        }
+
+        // 4) 复查：主账本未变——漏标仍全量（诚实面：captured 生效需重跑
+        //    extract_requirements 把 submitted 并入主 REQ 账本，本命令
+        //    不越权重写——UI 提示同口径）
+        let frame = call(&ctx, "bid.star_gaps");
+        assert_eq!(frame["ok"], json!(true), "{frame}");
+        let g1 = ok_of(&frame)["star_gaps"].clone();
+        assert_eq!(
+            g1["total"]["star_missing"].as_u64().unwrap(), miss0,
+            "主账本未变——submitted 未并入前漏标不动（生效链=重跑抽取）：{g1}"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #47 R28：star_mark 壳侧前置早拒（block_idx 负数 / file_id 空——
+    /// bad_args 零副作用，不进工具面）。
+    #[test]
+    fn star_mark_bad_args_early_reject() {
+        let (dir, _ws) = tmp_ws("starmarkargs");
+        {
+            let mut svc = bid_tools::service::BidService::open(&dir).unwrap();
+            svc.create_project("早拒测试项目", "PRJ-SMA", "明标", "ext-r28-sma").unwrap();
+            svc.checkpoint().unwrap();
+        }
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        let frame = ctx.dispatch(&crate::ipc::Request {
+            id: json!(1),
+            cmd: "bid.star_mark".to_string(),
+            body: serde_json::Map::from_iter([
+                ("file_id".to_string(), json!("TF-0001")),
+                ("block_idx".to_string(), json!(-1)),
+                ("statement".to_string(), json!("x")),
+            ]),
+        });
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "负 block_idx 壳侧早拒：{frame}");
+        let frame = ctx.dispatch(&crate::ipc::Request {
+            id: json!(1),
+            cmd: "bid.star_mark".to_string(),
+            body: serde_json::Map::from_iter([
+                ("file_id".to_string(), json!("")),
+                ("block_idx".to_string(), json!(3)),
+                ("statement".to_string(), json!("x")),
+            ]),
+        });
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "bad_args", "空 file_id 壳侧早拒：{frame}");
         let _ = std::fs::remove_dir_all(dir);
     }
 
