@@ -184,16 +184,33 @@ function syncDataset(el) {
 const OPEN_TAG = /<([a-zA-Z][\w-]*)((?:\s+[\w-]+(?:=(?:"[^"]*"|'[^']*'|[^\s">]+))?)*)\s*(\/?)>/g;
 const ATTR = /([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s">]+))?)/g;
 
+const VOID_TAGS = new Set(["input", "br", "img", "hr", "meta", "link", "source", "wbr"]);
 export function parseFlat(html, root) {
+  // R25（#47 e2e）：嵌套解析——扁平化设计假设（「本仓 UI 选择器全是
+  // 属性/类/id 过滤面」）被向导卡的 `.bid-wiz-file input[type=checkbox]`
+  // 打破（后代组合器需要真实层级）。开标签入栈、闭标签出栈（弹到最近
+  // 同名）、自闭合/void 不入栈。对既有测试是行为超集：queryAll 本就
+  // 递归走全部后代（访问集与顺序不变），新增的只是父子链与 closest 的
+  // 真实语义。
   const out = [];
   const doc = root && root.ownerDocument;
-  OPEN_TAG.lastIndex = 0;
+  const stack = [];
+  const TOKEN = /<(\/?)(([a-zA-Z][\w-]*))((?:\s+[\w-]+(?:=(?:"[^"]*"|'[^']*'|[^\s">]+))?)*)\s*(\/?)>/g;
+  TOKEN.lastIndex = 0;
   let m;
-  while ((m = OPEN_TAG.exec(html))) {
-    const tag = m[1];
+  while ((m = TOKEN.exec(html))) {
+    const closing = m[1] === "/";
+    const tag = m[2];
+    const selfClose = m[5] === "/";
+    if (closing) {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tagName === tag.toUpperCase()) { stack.length = i; break; }
+      }
+      continue;
+    }
     const el = new ShimElement(tag);
     el.ownerDocument = doc;
-    const attrStr = m[2] || "";
+    const attrStr = m[4] || "";
     ATTR.lastIndex = 0;
     let am;
     while ((am = ATTR.exec(attrStr))) {
@@ -210,23 +227,58 @@ export function parseFlat(html, root) {
     if (tag === "input" || tag === "select" || tag === "textarea" || tag === "option") {
       if (el.attrs.value !== undefined) el.value = el.attrs.value;
     }
-    out.push(el);
+    const parent = stack.length ? stack[stack.length - 1] : null;
+    if (parent) { parent.children.push(el); el.parentNode = parent; }
+    else out.push(el);
+    if (!selfClose && !VOID_TAGS.has(tag.toLowerCase())) stack.push(el);
   }
   return out;
 }
 
-// ---- 选择器匹配（子集：#id / .class / tag / [data-x] / [data-x="v"]） ----
+// ---- 选择器匹配（子集：#id / .class / tag / [data-x] / [data-x="v"] /
+// [type=checkbox] 无引号值 / 后代组合器「.a .b」） ----
+// R25（#47 e2e）：向导卡的真实绑定选择器是 `.bid-wiz-file input[type=checkbox]`
+// （后代 + 无引号属性值——合法 CSS）。此前 shim 两面都不支持 → 真实监听
+// 在仿真宿主上绑不上（sel 恒空）。按 CSS 语义补齐（零 app 代码让步）。
 export function matches(el, sel) {
   return String(sel)
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
-    .some((s) => matchOne(el, s));
+    .some((s) => matchChain(el, s));
+}
+// 后代组合器：从右向左在祖先链上找前缀段的匹配（CSS 祖先语义）
+function matchChain(el, sel) {
+  const parts = splitCompounds(sel);
+  if (!parts.length) return false;
+  if (!matchOne(el, parts[parts.length - 1])) return false;
+  let cur = el.parentNode;
+  let idx = parts.length - 2;
+  while (idx >= 0 && cur) {
+    if (cur instanceof ShimElement && matchOne(cur, parts[idx])) idx--;
+    cur = cur.parentNode;
+  }
+  return idx < 0;
+}
+// 按括号外空白切段（属性值内空格不分段）
+function splitCompounds(sel) {
+  const out = [];
+  let buf = "";
+  let depth = 0;
+  for (const ch of String(sel)) {
+    if (ch === "[") depth++;
+    if (ch === "]") depth--;
+    if (depth === 0 && /\s/.test(ch)) {
+      if (buf) { out.push(buf); buf = ""; }
+    } else buf += ch;
+  }
+  if (buf) out.push(buf);
+  return out;
 }
 function matchOne(el, sel) {
   const parts = [];
-  const rest = String(sel).replace(/\[([-\w]+)(?:="([^"]*)")?\]/g, (_, k, v) => {
-    parts.push(v === undefined ? (el.attrs[k] !== undefined) : (el.attrs[k] === v));
+  const rest = String(sel).replace(/\[([-\w]+)(?:="([^"]*)"|=([-\w]+))?\]/g, (_, k, q, u) => {
+    parts.push(q === undefined && u === undefined ? (el.attrs[k] !== undefined) : (el.attrs[k] === (q !== undefined ? q : u)));
     return "";
   });
   const tokens = rest.split(/(?=[.#])/).filter(Boolean);
