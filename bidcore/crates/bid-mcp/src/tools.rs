@@ -487,6 +487,8 @@ fn create_bid_project(svc: &mut BidService, args: Value) -> ToolResult {
     let (_, mut out) = svc
         .create_project(&name, &notice_ref.unwrap_or_default(), &mode, &external_key)
         .map_err(ToolError::from)?;
+    // #88 F-03：截止日落库（此前只校验不存——导出时效兜底裁决的基准日）
+    svc.store_mut().set_bid_deadline(&bid_deadline).map_err(ToolError::from)?;
     let mut warnings = Vec::new();
     if bid_deadline < bid_domain::dates::today_ymd() {
         warnings.push(format!(
@@ -3763,14 +3765,19 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         .check_version(project_version)
         .map_err(ToolError::from)?;
 
-    // ---- #322/R-05：开标日时效裁决接线（生产锚点 = 导出前——防废标最后关口）。
-    // apply_validity 此前全仓生产调用为零（仅测试引用）——时间性过期证据
-    // 长期被当 Active 消费。接线语义：
-    //   · 提供 bid_open_date → 按开标日单向翻转（翻转后矩阵在 apply_validity
-    //     内部重算——R-04，门 1a 读到的必是翻转后状态；翻转非空进 warnings
-    //     审计面）；非法日期/非字符串 → 响亮拒（不静默忽略）。
-    //   · 未提供 → 有 valid_until 的证据存在时响亮告警「时效未裁决」，
-    //     不硬拒（契约兼容：既有调用方不带该参数不应断链）。
+    // ---- #322/R-05 + #88 F-03/S-3 硬化：开标日时效裁决接线（生产锚点 =
+    // 导出前——防废标最后关口）。apply_validity 此前全仓生产调用为零（仅
+    // 测试引用）——时间性过期证据长期被当 Active 消费。裁决基准三级：
+    //   · 提供 bid_open_date → 按开标日单向翻转（翻转后矩阵在
+    //     apply_validity 内部重算——R-04，门 1a 读到的必是翻转后状态；
+    //     翻转非空进 warnings 审计面）；非法日期/非字符串 → 响亮拒。
+    //   · 未提供 而**项目截止日在库**（#88：create 落档 bid_deadline）→
+    //     **按截止日兜底裁决**（S-3 的洞：时效裁决此前是纯 opt-in，不传
+    //     参过期证据以 Active 通关——截止日是项目自带基准，兜底后开标前
+    //     到期的证据必被翻转拦截）。兜底口径响亮告知（开标≠截止的场景
+    //     显式传 bid_open_date 覆盖）。
+    //   · 未提供 且截止日缺档（legacy 快照）→ 告警「时效未裁决」按登记
+    //     态导出（契约兼容面——新项目全覆盖，旧档重导建议补参）。
     // 幂等面：翻转使 content_version 前进 → 幂等键随之分叉（不同时效态 =
     // 不同导出，不吃旧缓存）；重放时 apply_validity 幂等（同态不动）。
     let bid_open_date: Option<String> = match args.get("bid_open_date") {
@@ -3814,12 +3821,81 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
             .filter(|e| e.valid_until.is_some())
             .count();
         if with_validity > 0 {
-            warnings_pre.push(format!(
-                "{with_validity} 份证据带 valid_until 但本次导出未提供 bid_open_date——\
-                 时效未裁决，按当前登记状态导出（提供 bid_open_date 可按开标日翻转）"
-            ));
+            // #88 F-03 兜底：截止日在库 → 按截止日裁决（S-3 洞收口）；
+            // 缺档（legacy）→ 退回告警面（兼容）
+            let deadline = svc.store().project().ok().and_then(|p| p.bid_deadline.clone());
+            match deadline {
+                Some(dl) => {
+                    let flipped = svc
+                        .store_mut()
+                        .apply_validity(&dl)
+                        .map_err(ToolError::from)?;
+                    warnings_pre.push(format!(
+                        "未提供 bid_open_date——按投标截止日 {dl} 兜底裁决证据时效（#88 F-03）；\
+                         开标日≠截止日的场景请显式传 bid_open_date 覆盖"
+                    ));
+                    if !flipped.is_empty() {
+                        warnings_pre.push(format!(
+                            "证据时效裁决（截止日 {dl} 兜底）：{} 条翻转——{}",
+                            flipped.len(),
+                            flipped.join("; ")
+                        ));
+                    }
+                }
+                None => {
+                    warnings_pre.push(format!(
+                        "{with_validity} 份证据带 valid_until 但本次导出未提供 bid_open_date 且项目截止日缺档（legacy 快照）——\
+                         时效未裁决，按当前登记状态导出（提供 bid_open_date 可按开标日翻转）"
+                    ));
+                }
+            }
         }
     }
+    // ---- #88 F-10：证据体检单（导出响应常驻——四态计数 + Expiring 明细）
+    let ev_all = svc.store().evidences();
+    let n_active = ev_all
+        .iter()
+        .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Active)
+        .count();
+    let expiring: Vec<serde_json::Value> = ev_all
+        .iter()
+        .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Expiring)
+        .map(|e| {
+            json!({
+                "ev_id": e.id,
+                "title": e.title,
+                "valid_until": e.valid_until,
+            })
+        })
+        .collect();
+    let evidence_validity = json!({
+        "active": n_active,
+        "expiring": expiring.len(),
+        "expired": ev_all
+            .iter()
+            .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Expired)
+            .count(),
+        "superseded": ev_all
+            .iter()
+            .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Superseded)
+            .count(),
+        "expiring_detail": expiring,
+    });
+    if evidence_validity["expiring"].as_u64().unwrap_or(0) > 0 {
+        warnings_pre.push(format!(
+            "证据体检（#88 F-10）：{} 份证据开标前 90 天内到期（{}）——尽快换证（开标当天复核时已过期 = 资格项存疑）",
+            evidence_validity["expiring"],
+            evidence_validity["expiring_detail"]
+                .as_array()
+                .map(|a| a
+                    .iter()
+                    .filter_map(|d| d["ev_id"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("、"))
+                .unwrap_or_default(),
+        ));
+    }
+    let evidence_validity = evidence_validity; // 竣面（供 out 组装）
 
     // ---- #117 任务 1：投标决策（报价面）——从 profile 解析，进幂等键（不同的
     //      报价决策 ≠ 同一次导出，不能吃旧缓存）
@@ -3958,6 +4034,8 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "chapters_written": outcome.report.chapters_written,
         "total_chars": outcome.report.total_chars,
         "toc_field_present": outcome.report.toc_field_present,
+        // #88 F-10 证据体检单（四态计数 + Expiring 明细——常驻导出响应）
+        "evidence_validity": evidence_validity,
         // #317 暗标清理报告（dark 导出在场）：blockers 恒 0（复验不过则
         // 导出被拦）；manual_review 是人工确认清单（WARNING 面——不静默跳过）
         "dark_bid": outcome.report.dark_bid.as_ref().map(|r| serde_json::json!({

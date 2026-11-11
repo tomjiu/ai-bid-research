@@ -26,6 +26,13 @@ fn ok_result(reply: ToolReply) -> Value {
     }
 }
 
+fn err_text(reply: &ToolReply) -> String {
+    match reply {
+        ToolReply::Err { error, .. } => error.to_string(),
+        ToolReply::Ok(out) => panic!("预期错误，实际成功: {}", out.result),
+    }
+}
+
 fn err_code(reply: &ToolReply) -> String {
     match reply {
         ToolReply::Err { error, .. } => error.code().to_string(),
@@ -669,30 +676,72 @@ fn export_with_bid_open_date_no_flip_succeeds() {
     );
 }
 
-/// 兼容面：不带 bid_open_date（既有调用方）→ 不硬拒，响亮告警「时效未裁决」。
+/// #88 F-03 硬化：不带 bid_open_date → 截止日兜底裁决（截止 2027-12-31 >
+/// valid_until 2027-06-30 → 翻转 EXPIRED → REQ-0004 矩阵行未响应 → 门 1a
+/// 拒——S-3 洞收口：过期证据不再以 Active 通关）。
 #[test]
-fn export_without_bid_open_date_warns_unadjudicated() {
-    let (mut svc, pid, _dir) = svc_drafted_validity("no-date-warn");
+fn export_without_open_date_deadline_fallback_flips_and_blocks() {
+    let (mut svc, pid, _dir) = svc_drafted_validity("no-date-fallback");
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
+    }));
+    let msg = err_text(&reply);
+    assert!(
+        msg.contains("导出被阻断") || msg.contains("必选未响应"),
+        "截止日兜底翻转后门 1a 拦截: {msg}"
+    );
+}
+
+/// #88 F-03 兜底面：缺参 + 截止日在库 + 证据未过期（valid_until > 截止日）
+/// → 兜底裁决零翻转 → 导出成功 + 兜底口径告警 + 体检单字段。
+#[test]
+fn export_without_open_date_deadline_fallback_no_flip_exports() {
+    // 夹具换截止日在证据有效期内（2027-12-31 截止 > 2027-06-30？不——
+    // 反向构造：用 svc_drafted_validity 后快照改截止日为 2026-06-30，
+    // 证据 valid_until 2027-06-30 > 截止 → 无翻转）
+    let (mut svc, pid, _dir) = svc_drafted_validity("fallback-noflip");
+    svc.store_mut().set_bid_deadline("2026-06-30").unwrap();
+    // 截止日变更不改章节正文——#180 摘要不受影响；直接导出
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
-    assert_eq!(r["project_status"], "EXPORTED", "契约兼容：缺参不阻断导出");
+    assert_eq!(r["project_status"], "EXPORTED", "兜底零翻转 → 导出成功");
+    let warns: Vec<String> = serde_json::from_value(r["warnings"].clone()).unwrap_or_default();
     assert!(
-        r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap()
-            .contains("时效未裁决")),
-        "带 valid_until 的证据存在时必须响亮告警: {}",
-        r["warnings"]
+        warns.iter().any(|w| w.contains("按投标截止日 2026-06-30 兜底裁决")),
+        "兜底口径响亮告知: {warns:?}"
     );
-    // 对照：无时效证据的既有夹具（valid_until=None）不产该告警（零噪音）
-    let (mut svc2, pid2, _) = svc_drafted("no-date-clean", false);
-    let r2 = ok_result(call(&mut svc2, "export_bid_document", json!({
-        "project_id": pid2, "format": "docx", "output_path": "out/标书.docx",
-    })));
     assert!(
-        !r2["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap()
-            .contains("时效未裁决")),
-        "无 valid_until 证据 → 不产时效告警: {}",
-        r2["warnings"]
+        !warns.iter().any(|w| w.contains("翻转")),
+        "证据未过期 → 零翻转: {warns:?}"
+    );
+    // 体检单（#88 F-10）：四态计数常驻导出响应
+    assert!(
+        r["evidence_validity"]["active"].is_u64(),
+        "体检单在位: {}",
+        r["evidence_validity"]
+    );
+}
+
+/// #88 F-03 legacy 兼容面：截止日缺档（旧快照）→ 退回告警（不硬拒）。
+#[test]
+fn export_legacy_snapshot_without_deadline_warns_only() {
+    let (mut svc, pid, _dir) = svc_drafted_validity("legacy-nodeadline");
+    // 快照回环抹掉 bid_deadline（#88 之前的快照形态）
+    let mut v = serde_json::to_value(svc.store().to_snapshot()).unwrap();
+    if let Some(proj) = v.get_mut("project").and_then(|p| p.as_object_mut()) {
+        proj.remove("bid_deadline");
+    }
+    let snap: bid_domain::StoreSnapshot = serde_json::from_value(v).unwrap();
+    *svc.store_mut() = bid_domain::DomainStore::restore(snap).unwrap();
+    let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
+    })));
+    assert_eq!(r["project_status"], "EXPORTED", "legacy 缺档 → 告警不硬拒");
+    let warns: Vec<String> = serde_json::from_value(r["warnings"].clone()).unwrap_or_default();
+    assert!(
+        warns.iter().any(|w| w.contains("时效未裁决") && w.contains("缺档")),
+        "legacy 告警口径: {warns:?}"
     );
 }
 

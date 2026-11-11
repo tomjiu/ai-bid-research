@@ -26,6 +26,8 @@
 in : { name, tender_notice_ref?, bid_deadline, mode(明标|暗标), external_key }
 out: { project_id, status: "DRAFT" }
 幂等: external_key 相同 → 返回已有 project_id（E_PARTIAL 不适用，静默幂等）
+落库: bid_deadline 自 #88 F-03 起随创建存档（此前仅校验）——导出时效
+      兜底裁决的基准日；legacy 快照无此字段 → 兜底退回告警面
 日期: bid_deadline 严格 YYYY-MM-DD 且须为真实存在的日历日（#47 R15 平台区分⑧
       收编单一真源 bid_domain::dates::parse_ymd——#375 A-16 月长收紧对 MCP 直调面
       同享：2026-02-30 / 2026-04-31 等幻日、前缀时间形态均 E_UNPROCESSABLE；
@@ -422,12 +424,15 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        （#189 导出围栏纵深：工具层形状校验之外，服务层 resolve_write 按受信根
        组件级判定 + 逐段 symlink 检查——字符串前缀陷阱与 symlink 逃逸在
        两层任一被拦），
-       bid_open_date?(#322/R-05：开标日时效裁决——ISO 日期 YYYY-MM-DD。提供则
-       在导出前按开标日对全部证据做单向翻转（Active/Expiring→Expired，
-       只降不升；翻转后矩阵同步重算 R-04，矩阵门读到的是翻转后状态；
-       翻转非空进 warnings 审计面）。未提供但存在带 valid_until 的证据 →
-       响亮告警「时效未裁决」，不硬拒（契约兼容）；非法日期/非字符串 →
-       E_UNPROCESSABLE 响亮拒),
+       bid_open_date?(#322/R-05 + #88 F-03 硬化：开标日时效裁决——ISO 日期
+       YYYY-MM-DD。**三级裁决**：① 提供 → 按开标日对全部证据单向翻转
+       （Active/Expiring→Expired 只降不升；翻转后矩阵同步重算 R-04，
+       矩阵门读到的是翻转后状态；翻转非空进 warnings 审计面）；② 未提供
+       而项目截止日在库（create 落档 bid_deadline）→ **按截止日兜底裁决**
+       （#88 S-3 洞收口：过期证据不再以 Active 通关；兜底口径响亮告知，
+       开标≠截止场景显式传本参数覆盖）；③ 未提供且截止日缺档（legacy
+       快照）→ 响亮告警「时效未裁决」按登记态导出（契约兼容面）。
+       非法日期/非字符串 → E_UNPROCESSABLE 响亮拒),
        waive_star_missing?(#88 F-01：★漏标豁免理由——非空字符串生效。
        star_missing>0 时门 1e 子面 b 拒导出；人工确认漏标可接受（样板句
        误判/表格装配假阳性等）才传，理由进 warnings 审计面。空串/缺省
@@ -447,7 +452,10 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
          ——标书缺资质证书图是废标级事故）
        · 版面适配：宽超内容区 6 英寸等比缩放（A4 安全面）
      - 标题行：# / ## … → 剥号加粗段（不再字面输出井号）
-out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blockers:0, waived:[]},
+out: { artifact:{url, sha256, size}, content_version_snapshot,
+       evidence_validity:{ #88 F-10 证据体检单（常驻——四态计数 + Expiring 明细）
+         active, expiring, expired, superseded, expiring_detail:[{ev_id, title, valid_until}] },
+       precheck:{blockers:0, waived:[]},
        （waived 恒空——预留字段，无通用豁免通道；#508）
        tables_written, table_kinds:[...], forms_written, form_titles:[...],
        agent_waivers:[{ gate, actor, actor_type, method, human_confirmed, at, reason }](#277),
