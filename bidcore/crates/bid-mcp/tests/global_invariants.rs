@@ -66,6 +66,54 @@ fn ws_dir(tag: &str) -> PathBuf {
     d
 }
 
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道；映射到
+/// 首叶 = Agent 映射动作的最小建模）。须在 PreExportConfirm 记审**之前**
+/// （#474 计分面摘要）。与 e2e_pipeline/e2e_artifacts 的同款补面对齐
+/// ——#100 适配时漏了本文件，导致 main 面 gi_five_global_invariants 自
+/// #100 起必红（pristine main 50e41b2 实测复现）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
+}
+
 /// MCP 分派（写操作全部走工具面，不旁路）。
 fn call(svc: &mut BidService, tool: &str, mut args: Value) -> ToolReply {
     // 确定性套件钉 mock（防 dev 机配了 BID_LLM_API_KEY 后 auto 走真实调用）。
@@ -533,6 +581,12 @@ fn gi_five_global_invariants() {
         ));
         assert_eq!(r["section_status"], "DRAFTED", "⑥ 章节 {sid}");
     }
+
+    // ---------------- 门 1h 夹具补面（评分项显式映射） ----------------
+    // #88 F-07（#100 合入）：unmapped_scoring_items 非空 → 导出拒。
+    // 评分项不进正文（#126）——映射是唯一合规通道；须在记审（#474 计分面
+    // 摘要绑定）与导出之前完成。
+    map_scoring_items_to_first_leaf(&mut svc);
 
     // ---------------- 不变式 ④：自评 by_item ↔ 全部评分项 ----------------
     let score = ok_result(call(&mut svc, "score_document", json!({ "project_id": &pid })));

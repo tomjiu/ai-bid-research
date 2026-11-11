@@ -5,7 +5,9 @@
 //! record_review_gate ×3（G3）→ check_bid_quality（章节发现面——叶清单）→
 //! draft → validate → export。**零服务面直调**（此前 e2e 的建纲/证据/三门
 //! 全走 `prepare_outline_and_matrix` / `store_mut()`——外部 Agent 在 P3 前
-//! 断链，评估见 docs/subagent-llm-assessment.md §四）。
+//! 断链，评估见 docs/subagent-llm-assessment.md §四）。门 1h（#88 #100）
+//! 后：评分项不进正文（#126）且 TOOL 面无映射工具——纯工具面驱动用
+//! `waive_unmapped_scoring` 线路级豁免过门（豁免理由即审计面记录）。
 //!
 //! 章节发现面说明：`get_bid_project_state` 只回状态不回章节清单；叶清单的
 //! 只读发现面是 `check_bid_quality`（契约 §9 sections——只列叶，按 order
@@ -307,6 +309,11 @@ fn mcp_only_full_pipeline_drives_to_export() {
         json!({
             "project_id": &pid, "format": "docx",
             "output_path": "out/mcp纯工具面-投标文件-技术标.docx",
+            // #88 门 1h（#100）夹具补面：评分项不进正文（#126）且 TOOL 面
+            // 尚无映射工具——纯 MCP 驱动（本测试的核心断言）唯一的线路级
+            // 通道是导出参数显式豁免（门错误消息自文档化）；映射工具面
+            // 缺口登记 #88 后续（见 PR 描述）
+            "waive_unmapped_scoring": "外部 Agent 纯工具面夹具：评分项不进正文（#126）——映射工具面尚缺，本豁免是线路级唯一通道（#88 #100）",
         }),
     ));
     assert!(
