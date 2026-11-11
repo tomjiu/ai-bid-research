@@ -751,6 +751,25 @@ excerpt / verification_tier。值域（mode/top_k 1..=20/threshold 0..=1）在
                 "project_version": 12 } }
 ```
 
+### bid.evidence_register —— 证据登记（写面；#47 R26——缺口-4 写半边之登记）
+`{ kind, title, source_file_id, subject_name, scope?, valid_from?, valid_until?, client?, amount_wan?, completed_on?, placeholder?, locator?, fields?, project_version? }`（project_id 由壳从当前项目路由——恒覆写）
+
+经 `bid_mcp::dispatch_with(register_evidence)`：source_file_id **锚定已导入
+件**（import 回执 per_file[].file_id，#185——sha256/指纹由服务端从库内生成，
+不接受自报）；verification_tier 由服务端裁决（#245 自报显式拒）；
+旧来源参数 source_file/source_sha256/fingerprint 显式拒（防假成功）。
+返回 (ev_id, deduplicated)：同 key 同指纹同验证态 → **幂等重放**（原
+EV-id 直返不换版）；同 key 换版 → 旧记录单向降级 SUPERSEDED 且既有绑定
+迁移到新记录。E_UNPROCESSABLE → bad_args（表单内反馈，不走横幅）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "register": { "ev_id": "EV-0014", "deduplicated": false, "kind": "qualification",
+                  "status": "ACTIVE", "verification_tier": "VERIFIED", "placeholder": false,
+                  "excerpt": "…正文摘录", "hint": "新 EV 已签发…",
+                  "project_version": 12 } }
+```
+
 ### bid.matrix_override —— 否决项死锁人工裁定（写面；#20/#226）
 `{ requirement_id, status, deviation?, actor_id?, project_version? }`
 

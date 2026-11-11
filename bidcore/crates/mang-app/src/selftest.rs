@@ -1082,6 +1082,62 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && im14b["per_file"][0]["deduplicated"] == json!(true),
         format!("id14={id14} 重放={}", im14b["file_ids"][0]),
     );
+    // ---- #47 R26：证据登记写面真链路（状态窗 EState 探针 + MatrixReady 后 成功/幂等）
+    // 窗口前置：register_evidence 契约 §11-A = MATRIX_READY+（G2）。先在当前
+    // 状态上探 EState（不为测试放宽状态窗——R10 纪律）；随后外部写者推进
+    // （与「db.json 被外部进程改写」块同款真服务面：set_requirements +
+    // prepare_outline_and_matrix——661 段同款，MCP 同源面）
+    let resp = call(&ctx, json!({"id":"t-bid-eva0","cmd":"bid.evidence_register","kind":"qualification","title":"R26 登记测试资质","source_file_id":id14,"subject_name":"selftest","valid_until":"2030-01-01"}));
+    r.check(
+        "bid.evidence_register(早态 EState 拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    {
+        use bid_domain::Requirement;
+        use std::collections::HashMap;
+        // 注意：开当前 R14 工作区（ws_r14）——ctx 此刻在 ws_r14，不是旧 root
+        let mut svc = bid_tools::service::BidService::open(&ws_r14).unwrap();
+        let st = svc.store_mut();
+        st.set_requirements(vec![Requirement {
+            id: "REQ-0001".into(),
+            category: "技术参数".into(),
+            clause_no: None,
+            anchors: vec![bid_domain::Anchor {
+                file: "技术标.docx".into(),
+                kind: "para".into(),
+                locator: "第三章 3.2/REQ-0001".into(),
+                excerpt: "投标人须提供 2000 路并发能力".into(),
+                ..bid_domain::Anchor::default()
+            }],
+            params: HashMap::new(),
+            source_file: "技术标.docx".into(),
+        }])
+        .unwrap();
+        // 状态窗推进（外部写者；容错逐级——不后向、不重复，幂等对齐）
+        let _ = st.advance_project_status(bid_domain::ProjectStatus::RequirementsExtracted);
+        let _ = st.advance_project_status(bid_domain::ProjectStatus::MatrixReady);
+        svc.checkpoint().unwrap(); // 持久化（seed/585 块同款——store_mut 变更须显式落盘）
+    }
+    let resp = call(&ctx, json!({"id":"t-bid-eva1","cmd":"bid.evidence_register","kind":"qualification","title":"R26 登记测试资质","source_file_id":id14,"subject_name":"selftest","valid_until":"2030-01-01"}));
+    let bra1 = result(&resp);
+    r.check(
+        "bid.evidence_register(新登记)",
+        resp["ok"] == json!(true)
+            && bra1["register"]["ev_id"].is_string()
+            && bra1["register"]["deduplicated"] == json!(false)
+            && bra1["register"]["status"] == json!("ACTIVE"),
+        format!("ev={} detail={}", bra1["register"]["ev_id"], resp.get("error").cloned().unwrap_or(json!(null))),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-eva2","cmd":"bid.evidence_register","kind":"qualification","title":"R26 登记测试资质","source_file_id":id14,"subject_name":"selftest","valid_until":"2030-01-01"}));
+    let bra2 = result(&resp);
+    r.check(
+        "bid.evidence_register(幂等重放)",
+        resp["ok"] == json!(true)
+            && bra2["register"]["ev_id"] == bra1["register"]["ev_id"]
+            && bra2["register"]["deduplicated"] == json!(true),
+        format!("ev1={} ev2={}", bra1["register"]["ev_id"], bra2["register"]["ev_id"]),
+    );
     let _ = std::fs::remove_dir_all(&ws_r14);
 
     // ---- #47 R15（平台区分⑧）：日期时区口径——严格公历（不存在的日历日

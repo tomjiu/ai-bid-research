@@ -1423,5 +1423,42 @@ check(
   "契约未登记"
 );
 
+// ---------- #47 R26：证据登记写面（register_evidence——缺口-4 写半边之登记） ----------
+check(
+  "R26 IPC 对齐：UI 调用与壳分发逐字一致（bid.evidence_register）",
+  app.includes('ipc("bid.evidence_register"')
+    && ipcRs.includes('"bid.evidence_register" => crate::bid::evidence_register(&ws, &self.bid, &a)'),
+  "登记命令对齐断裂（单面漂移）"
+);
+check(
+  "R26 壳面：真实工具面直链 + 参数透传表（source_file_id 锚定；#185/#245 拒在工具面单一真源——壳不自报 verification_tier）",
+  bidRs.includes('tool: "register_evidence".to_string()')
+    && bidRs.includes('"placeholder", "locator", "fields", "project_version"'),
+  "壳侧绕开工具面或透传表断裂"
+);
+check(
+  "R26 UI：登记表单（source 锚定导入回执 parse_status=ok + 幂等双态回显 + 表单内错误反馈）",
+  app.includes('data-ev-reg-src="source"') && app.includes('parse_status === "ok"')
+    && app.includes('rg.info.deduplicated') && app.includes("registerBidEvidence"),
+  "登记表单/幂等回显缺失"
+);
+check(
+  "R26 演示桥：可变态登记（demoEvidence 深拷贝 + register 真改台账 + 换版降级）",
+  app.includes("const demoEvidence = JSON.parse(JSON.stringify(DEMO_BID.evidence))")
+    && app.includes('case "bid.evidence_register"') && app.includes("SUPERSEDED"),
+  "演示桥缺可变登记 stub"
+);
+check(
+  "R26 selftest：三检查在场（早态 EState 拒 + 新登记 + 幂等重放）",
+  selftestRs.includes("bid.evidence_register(早态 EState 拒)") && selftestRs.includes("bid.evidence_register(新登记)")
+    && selftestRs.includes("bid.evidence_register(幂等重放)"),
+  "selftest 集成自检项被删"
+);
+check(
+  "R26 契约：IPC-CONTRACT 登记写面命令（含 #185/#245 口径）",
+  contract.includes("### bid.evidence_register —") && contract.includes("#185") && contract.includes("#245"),
+  "写面契约未登记"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

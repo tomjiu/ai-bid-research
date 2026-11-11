@@ -491,6 +491,8 @@
     // 同语义：追认后最新条翻 human、agent_waivers 消项、human_review_complete
     // 重算；演示刷新页面即重置，与其它演示面一致）
     const demoGates = JSON.parse(JSON.stringify(DEMO_BID.gates));
+    // #47 R26：登记写面可变态（register 真改台账——与 demoGates 同款深拷贝隔离）
+    const demoEvidence = JSON.parse(JSON.stringify(DEMO_BID.evidence));
     // #603 批 C：补遗台账演示数据（与真实 bid.addenda 响应同形——
     // readiness::{total, ready, not_ready[]} + waivers）。演示态 = 2 件
     // 补遗（1 就绪 + 1 OCR 未完——逐件确认的目标件）；全局确认对它
@@ -666,7 +668,7 @@
               // #47 R25 演示桥：过滤在桥内重放（kind/status——与工具面值域同款）
               {
                 const f = m.filters || {};
-                let items = DEMO_BID.evidence.items.slice();
+                let items = demoEvidence.items.slice();
                 if (f.kind) items = items.filter((e) => e.kind === f.kind);
                 if (f.status) items = items.filter((e) => e.status === f.status);
                 return respond(m.id, {
@@ -682,7 +684,7 @@
               {
                 const q = String(m.query || "").toLowerCase();
                 const mode = m.mode || "hybrid";
-                const pool = DEMO_BID.evidence.items.filter((e) => e.status !== "SUPERSEDED");
+                const pool = demoEvidence.items.filter((e) => e.status !== "SUPERSEDED");
                 let items = pool.filter((e) => !q || (e.title + " " + (e.subject_name || "") + " " + (e.excerpt || "")).toLowerCase().includes(q));
                 if (mode === "exact") items = items.filter((e) => e.title.toLowerCase().includes(q));
                 const hits = items.map((e, i) => ({
@@ -698,6 +700,45 @@
                   search: {
                     hits, total: hits.length, top_k: 10, warnings: [],
                     trace: { semantic_k: hits.length, exact_k: mode === "exact" ? hits.length : 0, merged_by: "ev_id", engine: "demo（桥内重放）", content_face: "title+subject+excerpt（演示面）" },
+                    project_version: 12,
+                  },
+                });
+              }
+            case "bid.evidence_register":
+              // #47 R26 演示桥：登记真改台账（桥内重放工具面语义——
+              // 同 key 同指纹同占位 → 幂等重放原直返；同 key 换版 → 旧降
+              // SUPERSEDED 新签发；全新 → 新签发。绑定迁移面桥内无对应（登记
+              // 半边先立，R27 绑定时补）
+              {
+                const key = String(m.kind || "") + "|" + String(m.title || "") + "|" + String(m.subject_name || "");
+                const keyOf = (e) => e.kind + "|" + e.title + "|" + (e.subject_name || "");
+                const sameAll = (e) => keyOf(e) === key && (e.valid_until || null) === (m.valid_until || null) && !!e.is_placeholder === !!m.placeholder;
+                let evId, dedup;
+                const hit = demoEvidence.items.find(sameAll);
+                if (hit) {
+                  evId = hit.id; dedup = true;
+                } else {
+                  const old = demoEvidence.items.find((e) => keyOf(e) === key);
+                  if (old) old.status = "SUPERSEDED"; // 同 key 换版：旧单向降级
+                  evId = "EV-" + String(1000 + demoEvidence.items.length + 1).padStart(4, "0");
+                  dedup = false;
+                  demoEvidence.items.push({
+                    id: evId, kind: m.kind || "", title: m.title || "", status: "ACTIVE",
+                    subject_name: m.subject_name || "", valid_until: m.valid_until || null,
+                    verification_tier: m.placeholder ? null : "VERIFIED",
+                    is_placeholder: !!m.placeholder, excerpt: null,
+                  });
+                  demoEvidence.total = demoEvidence.items.length;
+                }
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  register: {
+                    ev_id: evId, deduplicated: dedup, kind: m.kind || "", status: "ACTIVE",
+                    verification_tier: m.placeholder ? null : "VERIFIED",
+                    placeholder: !!m.placeholder, excerpt: null, excerpt_locator: null,
+                    hint: dedup ? "语义位查重命中：幂等重放（原 EV-id 直返，不换版）" : "新 EV 已签发（若为同 key 换版，旧记录已单向降级 SUPERSEDED）",
                     project_version: 12,
                   },
                 });
@@ -910,6 +951,8 @@
     // #47 R25：证据台账读面（list_evidence / search_evidence——缺口-4 读半边）
     bidEvidence: { status: "idle", data: null, error: "", code: "", kindFilter: "", statusFilter: "" },
     bidEvidenceSearch: { status: "idle", data: null, error: "", code: "", query: "", mode: "hybrid" },
+    // #47 R26：证据登记写面（register_evidence——表单态与回执信息；错误走表单内反馈）
+    bidEvidenceReg: { busy: false, error: "", info: null },
     // #603 批 C：补遗台账 + 豁免写面（gates 面板补遗门接线用）
     bidAddenda: { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false },
   };
@@ -3120,7 +3163,39 @@
       }
     }
     html += '<div class="bid-card-sub">检索面 = 标题+范围+主体+客户+正文摘录（#217）；语义引擎 pre-M2-b 为朴素 token 匹配</div>';
-    html += "</div></div>";
+    html += "</div>"; // #47 R26：检索卡在此收口——登记卡为同级卡，不嵌检索卡内
+    // 写面段（register_evidence——#47 R26；source_file_id 锚定导入回执 per_file）
+    const rg = state.bidEvidenceReg;
+    const wr = (state.bidWizard && state.bidWizard.result) || null;
+    const srcFiles = (wr && Array.isArray(wr.per_file) ? wr.per_file : []).filter((f) => f && f.parse_status === "ok" && f.file_id);
+    html += '<div class="bid-card"><div class="bid-card-title">登记证据（register_evidence · #47 R26）</div>';
+    html += '<div class="bid-ev-reg">';
+    if (!srcFiles.length) {
+      html += '<div class="bid-card-sub">本会话尚无导入回执（per_file）——登记须锚定已导入件（#185：先向导导入；Agent 持久路径走 MCP register_evidence）。</div>';
+    } else {
+      html += '<select data-ev-reg-src="source"><option value="">来源文件（必选）</option>'
+        + srcFiles.map((f) => '<option value="' + esc(f.file_id) + '">' + esc(f.file_id + " · " + (f.filename || "")) + "</option>").join("")
+        + '</select> <select data-ev-reg-kind="kind"><option value="">类别（必选）</option>'
+        + Object.keys(EVIDENCE_KIND_ZH).map((k) => '<option value="' + k + '">' + EVIDENCE_KIND_ZH[k] + "</option>").join("")
+        + '</select> <input data-ev-reg-title="title" type="text" placeholder="标题（必填）">'
+        + ' <input data-ev-reg-subject="subject" type="text" placeholder="主体名（必填）">'
+        + ' <input data-ev-reg-until="valid_until" type="date" title="有效期至（可选）">'
+        + ' <label class="bid-ev-chk"><input data-ev-reg-ph="placeholder" type="checkbox"> 占位/待核验</label>'
+        + ' <button class="btn btn-sm" data-ev-reg-go="register">登记</button>';
+    }
+    html += "</div>";
+    if (rg.error) html += '<div class="bid-card-sub" data-kind="error">' + esc(rg.error) + "</div>";
+    if (rg.info) {
+      html += '<div class="bid-card-sub" data-state="' + (rg.info.deduplicated ? "warn" : "ok") + '">'
+        + (rg.info.deduplicated
+          ? "幂等重放——原 " + esc(rg.info.ev_id || "") + " 直返（不换版）"
+          : "新 EV 签发 " + esc(rg.info.ev_id || "") + "（status=" + esc(rg.info.status || "") + (rg.info.placeholder ? " · 占位" : "") + "）")
+        + (rg.info.hint ? " · " + esc(rg.info.hint) : "")
+        + "</div>";
+    }
+    html += '<div class="bid-card-sub">写面约束（工具面单一真源）：source_file_id 锚定导入回执；#185 旧来源参数（source_file/sha256/fingerprint）与 #245 自报验证态显式拒；同 key 同指纹→幂等重放 / 换版旧记录降级 SUPERSEDED 且绑定迁移。scope/client/amount_wan/completed_on 等可选面走 Agent（MCP）。</div>';
+    html += "</div>";
+    html += "</div>";
     panel.innerHTML = html;
     const kindSel = panel.querySelector("[data-ev-kind]");
     if (kindSel) kindSel.addEventListener("change", () => { state.bidEvidence.kindFilter = kindSel.value; ui.loadBidEvidence(true); });
@@ -3134,6 +3209,24 @@
     });
     const qEl2 = panel.querySelector("[data-ev-q]");
     if (qEl2) qEl2.addEventListener("keydown", (e) => { if (e.key === "Enter" && go) go.click(); });
+    // #47 R26：登记表单提交（必填前置校验 + ui.registerBidEvidence）
+    const regGo = panel.querySelector("[data-ev-reg-go]");
+    if (regGo) regGo.addEventListener("click", () => {
+      const gv = (n) => { const el = panel.querySelector("[data-ev-reg-" + n + "]"); return el ? String(el.value || "").trim() : ""; };
+      const phEl = panel.querySelector("[data-ev-reg-ph]");
+      const p = { source_file_id: gv("src"), kind: gv("kind"), title: gv("title"), subject_name: gv("subject") };
+      const until = gv("until");
+      if (until) p.valid_until = until;
+      if (phEl && phEl.checked) p.placeholder = true;
+      if (!p.source_file_id || !p.kind || !p.title || !p.subject_name) {
+        state.bidEvidenceReg.error = "来源文件/类别/标题/主体名均必填";
+        state.bidEvidenceReg.info = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      state.bidEvidenceReg.error = "";
+      ui.registerBidEvidence(p);
+    });
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */
   function renderBidMatrixPanel(host, panel) {
@@ -5838,6 +5931,30 @@
         ses.status = "error";
         ses.error = (err && (err.message || err.code)) || "bid.evidence_search 检索失败";
       }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R26：证据登记写面（register_evidence——source_file_id 锚定 + 幂等回显）
+     *  错误（含 #185/#245 显式拒）走表单内反馈（rg.error），不弹横幅。 */
+    async registerBidEvidence(payload) {
+      if (!state.bridge) return;
+      const rg = state.bidEvidenceReg;
+      if (rg.busy) return;
+      rg.busy = true;
+      rg.error = "";
+      rg.info = null;
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.evidence_register", payload, 20e3);
+        if (r && r.present && r.register && r.register.ev_id) {
+          rg.info = r.register;
+          ui.loadBidEvidence(true);
+        } else {
+          rg.error = (r && r.error) || "登记未落库";
+        }
+      } catch (err) {
+        rg.error = (err && (err.message || err.code)) || "bid.evidence_register 登记失败";
+      }
+      rg.busy = false;
       renderBidWorkbenchIfOpen();
     },
     /** #20：否决项死锁人工裁定（bid.matrix_override → 工具面
