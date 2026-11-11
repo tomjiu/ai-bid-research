@@ -513,6 +513,13 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         resp["ok"] == json!(false) && err_code(&resp) == "not_found",
         format!("{}", err_code(&resp)),
     );
+    // #47 R25：无 db.json → 证据读面同样干净拒绝（不落副作用）
+    let resp = call(&ctx, json!({"id":"t-bid-ev0","cmd":"bid.evidence"}));
+    r.check(
+        "bid.evidence(无db.json)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
     // 种一个真实项目（bid-tools 服务面——与 MCP 写路径同源）
     seed_bid_project(&root);
     let resp = call(&ctx, json!({"id":"t-bid-s1","cmd":"bid.state"}));
@@ -553,6 +560,27 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && bm["star_summary"]["total"] == json!(0)
             && bm["fetched_pages"] == json!(1),
         format!("rows={} status={}", bm["rows"].as_array().map(|a| a.len()).unwrap_or(0), bm["rows"][0]["status"]),
+    );
+    // #47 R25：真实项目的证据台账读面（list 过滤 + search 检索真链路往返）
+    let resp = call(&ctx, json!({"id":"t-bid-ev1","cmd":"bid.evidence","filters":{"kind":"qualification"}}));
+    let bev = result(&resp);
+    r.check(
+        "bid.evidence(真实项目·kind过滤)",
+        resp["ok"] == json!(true)
+            && bev["present"] == json!(true)
+            && bev["evidence"]["items"].is_array()
+            && bev["evidence"]["total"].is_u64(),
+        format!("total={}", bev["evidence"]["total"]),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-ev2","cmd":"bid.evidence_search","query":"selftest"}));
+    let bes = result(&resp);
+    r.check(
+        "bid.evidence_search(真实项目·检索)",
+        resp["ok"] == json!(true)
+            && bes["present"] == json!(true)
+            && bes["search"]["hits"].is_array()
+            && bes["search"]["total"].is_u64(),
+        format!("hits_total={}", bes["search"]["total"]),
     );
     // db.json 被外部进程改写（bid-mcp-stdio / Agent）→ 服务缓存按指纹重开
     {
