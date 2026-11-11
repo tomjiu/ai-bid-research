@@ -634,8 +634,10 @@ E_UNPROCESSABLE（壳侧仍是形态检查先行——10 字符数字，分层�
 导入（导入仍走 `bid.import_files`，向导第二步用户确认 kind）。**不依赖 db.json**（先拖
 文件再建项合法——不碰 DomainStore）。落位规则：同名且 sha256 相同 → `skipped:
 already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找空位。白名单与
-`BID_IMPORT_EXTS` 同源（docx/xlsx/pdf/doc/ods）；目录拖入明拒（`is_dir`——R17+ 递归导
-入）；不存在的路径 `not_found`。
+`BID_IMPORT_EXTS` 同源（**docx/xlsx/pdf/doc**——R17 与解析面对齐：bid-tools `service.rs`
+导入路由只认这四类，其余扩展名（含旧表的 `.ods`）落 `parse_file`「不支持的文件类型」
+显式拒；能落位但导入必失败的件在壳侧就拒，分账 `ext_blocked` + detail 指明合法四类）；
+目录拖入明拒（`is_dir`——后续硬化轮可做递归导入）；不存在的路径 `not_found`。
 
 **基名跨平台守卫（R10，#47 平台区分③——R8 注释预留硬化项落地）**：`paths::guard_portable_basename`
 在壳侧入口拦截不可跨 Windows 迁移的基名，**双平台同拒**（不是 cfg 分支）——

@@ -1645,6 +1645,16 @@ pub fn import_files(
 /// （`already_present`）；内容不同 → 自动 `-2`/`-3` 后缀。R9-R16 平台
 /// 硬化专列在此基础做 Win 保留名 / 大小写不敏感去重 / 分隔符统一。
 /// 契约：IPC-CONTRACT.md §bid.ingest_drop。
+///
+/// R17（#47）：拖拽落位后缀白名单——**与解析面严格对齐**的单一真源。
+/// bid-tools `service.rs` 的导入路由只认 docx/xlsx/pdf/doc 四类，
+/// 其余扩展名（含旧表里的 `.ods`）落 `parse_file` 的「不支持的文件
+/// 类型」显式拒——能落位但导入必失败的件不该进白名单（向导注释的
+/// 原始设计意图）。UI 侧 `BID_IMPORT_EXTS`（app.js）与本表同源，源级
+/// 回归双向钉死（壳单测 `ingest_ods_blocked` + bid-panels 白名单断言）。
+/// 改表必须三面同改：本常量 / app.js 白名单 / bid-panels 锚。
+const INGEST_DROP_EXTS: &[&str] = &[".docx", ".xlsx", ".pdf", ".doc"];
+
 pub fn ingest_drop(
     ws: &Workspace,
     _cache: &Mutex<Option<CachedService>>,
@@ -1713,15 +1723,23 @@ pub fn ingest_drop(
         // **之前**（守卫与占位键看到的都是 NFC 形态——单一口径）。
         // CJK/ASCII 两形态字节相同，零影响。
         let name = paths::nfc(&raw_name);
-        // 后缀白名单（与 UI 的 BID_IMPORT_EXTS 同源口径：docx/xlsx/pdf/doc/ods）
+        // 后缀白名单（单一真源 INGEST_DROP_EXTS——与 UI 的 BID_IMPORT_EXTS
+        // 同源口径：docx/xlsx/pdf/doc）。R17（#47）
+        // ① 与解析面严格对齐——bid-tools service.rs 的导入路由只认
+        //   docx/xlsx/pdf/doc 四类（其余扩展名落 `parse_file` 的
+        //   「不支持的文件类型」显式拒）；旧表里的 `.ods` 能落位但导入
+        //   必失败，违背向导白名单「不列必败件免得用户白跑一趟」的设计
+        //   意图——全链（UI 分拣 / 壳落位 / 解析路由）三面对齐后摘除。
+        // ② 源级回归双向钉死：壳侧（ingest_ods_blocked）+ UI 侧
+        //   （bid-panels BID_IMPORT_EXTS）各自锚定，改表必同步触雷。
         let lower = name.to_lowercase();
-        if ![".docx", ".xlsx", ".pdf", ".doc", ".ods"]
+        if !INGEST_DROP_EXTS
             .iter()
             .any(|e| lower.ends_with(e))
         {
             skipped.push(json!({
                 "path": raw, "reason": "ext_blocked",
-                "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc/ods）")
+                "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc）")
             }));
             continue;
         }
@@ -3007,6 +3025,85 @@ mod tests {
             assert!(dir.join("补遗说明.docx").is_file());
             assert!(!dir.join("CON.docx").exists(), "保留名不落位");
         }
+
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(src_dir);
+    }
+
+    /// R17（#47）：拖拽白名单与解析面严格对齐——`.ods` 摘除断言面。
+    /// bid-tools service.rs 导入路由只认 docx/xlsx/pdf/doc 四类（其余
+    /// 扩展名落 `parse_file`「不支持的文件类型」显式拒）——旧白名单里
+    /// 的 `.ods` 能落位但导入必失败，白名单三面（壳/UI/解析）对齐后
+    /// 拒落位。分账口径：ext_blocked + detail 指明合法四类（不按错误
+    /// 回，混拖批次不连坐）；同批合法件照常落位。纯字符串判定，
+    /// 双平台同跑（非 cfg——「Linux 合法拷 Windows 必坏」不适用，
+    /// 这里是「落位成功导入必败」的双平台同拒）。
+    #[test]
+    fn ingest_drop_ods_blocked_as_unsupported_parse_face() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ingest17");
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+
+        fn call_args(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        let src_dir = std::env::temp_dir().join(format!(
+            "mang-bid-ingest17-src-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let src_ods = src_dir.join("报价清单.ods");
+        std::fs::write(&src_ods, b"PK\x03\x04fake-ods-zip-payload").unwrap();
+        let src_ok = src_dir.join("招标文件.docx");
+        std::fs::write(&src_ok, b"PK\x03\x04ok-docx-payload").unwrap();
+
+        // 混拖：.ods 分账拒 + 合法 docx 照常落位（批次不连坐）
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [src_ods.to_string_lossy(), src_ok.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "分账不按错误回：{r}");
+        let out = r["result"].clone();
+        let skipped = out["skipped"].as_array().unwrap();
+        assert_eq!(skipped.len(), 1, "只 .ods 分账拒：{out}");
+        assert_eq!(skipped[0]["reason"], json!("ext_blocked"), "reason：{out}");
+        let detail = skipped[0]["detail"].as_str().unwrap_or("");
+        assert!(detail.contains("ods"), "detail 应点名被拒后缀：{out}");
+        assert!(
+            detail.contains("docx/xlsx/pdf/doc"),
+            "detail 应指明合法四类：{out}"
+        );
+        let copied = out["copied"].as_array().unwrap();
+        assert_eq!(copied.len(), 1, "合法件照常落位：{out}");
+        assert_eq!(copied[0]["rel"], json!("招标文件.docx"));
+        assert!(dir.join("招标文件.docx").is_file());
+        assert!(
+            !dir.join("报价清单.ods").exists(),
+            ".ods 不落位（导入必失败件不进白名单）"
+        );
+
+        // 大写变体 .ODS 同拒（白名单大小写无关口径与 ext 门一致）
+        let src_ods2 = src_dir.join("报价清单2.ODS");
+        std::fs::write(&src_ods2, b"PK\x03\x04fake-ods-zip-payload").unwrap();
+        let r = call_args(&ctx, "bid.ingest_drop", json!({
+            "paths": [src_ods2.to_string_lossy()]
+        }));
+        assert_eq!(r["ok"], json!(true), "分账不按错误回：{r}");
+        let out = r["result"].clone();
+        assert_eq!(
+            out["skipped"][0]["reason"], json!("ext_blocked"),
+            "大写变体同拒：{out}"
+        );
+        assert!(!dir.join("报价清单2.ODS").exists());
+
+        // 单一真源表本体钉死：四类在场 / ods 不在（改表必触雷——
+        // 若加回 .ods，此断言与 bid-panels 锚同时红）
+        assert_eq!(INGEST_DROP_EXTS.len(), 4, "白名单四类：{INGEST_DROP_EXTS:?}");
+        assert!(!INGEST_DROP_EXTS.contains(&".ods"), "ods 不在表：{INGEST_DROP_EXTS:?}");
 
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(src_dir);
