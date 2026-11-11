@@ -311,6 +311,31 @@
         },
         quick_stats: { requirements: 1120, evidence: 13, evidence_bindings: 46, sections: 26, sections_leaf: 20, sections_drafted: 12, sections_accepted: 3, sections_failed: 1, sections_dirty: 1, target_total_chars: 150000, actual_total_chars: 81200, pages_estimate: 97 }
       },
+      // #47 R25：证据台账演示数据（与真实 bid.evidence 响应同形——list_evidence
+      // 工具输出原样透传；13 件与 quick_stats.evidence=13 同口径；
+      // EV-0001 与矩阵演示行（并发压测报告）同源）
+      evidence: {
+        items: [
+          { id: "EV-0001", kind: "product_doc", title: "并发压测报告", status: "ACTIVE", subject_name: "演示科技", valid_until: "2027-06-30", verification_tier: "SELF_TEST", excerpt: "2000 路并发压测全通过，P99 < 120ms。" },
+          { id: "EV-0002", kind: "qualification", title: "电子与智能化专业承包二级资质", status: "ACTIVE", subject_name: "演示科技", valid_until: "2028-03-31", verification_tier: "VERIFIED", excerpt: "资质证书编号 D2330022xx，有效期至 2028-03。" },
+          { id: "EV-0003", kind: "performance", title: "智慧园区一期弱电工程合同", status: "ACTIVE", subject_name: "演示科技", valid_until: null, verification_tier: "VERIFIED", excerpt: "合同额 3200 万元，2025-11 完工验收。" },
+          { id: "EV-0004", kind: "personnel", title: "项目经理建造师证书（张工）", status: "ACTIVE", subject_name: "张工", valid_until: "2027-12-31", verification_tier: "SELF_TEST", excerpt: "机电工程一级建造师，B 安全考核证在有效期内。" },
+          { id: "EV-0005", kind: "certificate", title: "ISO9001 质量管理体系认证", status: "EXPIRING", subject_name: "演示科技", valid_until: "2027-01-15", verification_tier: "VERIFIED", excerpt: "认证覆盖范围含弱电系统集成；复认证明已提交。" },
+          { id: "EV-0006", kind: "product_doc", title: "核心设备原厂授权书", status: "ACTIVE", subject_name: "回产主流厂商", valid_until: "2027-09-30", verification_tier: "SELF_TEST", excerpt: "授权型号与★条款一致，含 7×24 服务承诺。" },
+          { id: "EV-0007", kind: "solution_module", title: "运维平台方案模块说明书", status: "ACTIVE", subject_name: "演示科技", valid_until: null, verification_tier: "SELF_TEST", excerpt: "模块清单与投标应答章节逐条对应。" },
+          { id: "EV-0008", kind: "contract", title: "2024 年度运维框架合同", status: "ACTIVE", subject_name: "演示运维", valid_until: "2026-12-31", verification_tier: "VERIFIED", excerpt: "框架合同含 SLA 附件。" },
+          { id: "EV-0009", kind: "qualification", title: "安全生产许可证", status: "ACTIVE", subject_name: "演示科技", valid_until: "2027-05-20", verification_tier: "VERIFIED", excerpt: "许可范围含电子与智能化工程。" },
+          { id: "EV-0010", kind: "performance", title: "市政水厂自控项目业绩", status: "SUPERSEDED", subject_name: "演示科技", valid_until: null, verification_tier: "SELF_TEST", excerpt: "已被 EV-0003 替代（同口径规模更大）。" },
+          { id: "EV-0011", kind: "certificate", title: "ISO27001 信息安全认证", status: "EXPIRED", subject_name: "演示科技", valid_until: "2026-06-30", verification_tier: "VERIFIED", excerpt: "已过期，续证审核中（bind_evidence 将禁绑）。" },
+          { id: "EV-0012", kind: "personnel", title: "高级工程师职称证（李工）", status: "ACTIVE", subject_name: "李工", valid_until: "2029-04-30", verification_tier: "SELF_TEST", excerpt: "职称专业：自动化。" },
+          { id: "EV-0013", kind: "solution_module", title: "能耗监测方案白皮书", status: "ACTIVE", subject_name: "演示科技", valid_until: null, verification_tier: "SELF_TEST", excerpt: "白皮书第三章含节能测算方法。" }
+        ],
+        total: 13,
+        limit: 50,
+        cursor: null,
+        next_cursor: null,
+        project_version: 12,
+      },
       outline: {
         present: true,
         workspace: root,
@@ -471,6 +496,8 @@
     // 同语义：追认后最新条翻 human、agent_waivers 消项、human_review_complete
     // 重算；演示刷新页面即重置，与其它演示面一致）
     const demoGates = JSON.parse(JSON.stringify(DEMO_BID.gates));
+    // #47 R26：登记写面可变态（register 真改台账——与 demoGates 同款深拷贝隔离）
+    const demoEvidence = JSON.parse(JSON.stringify(DEMO_BID.evidence));
     // #603 批 C：补遗台账演示数据（与真实 bid.addenda 响应同形——
     // readiness::{total, ready, not_ready[]} + waivers）。演示态 = 2 件
     // 补遗（1 就绪 + 1 OCR 未完——逐件确认的目标件）；全局确认对它
@@ -755,6 +782,85 @@
                   project_version: 3
                 }
               });
+            case "bid.evidence":
+              // #47 R25 演示桥：过滤在桥内重放（kind/status——与工具面值域同款）
+              {
+                const f = m.filters || {};
+                let items = demoEvidence.items.slice();
+                if (f.kind) items = items.filter((e) => e.kind === f.kind);
+                if (f.status) items = items.filter((e) => e.status === f.status);
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  evidence: { items, total: items.length, limit: 50, cursor: null, next_cursor: null, project_version: 12 },
+                });
+              }
+            case "bid.evidence_search":
+              // #47 R25 演示桥：子串检索重放（pre-M2-b 朴素引擎同款语义；
+              // SUPERSEDED 不进检索池——与工具面同口径）
+              {
+                const q = String(m.query || "").toLowerCase();
+                const mode = m.mode || "hybrid";
+                const pool = demoEvidence.items.filter((e) => e.status !== "SUPERSEDED");
+                let items = pool.filter((e) => !q || (e.title + " " + (e.subject_name || "") + " " + (e.excerpt || "")).toLowerCase().includes(q));
+                if (mode === "exact") items = items.filter((e) => e.title.toLowerCase().includes(q));
+                const hits = items.map((e, i) => ({
+                  id: e.id, title: e.title, score: Math.max(0.4, 1 - i * 0.05),
+                  match_type: q ? (mode === "exact" ? "exact" : "both") : "semantic",
+                  kind: e.kind, status: e.status, valid_until: e.valid_until || null,
+                  excerpt: e.excerpt || null, verification_tier: e.verification_tier || null,
+                }));
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  search: {
+                    hits, total: hits.length, top_k: 10, warnings: [],
+                    trace: { semantic_k: hits.length, exact_k: mode === "exact" ? hits.length : 0, merged_by: "ev_id", engine: "demo（桥内重放）", content_face: "title+subject+excerpt（演示面）" },
+                    project_version: 12,
+                  },
+                });
+              }
+            case "bid.evidence_register":
+              // #47 R26 演示桥：登记真改台账（桥内重放工具面语义——
+              // 同 key 同指纹同占位 → 幂等重放原直返；同 key 换版 → 旧降
+              // SUPERSEDED 新签发；全新 → 新签发。绑定迁移面桥内无对应（登记
+              // 半边先立，R27 绑定时补）
+              {
+                const key = String(m.kind || "") + "|" + String(m.title || "") + "|" + String(m.subject_name || "");
+                const keyOf = (e) => e.kind + "|" + e.title + "|" + (e.subject_name || "");
+                const sameAll = (e) => keyOf(e) === key && (e.valid_until || null) === (m.valid_until || null) && !!e.is_placeholder === !!m.placeholder;
+                let evId, dedup;
+                const hit = demoEvidence.items.find(sameAll);
+                if (hit) {
+                  evId = hit.id; dedup = true;
+                } else {
+                  const old = demoEvidence.items.find((e) => keyOf(e) === key);
+                  if (old) old.status = "SUPERSEDED"; // 同 key 换版：旧单向降级
+                  evId = "EV-" + String(1000 + demoEvidence.items.length + 1).padStart(4, "0");
+                  dedup = false;
+                  demoEvidence.items.push({
+                    id: evId, kind: m.kind || "", title: m.title || "", status: "ACTIVE",
+                    subject_name: m.subject_name || "", valid_until: m.valid_until || null,
+                    verification_tier: m.placeholder ? null : "VERIFIED",
+                    is_placeholder: !!m.placeholder, excerpt: null,
+                  });
+                  demoEvidence.total = demoEvidence.items.length;
+                }
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  register: {
+                    ev_id: evId, deduplicated: dedup, kind: m.kind || "", status: "ACTIVE",
+                    verification_tier: m.placeholder ? null : "VERIFIED",
+                    placeholder: !!m.placeholder, excerpt: null, excerpt_locator: null,
+                    hint: dedup ? "语义位查重命中：幂等重放（原 EV-id 直返，不换版）" : "新 EV 已签发（若为同 key 换版，旧记录已单向降级 SUPERSEDED）",
+                    project_version: 12,
+                  },
+                });
+              }
             case "bid.matrix_override":
               // #20 演示桥：人工裁定 stub（真实壳 = 宿主签发 receipt → set_matrix_override）
               return respond(m.id, {
@@ -971,6 +1077,11 @@
     },
     // #20 分包视图（bid.packages 只读拉取缓存——工作台「分包」页签用）
     bidPackages: { status: "idle", data: null, error: "" },
+    // #47 R25：证据台账读面（list_evidence / search_evidence——缺口-4 读半边）
+    bidEvidence: { status: "idle", data: null, error: "", code: "", kindFilter: "", statusFilter: "" },
+    bidEvidenceSearch: { status: "idle", data: null, error: "", code: "", query: "", mode: "hybrid" },
+    // #47 R26：证据登记写面（register_evidence——表单态与回执信息；错误走表单内反馈）
+    bidEvidenceReg: { busy: false, error: "", info: null },
     // #603 批 C：补遗台账 + 豁免写面（gates 面板补遗门接线用）
     bidAddenda: { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false },
     // R25（#47）：建纲流（向导深水区——导入后直达章节树）。抽取写面 +
@@ -1598,6 +1709,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="export">校验与导出</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="packages">分包</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="evidence">证据台账</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1755,6 +1867,8 @@
       if (activePanel === "export") renderBidExportPanel(host);
       // #20：分包清单同样不依赖章节树（#316 识别面任何阶段可看）
       if (activePanel === "packages") renderBidPackagesPanel(host);
+      // #47 R25：证据台账不依赖章节树（读面——list 过滤 + search 检索）
+      if (activePanel === "evidence") renderBidEvidencePanel(host);
       return;
     }
     const byId = {};
@@ -1816,6 +1930,11 @@
     }
     if (activePanel === "packages") {
       renderBidPackagesPanel(host);
+      return;
+    }
+    // #47 R25：证据台账（读面——同 packages：不依赖章节树）
+    if (activePanel === "evidence") {
+      renderBidEvidencePanel(host);
       return;
     }
     if (activePanel === "matrix") {
@@ -3260,6 +3379,169 @@
     panel.innerHTML = html;
     const rf = panel.querySelector("[data-pk-refresh]");
     if (rf) rf.addEventListener("click", () => ui.loadBidPackages(true));
+  }
+
+  /** #47 R25：证据类别/状态中文映射（与 bid-domain as_str 同口径——
+   *  machine 值（snake_case）为 IPC 过滤值，中文为展示值；
+   *  值域单一真源在工具面（parse_evidence_kind/status），此处仅展示映射） */
+  const EVIDENCE_KIND_ZH = {
+    qualification: "资质", performance: "业绩", personnel: "人员", certificate: "证书",
+    product_doc: "产品资料", solution_module: "方案模块", contract: "合同",
+  };
+  const EVIDENCE_STATUS_ZH = { ACTIVE: "有效", EXPIRING: "临期", EXPIRED: "已失效", SUPERSEDED: "已作废" };
+
+  /** #47 R25：证据台账面板（工作台 evidence 页签）——list_evidence 过滤清单
+   *  + search_evidence 检索（query/mode；命中带 score/match_type/摘录）。
+   *  E_NOTFOUND（无 db.json）→ 引导卡（R5 同款口径）；E_STATE 不存在于读面。 */
+  function renderBidEvidencePanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const ev = state.bidEvidence;
+    if (ev.status === "idle") ui.loadBidEvidence();
+    if (ev.status === "idle" || ev.status === "loading") {
+      panel.innerHTML = '<div class="bid-gt"><div class="view-state"><div class="view-spinner"></div><div>正在读取证据台账…</div></div></div>';
+      return;
+    }
+    if (ev.status === "error" && ev.code === "not_found") {
+      // R5 同款：空工作区（无 db.json）不是错误——E_NOTFOUND 引导卡口径
+      renderBidEarlyGuide(host, panel, {
+        code: "not_found",
+        title: "还没有标书项目",
+        text: "证据台账按项目归集——先建项并导入招标文件，随后由 Agent（MCP register_evidence）或后续写面登记证据材料。",
+        next: "登记后此处逐件可见（类别/状态过滤 + 关键词检索——search_evidence 检索面含正文摘录 #217）。",
+      });
+      return;
+    }
+    if (ev.status === "error") {
+      panel.innerHTML =
+        '<div class="bid-gt"><div class="view-state" data-kind="error"><div class="view-state-title">证据台账读取失败</div><div>'
+        + esc(ev.error || "无数据")
+        + '</div><div><button class="btn" data-ev-retry="retry">重试</button></div></div></div>';
+      const retry = panel.querySelector("[data-ev-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidEvidence(true));
+      return;
+    }
+    const d = (ev.data && ev.data.evidence) || {};
+    const items = Array.isArray(d.items) ? d.items : [];
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">证据台账（T-1 · #47 R25）</div>'
+      + '<div class="bid-card-sub">共 ' + fmtChars(d.total != null ? d.total : items.length) + ' 件'
+      + (ev.kindFilter || ev.statusFilter ? "（已过滤）" : "")
+      + " · 读面 = list_evidence（kind/status 过滤 + id 字典序）</div>";
+    html += '<div class="bid-ev-filters"><select data-ev-kind="kind"><option value="">全部类别</option>'
+      + Object.keys(EVIDENCE_KIND_ZH).map((k) => '<option value="' + k + '"' + (ev.kindFilter === k ? " selected" : "") + ">" + EVIDENCE_KIND_ZH[k] + "</option>").join("")
+      + '</select> <select data-ev-status="status"><option value="">全部状态</option>'
+      + Object.keys(EVIDENCE_STATUS_ZH).map((s) => '<option value="' + s + '"' + (ev.statusFilter === s ? " selected" : "") + ">" + EVIDENCE_STATUS_ZH[s] + "</option>").join("")
+      + "</select></div>";
+    if (!items.length) {
+      html += '<div class="bid-card-sub">当前过滤条件下无证据件（或项目尚未登记证据）</div>';
+    } else {
+      html += '<table class="bid-table"><thead><tr><th>ID</th><th>类别</th><th>标题</th><th>状态</th><th>主体</th><th>有效期至</th><th>正文验证</th></tr></thead><tbody>';
+      for (const it of items) {
+        html += "<tr><td>" + esc(it.id || "") + "</td><td>" + esc(EVIDENCE_KIND_ZH[it.kind] || it.kind || "—")
+          + "</td><td>" + esc(it.title || "") + '</td><td><span class="bid-badge" data-status="' + (it.status === "ACTIVE" ? "ok" : "") + '">'
+          + esc(EVIDENCE_STATUS_ZH[it.status] || it.status || "—") + "</span></td><td>" + esc(it.subject_name || "—") + "</td><td>"
+          + esc(it.valid_until || "—") + "</td><td>" + esc(it.verification_tier || "—") + "</td></tr>";
+      }
+      html += "</tbody></table>";
+    }
+    html += "</div>";
+    // 检索段（search_evidence——hits 含 score/match_type/摘录；warnings 原样透传）
+    const ses = state.bidEvidenceSearch;
+    html += '<div class="bid-card"><div class="bid-card-title">证据检索（search_evidence）</div>';
+    html += '<div class="bid-ev-search"><input data-ev-q="query" type="text" placeholder="关键词（标题/范围/主体/客户/正文摘录）" value="' + esc(ses.query || "") + '">'
+      + ' <select data-ev-mode="mode">' + ["hybrid", "semantic", "exact"].map((m) => '<option value="' + m + '"' + (ses.mode === m ? " selected" : "") + ">" + m + "</option>").join("") + "</select>"
+      + ' <button class="btn btn-sm" data-ev-go="search">检索</button></div>';
+    if (ses.status === "loading") html += '<div class="bid-card-sub">检索中…</div>';
+    if (ses.status === "error") html += '<div class="bid-card-sub" data-kind="error">' + esc(ses.error || "检索失败") + "</div>";
+    if (ses.status === "ready" && ses.data) {
+      const sd = (ses.data && ses.data.search) || {};
+      const hits = Array.isArray(sd.hits) ? sd.hits : [];
+      html += '<div class="bid-card-sub">命中 ' + fmtChars(sd.total != null ? sd.total : hits.length) + " 件 · top_k=" + fmtChars(sd.top_k != null ? sd.top_k : "—") + "</div>";
+      if (!hits.length) {
+        html += '<div class="bid-card-sub">无命中（换关键词或 mode 试试）</div>';
+      } else {
+        html += '<div class="bid-gt-gates">';
+        for (const h of hits) {
+          html += '<div class="bid-gt-row"><div class="bid-gt-main"><span class="bid-gt-name">' + esc(h.title || "")
+            + " <small>" + esc(h.id || "") + "</small></span>"
+            + '<span class="bid-gt-sub">' + esc(EVIDENCE_KIND_ZH[h.kind] || h.kind || "—") + " · "
+            + esc(EVIDENCE_STATUS_ZH[h.status] || h.status || "—") + (h.valid_until ? " · 有效期至 " + esc(h.valid_until) : "") + "</span></div>"
+            + '<span class="bid-badge">' + (typeof h.score === "number" ? h.score.toFixed(3) : "—") + " · " + esc(h.match_type || "—") + "</span></div>";
+          if (h.excerpt) html += '<div class="bid-gt-row"><span class="bid-gt-sub">' + esc(h.excerpt) + "</span></div>";
+        }
+        html += "</div>";
+      }
+      if (Array.isArray(sd.warnings) && sd.warnings.length) {
+        html += '<div class="bid-card-sub" data-kind="warn">' + sd.warnings.map((w) => esc(w)).join("<br>") + "</div>";
+      }
+    }
+    html += '<div class="bid-card-sub">检索面 = 标题+范围+主体+客户+正文摘录（#217）；语义引擎 pre-M2-b 为朴素 token 匹配</div>';
+    html += "</div>"; // #47 R26：检索卡在此收口——登记卡为同级卡，不嵌检索卡内
+    // 写面段（register_evidence——#47 R26；source_file_id 锚定导入回执 per_file）
+    const rg = state.bidEvidenceReg;
+    const wr = (state.bidWizard && state.bidWizard.result) || null;
+    const srcFiles = (wr && Array.isArray(wr.per_file) ? wr.per_file : []).filter((f) => f && f.parse_status === "ok" && f.file_id);
+    html += '<div class="bid-card"><div class="bid-card-title">登记证据（register_evidence · #47 R26）</div>';
+    html += '<div class="bid-ev-reg">';
+    if (!srcFiles.length) {
+      html += '<div class="bid-card-sub">本会话尚无导入回执（per_file）——登记须锚定已导入件（#185：先向导导入；Agent 持久路径走 MCP register_evidence）。</div>';
+    } else {
+      html += '<select data-ev-reg-src="source"><option value="">来源文件（必选）</option>'
+        + srcFiles.map((f) => '<option value="' + esc(f.file_id) + '">' + esc(f.file_id + " · " + (f.filename || "")) + "</option>").join("")
+        + '</select> <select data-ev-reg-kind="kind"><option value="">类别（必选）</option>'
+        + Object.keys(EVIDENCE_KIND_ZH).map((k) => '<option value="' + k + '">' + EVIDENCE_KIND_ZH[k] + "</option>").join("")
+        + '</select> <input data-ev-reg-title="title" type="text" placeholder="标题（必填）">'
+        + ' <input data-ev-reg-subject="subject" type="text" placeholder="主体名（必填）">'
+        + ' <input data-ev-reg-until="valid_until" type="date" title="有效期至（可选）">'
+        + ' <label class="bid-ev-chk"><input data-ev-reg-ph="placeholder" type="checkbox"> 占位/待核验</label>'
+        + ' <button class="btn btn-sm" data-ev-reg-go="register">登记</button>';
+    }
+    html += "</div>";
+    if (rg.error) html += '<div class="bid-card-sub" data-kind="error">' + esc(rg.error) + "</div>";
+    if (rg.info) {
+      html += '<div class="bid-card-sub" data-state="' + (rg.info.deduplicated ? "warn" : "ok") + '">'
+        + (rg.info.deduplicated
+          ? "幂等重放——原 " + esc(rg.info.ev_id || "") + " 直返（不换版）"
+          : "新 EV 签发 " + esc(rg.info.ev_id || "") + "（status=" + esc(rg.info.status || "") + (rg.info.placeholder ? " · 占位" : "") + "）")
+        + (rg.info.hint ? " · " + esc(rg.info.hint) : "")
+        + "</div>";
+    }
+    html += '<div class="bid-card-sub">写面约束（工具面单一真源）：source_file_id 锚定导入回执；#185 旧来源参数（source_file/sha256/fingerprint）与 #245 自报验证态显式拒；同 key 同指纹→幂等重放 / 换版旧记录降级 SUPERSEDED 且绑定迁移。scope/client/amount_wan/completed_on 等可选面走 Agent（MCP）。</div>';
+    html += "</div>";
+    html += "</div>";
+    panel.innerHTML = html;
+    const kindSel = panel.querySelector("[data-ev-kind]");
+    if (kindSel) kindSel.addEventListener("change", () => { state.bidEvidence.kindFilter = kindSel.value; ui.loadBidEvidence(true); });
+    const stSel = panel.querySelector("[data-ev-status]");
+    if (stSel) stSel.addEventListener("change", () => { state.bidEvidence.statusFilter = stSel.value; ui.loadBidEvidence(true); });
+    const go = panel.querySelector("[data-ev-go]");
+    if (go) go.addEventListener("click", () => {
+      const qEl = panel.querySelector("[data-ev-q]");
+      const mEl = panel.querySelector("[data-ev-mode]");
+      ui.searchBidEvidence((qEl && qEl.value) || "", (mEl && mEl.value) || "hybrid");
+    });
+    const qEl2 = panel.querySelector("[data-ev-q]");
+    if (qEl2) qEl2.addEventListener("keydown", (e) => { if (e.key === "Enter" && go) go.click(); });
+    // #47 R26：登记表单提交（必填前置校验 + ui.registerBidEvidence）
+    const regGo = panel.querySelector("[data-ev-reg-go]");
+    if (regGo) regGo.addEventListener("click", () => {
+      const gv = (n) => { const el = panel.querySelector("[data-ev-reg-" + n + "]"); return el ? String(el.value || "").trim() : ""; };
+      const phEl = panel.querySelector("[data-ev-reg-ph]");
+      const p = { source_file_id: gv("src"), kind: gv("kind"), title: gv("title"), subject_name: gv("subject") };
+      const until = gv("until");
+      if (until) p.valid_until = until;
+      if (phEl && phEl.checked) p.placeholder = true;
+      if (!p.source_file_id || !p.kind || !p.title || !p.subject_name) {
+        state.bidEvidenceReg.error = "来源文件/类别/标题/主体名均必填";
+        state.bidEvidenceReg.info = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      state.bidEvidenceReg.error = "";
+      ui.registerBidEvidence(p);
+    });
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */
   function renderBidMatrixPanel(host, panel) {
@@ -6041,6 +6323,94 @@
         state.bidPackages.status = "error";
         state.bidPackages.error = err && (err.message || err.code) || "bid.packages 读取失败";
       }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R25：证据台账读面（list_evidence——过滤透传；not_found 走引导卡） */
+    async loadBidEvidence(force) {
+      if (!state.bridge) return;
+      if (state.bidEvidence.status === "loading" && !force) return;
+      state.bidEvidence.status = "loading";
+      state.bidEvidence.error = "";
+      state.bidEvidence.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const payload = {};
+        const f = {};
+        if (state.bidEvidence.kindFilter) f.kind = state.bidEvidence.kindFilter;
+        if (state.bidEvidence.statusFilter) f.status = state.bidEvidence.statusFilter;
+        if (f.kind || f.status) payload.filters = f;
+        const r = await ipc("bid.evidence", payload, 15e3);
+        if (r && r.present) {
+          state.bidEvidence.data = r;
+          state.bidEvidence.status = "ready";
+        } else {
+          state.bidEvidence.data = null;
+          state.bidEvidence.status = "error";
+          state.bidEvidence.error = "当前工作区无证据台账";
+        }
+      } catch (err) {
+        state.bidEvidence.data = null;
+        state.bidEvidence.status = "error";
+        state.bidEvidence.code = (err && err.code) || "";
+        state.bidEvidence.error = (err && (err.message || err.code)) || "bid.evidence 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R25：证据检索（search_evidence——空关键词前端早拒，值域在工具面） */
+    async searchBidEvidence(query, mode) {
+      if (!state.bridge) return;
+      const q = String(query || "").trim();
+      const ses = state.bidEvidenceSearch;
+      if (!q) {
+        ses.status = "error";
+        ses.error = "关键词不能为空";
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      ses.query = q;
+      ses.mode = mode || "hybrid";
+      ses.status = "loading";
+      ses.error = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.evidence_search", { query: q, mode: ses.mode }, 15e3);
+        if (r && r.present) {
+          ses.data = r;
+          ses.status = "ready";
+        } else {
+          ses.data = null;
+          ses.status = "error";
+          ses.error = "检索无结果";
+        }
+      } catch (err) {
+        ses.data = null;
+        ses.status = "error";
+        ses.error = (err && (err.message || err.code)) || "bid.evidence_search 检索失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R26：证据登记写面（register_evidence——source_file_id 锚定 + 幂等回显）
+     *  错误（含 #185/#245 显式拒）走表单内反馈（rg.error），不弹横幅。 */
+    async registerBidEvidence(payload) {
+      if (!state.bridge) return;
+      const rg = state.bidEvidenceReg;
+      if (rg.busy) return;
+      rg.busy = true;
+      rg.error = "";
+      rg.info = null;
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.evidence_register", payload, 20e3);
+        if (r && r.present && r.register && r.register.ev_id) {
+          rg.info = r.register;
+          ui.loadBidEvidence(true);
+        } else {
+          rg.error = (r && r.error) || "登记未落库";
+        }
+      } catch (err) {
+        rg.error = (err && (err.message || err.code)) || "bid.evidence_register 登记失败";
+      }
+      rg.busy = false;
       renderBidWorkbenchIfOpen();
     },
     /** #20：否决项死锁人工裁定（bid.matrix_override → 工具面

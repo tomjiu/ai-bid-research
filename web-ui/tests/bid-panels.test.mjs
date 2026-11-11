@@ -1487,7 +1487,7 @@ check(
 check(
   "R25 入口①：结果面部分失败给重导按钮（失败计数同 partial 判据）",
   /failedRows\.length \? '<div class="bid-wiz-bar"><button class="btn btn-primary" data-bid-act="wizard-retry-failed">'/.test(app) &&
-    /failedR25\.length \? '<div style="margin-top:10px"><button class="btn" data-bid-act="wizard-retry-failed">'/.test(app),
+    /retryBar\.innerHTML = '<button class="btn" data-bid-act="wizard-retry-failed">'/.test(app),
   "「修复后重新导入即可」的话无 UI 路径兑现（结果面/树区重导入口被删）"
 );
 check(
@@ -1512,6 +1512,94 @@ check(
   "R25 收口：导入完成后退出重入（结果面接管，失败件可再入——循环到全绿）",
   /state\.bidWizard\.reentry = null;/.test(app) && /新结果若仍有失败件，重导入口随结果面再现/.test(app),
   "导入后滞留重入态（或退出重入的清理被删）"
+);
+
+// ---------- #47 R25：证据台账读面（缺口-4 读半边——list/search 双工具） ----------
+check(
+  "R25 页签：证据台账页签在场（工作台页签）",
+  app.includes('data-bid-panel="evidence"') && app.includes("证据台账"),
+  "证据页签被删或改名"
+);
+check(
+  "R25 面板：渲染函数 + 两处 panes 路由 + not_found 引导卡",
+  /function renderBidEvidencePanel/.test(app)
+    && (app.match(/activePanel === "evidence"/g) || []).length >= 2
+    && app.includes('ev.code === "not_found"') && app.includes("renderBidEarlyGuide"),
+  "证据面板路由/引导卡回退"
+);
+check(
+  "R25 IPC 对齐：UI 调用与壳分发逐字一致（bid.evidence / bid.evidence_search）",
+  app.includes('ipc("bid.evidence"') && app.includes('ipc("bid.evidence_search"')
+    && ipcRs.includes('"bid.evidence" => crate::bid::evidence(&ws, &self.bid, &a)')
+    && ipcRs.includes('"bid.evidence_search" => crate::bid::evidence_search(&ws, &self.bid, &a)'),
+  "命令对齐断裂（单面漂移）"
+);
+check(
+  "R25 壳面：真实工具面直链（dispatch_with + project_id 壳侧覆写单一真源）",
+  bidRs.includes('tool: "list_evidence".to_string()') && bidRs.includes('tool: "search_evidence".to_string()')
+    && bidRs.includes('req["project_id"] = json!(project_id);'),
+  "壳侧绕开工具面（私有实现回潮）"
+);
+check(
+  "R25 值域：kind 七值 + status 四值中文映射（bid-domain as_str 同口径）",
+  app.includes("const EVIDENCE_KIND_ZH") && app.includes('product_doc: "产品资料"') && app.includes('solution_module: "方案模块"') && app.includes('contract: "合同"')
+    && app.includes("const EVIDENCE_STATUS_ZH") && app.includes('SUPERSEDED: "已作废"') && app.includes('EXPIRING: "临期"'),
+  "证据类别/状态映射回退"
+);
+check(
+  "R25 演示桥：两命令 stub 在场（e2e 数据链前提）+ SUPERSEDED 不进检索池",
+  app.includes('case "bid.evidence"') && app.includes('case "bid.evidence_search"') && app.includes("DEMO_BID.evidence")
+    && app.includes('e.status !== "SUPERSEDED"'),
+  "演示桥缺 stub（e2e 断链）"
+);
+check(
+  "R25 selftest：三检查在场（无db.json拒 + kind过滤 + 检索往返）",
+  selftestRs.includes("bid.evidence(无db.json)") && selftestRs.includes("bid.evidence(真实项目·kind过滤)")
+    && selftestRs.includes("bid.evidence_search(真实项目·检索)"),
+  "selftest 集成自检项被删"
+);
+check(
+  "R25 契约：IPC-CONTRACT 登记两命令（改代码要同步改契约）",
+  contract.includes("### bid.evidence ——") && contract.includes("### bid.evidence_search ——")
+    && contract.includes("list_evidence"),
+  "契约未登记"
+);
+
+// ---------- #47 R26：证据登记写面（register_evidence——缺口-4 写半边之登记） ----------
+check(
+  "R26 IPC 对齐：UI 调用与壳分发逐字一致（bid.evidence_register）",
+  app.includes('ipc("bid.evidence_register"')
+    && ipcRs.includes('"bid.evidence_register" => crate::bid::evidence_register(&ws, &self.bid, &a)'),
+  "登记命令对齐断裂（单面漂移）"
+);
+check(
+  "R26 壳面：真实工具面直链 + 参数透传表（source_file_id 锚定；#185/#245 拒在工具面单一真源——壳不自报 verification_tier）",
+  bidRs.includes('tool: "register_evidence".to_string()')
+    && bidRs.includes('"placeholder", "locator", "fields", "project_version"'),
+  "壳侧绕开工具面或透传表断裂"
+);
+check(
+  "R26 UI：登记表单（source 锚定导入回执 parse_status=ok + 幂等双态回显 + 表单内错误反馈）",
+  app.includes('data-ev-reg-src="source"') && app.includes('parse_status === "ok"')
+    && app.includes('rg.info.deduplicated') && app.includes("registerBidEvidence"),
+  "登记表单/幂等回显缺失"
+);
+check(
+  "R26 演示桥：可变态登记（demoEvidence 深拷贝 + register 真改台账 + 换版降级）",
+  app.includes("const demoEvidence = JSON.parse(JSON.stringify(DEMO_BID.evidence))")
+    && app.includes('case "bid.evidence_register"') && app.includes("SUPERSEDED"),
+  "演示桥缺可变登记 stub"
+);
+check(
+  "R26 selftest：三检查在场（早态 EState 拒 + 新登记 + 幂等重放）",
+  selftestRs.includes("bid.evidence_register(早态 EState 拒)") && selftestRs.includes("bid.evidence_register(新登记)")
+    && selftestRs.includes("bid.evidence_register(幂等重放)"),
+  "selftest 集成自检项被删"
+);
+check(
+  "R26 契约：IPC-CONTRACT 登记写面命令（含 #185/#245 口径）",
+  contract.includes("### bid.evidence_register —") && contract.includes("#185") && contract.includes("#245"),
+  "写面契约未登记"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);

@@ -826,6 +826,142 @@ pub fn packages(
     }))
 }
 
+/// `bid.evidence` —— 证据台账读面（只读，#47 R25——缺口-4 读半边）。
+///
+/// 经 `bid_mcp::dispatch_with(list_evidence)` 走真实工具面：kind/status
+/// 过滤 + id 字典序 + 游标分页。filters/limit/cursor 原样透传——值域
+/// 校验与非法值拒绝在工具面单一真源（壳不重复实现）；project_id 恒由
+/// 壳从当前项目路由（与 packages 同轨，不接受调用方伪造）。
+/// E_NOTFOUND（无 db.json）走引导卡（IPC-CONTRACT §3.4）。
+pub fn evidence(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // 请求参数透传 + project_id 壳侧覆写（单一真源）
+    let mut req = json!({});
+    for k in ["filters", "limit", "cursor"] {
+        if let Some(v) = a.map.get(k) {
+            if !v.is_null() {
+                req[k] = v.clone();
+            }
+        }
+    }
+    req["project_id"] = json!(project_id);
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "list_evidence".to_string(),
+            args: req,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "evidence": tool_out,
+    }))
+}
+
+/// `bid.evidence_search` —— 证据检索读面（只读，#47 R25）。
+///
+/// 经 `bid_mcp::dispatch_with(search_evidence)`：query 必填（空 query 由
+/// 工具面显式拒绝），mode hybrid|semantic|exact（缺省 hybrid），top_k/
+/// threshold 透传（值域在工具面单一真源）。检索面 = 标题+范围+主体+
+/// 客户+正文摘录（#217）；时间面降权 warnings 原样透传。
+pub fn evidence_search(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut req = json!({});
+    for k in ["query", "mode", "top_k", "threshold", "filters"] {
+        if let Some(v) = a.map.get(k) {
+            if !v.is_null() {
+                req[k] = v.clone();
+            }
+        }
+    }
+    req["project_id"] = json!(project_id);
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "search_evidence".to_string(),
+            args: req,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "search": tool_out,
+    }))
+}
+
+/// `bid.evidence_register` —— 证据登记写面（#47 R26——缺口-4 写半边之登记）。
+///
+/// 经 `bid_mcp::dispatch_with(register_evidence)`：必填 kind/title/
+/// source_file_id（锚定已导入件——import 回执 per_file[].file_id，#185：
+/// 旧来源参数 source_file/source_sha256/fingerprint 与自报 verification_tier
+/// (#245) 均由工具面显式拒）；返回 (ev_id, deduplicated)——幂等重放原 EV
+/// 直返 / 同 key 换版旧记录降级 SUPERSEDED 且绑定迁移。project_id 恒壳侧
+/// 覆写（R25 同轨）。E_UNPROCESSABLE → bad_args（表单内反馈，引导卡语义
+/// 见 IPC-CONTRACT §3.4——写面校验错不走横幅）。
+pub fn evidence_register(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // 参数透传（值域/显式拒绝在工具面单一真源）+ project_id 壳侧覆写
+    let mut req = json!({});
+    for k in [
+        "kind", "title", "source_file_id", "subject_name", "scope",
+        "valid_from", "valid_until", "client", "amount_wan", "completed_on",
+        "placeholder", "locator", "fields", "project_version",
+    ] {
+        if let Some(v) = a.map.get(k) {
+            if !v.is_null() {
+                req[k] = v.clone();
+            }
+        }
+    }
+    req["project_id"] = json!(project_id);
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "register_evidence".to_string(),
+            args: req,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "register": tool_out,
+    }))
+}
+
 /// `bid.matrix_override` —— 否决项死锁人工裁定（写面，#226）。
 ///
 /// receipt 走 #182 宿主签发面（不进 MCP 工具表——Agent 拿不到）：
