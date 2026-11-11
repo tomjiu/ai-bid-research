@@ -4277,6 +4277,29 @@ html[data-chrome="native"][data-maximized="1"] #app {
   font-size: 12px;
   line-height: 1.6;
 }
+/* R18（#47）：截断诚实横幅——非阻断警示（区别于 data-state="error"
+ * 的错误面：截断不是失败，是「可见部分」的诚实标注） */
+.bid-wiz-error[data-state="warn"] {
+  border: 1px solid #dcc38a;
+  background: #fdf6e5;
+  color: #7a5d1e;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+/* R18（#47）：侧栏文件树同款截断警示 */
+.tree-trunc-warn {
+  border: 1px solid #dcc38a;
+  background: #fdf6e5;
+  color: #7a5d1e;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 4px 6px;
+}
 .bid-wiz-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .bid-wiz-files {
   display: flex;
