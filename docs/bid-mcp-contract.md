@@ -47,7 +47,7 @@ in : { project_id, files:[{upload_ref, filename, kind(招标文件|附件|图纸
       upload_ref（#183/#189 文件围栏）: 必须落在受信根内——BID_FS_ROOT 声明的
       导入根，或 BID_WS 工作区（二者的并集）；相对路径按受信根锚定（不再按
       进程 CWD 解析）；词法 `..` 分量预拒（先于一切磁盘操作，零副作用）。
-out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), sha256, pages, tables, chunks, ocr_tier, parse_status, deduplicated, errors?, warnings?(#188 METADATA_CONFLICT | #270 CONVERTED_FROM_DOC)}],
+out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), upload_ref(R24 回显——调用方归一形态；深层件与 filename 解耦的定位键), sha256, pages, tables, chunks, ocr_tier, parse_status, deduplicated, errors?, warnings?(#188 METADATA_CONFLICT | #270 CONVERTED_FROM_DOC)}],
        totals:{files, chunks, parse_failed, partial},
        forms_manifest?:{ count, items:[{file_id, name, parse_status, pages, tables}] }
          ← #271 格式件清单（kind=格式模板 的库内登记逐件可见；无格式件时键省略）。

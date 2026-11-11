@@ -201,6 +201,10 @@ fn real_docx_import_transitions_draft_to_files_imported() {
     let pf = &data["per_file"][0];
     assert_eq!(pf["file_id"], "TF-0002");
     assert_eq!(pf["filename"], "word-complex.docx");
+    // R24（#47）：per_file.upload_ref 回显调用方原串（MCP 直调面这里传的
+    // 是绝对路径形态——如实回显调用方字符串；壳面走 R9 归一后的工作区
+    // 相对形态，selftest R24 项断言之——两个调用面各自诚实）
+    assert_eq!(pf["upload_ref"], wc, "upload_ref 回显调用方形态（R24）");
     assert_eq!(pf["parse_status"], "ok");
     assert_eq!(pf["ocr_tier"], "none", "docx 文本层在位——无需 OCR");
     assert_eq!(pf["deduplicated"], false);

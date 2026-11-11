@@ -1035,6 +1035,15 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         resp["ok"] == json!(true) && im14a["totals"]["files"] == json!(1),
         format!("totals={:?}", im14a["totals"]["files"]),
     );
+    // ---- #47 R24：per_file.upload_ref 回显调用方归一形态——结果面深层件
+    //      消歧（结果表只有 filename 时「资料/技术标.docx」与根下同名件
+    //      不可分，rel 才是定位键）。壳侧 R9 归一先行，工具面收到与回显
+    //      的是 `/` 形态。
+    r.check(
+        "bid.import_files(per_file upload_ref 回显)",
+        im14a["per_file"][0]["upload_ref"] == json!("资料/技术标.docx"),
+        format!("upload_ref={:?}", im14a["per_file"][0]["upload_ref"].as_str()),
+    );
     // 正斜杠形态重导 → 同 file_id + deduplicated（两形态一文件，不双入库）
     let resp = call(&ctx, json!({"id":"t-bid-im14b","cmd":"bid.import_files","files":[{"upload_ref":"资料/技术标.docx","kind":"招标文件"}]}));
     let im14b = result(&resp);

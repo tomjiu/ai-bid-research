@@ -551,9 +551,15 @@ fn import_tender_files(svc: &mut BidService, args: Value) -> ToolResult {
         });
     }
     let mut specs = Vec::with_capacity(files.len());
+    // R24（#47）：调用方 upload_ref 原串留档（归一后的工作区相对形态——壳
+    // 侧 R9 归一先行，MCP 直调面是调用方原串）。与 specs / per_file 严格
+    // 1:1（kind 非法在入参阶段整批早拒，不留半批）——回应用组装时按序
+    // 回显，深层件（同基名异目录）在结果面可消歧。
+    let mut caller_upload_refs = Vec::with_capacity(files.len());
     for (i, f) in files.iter().enumerate() {
         let at = format!("files[{i}]");
         let upload_ref = req_str(f, "upload_ref", &at)?;
+        caller_upload_refs.push(upload_ref.clone());
         let filename = req_str(f, "filename", &at)?;
         let kind = match opt_str(f, "kind", &at)? {
             Some(k) if TENDER_FILE_KINDS.contains(&k.as_str()) => k,
@@ -614,7 +620,7 @@ fn import_tender_files(svc: &mut BidService, args: Value) -> ToolResult {
     let mut per_file: Vec<Value> = Vec::with_capacity(report.per_file.len());
     let mut item_errors: Vec<String> = Vec::new();
     let (mut totals_files, mut totals_chunks, mut parse_failed) = (0usize, 0usize, 0usize);
-    for o in &report.per_file {
+    for (o_i, o) in report.per_file.iter().enumerate() {
         if let Some(fid) = &o.file_id {
             // per_file 仅含有文件身份的条目（不可读 upload_ref 无档可报——入 item_errors）
             file_ids.push(fid.clone());
@@ -626,6 +632,9 @@ fn import_tender_files(svc: &mut BidService, args: Value) -> ToolResult {
             let mut entry = json!({
                 "file_id": fid,
                 "filename": o.filename,
+                // R24（#47）：upload_ref 回显调用方形态（与 filename 解耦——
+                // 深层件同基名异目录时 filename 不可分，rel 才是定位键）
+                "upload_ref": caller_upload_refs.get(o_i).cloned().unwrap_or_default(),
                 "kind": svc.store().files().iter().find(|f| f.id == *fid)
                     .map(|f| f.kind.as_str()).unwrap_or(""),
                 "sha256": o.sha256,

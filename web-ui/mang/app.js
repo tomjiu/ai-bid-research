@@ -1835,9 +1835,13 @@
     let rows = "";
     for (const f of perFile) {
       const failed = String(f.parse_status || "").toLowerCase() === "failed";
+      // R24（#47）：深层件结果面消歧——filename 同基名异目录不可分时
+      // 显示 upload_ref 回显（工具面新字段：调用方归一形态——与向导
+      // 列表 R21 同口径）；根下文件两者相同，零变化。
+      const refR24 = f.upload_ref && f.upload_ref !== f.filename ? f.upload_ref : "";
       rows +=
         '<tr class="' + (failed ? "is-failed" : "") + '">'
-        + "<td>" + esc(f.filename || "—") + "</td><td>" + esc(f.kind || "—") + "</td>"
+        + "<td>" + esc(refR24 || f.filename || "—") + (refR24 ? '<div class="bid-wiz-file-meta" style="font-weight:400">' + esc(f.filename || "—") + "</div>" : "") + "</td><td>" + esc(f.kind || "—") + "</td>"
         + "<td>" + (f.pages || 0) + "</td><td>" + (f.tables || 0) + "</td><td>" + (f.chunks || 0) + "</td>"
         + '<td><span class="bid-badge" data-status="' + (failed ? "FAILED" : "OK") + '">' + (failed ? "失败" : "成功") + "</span></td>"
         + "<td>" + (f.deduplicated ? "已存在" : "新入库") + "</td></tr>";

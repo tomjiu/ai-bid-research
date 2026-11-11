@@ -725,6 +725,20 @@ check(
     );
   }
 }
+// R24（#47）：per_file.upload_ref 回显——工具面字段（tools.rs caller_upload_refs
+// → entry）+ UI 结果面消费（深层件消歧，与 R21 列表同口径）双锚。
+check(
+  "R24 工具面：per_file 回显 upload_ref（调用方归一形态）",
+  /let mut caller_upload_refs = Vec::with_capacity\(files\.len\(\)\);/.test(toolsRs) &&
+    /"upload_ref": caller_upload_refs\.get\(o_i\)\.cloned\(\)\.unwrap_or_default\(\)/.test(toolsRs),
+  "工具面 upload_ref 回显被删（结果面深层件消歧断源）"
+);
+check(
+  "R24 UI：结果表深层件显 upload_ref（同基名异目录可分）",
+  /const refR24 = f\.upload_ref && f\.upload_ref !== f\.filename \? f\.upload_ref : "";/.test(app) &&
+    /esc\(refR24 \|\| f\.filename \|\| "—"\)/.test(app),
+  "结果表退回只显 filename——深层件结果行不可分（导入成败对不上具体件）"
+);
 check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
