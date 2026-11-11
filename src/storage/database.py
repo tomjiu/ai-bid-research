@@ -98,6 +98,41 @@ _BID_COLUMNS = (
 )
 
 
+def _merge_missing(value) -> bool:
+    """merge_bid 口径的空缺判定（None / 空串 / 空列表）。
+
+    与 collect.dedupe._missing 同口径：``0.0`` 是记录在案的
+    预算值（病态但如实，十七节审计揭示），不算空缺。
+    """
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    if isinstance(value, list) and not value:
+        return True
+    return False
+
+
+def _requirements_list(value):
+    """requirements 归一为非空列表或 None（merge 比较用）。
+
+    兼容三种传入形态：列表（to_bid_row）、JSON 文本
+    （db --import 直接读文件）、None。dict 等罕见形态保守
+    计缺（不参与合并，库内保值）。
+    """
+    if isinstance(value, list):
+        return value if value else None
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, list) and parsed:
+            return parsed
+        return None
+    return None
+
+
 class BidDatabase:
     """招标信息数据库封装。
 
@@ -300,6 +335,127 @@ class BidDatabase:
         )
         self._maybe_commit()
         return cursor.rowcount
+
+    def merge_bid(self, bid: Dict[str, Any]) -> Dict[str, Any]:
+        """不倒退合并写入（R102——「更完整记录胜出」的存储面形态）。
+
+        与 :meth:`save_bid` 盲覆盖 upsert 的分野：传入**空缺**值
+        （None/空串/空列表）不覆盖库内已有值——稀疏源重导不抹库；
+        传入**有值**采用传入值（时序上新证据胜——变更公告对
+        budget/deadline 的修正是合法更新。与批内合并 keep-first
+        的分野：批内是同批快照无时间性，跨批有先后）。
+
+        Args:
+            bid: 项目数据字典（必填 ``bid_id``/``project_name``）。
+
+        Returns:
+            分账字典：``action``（``inserted``/``unchanged``/``merged``）
+            + ``filled``（库内空缺被补的字段数）/ ``changed``
+            （库内非空被更新的字段数）/ ``preserved``（传入空缺、
+            库内保值的字段数）。``inserted``/``unchanged`` 时三计数
+            为 0（unchanged 零写入——同值重导不产生写事务）。
+
+        Raises:
+            KeyError: 缺少必填字段（与 save_bid 同口径）。
+        """
+        for required in ("bid_id", "project_name"):
+            if not bid.get(required):
+                raise KeyError(f"招标项目缺少必填字段: {required}")
+
+        incoming = {key: bid.get(key) for key in _BID_COLUMNS}
+        incoming["bid_id"] = str(incoming["bid_id"])
+        incoming["project_name"] = str(incoming["project_name"])
+
+        existing = self._conn.execute(
+            "SELECT * FROM bids WHERE bid_id = ?", (incoming["bid_id"],)
+        ).fetchone()
+        if existing is None:
+            row = dict(incoming)
+            if isinstance(row["requirements"], (list, dict)):
+                row["requirements"] = json.dumps(
+                    row["requirements"], ensure_ascii=False
+                )
+            columns = ", ".join(_BID_COLUMNS)
+            placeholders = ", ".join("?" for _ in _BID_COLUMNS)
+            self._conn.execute(
+                f"INSERT INTO bids ({columns}) VALUES ({placeholders})",
+                [row[key] for key in _BID_COLUMNS],
+            )
+            self._maybe_commit()
+            return {
+                "action": "inserted",
+                "filled": 0,
+                "changed": 0,
+                "preserved": 0,
+            }
+
+        old = self._row_to_dict(existing)
+        final = dict(incoming)
+        filled = changed = preserved = 0
+        for key in _BID_COLUMNS:
+            if key == "bid_id":
+                continue
+            old_val = old.get(key)
+            new_val = incoming[key]
+            if key == "requirements":
+                # 两侧归一为非空列表或 None 再比较（列表/JSON 文本同权）
+                old_cmp = _requirements_list(old_val)
+                new_cmp = _requirements_list(new_val)
+                if new_cmp is None:
+                    final[key] = self._requirements_stored(old_val)
+                    if old_cmp is not None:
+                        preserved += 1
+                elif old_cmp is None:
+                    final[key] = json.dumps(new_cmp, ensure_ascii=False)
+                    filled += 1
+                elif new_cmp != old_cmp:
+                    final[key] = json.dumps(new_cmp, ensure_ascii=False)
+                    changed += 1
+                else:
+                    final[key] = self._requirements_stored(old_val)
+                continue
+            if _merge_missing(new_val):
+                final[key] = old_val  # 不倒退：库内保值
+                if not _merge_missing(old_val):
+                    preserved += 1
+            elif _merge_missing(old_val):
+                final[key] = new_val
+                filled += 1
+            elif new_val != old_val:
+                final[key] = new_val  # 新证据更新
+                changed += 1
+            else:
+                final[key] = old_val
+
+        if not (filled or changed):
+            return {
+                "action": "unchanged",
+                "filled": 0,
+                "changed": 0,
+                "preserved": 0,
+            }
+        updates = ", ".join(
+            f"{key} = ?" for key in _BID_COLUMNS if key != "bid_id"
+        )
+        self._conn.execute(
+            f"UPDATE bids SET {updates} WHERE bid_id = ?",
+            [final[key] for key in _BID_COLUMNS if key != "bid_id"]
+            + [final["bid_id"]],
+        )
+        self._maybe_commit()
+        return {
+            "action": "merged",
+            "filled": filled,
+            "changed": changed,
+            "preserved": preserved,
+        }
+
+    @staticmethod
+    def _requirements_stored(old_val):
+        """库内 requirements 保持原存储形态（避免无谓的重序列化）。"""
+        if isinstance(old_val, list):
+            return json.dumps(old_val, ensure_ascii=False)
+        return old_val
 
     def import_bids(self, bids: List[Dict[str, Any]]) -> int:
         """批量导入项目记录（R62：单事务原子化）。
