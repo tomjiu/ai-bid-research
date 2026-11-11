@@ -948,7 +948,9 @@ check(
 );
 check(
   "R8 壳侧：ingest_drop 幂等 + 冲突后缀 + 白名单守卫（单测在场）",
-  /fn ingest_drop_copies_idempotent_and_guards\(\)[\s\S]{0,2600}already_present[\s\S]{0,800}招标文件-2\.docx/.test(bidRs),
+  // R26 后邻近界 2600→3600：单测新增目录递归断言（结构落位/截断旗），
+  // already_present/-2 后缀断言仍在同函数内——语义不变。
+  /fn ingest_drop_copies_idempotent_and_guards\(\)[\s\S]{0,3600}already_present[\s\S]{0,800}招标文件-2\.docx/.test(bidRs),
   "拖拽落位单测缺失（幂等/后缀/守卫回归无门）"
 );
 check(
@@ -1425,6 +1427,46 @@ check(
   "R25 收口：导入完成后退出重入（结果面接管，失败件可再入——循环到全绿）",
   /state\.bidWizard\.reentry = null;/.test(app) && /新结果若仍有失败件，重导入口随结果面再现/.test(app),
   "导入后滞留重入态（或退出重入的清理被删）"
+);
+
+// R26（#47）：递归目录拖入——ingest_drop 面壳侧（此前代码注释明拒
+// is_dir「R17+ 再做」）。锚：walk 递归（预算/深度/符号链接面）+
+// 守卫链函数化共用（文件直拖零变化）+ 结构化 rel + 截断旗。
+check(
+  "R26 壳侧：目录递归收集（预算 200 + 深度 8 + 符号链接不跟）",
+  /const INGEST_DIR_FILE_CAP: usize = 200;/.test(bidRs)
+    && /const INGEST_DIR_DEPTH_CAP: usize = 8;/.test(bidRs)
+    && /fn walk_drop_dir\([\s\S]{0,600}symlink_metadata[\s\S]{0,200}is_symlink/.test(bidRs),
+  "目录拖入的预算/深度/链接免疫面被删（无界递归或循环链接炸点回潮）"
+);
+check(
+  "R26 壳侧：守卫链函数化共用（ingest_one_file——直拖零变化）",
+  /fn ingest_one_file\([\s\S]{0,200}dir_base: &str[\s\S]{0,1800}guard_portable_basename\(&name\)/.test(bidRs)
+    && /if !dir_base.is_empty\(\) \{[\s\S]{0,1100}create_dir_all\(&landing_dir\)/.test(bidRs),
+  "文件直拖与目录递归的守卫链分叉（白名单/守卫/建目录某面丢失）"
+);
+check(
+  "R26 壳侧：目录名与目录段可移植守卫（CON 目录同罪）",
+  /目录名不跨平台/.test(bidRs) && /guard_portable_basename\(&seg\)\.is_ok\(\)/.test(bidRs),
+  "目录名绕过守卫（CON 目录落位拷 Win 即失效）"
+);
+check(
+  "R26 壳侧：结构化 rel（/ 分隔前缀）+ 诚实截断旗",
+  /format!\("\{rel_prefix\}\/\{landed\}"\)/.test(bidRs)
+    && /"truncated": dir_truncated/.test(bidRs),
+  "目录件 rel 丢层级前缀（深层件结果面消歧断源）/截断静默"
+);
+check(
+  "R26 测试：递归结构 + 幂等 + 预算旗三件套在场",
+  /fn ingest_drop_recursive_dir_structure_and_budgets\(\)/.test(bidRs)
+    && /fn ingest_drop_dir_name_guard_and_budget_flag\(\)/.test(bidRs),
+  "R26 壳侧回归门被删"
+);
+check(
+  "R26 selftest：目录递归落位 + 重拖幂等双项",
+  selftestRs.includes("bid.ingest_drop(目录递归落位)")
+    && selftestRs.includes("bid.ingest_drop(目录重拖幂等)"),
+  "集成自检项缺失"
 );
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
