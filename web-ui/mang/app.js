@@ -1678,8 +1678,13 @@
     return "附件";
   }
   // #19：导入候选扩展名白名单（解析管线支持面：docx/xlsx 引擎 + pdf 三降级链
-  // + .doc 转换通道；其余扩展名必 parse FAILED，不列进来免得用户白跑一趟）
-  var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc|ods)$/i;
+  // + .doc 转换通道；其余扩展名必 parse FAILED，不列进来免得用户白跑一趟）。
+  // R17（#47）：与解析面严格对齐——旧表的 .ods 在 bid-tools service.rs 的
+  // 导入路由里无臂（落 parse_file「不支持的文件类型」显式拒），能被列进
+  // 向导但导入必失败。摘除后与壳侧 INGEST_DROP_EXTS（bid.rs）单一真源
+  // 口径一致：docx/xlsx/pdf/doc 四类（改表三面同改：本表 / 壳常量 /
+  // bid-panels 白名单锚）。
+  var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc)$/i;
 
   // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） ============
   // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；

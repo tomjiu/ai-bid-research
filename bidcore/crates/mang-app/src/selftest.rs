@@ -729,6 +729,29 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
     );
+    // ---- #47 R17：拖拽白名单与解析面对齐——.ods 摘除。解析路由（bid-tools
+    //      service.rs）只认 docx/xlsx/pdf/doc 四类，.ods 落位后导入必失败
+    //      （「不支持的文件类型」）——白名单在壳侧拒落位（ext_blocked 分账，
+    //      不按错误回），用户得到明确的合法四类指引而不是白跑一趟。
+    let ods_src = scratch_dir().join("报价清单.ods");
+    std::fs::write(&ods_src, b"PK\x03\x04selftest-ods-zip-payload").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ingods","cmd":"bid.ingest_drop","paths":[ods_src.to_string_lossy()]}));
+    let ing_ods = result(&resp);
+    r.check(
+        "bid.ingest_drop(.ods 摘除对齐解析面)",
+        resp["ok"] == json!(true)
+            && ing_ods["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ing_ods["skipped"][0]["reason"].as_str() == Some("ext_blocked")
+            && ing_ods["skipped"][0]["detail"]
+                .as_str()
+                .map(|d| d.contains("docx/xlsx/pdf/doc"))
+                .unwrap_or(false),
+        format!(
+            "copied={} detail={}",
+            ing_ods["copied"].as_array().map(|a| a.len()).unwrap_or(0),
+            ing_ods["skipped"][0]["detail"].as_str().unwrap_or("?"),
+        ),
+    );
     // ---- #47 R10（平台区分③）：基名跨平台守卫——CON.docx 在 Linux 真实
     //      可创建（文件在场、后缀过白名单），但落位被守卫分账拒绝
     // 平台门（AGENTS.md §13.1）：CON.docx 在 Windows 上映射控制台设备——

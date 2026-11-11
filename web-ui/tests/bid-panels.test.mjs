@@ -583,8 +583,15 @@ check(
 check(
   "#19 UI：kind 清单 + 扩展名白名单（契约 §2 同源）",
   app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];') &&
-    app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc|ods)$/i;'),
+    app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc)$/i;'),
   "kind 合法值/可解析扩展名漂移"
+);
+check(
+  "R17 UI：白名单与解析面对齐（.ods 摘除）+ 对齐理由在场",
+  /R17（#47）：与解析面严格对齐/.test(app) &&
+    /service\.rs[\s\S]{0,200}导入路由/.test(app) &&
+    !/\\\.\(docx\|xlsx\|pdf\|doc\|ods\)\$/.test(app),
+  "白名单重新混入解析面必拒的扩展名（导入必失败件——service.rs 只路由 docx/xlsx/pdf/doc）"
 );
 check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
