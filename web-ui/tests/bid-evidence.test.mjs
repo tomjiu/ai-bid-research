@@ -273,6 +273,84 @@ if (mang) {
       ok && sd.total === 0 && panelHtml().indexOf("无命中") >= 0,
       "total=" + sd.total);
   }
+
+  // ---------- ④ 登记写面全链（表单 → bridge 真改台账 → 幂等回显 → #245 拒） ----------
+  {
+    // 复位过滤态（前面用例留下 status=SUPERSEDED——登记后要看到全量）
+    state.bidEvidence.statusFilter = "";
+    // 种子：向导导入回执（per_file）——登记表单 source 下拉的数据源
+    const imp = await mang.ipc("bid.import_files", { files: [{ upload_ref: "资质证书.pdf", kind: "附件" }] });
+    state.bidWizard.result = imp && imp.present ? imp : null;
+    await ui.loadBidEvidence(true); // 公开重拉路径（内部重渲染——源下拉读 state.bidWizard.result）
+    const host = workbenchHost();
+    const srcSel = host && host.querySelector("[data-ev-reg-src]");
+    check("register：表单在场（source 下拉读 per_file 回执——flat 解析无 children，以面板文本断言）",
+      !!srcSel && panelHtml().indexOf("TF-001") >= 0 && panelHtml().indexOf("资质证书.pdf") >= 0 && !!host.querySelector("[data-ev-reg-ph]"),
+      "panelHtml 片段：" + panelHtml().slice(0, 160));
+    if (srcSel) {
+      srcSel.value = "TF-001";
+      const k2 = host.querySelector("[data-ev-reg-kind]");
+      k2.value = "qualification";
+      host.querySelector("[data-ev-reg-title]").value = "E2E 登记资质";
+      host.querySelector("[data-ev-reg-subject]").value = "E2E 主体";
+      const uEl = host.querySelector("[data-ev-reg-until]");
+      if (uEl) uEl.value = "2030-06-30";
+      host.querySelector("[data-ev-reg-go]").click();
+      const okr = await waitFor(() => state.bidEvidenceReg.info && state.bidEvidenceReg.info.ev_id, "登记回执");
+      check("register：提交 → bid.evidence_register IPC 帧 + 新签发回显",
+        okr && frameHas("bid.evidence_register") && state.bidEvidenceReg.info.deduplicated === false,
+        "info=" + JSON.stringify(state.bidEvidenceReg.info || {}).slice(0, 140));
+      await waitFor(() => state.bidEvidence.status === "ready" && panelHtml().indexOf("E2E 登记资质") >= 0, "台账刷新见新件");
+      check("register：台账刷新可见新件（共 14 件 + 行在场）",
+        panelHtml().indexOf("共 14 件") >= 0 && panelHtml().indexOf("E2E 登记资质") >= 0,
+        panelHtml().slice(0, 120));
+    }
+  }
+  {
+    // 幂等重放（同参数重提——注意面板已重渲染，元素重查）
+    const host = workbenchHost();
+    const srcSel = host && host.querySelector("[data-ev-reg-src]");
+    if (srcSel) {
+      srcSel.value = "TF-001";
+      host.querySelector("[data-ev-reg-kind]").value = "qualification";
+      host.querySelector("[data-ev-reg-title]").value = "E2E 登记资质";
+      host.querySelector("[data-ev-reg-subject]").value = "E2E 主体";
+      const uEl = host.querySelector("[data-ev-reg-until]");
+      if (uEl) uEl.value = "2030-06-30";
+      const firstEv = state.bidEvidenceReg.info && state.bidEvidenceReg.info.ev_id;
+      state.bidEvidenceReg.info = null;
+      host.querySelector("[data-ev-reg-go]").click();
+      const okd = await waitFor(() => state.bidEvidenceReg.info && state.bidEvidenceReg.info.ev_id, "幂等回执");
+      check("register：同参数重提 → 幂等重放原直返（deduplicated=true + 同 ev_id）",
+        okd && state.bidEvidenceReg.info.deduplicated === true && state.bidEvidenceReg.info.ev_id === firstEv,
+        "ev1=" + firstEv + " ev2=" + (state.bidEvidenceReg.info || {}).ev_id);
+    }
+  }
+  {
+    // 换版降级（同 key 换 valid_until → 旧降 SUPERSEDED + 新签发；#245/#185 属工具面（MCP 直调），壳白名单不入——e2e 不在此重复）
+    const host = workbenchHost();
+    const srcSel = host && host.querySelector("[data-ev-reg-src]");
+    if (srcSel) {
+      srcSel.value = "TF-001";
+      host.querySelector("[data-ev-reg-kind]").value = "qualification";
+      host.querySelector("[data-ev-reg-title]").value = "E2E 登记资质";
+      host.querySelector("[data-ev-reg-subject]").value = "E2E 主体";
+      const uEl = host.querySelector("[data-ev-reg-until]");
+      if (uEl) uEl.value = "2031-01-15"; // 同 key 换有效期 → 换版
+      const oldEv = state.bidEvidenceReg.info && state.bidEvidenceReg.info.ev_id;
+      state.bidEvidenceReg.info = null;
+      host.querySelector("[data-ev-reg-go]").click();
+      const okn = await waitFor(() => state.bidEvidenceReg.info && state.bidEvidenceReg.info.ev_id, "换版回执");
+      check("register：同 key 换有效期 → 换版新签发（dedup=false + 新 ev_id ≠ 旧）",
+        okn && state.bidEvidenceReg.info.deduplicated === false && state.bidEvidenceReg.info.ev_id !== oldEv,
+        "old=" + oldEv + " new=" + (state.bidEvidenceReg.info || {}).ev_id);
+      await waitFor(() => state.bidEvidence.status === "ready", "台账重拉");
+      const rows = (state.bidEvidence.data.evidence.items || []).filter((e) => e.title === "E2E 登记资质");
+      check("register：台账含新旧两版（旧 SUPERSEDED + 新 ACTIVE）",
+        rows.length === 2 && rows.some((e) => e.status === "SUPERSEDED") && rows.some((e) => e.status === "ACTIVE"),
+        "rows=" + JSON.stringify(rows.map((e) => [e.id, e.status])));
+    }
+  }
 }
 
 console.log(`\nPASS: #47 R25 证据台账 e2e（${pass} 通过，${fail} 失败）`);

@@ -528,6 +528,7 @@ impl Ctx {
             //    search_evidence 双工具直链；值域校验在工具面单一真源）──
             "bid.evidence" => crate::bid::evidence(&ws, &self.bid, &a),
             "bid.evidence_search" => crate::bid::evidence_search(&ws, &self.bid, &a),
+            "bid.evidence_register" => crate::bid::evidence_register(&ws, &self.bid, &a),
 
             "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
 
