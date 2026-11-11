@@ -582,7 +582,7 @@ check(
 );
 check(
   "#19 UI：kind 清单 + 扩展名白名单（契约 §2 同源）",
-  app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];') &&
+  app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板", "报价文件", "扫描件"];') &&
     app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc)$/i;'),
   "kind 合法值/可解析扩展名漂移"
 );
@@ -699,6 +699,29 @@ check(
       `R22 白名单：跨面等值（壳 ${shellExts.length} 类 = UI ${uiExts.length} 类，双向零差）`,
       onlyShell.length === 0 && onlyUi.length === 0,
       `壳有 UI 无：[${onlyShell}]；UI 有壳无：[${onlyUi}]——改一面必须同步另一面（R17 三面同改纪律）`
+    );
+  }
+}
+// R23（#47）：kind 值域跨面等值门——UI BID_FILE_KINDS（app.js）与工具面
+// TENDER_FILE_KINDS（bid-mcp tools.rs，含 #473 并入的报价文件/扫描件）
+// 同为值域声明。漂移四面（工具面/MCP 契约/UI/测试）任一不同步即红。
+{
+  const uiArrMatch = app.match(/var BID_FILE_KINDS = \[([^\]]+)\]/);
+  const toolArrMatch = toolsRs.match(/const TENDER_FILE_KINDS: \[&str; \d+\] = \[([\s\S]*?)\];/);
+  check(
+    "R23 kind：两面声明锚在场（UI 数组 + 工具面常量）",
+    !!uiArrMatch && !!toolArrMatch,
+    "BID_FILE_KINDS 或 TENDER_FILE_KINDS 改名/删除——提取失败"
+  );
+  if (uiArrMatch && toolArrMatch) {
+    const uiKinds = uiArrMatch[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1));
+    const toolKinds = (toolArrMatch[1].match(/"[^"]+"/g) || []).map((s) => s.slice(1, -1));
+    const onlyUi = uiKinds.filter((k) => !toolKinds.includes(k));
+    const onlyTool = toolKinds.filter((k) => !uiKinds.includes(k));
+    check(
+      `R23 kind：跨面等值（UI ${uiKinds.length} 值 = 工具面 ${toolKinds.length} 值，双向零差）`,
+      onlyUi.length === 0 && onlyTool.length === 0,
+      `UI 有工具面无：[${onlyUi}]；工具面有 UI 无：[${onlyTool}]——值域四面同改（#473/R23 纪律）`
     );
   }
 }
