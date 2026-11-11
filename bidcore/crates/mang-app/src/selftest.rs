@@ -1129,6 +1129,62 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && im14b["per_file"][0]["deduplicated"] == json!(true),
         format!("id14={id14} 重放={}", im14b["file_ids"][0]),
     );
+    // ---- #47 R26：证据登记写面真链路（状态窗 EState 探针 + MatrixReady 后 成功/幂等）
+    // 窗口前置：register_evidence 契约 §11-A = MATRIX_READY+（G2）。先在当前
+    // 状态上探 EState（不为测试放宽状态窗——R10 纪律）；随后外部写者推进
+    // （与「db.json 被外部进程改写」块同款真服务面：set_requirements +
+    // prepare_outline_and_matrix——661 段同款，MCP 同源面）
+    let resp = call(&ctx, json!({"id":"t-bid-eva0","cmd":"bid.evidence_register","kind":"qualification","title":"R26 登记测试资质","source_file_id":id14,"subject_name":"selftest","valid_until":"2030-01-01"}));
+    r.check(
+        "bid.evidence_register(早态 EState 拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "state",
+        format!("{}", err_code(&resp)),
+    );
+    {
+        use bid_domain::Requirement;
+        use std::collections::HashMap;
+        // 注意：开当前 R14 工作区（ws_r14）——ctx 此刻在 ws_r14，不是旧 root
+        let mut svc = bid_tools::service::BidService::open(&ws_r14).unwrap();
+        let st = svc.store_mut();
+        st.set_requirements(vec![Requirement {
+            id: "REQ-0001".into(),
+            category: "技术参数".into(),
+            clause_no: None,
+            anchors: vec![bid_domain::Anchor {
+                file: "技术标.docx".into(),
+                kind: "para".into(),
+                locator: "第三章 3.2/REQ-0001".into(),
+                excerpt: "投标人须提供 2000 路并发能力".into(),
+                ..bid_domain::Anchor::default()
+            }],
+            params: HashMap::new(),
+            source_file: "技术标.docx".into(),
+        }])
+        .unwrap();
+        // 状态窗推进（外部写者；容错逐级——不后向、不重复，幂等对齐）
+        let _ = st.advance_project_status(bid_domain::ProjectStatus::RequirementsExtracted);
+        let _ = st.advance_project_status(bid_domain::ProjectStatus::MatrixReady);
+        svc.checkpoint().unwrap(); // 持久化（seed/585 块同款——store_mut 变更须显式落盘）
+    }
+    let resp = call(&ctx, json!({"id":"t-bid-eva1","cmd":"bid.evidence_register","kind":"qualification","title":"R26 登记测试资质","source_file_id":id14,"subject_name":"selftest","valid_until":"2030-01-01"}));
+    let bra1 = result(&resp);
+    r.check(
+        "bid.evidence_register(新登记)",
+        resp["ok"] == json!(true)
+            && bra1["register"]["ev_id"].is_string()
+            && bra1["register"]["deduplicated"] == json!(false)
+            && bra1["register"]["status"] == json!("ACTIVE"),
+        format!("ev={} detail={}", bra1["register"]["ev_id"], resp.get("error").cloned().unwrap_or(json!(null))),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-eva2","cmd":"bid.evidence_register","kind":"qualification","title":"R26 登记测试资质","source_file_id":id14,"subject_name":"selftest","valid_until":"2030-01-01"}));
+    let bra2 = result(&resp);
+    r.check(
+        "bid.evidence_register(幂等重放)",
+        resp["ok"] == json!(true)
+            && bra2["register"]["ev_id"] == bra1["register"]["ev_id"]
+            && bra2["register"]["deduplicated"] == json!(true),
+        format!("ev1={} ev2={}", bra1["register"]["ev_id"], bra2["register"]["ev_id"]),
+    );
     let _ = std::fs::remove_dir_all(&ws_r14);
 
     // ---- #47 R15（平台区分⑧）：日期时区口径——严格公历（不存在的日历日
@@ -1161,6 +1217,96 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         format!("warns={:?}", cp15["warnings"]),
     );
     let _ = std::fs::remove_dir_all(&ws_r15);
+
+    // ---- #47 R25（向导深水区）：建纲流全链——全新 DRAFT 工作区，导入 →
+    //      抽取（bid.extract，确定性规则）→ 推荐（bid.length_profile，四档
+    //      alternatives + 信号面）→ 建纲（bid.build_outline，practical 档）→
+    //      bid.outline 章节树呈现。UI 断档收口的自测面锁定——此前这三步
+    //      只能走 MCP 管线（树区空态明文「由 Agent 走」）。
+    let ws_r25 = scratch_dir();
+    std::fs::create_dir_all(ws_r25.join("files")).unwrap();
+    std::fs::write(
+        ws_r25.join("files").join("A-招标文件.docx"),
+        include_bytes!("../../../tests/fixtures/wizard19-min.docx"),
+    )
+    .unwrap();
+    let resp = call(&ctx, json!({"id":"t-ws-r25","cmd":"workspace.open","path": ws_r25.to_string_lossy()}));
+    r.check(
+        "workspace.open(R25 建纲流工作区)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-cp25","cmd":"bid.create_project","name":"R25 建纲流","bid_deadline":"2026-12-31","mode":"明标"}));
+    r.check(
+        "bid.create_project(R25 起步)",
+        resp["ok"] == json!(true),
+        format!("{resp}"),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-im25","cmd":"bid.import_files","files":[{"upload_ref":"files/A-招标文件.docx","kind":"招标文件"}]}));
+    let im25 = result(&resp);
+    r.check(
+        "bid.import_files(R25 入库)",
+        resp["ok"] == json!(true) && im25["totals"]["files"] == json!(1),
+        format!("totals={:?}", im25["totals"]["files"]),
+    );
+    // 抽取：确定性规则 → REQ 面 + 状态推进（零抽取是警告不是错误；夹具实测 >0）
+    let resp = call(&ctx, json!({"id":"t-bid-ex25","cmd":"bid.extract"}));
+    let ex25 = result(&resp);
+    let ex_total = ex25["extract"]["counts"]["total"].as_u64().unwrap_or(0);
+    r.check(
+        "bid.extract(确定性抽取)",
+        resp["ok"] == json!(true)
+            && ex_total >= 1
+            && ex25["extract"]["status"] == json!("REQUIREMENTS_EXTRACTED"),
+        format!("total={ex_total}"),
+    );
+    // 状态对账：quick_stats.requirements 同源可见（树区空态卡的两相位判据）
+    let resp = call(&ctx, json!({"id":"t-bid-st25","cmd":"bid.state"}));
+    let st25 = result(&resp);
+    r.check(
+        "bid.state(抽取后对账)",
+        resp["ok"] == json!(true)
+            && st25["project"]["status"] == json!("REQUIREMENTS_EXTRACTED")
+            && st25["quick_stats"]["requirements"].as_u64() == Some(ex_total),
+        format!("reqs={:?}", st25["quick_stats"]["requirements"]),
+    );
+    // 推荐：四档 alternatives + 信号面（#287 呈现义务的壳面直通）
+    let resp = call(&ctx, json!({"id":"t-bid-lp25","cmd":"bid.length_profile"}));
+    let lp25 = result(&resp);
+    let alts25 = lp25["recommendation"]["alternatives"].as_array().map(|a| a.len()).unwrap_or(0);
+    r.check(
+        "bid.length_profile(推荐+四档)",
+        resp["ok"] == json!(true)
+            && lp25["recommendation"]["recommended_profile"].is_string()
+            && alts25 == 4
+            && lp25["recommendation"]["signals"]["scoring_detail_count"].is_u64(),
+        format!("alts={alts25}"),
+    );
+    // 建纲：practical 档 → 章节树 + 矩阵一体（prepare_outline_and_matrix）
+    let resp = call(&ctx, json!({"id":"t-bid-bo25","cmd":"bid.build_outline","length_profile":"practical"}));
+    let bo25 = result(&resp);
+    r.check(
+        "bid.build_outline(建纲+矩阵一体)",
+        resp["ok"] == json!(true)
+            && bo25["outline_build"]["counts"]["sections"].as_u64().unwrap_or(0) >= 1
+            && bo25["outline_build"]["counts"]["matrix_rows"].as_u64().unwrap_or(0) >= 1
+            && bo25["outline_build"]["status"] == json!("MATRIX_READY"),
+        format!(
+            "sections={:?} matrix={:?}",
+            bo25["outline_build"]["counts"]["sections"],
+            bo25["outline_build"]["counts"]["matrix_rows"]
+        ),
+    );
+    // 大纲呈现：节点非空（UI 章节树数据源——建纲流卡的退场条件）
+    let resp = call(&ctx, json!({"id":"t-bid-ol25","cmd":"bid.outline"}));
+    let ol25 = result(&resp);
+    let nodes25 = ol25["nodes"].as_array().map(|a| a.len()).unwrap_or(0);
+    r.check(
+        "bid.outline(章节树呈现)",
+        resp["ok"] == json!(true) && nodes25 >= 1,
+        format!("nodes={nodes25}"),
+    );
+    let _ = std::fs::remove_dir_all(&ws_r25);
 
     println!();
     println!(

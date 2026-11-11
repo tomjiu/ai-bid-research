@@ -4378,6 +4378,107 @@ html[data-chrome="native"][data-maximized="1"] #app {
 .bid-wiz-fail-what { padding: 4px 0 2px; opacity: 0.8; }
 .bid-wiz-fail-row { padding: 3px 0 3px 12px; line-height: 1.6; }
 
+/* ---- R25（#47）：建纲流卡（树区空态——抽取卡 + 推荐选档卡） ---- */
+/* 成功回执（抽取计数/建纲计数）——与 warn/error 同构的非阻断面 */
+.bid-wiz-error[data-state="ok"] {
+  border: 1px solid #bfe0c0;
+  background: #f0f8f0;
+  color: #2f7a35;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+/* 四档篇幅单选行（#287：推荐可被覆盖——决策权在用户） */
+.bid-build-profs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line, #e2e6ee);
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 8px;
+}
+.bid-build-prof {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bid-build-prof:hover { background: var(--bg-hover, #f3f6fa); }
+.bid-build-prof[data-on="true"] { background: #eef4fb; }
+.bid-build-prof input[type="radio"] { flex: none; }
+.bid-build-prof-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bid-build-prof-label { font-size: 12.5px; font-weight: 600; }
+.bid-build-prof-when {
+  font-size: 11px;
+  color: var(--ink-dim, #7b8494);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bid-build-prof-chars {
+  flex: none;
+  text-align: right;
+  font-size: 11px;
+  color: var(--ink-dim, #7b8494);
+  line-height: 1.5;
+}
+.bid-build-rec-tag {
+  display: inline-block;
+  border: 1px solid #bfe0c0;
+  background: #f0f8f0;
+  color: #2f7a35;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+/* 推荐理由 + 信号行（原始值随行回显——决策可核对） */
+.bid-build-reasons {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink, #2c3340);
+  padding: 4px 2px;
+}
+.bid-build-signals {
+  font-size: 11.5px;
+  color: var(--ink-dim, #7b8494);
+  padding: 4px 2px 6px;
+}
+/* 分包选择器（detected≥2 时必选——共用条款自动进纲） */
+.bid-build-pkgs {
+  border: 1px solid var(--line, #e2e6ee);
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 8px;
+}
+.bid-build-pkgs-title {
+  font-size: 11.5px;
+  color: var(--ink-dim, #7b8494);
+  padding: 2px 4px 6px;
+}
+.bid-build-pkg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bid-build-pkg:hover { background: var(--bg-hover, #f3f6fa); }
+.bid-build-pkg[data-on="true"] { background: #eef4fb; }
+.bid-build-pkg input[type="radio"] { flex: none; }
+.bid-build-pkg span:first-of-type { flex: 1; }
+.bid-build-pkg-meta { flex: none; font-size: 11px; color: var(--ink-dim, #7b8494); }
+
 /* 导入结果面（右面板） */
 .bid-panel-card {
   display: flex;
@@ -4543,3 +4644,9 @@ html[data-chrome="native"][data-maximized="1"] #app {
 .bid-ev-filters select, .bid-ev-search select, .bid-ev-search input { padding: 4px 8px; border: 1px solid var(--line, #d0d4dc); border-radius: 6px; background: var(--bg, #fff); font: inherit; }
 .bid-ev-search { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; align-items: center; }
 .bid-ev-search input[type="text"] { flex: 1 1 240px; min-width: 180px; }
+
+/* #47 R26：登记表单布局（与 .bid-ev-search 同款） */
+.bid-ev-reg { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; align-items: center; }
+.bid-ev-reg select, .bid-ev-reg input { padding: 4px 8px; border: 1px solid var(--line, #d0d4dc); border-radius: 6px; background: var(--bg, #fff); font: inherit; }
+.bid-ev-reg input[type="text"] { flex: 0 1 160px; }
+.bid-ev-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-dim, #666); }
