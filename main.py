@@ -608,7 +608,17 @@ def run_collect(args: argparse.Namespace) -> int:
           f" / 指纹 {deduped.by_fingerprint}），"
           f"待入库 {len(deduped.unique)} 条")
     for dup in deduped.duplicates:
-        print(f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件（{dup['reason']}）")
+        merged = dup.get("merged_fields") or []
+        suffix = f"；补全 {'/'.join(merged)}" if merged else ""
+        print(
+            f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件"
+            f"（{dup['reason']}{suffix}）"
+        )
+    if deduped.merged_events:
+        print(
+            f"  其中 {deduped.merged_events} 条补全了保留者空缺字段"
+            "（字段级合并，不覆盖已有值）"
+        )
 
     # 健全性告警面（R33）——告警不拒收，逐条可见供复核
     warned = [r for r in deduped.unique if r.warnings]

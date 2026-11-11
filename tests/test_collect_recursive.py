@@ -105,6 +105,7 @@ class TestRecursiveWalk:
             by_fingerprint = 0
             unique = []
             duplicates = []
+            merged_events = 0  # R101 完备性合并面（属性）
 
         monkeypatch.setattr(main_mod, "dedupe_records", lambda recs: _Dedup())
         rc = main_mod.main(
