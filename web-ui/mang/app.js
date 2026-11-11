@@ -15,6 +15,7 @@
     folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"><path d="M1.8 4.2h4.1l1.3 1.6h7v6.4a.9.9 0 0 1-.9.9H2.7a.9.9 0 0 1-.9-.9z"/></svg>',
     folderOpen: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"><path d="M1.8 4.2h4.1l1.3 1.6h7v1.4H4.4L2.6 13.4a.9.9 0 0 1-2-.5z"/><path d="M4.6 7.2h10.2l-1.7 5.2a.9.9 0 0 1-.85.6H2.9"/></svg>',
     refresh: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75"/><path d="M13.4 2.2v3.1h-3.1"/></svg>',
+    plus: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>',
     docx: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"><path d="M3.4 1.8h5.4l3.8 3.7v8.7H3.4z"/><path d="M8.7 1.9v3.7h3.8"/><path d="M5.3 8.4h1.3l.65 3 .65-3h1.3l.65 3 .65-3H11"/></svg>',
     xlsx: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"><path d="M3.4 1.8h5.4l3.8 3.7v8.7H3.4z"/><path d="M8.7 1.9v3.7h3.8"/><path d="m5.5 8.2 3.4 3.5M8.9 8.2l-3.4 3.5"/></svg>',
     pdf: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"><path d="M3.4 1.8h5.4l3.8 3.7v8.7H3.4z"/><path d="M8.7 1.9v3.7h3.8"/><path d="M5.4 12V8.6h1.2a1 1 0 0 1 0 2H5.4"/></svg>',
@@ -203,6 +204,10 @@
       { path: root + String.raw`\项目A\招标文件.docx`, size: 58320, mtime: now - 2592e5 },
       { path: root + String.raw`\项目B\商务标.md`, size: 2200, mtime: now - 1728e5 }
     ];
+    // R25（#47）：子节点字段对齐真实 fs.tree 协议（fsapi.rs to_json：
+    // kind=dir 时子数组字段名 = nodes；演示树此前用 children——文件浏览器
+    // 双读兼容不暴露，向导 walk 只读 nodes 导致演示模式文件列表恒空。
+    // 首个向导运行时 e2e（bid-e2e ⑥）暴露此潜伏分叉）
     const tree = {
       root,
       nodes: [
@@ -210,7 +215,7 @@
           name: "\u9879\u76EEA",
           rel: "\u9879\u76EEA",
           kind: "dir",
-          children: [
+          nodes: [
             { name: "\u62DB\u6807\u6587\u4EF6.docx", rel: String.raw`项目A\招标文件.docx`, kind: "file", size: 58320, mtimeMs: now - 2592e5 },
             { name: "\u6280\u672F\u6807.md", rel: String.raw`项目A\技术标.md`, kind: "file", size: 1620, mtimeMs: now - 36e5 },
             { name: "\u62A5\u4EF7\u5355.xlsx", rel: String.raw`项目A\报价单.xlsx`, kind: "file", size: 18320, mtimeMs: now - 36e5 },
@@ -222,7 +227,7 @@
           name: "\u9879\u76EEB",
           rel: "\u9879\u76EEB",
           kind: "dir",
-          children: [{ name: "\u5546\u52A1\u6807.md", rel: String.raw`项目B\商务标.md`, kind: "file", size: 2200, mtimeMs: now - 1728e5 }]
+          nodes: [{ name: "\u5546\u52A1\u6807.md", rel: String.raw`项目B\商务标.md`, kind: "file", size: 2200, mtimeMs: now - 1728e5 }]
         },
         { name: "README.md", rel: "README.md", kind: "file", size: 900, mtimeMs: now - 432e6 }
       ]
@@ -674,6 +679,11 @@
                 const broken = /损坏件/.test(String(f.filename || f.upload_ref || ""));
                 return {
                   file_id: "TF-00" + (i + 1), filename: f.filename || f.upload_ref, kind: f.kind || "附件",
+                  // R25（#47）：对齐真实壳 R24 的 per_file.upload_ref 回显
+                  //（调用方归一形态——演示桥宣称「与真实壳口径一字不差」，
+                  // 此前漏字段：重导失败件的预勾选对齐（upload_ref ↔ rel）
+                  // 与结果面深层件消歧都依赖它）
+                  upload_ref: f.upload_ref || "",
                   sha256: broken ? "demo-broken" : "demo", pages: broken ? 0 : 12, tables: broken ? 0 : 3,
                   chunks: broken ? 0 : 48, ocr_tier: broken ? "none" : "text",
                   parse_status: broken ? "failed" : "ok", deduplicated: false
@@ -830,7 +840,13 @@
     bidWizard: {
       createBusy: false, createError: "", createWarnings: [],
       treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
-      importBusy: false, importError: "", result: null
+      importBusy: false, importError: "", result: null,
+      // R25（#47）：导入卡重入模式——null=常规（files>0 后导入卡退场）；
+      // "retry-failed"=部分失败重导（失败件预勾选）；"supplement"=补导
+      // （FILES_IMPORTED 后追加新批次——补遗/澄清函是标书常态）。
+      // 动机：q19.files>0 后导入卡永不再现，结果面的「修复后重新导入」
+      // 与补遗补件均无 UI 路径（向导生命周期断链）。
+      reentry: null
     },
     // #18 出口闭环（校验报告 + 导出落盘）：validate 报告面与 export 写面
     // 分开记——报告可独立重看，导出有自己的 loading/产物回显；两码
@@ -1352,6 +1368,10 @@
         else if (act === "wizard") ui.openBidWorkbench("detail");
         else if (act === "wizard-refresh-tree") ui.loadBidWizardTree(true);
         else if (act === "wizard-retry-import") ui.submitBidWizardImport();
+        // R25（#47）：导入卡重入动作——重导失败件（预勾选）/ 补导（新批次）/ 退出重入
+        else if (act === "wizard-retry-failed") ui.enterBidWizardReentry("retry-failed");
+        else if (act === "wizard-supplement") ui.enterBidWizardReentry("supplement");
+        else if (act === "wizard-exit-reentry") ui.exitBidWizardReentry();
         // #18 出口闭环：工具栏「校验并导出」（切页签 + 触发校验）/ 重新校验 /
         // 确认导出 / 产物定位
         else if (act === "validate-export") ui.openBidWorkbench("export");
@@ -1561,10 +1581,23 @@
       const st19 = p.status || "";
       if (st19 === "DRAFT" && !(q19.files > 0)) {
         renderBidWizardImport(treeEl, host);
+      } else if (state.bidWizard.reentry) {
+        // R25（#47）：导入卡重入——部分失败重导（retry-failed，失败件
+        // 预勾选）/ 补导（supplement，新批次）。files>0 也允许显式回到
+        // 第二步；右面板保留原结果面（失败清单可对照）或完成态卡。
+        renderBidWizardImport(treeEl, host);
+        const panelElR25 = host.querySelector("#bid-panel");
+        if (panelElR25 && state.bidWizard.result) renderBidWizardResult(panelElR25, state.bidWizard.result);
+        else if (panelElR25) renderBidWizardDone(panelElR25, b);
       } else if (state.bidWizard.result) {
         // #19：导入刚完成——树区给「下一步」引导（对齐 bid.coverage next 语言），
-        // 右面板保留导入结果面（per_file 逐件表）
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>';
+        // 右面板保留导入结果面（per_file 逐件表）；R25（#47）：部分失败
+        // 时同步给「重导失败件」入口（结果面板也有主按钮，这里是树区
+        // 近旁径——两条径同一动作）
+        const failedR25 = (state.bidWizard.result.per_file || []).filter((f) => String(f.parse_status || "").toLowerCase() === "failed");
+        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div>'
+          + (failedR25.length ? '<div style="margin-top:10px"><button class="btn" data-bid-act="wizard-retry-failed">' + ICON.refresh + "重导失败件（" + failedR25.length + "）</button></div>" : "")
+          + "</div>";
         const panelEl19 = host.querySelector("#bid-panel");
         if (panelEl19) renderBidWizardResult(panelEl19, state.bidWizard.result);
       } else if (q19.files > 0) {
@@ -1577,6 +1610,11 @@
       } else {
         treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
       }
+      // R25（#47）：树区重导按钮的监听绑定——wizard 分支的 treeEl 重绘
+      // 不经 renderBidWizardImport（那里只在导入卡内绑定），这里直接绑
+      //（每次 innerHTML 重建后新元素，无重复绑定面）
+      const retryBtnR25 = treeEl.querySelector('[data-bid-act="wizard-retry-failed"]');
+      if (retryBtnR25) retryBtnR25.addEventListener("click", () => ui.enterBidWizardReentry("retry-failed"));
       if (activePanel === "quality") renderBidQualityPanel(host);
       // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
       if (activePanel === "gates") renderBidGatesPanel(host);
@@ -1779,7 +1817,11 @@
         + '<div class="bid-wiz-files">' + rows + "</div>"
         + '<div class="bid-wiz-bar"><span class="bid-wiz-count">已选 ' + selCount + " / " + w.files.length + " 件</span>"
         + '<button class="btn btn-primary" data-bid-act="wizard-go"' + (w.importBusy || !selCount ? " disabled" : "") + ">" + (w.importBusy ? "解析入库中…" : "导入 " + selCount + " 件") + "</button>"
-        + '<button class="btn" data-bid-act="wizard-refresh-tree" title="重读工作区文件">' + ICON.refresh + "</button></div>";
+        + '<button class="btn" data-bid-act="wizard-refresh-tree" title="重读工作区文件">' + ICON.refresh + "</button>"
+        // R25（#47）：重入模式的退出径——返回「文件已入库」引导态
+        //（已入库件不受影响；补导/重导可随时再入）
+        + (w.reentry ? '<button class="btn" data-bid-act="wizard-exit-reentry">返回</button>' : "")
+        + "</div>";
     }
     // R19（#47）：建项警示透出——BID_DEADLINE_PAST 等（建项时域层产出、
     // 无编辑命令可消除）随向导带到导入卡持续可见；warn 态非阻断
@@ -1877,10 +1919,16 @@
       + '<table class="bid-table"><thead><tr><th>文件</th><th>角色</th><th>页</th><th>表</th><th>块</th><th>解析</th><th>幂等</th></tr></thead><tbody>' + rows + "</tbody></table>"
       + '<div class="bid-wiz-total">共 ' + (totals.files || perFile.length) + " 件 · " + (totals.chunks || 0) + " 块 · 解析失败 " + (totals.parse_failed || 0) + " 件</div>"
       + fails
+      // R25（#47）：部分失败重导入口——失败清单说「修复后重新导入即可」，
+      // 本按钮把该径走通（失败件预勾选回到导入卡；已成功件不动）
+      + (failedRows.length ? '<div class="bid-wiz-bar"><button class="btn btn-primary" data-bid-act="wizard-retry-failed">' + ICON.refresh + "重导失败件（" + failedRows.length + "）</button></div>" : "")
       + (integrity.length ? '<div class="bid-cov-next" data-state="warn"><span>输入完整性</span>' + integrity.map((f) => esc(f.name + "：" + (f.reason || ""))).join("；") + "</div>" : "")
       + (warns.length ? '<details class="bid-wiz-warns"><summary>' + warns.length + " 条告警</summary>" + warns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
       + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草</div>'
       + "</div>";
+    // R25：结果面板不在 bindBidViewActions 的既有绑定面内——重导按钮直接绑
+    const retryBtnR25 = panelEl.querySelector('[data-bid-act="wizard-retry-failed"]');
+    if (retryBtnR25) retryBtnR25.addEventListener("click", () => ui.enterBidWizardReentry("retry-failed"));
   }
 
   /** R4（#47）：向导完成态卡（右面板）——重开工作区场景：quick_stats
@@ -1904,8 +1952,15 @@
       + "<tr><td>模式</td><td>" + esc(p.mode || "—") + "</td></tr>"
       + "<tr><td>状态</td><td>" + esc(bidProjectStatusZh(p.status || "")) + "</td></tr>"
       + "</tbody></table>"
+      // R25（#47）：补导入口——补遗/澄清函是标书常态，FILES_IMPORTED
+      // 后追加新批次不应只能靠 Agent 直调 MCP（向导生命周期补链）
+      + '<div class="bid-wiz-bar"><button class="btn" data-bid-act="wizard-supplement">' + ICON.plus + "补导文件</button></div>"
       + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草——建纲后左侧显示章节树与本面板详情</div>'
       + "</div>";
+    // R25：本卡不在 bindBidViewActions 的既有绑定面内（那里只绑侧栏/向导卡
+    // /结果面板）——补导按钮直接绑（每次 innerHTML 重建后新元素）
+    const suppBtnR25 = panelEl.querySelector('[data-bid-act="wizard-supplement"]');
+    if (suppBtnR25) suppBtnR25.addEventListener("click", () => ui.enterBidWizardReentry("supplement"));
   }
 
   /** 章节详情（右面板）：元信息 + 章节正文预览（chapters/{id}.json 的 content） */
@@ -5332,6 +5387,41 @@
       }
       renderBidWorkbenchIfOpen();
     },
+    /** R25（#47）：进入导入卡重入——"retry-failed"（部分失败重导：上次
+     * 结果的 FAILED 件预勾选，upload_ref 对齐 fs.tree 的 rel——R24 回显
+     * 字段；已成功件不动）/ "supplement"（补导：清空勾选，新批次）。
+     * treeStatus 置 idle 强制重拉（用户可能刚修复/新放文件——列表必须
+     * 反映当下工作区，不吃缓存）。 */
+    enterBidWizardReentry(mode) {
+      const w = state.bidWizard;
+      if (mode !== "retry-failed" && mode !== "supplement") return;
+      w.reentry = mode;
+      w.importError = "";
+      if (mode === "retry-failed" && w.result && Array.isArray(w.result.per_file)) {
+        const next = {};
+        for (const f of w.result.per_file) {
+          if (String(f.parse_status || "").toLowerCase() !== "failed") continue;
+          // upload_ref 是工具面回显的归一形态（与向导列表 rel 同口径）；
+          // 演示桥/旧响应无该字段时回退 filename（根下文件两者相同）
+          const rel = f.upload_ref || f.filename || "";
+          if (rel && w.files.some((x) => x.rel === rel)) {
+            next[rel] = guessBidFileKind(f.filename || rel);
+          }
+        }
+        w.sel = next;
+      } else {
+        w.sel = {}; // 补导：新批次从空选开始（旧勾选残留会把已入库件带上）
+      }
+      w.treeStatus = "idle"; // 渲染时自动 loadBidWizardTree 重拉
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：退出重入——回「文件已入库」引导态（不触发导入；
+     * 已入库件不受任何影响）。 */
+    exitBidWizardReentry() {
+      state.bidWizard.reentry = null;
+      state.bidWizard.importError = "";
+      renderBidWorkbenchIfOpen();
+    },
     /** #19：向导第一步提交——bid.create_project（壳侧隐式幂等键 = 工作区
      *  路径；重复提交不建第二个项目，UI 侧不再另造 external_key） */
     async submitBidWizardCreate(form) {
@@ -5390,6 +5480,9 @@
         }, 6e5);
         state.bidWizard.importBusy = false;
         state.bidWizard.result = r || null;
+        // R25（#47）：导入完成后退出重入模式（回到「文件已入库」引导态；
+        // 新结果若仍有失败件，重导入口随结果面再现——可循环直到全绿）
+        state.bidWizard.reentry = null;
         await ui.loadBid(true); // FILES_IMPORTED → 树区转「下一步」引导，右面板留结果
       } catch (err) {
         state.bidWizard.importBusy = false;
