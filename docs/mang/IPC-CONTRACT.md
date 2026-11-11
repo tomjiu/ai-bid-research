@@ -586,6 +586,34 @@ E_STATE 透传为 `state` 错误码（§3.3——UI 分支「尚未开放」卡�
                          "star_truth": 48, "star_captured": 45, "star_missing": 3 } } }
 ```
 
+### bid.star_gaps —— ★漏标明细（只读；#47 R27 / #88 Q2 兜底数据源）
+逐文件循 `get_star_coverage`（#285）真实工具面（与 `bid.coverage` 的 `star`
+计数面同源单真源），**只含有漏标的文件**进 `star_gaps.files[]`——每件含
+`missing[]` 明细（工具面 MAX_STAR_DETAIL=100 条封顶 + `missing_truncated` 旗
+原样透传；每条 block_idx / locator / page / line / stars / text / reason）、
+`warnings`（REQ 空引导「先抽取再查」/ 表格行装配提示）、`next`（补标引导）。
+壳侧每条 `text` 截断 120 chars（chars 计，截断追加「…」——防 IPC 膨胀）。
+汇总 `total`（star_truth / star_captured / star_missing / files_with_gaps，
+与 coverage().star.total 同口径可对账）；`checked_files` 已检文件数**含无漏标
+件**（分母诚实）；`all_clear` = 全部已检文件无漏标（导出兜底 UI 直通行据）。
+无 db.json → `not_found`；DRAFT 态（未导入）工具面 get_coverage_report
+E_STATE 透传为 `state` 码（§3.3——UI 分支「尚未开放」卡）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "star_gaps": { "files": [ { "file_id": "TF-0001", "file_name": "A-招标文件.docx",
+                                 "star_truth": 48, "star_captured": 45, "star_missing": 3,
+                                 "missing": [ { "block_idx": 207, "locator": "第19页 行6",
+                                                 "page": 19, "line": 6, "stars": 1,
+                                                 "text": "★网络直连功能：可通过网线传输…",
+                                                 "reason": "该块未产生任何 REQ" } ],
+                                 "missing_truncated": false,
+                                 "warnings": [], "next": "有★漏标——用 missing[].block_idx 定位后 submit_block_marks 补标…" } ],
+                   "total": { "star_truth": 48, "star_captured": 45, "star_missing": 3,
+                              "files_with_gaps": 1 },
+                   "checked_files": 2, "all_clear": false } }
+```
+
 ### bid.create_project `{ name, bid_deadline, mode, tender_notice_ref? }`  （写面；#19 导入向导第一步）
 
 空工作区起步（无 db.json 不再 `not_found`——`ensure_or_open` 空态 + `.mang/approval.key`，

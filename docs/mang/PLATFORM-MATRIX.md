@@ -39,12 +39,15 @@
 | R2 | 绝对越界样本平台自适应 | 围栏外路径样本按平台取形态（Windows 盘符 `C:/Windows/win.ini` / Unix 根 `/etc/passwd`）——写死盘符在 Linux 是合法相对路径（假绿教训） | `mang-app/src/selftest.rs`（`cfg!(windows)` 分支样本） | selftest `path-guard 越界全拦` + `path-guard 盘符形态平台语义` | **cfg 分支样本**（双平台各断本平台形态） |
 | 既有 | 围栏 is_inside 组件比较 | 前缀陷阱：`c:/bid/work-evil` 不命中 `c:/bid/work`——组件级而非字符串前缀；Windows verbatim `\\?\` 前缀不干扰 | `bid-tools/src/fs_fence.rs` `is_inside`（mang-app 侧 `paths.rs` 同名） | cargo `is_inside_is_component_wise_not_string_prefix`（fs_fence）+ `sibling_prefix_not_inside` + `drive_letter_form_platform_semantics`（paths.rs） | 双平台 + Windows verbatim 分支 |
 | 既有 | 展示/记录路径规范 | `rel_join` 记录 rel 一律 `/` 分隔（fs.tree 的 rel 即此口径——upload_ref 的规范形态来源）；`display` 展示面反斜杠转 `/` | `mang-app/src/paths.rs` `rel_join` / `display` | cargo `upload_ref_separator_normalized_and_idempotent`（消费面） | 双平台 |
+| R27 | ★漏标明细读面（平台无关） | `bid.star_gaps` 纯数据透出面：无 cfg 分支、无路径语义、无平台启发式——`text` 截断按 `chars()` 计数（Unicode 标量一致，非字节——CJK/★NFKC 变体双平台同长）；fixture 解析 `canonicalize`（跨平台绝对形态）；导出兜底为 UI 呈现层（`bid.export` 工具面语义不动，无平台分叉） | `mang-app/src/bid.rs` `star_gaps` + `STAR_GAP_TEXT_MAX_CHARS` | cargo `star_gaps_reads_real_missing_detail`（真件 8★ 明细链）+ `star_gaps_state_gate_before_import`（DRAFT 态）；selftest `bid.star_gaps(未导入件空态)`；bid-panels R27 九锚（壳注册/明细透出/UI 三面/样式） | 双平台（Linux 本机三件套真跑 + Windows 交叉 check——无 cfg 面即无分叉验证负担） |
 
 ## 三、平台运行面实测账（如实标注）
 
 | 平台 | 已实测面 | 记录 |
 |---|---|---|
 | Linux（Debian 沙箱，rustc 1.99） | 三件套全量：cargo（mang-app 80 + bid-domain 334 + bid-mcp 22）· selftest 81 · web-ui run-all 13/13 | 2026-11-10，R15 合并后基线；环境备忘：磁盘 97% 满触发 `ld Bus error`（清增量缓存后恢复）——issue #47 备忘同款 |
+| Linux（Debian 沙箱，rustc 1.99.0） | R27 轮三件套：cargo mang-app **97/0**（含 star_gaps 真件 8★ 明细链 + DRAFT 态透传）· selftest **88/0/0**（+R27 空态项）· web-ui run-all **14/14**（+bid-panels R27 九锚 → 283/0） | 2026-11-11，R27（★漏标明细 + 导出兜底）本机真跑；GTK 自愈树重建（optroot 回收后 apt download+dpkg-x 全量重提） |
+| Windows（Linux 沙箱交叉，x86_64-pc-windows-gnu） | R27 轮：`cargo check -p mang-app --target x86_64-pc-windows-gnu` → **0 error**（1m08s，mingw-w64 工具链 apt download 提取树） | 2026-11-11，R27 Windows 面静态检查（check 不链接——链接与真机运行面归 Windows CI/真机线，AGENTS §13 如实标注） |
 | Windows（真机/CI） | **未实测**——cfg(windows) 分支断言（R14 windows identity / R2 盘符样本 / verbatim 前缀）在 Windows CI 真跑，本轮无 Windows 真机 | 缺口如实标注：Windows 绝对值归 Lead 复核线（AGENTS §13：不以未跑为通过） |
 
 ## 四、防漂移契约（本清单如何被守护）

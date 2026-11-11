@@ -1469,5 +1469,68 @@ check(
   "集成自检项缺失"
 );
 
+// R27（#47 / #88 Q2）：★漏标明细可见面 + 导出前兜底。三面：
+// ①壳侧 bid.star_gaps 读面（dispatch_with get_star_coverage 明细透出 +
+//   text 截断防膨胀）②UI coverage 面板明细入口 + bid-star-gate 排版
+// ③导出兜底（star_missing>0 拦截 + 「已知悉仍导出」明示勾选解锁 +
+//   确认一次性——导出完成重置）。
+check(
+  "R27 壳侧：bid.star_gaps 注册 + dispatch_with 真实工具面",
+  /"bid\.star_gaps" => crate::bid::star_gaps\(&ws, &self\.bid, &a\),/.test(ipcRs)
+    && /tool: "get_star_coverage"\.to_string\(\),/.test(bidRs)
+    && /const STAR_GAP_TEXT_MAX_CHARS: usize = 120;/.test(bidRs),
+  "★漏标明细命令被删/绕开工具面（壳自写判定 = 分叉真源）"
+);
+check(
+  "R27 壳侧：gaps 只含有漏标文件 + checked_files 分母诚实 + all_clear 旗",
+  /无漏标件不进 gaps（计数仍入汇总——checked_files 分母诚实）/.test(bidRs)
+    && /"checked_files": checked/.test(bidRs)
+    && /"all_clear": g_miss == 0/.test(bidRs),
+  "gaps 全量回显（IPC 膨胀）或分母只数漏标件（看不见当没有）"
+);
+check(
+  "R27 壳侧：真件★链 + DRAFT 态透传双测试在场",
+  /fn star_gaps_reads_real_missing_detail\(\)/.test(bidRs)
+    && /fn star_gaps_state_gate_before_import\(\)/.test(bidRs),
+  "R27 壳侧回归门被删"
+);
+check(
+  "R27 selftest：未导入件空态（checked=0 + all_clear）",
+  selftestRs.includes("bid.star_gaps(未导入件空态)"),
+  "集成自检项缺失"
+);
+check(
+  "R27 UI：state 缓存 + loadBidStarGaps 拉取（bid.star_gaps IPC）",
+  /bidStarGaps: \{ status: "idle", data: null, error: "" \}/.test(app)
+    && /await ipc\("bid\.star_gaps", \{\}, 6e4\)/.test(app),
+  "明细缓存/拉取被删（coverage 计数孤岛回潮）"
+);
+check(
+  "R27 UI：coverage ★卡明细入口动作 + 明细展开区",
+  /data-bid-act="star-gaps-detail"/.test(app)
+    && /else if \(act === "star-gaps-detail"\) ui\.loadBidStarGaps\(true\);/.test(app)
+    && /★漏标明细展开区/.test(app),
+  "明细入口/展开区被删（用户看得到漏标在哪的通路断）"
+);
+check(
+  "R27 UI：导出兜底拦截（查询前置 + miss>0 早退亮卡）",
+  /#47 R27（#88 Q2「能强制阻断导出吗」）/.test(app)
+    && /if \(!x\.starAck\) \{[\s\S]{0,600}await ui\.loadBidStarGaps\(true\);[\s\S]{0,400}return; \/\/ 拦截：确认卡亮清单，勾选后才走真导出/.test(app),
+  "导出直通（★漏标拦截被删——#88 Q2 兜底失效）"
+);
+check(
+  "R27 UI：拦截卡 + 明示勾选 + 按钮门控 + 确认一次性",
+  /已知悉上述 <b>' \+ fmtChars\(x\.starGateMiss\) \+ "<\/b> 处★漏标，仍要继续导出（漏标责任自负）/.test(app)
+    && /x\.exporting \|\| \(x\.starGateMiss > 0 && !x\.starAck\) \? " disabled" : ""/.test(app)
+    && /R27：★确认一次性——导出完成后重置，下次导出重新面对清单[\s\S]{0,60}x\.starAck = false;/.test(app),
+  "勾选明示/按钮门控/一次性重置某面丢失（导出拦截形同虚设）"
+);
+check(
+  "R27 样式：bid-star-gate-* 系在场（拦截卡 + 明细卡共用）",
+  /\.bid-star-gate-ack \{/.test(css) && /\.bid-star-gate-item \{/.test(css)
+    && /\.bid-star-gate-file \{/.test(css),
+  "★漏标卡排版类被删（拦截卡/明细卡裸奔）"
+);
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

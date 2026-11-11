@@ -615,6 +615,27 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         format!("total={} next={}", bc["coverage"]["total_blocks"], bc["coverage"]["next"]),
     );
 
+    // #47 R27（#88 Q2）：★漏标明细读面（与 coverage 同种子——files 空的
+    // 诚实口径：checked=0 + all_clear + gaps 空，不是错误；真件 8★ 明细
+    // 链在 bid.rs 单测 star_gaps_reads_real_missing_detail 双保险）
+    let resp = call(&ctx, json!({"id":"t-bid-sg1","cmd":"bid.star_gaps"}));
+    let bsg = result(&resp);
+    r.check(
+        "bid.star_gaps(未导入件空态)",
+        resp["ok"] == json!(true)
+            && bsg["present"] == json!(true)
+            && bsg["project"]["name"] == json!("selftest 项目")
+            && bsg["star_gaps"]["files"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && bsg["star_gaps"]["checked_files"] == json!(0)
+            && bsg["star_gaps"]["all_clear"] == json!(true)
+            && bsg["star_gaps"]["total"]["star_missing"] == json!(0),
+        format!(
+            "checked={} miss={}",
+            bsg["star_gaps"]["checked_files"],
+            bsg["star_gaps"]["total"]["star_missing"]
+        ),
+    );
+
     // ---- #313 批 C：自评数据面（bid.quality / bid.score）
     // 早态（REQUIREMENTS_EXTRACTED，矩阵未建）→ 工具面 E_STATE 透传为
     // 壳侧 `state` 码（UI 据此分支「尚未开放」引导卡，不是故障）

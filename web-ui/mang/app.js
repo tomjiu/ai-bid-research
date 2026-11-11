@@ -855,9 +855,15 @@
       status: "idle", report: null, error: "", code: "", ts: 0,
       exporting: false, format: "docx", path: "", darkBid: false, bidderName: "",
       done: null, doneError: "", doneCode: "",
+      // #47 R27：★漏标导出兜底（starGateMiss>0 亮拦截卡；starAck 为
+      // 「已知悉仍导出」明示勾选——仅本次导出会话有效，完成即重置）
+      starGateMiss: 0, starAck: false,
     },
     // #20 分包视图（bid.packages 只读拉取缓存——工作台「分包」页签用）
     bidPackages: { status: "idle", data: null, error: "" },
+    // #47 R27（#88 Q2）：★漏标明细缓存（bid.star_gaps 只读——覆盖报告
+    // 面板明细入口与导出兜底确认共用一份数据，不重复拉）
+    bidStarGaps: { status: "idle", data: null, error: "" },
     // #603 批 C：补遗台账 + 豁免写面（gates 面板补遗门接线用）
     bidAddenda: { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false },
   };
@@ -1377,6 +1383,8 @@
         else if (act === "validate-export") ui.openBidWorkbench("export");
         else if (act === "refresh-validate") ui.loadBidValidate(true);
         else if (act === "confirm-export") ui.runBidExport();
+        // R27（#88 Q2）：★漏标明细入口（coverage 面板 / 明细错误卡重试共用）
+        else if (act === "star-gaps-detail") ui.loadBidStarGaps(true);
         else if (act === "reveal-artifact") ui.revealBidArtifact();
         else if (act === "workbench-packages") ui.openBidWorkbench("packages");
 
@@ -2179,6 +2187,41 @@
     if (warnings.length) {
       html += bidQualList("警告（MINOR · " + warnings.length + "）", warnings.map(String));
     }
+    // ---- #47 R27（#88 Q2）：★漏标导出兜底卡（starGateMiss>0 且未勾选
+    // 确认时置顶亮出——明细前 8 条 + 计数 + 「已知悉仍导出」明示勾选；
+    // 未勾选时导出按钮禁用。全绿/未决态不渲染本卡）----
+    if (x.starGateMiss > 0 && !x.starAck) {
+      const sg = (state.bidStarGaps.data && state.bidStarGaps.data.star_gaps) || {};
+      const gfiles = Array.isArray(sg.files) ? sg.files : [];
+      let gateHtml =
+        '<div class="bid-card bid-star-gate" data-kind="star-gate"><div class="bid-card-title">'
+        + ICON.warning + " ★漏标拦截——导出前必读（#88 兜底）</div>"
+        + '<div class="bid-star-gate-sub">招标文件有 <b>' + fmtChars(x.starGateMiss) + "</b> 处真值★实质性条款未捕获（一条不响应即响应无效）。清单如下，建议先去覆盖报告面板逐条核对补抽：</div>"
+        + '<div class="bid-star-gate-list">';
+      for (const gf of gfiles) {
+        const miss = Number(gf.star_missing || 0);
+        if (!miss) continue;
+        gateHtml += '<div class="bid-star-gate-file"><div class="bid-star-gate-fname">' + esc(gf.file_name || gf.file_id || "") + " · 漏标 " + fmtChars(miss) + " / 真值 " + fmtChars(Number(gf.star_truth || 0)) + "</div>";
+        const ms = Array.isArray(gf.missing) ? gf.missing.slice(0, 8) : [];
+        for (const m of ms) {
+          gateHtml += '<div class="bid-star-gate-item"><span class="bid-star-gate-loc">块 ' + fmtChars(Number(m.block_idx || 0)) + (m.page ? " · 第" + fmtChars(Number(m.page)) + "页" : "") + (m.line ? " 行" + fmtChars(Number(m.line)) : "") + "</span><span class=\"bid-star-gate-text\">" + esc(m.text || "") + "</span><span class=\"bid-star-gate-reason\">" + esc(m.reason || "") + "</span></div>";
+        }
+        if (Array.isArray(gf.missing) && gf.missing.length > 8) {
+          gateHtml += '<div class="bid-star-gate-more">… 共 ' + fmtChars(gf.missing.length) + " 条明细，完整清单见覆盖报告面板「★条款覆盖」</div>";
+        }
+        if (gf.missing_truncated) {
+          gateHtml += '<div class="bid-star-gate-more">⚠ 明细超 100 条被工具面截断——补标后重跑抽取再查</div>';
+        }
+        if (Array.isArray(gf.warnings) && gf.warnings.length) {
+          gateHtml += '<div class="bid-star-gate-warn">' + gf.warnings.map((w) => esc(String(w))).join("<br>") + "</div>";
+        }
+        gateHtml += "</div>";
+      }
+      gateHtml +=
+        '<label class="bid-star-gate-ack"><input type="checkbox" id="bid-star-ack" /> 已知悉上述 <b>' + fmtChars(x.starGateMiss) + "</b> 处★漏标，仍要继续导出（漏标责任自负）</label>"
+        + "</div></div>";
+      html += gateHtml;
+    }
     // ---- 导出表单（看完报告确认后落盘）----
     const proj = (state.bid.data && state.bid.data.project) || {};
     const defName = (proj.name || "标书").replace(/[\\/:*?"<>|]/g, "_");
@@ -2194,8 +2237,10 @@
       + '<label class="bid-export-field"' + (x.darkBid ? "" : ' style="display:none"') + ' id="bid-export-bidder-row"><span>投标人名称（暗标脱敏用）</span>'
       + '<input type="text" id="bid-export-bidder" value="' + esc(x.bidderName) + '" placeholder="公司全称" /></label>'
       + '<div class="bid-export-actions">'
-      + '<button class="btn btn-primary" data-bid-act="confirm-export"' + (x.exporting ? " disabled" : "") + ">" + (x.exporting ? "正在导出…" : ICON.export + " 导出成品文档") + "</button>"
-      + (r.ok ? "" : '<span class="bid-qual-warn">' + ICON.warning + " 校验未通过——导出前置门可能拦截，建议先按缺陷清单修复</span>")
+      + '<button class="btn btn-primary" data-bid-act="confirm-export"' + (x.exporting || (x.starGateMiss > 0 && !x.starAck) ? " disabled" : "") + ">" + (x.exporting ? "正在导出…" : ICON.export + " 导出成品文档") + "</button>"
+      + (x.starGateMiss > 0 && !x.starAck
+        ? '<span class="bid-qual-warn">' + ICON.warning + " ★漏标未确认——勾选上方「已知悉仍导出」后解锁导出按钮</span>"
+        : r.ok ? "" : '<span class="bid-qual-warn">' + ICON.warning + " 校验未通过——导出前置门可能拦截，建议先按缺陷清单修复</span>")
       + "</div></div></div>";
     // ---- 产物回显 / 导出失败引导 ----
     if (x.done) {
@@ -2233,6 +2278,12 @@
       renderBidWorkbenchIfOpen();
     });
     if (pathInput) pathInput.addEventListener("change", () => { x.path = pathInput.value.trim(); });
+    // R27：★漏标确认勾选——解锁导出按钮（明示知情，仅本次会话有效）
+    const starAckChk = panel.querySelector("#bid-star-ack");
+    if (starAckChk) starAckChk.addEventListener("change", () => {
+      x.starAck = starAckChk.checked;
+      renderBidWorkbenchIfOpen();
+    });
     if (darkChk) darkChk.addEventListener("change", () => {
       x.darkBid = darkChk.checked;
       const row = panel.querySelector("#bid-export-bidder-row");
@@ -3388,8 +3439,12 @@
       + '<div class="bid-cov-bar"><span class="ok" style="width:' + pJ + '%"></span><span class="ex" style="width:' + pE + '%"></span><span class="un" style="width:' + (total ? 100 - pJ - pE : 0) + '%"></span></div>'
       + "</div>"
       // ---- ★条款覆盖卡（#285：真值★已捕获/真值★——「一条不响应即响应无效」）
+      // R27（#88 Q2）：miss>0 加「查看漏标明细」入口——bid.star_gaps 逐文件
+      // 明细（块位/页行/原文摘录/漏标原因），不再是计数孤岛
       + '<div class="bid-cov-card">'
-      + '<div class="bid-cov-card-title">★条款覆盖（#285 漏标检测）</div>'
+      + '<div class="bid-cov-card-title">★条款覆盖（#285 漏标检测）'
+      + (miss > 0 ? ' <button class="btn btn-sm" data-bid-act="star-gaps-detail" title="逐文件查看漏标明细（块位/页行/原文/原因——bid.star_gaps）">漏标明细</button>' : "")
+      + "</div>"
       + (truth > 0
         ? '<div class="bid-cov-star-row"><span class="bid-cov-star-big">' + fmtChars(capt) + '<i>/' + fmtChars(truth) + "</i></span>"
           + '<div class="bid-cov-star-meta">'
@@ -3400,6 +3455,39 @@
         : '<div class="view-state"><div class="view-state-title">无★实质性条款</div><div>招标文件字面无真值★——无漏标检测面</div></div>')
       + "</div>"
       + "</div>";
+
+    // ---- R27：★漏标明细展开区（按钮触发拉取 bid.star_gaps 后渲染）----
+    if (state.bidStarGaps.status === "loading") {
+      html += '<div class="view-state"><div class="view-spinner"></div><div>正在读取★漏标明细…</div></div>';
+    } else if (state.bidStarGaps.status === "ready" && state.bidStarGaps.data) {
+      const sg = state.bidStarGaps.data.star_gaps || {};
+      const gfiles = Array.isArray(sg.files) ? sg.files : [];
+      if (!gfiles.length) {
+        html += '<div class="bid-card"><div class="bid-card-sub">' + ICON.check + " 已检 " + fmtChars(Number(sg.checked_files || 0)) + " 个文件——无★漏标（全覆盖）</div></div>";
+      } else {
+        html += '<div class="bid-card bid-star-gate" data-kind="star-detail"><div class="bid-card-title">★漏标明细（' + fmtChars(Number(sg.total && sg.total.star_missing || 0)) + " 处 / " + fmtChars(gfiles.length) + " 个文件）</div>";
+        for (const gf of gfiles) {
+          html += '<div class="bid-star-gate-file"><div class="bid-star-gate-fname">' + esc(gf.file_name || gf.file_id || "") + " · 漏标 " + fmtChars(Number(gf.star_missing || 0)) + " / 真值 " + fmtChars(Number(gf.star_truth || 0)) + "</div>";
+          const ms = Array.isArray(gf.missing) ? gf.missing : [];
+          for (const m of ms) {
+            html += '<div class="bid-star-gate-item"><span class="bid-star-gate-loc">块 ' + fmtChars(Number(m.block_idx || 0)) + (m.page ? " · 第" + fmtChars(Number(m.page)) + "页" : "") + (m.line ? " 行" + fmtChars(Number(m.line)) : "") + "</span><span class=\"bid-star-gate-text\">" + esc(m.text || "") + "</span><span class=\"bid-star-gate-reason\">" + esc(m.reason || "") + "</span></div>";
+          }
+          if (gf.missing_truncated) {
+            html += '<div class="bid-star-gate-more">⚠ 明细超 100 条被工具面截断——补标后重跑抽取再查</div>';
+          }
+          if (Array.isArray(gf.warnings) && gf.warnings.length) {
+            html += '<div class="bid-star-gate-warn">' + gf.warnings.map((w) => esc(String(w))).join("<br>") + "</div>";
+          }
+          if (gf.next) {
+            html += '<div class="bid-star-gate-next">' + esc(gf.next) + "</div>";
+          }
+          html += "</div>";
+        }
+        html += "</div>";
+      }
+    } else if (state.bidStarGaps.status === "error") {
+      html += '<div class="bid-card"><div class="bid-card-sub">' + ICON.warning + " ★漏标明细读取失败：" + esc(state.bidStarGaps.error || "未知") + '</div><div class="bid-card-actions"><button class="btn btn-sm" data-bid-act="star-gaps-detail">重试</button></div></div>';
+    }
 
     // ---- 逐文件覆盖表（行展开：by_verdict 分账 + 未判定区间明细 + ★引导）
     if (!files.length) {
@@ -5623,6 +5711,27 @@
         renderBidWorkbenchIfOpen();
         return;
       }
+      // #47 R27（#88 Q2「能强制阻断导出吗」）：导出前★漏标兜底——UI 呈现
+      // 义务（壳零裁决：工具面 bid.export 语义不动，本层只让漏标「看得见
+      // 才走得动」）。star_missing>0 时先拦：明细确认卡 + 「已知悉仍导出」
+      // 明示勾选（x.starAck 仅本次导出会话有效——导出完成/换项目即重置，
+      // 下次导出重新面对清单）。查询失败（早态/未建项）不拦：工具面导出
+      // 前置门自己裁决，★面不越权（诚实面：查不到 ≠ 无漏标，卡片会亮出
+      // 未决态提示）。
+      if (!x.starAck) {
+        try {
+          await ui.loadBidStarGaps(true);
+        } catch (_e) { /* loadBidStarGaps 自吞错误入缓存——未决态不拦 */ }
+        const sg = (state.bidStarGaps.data && state.bidStarGaps.data.star_gaps) || null;
+        const miss = sg ? Number(sg.total && sg.total.star_missing || 0) : 0;
+        if (sg && miss > 0) {
+          x.starGateMiss = miss;
+          x.exporting = false;
+          renderBidWorkbenchIfOpen();
+          return; // 拦截：确认卡亮清单，勾选后才走真导出
+        }
+        x.starGateMiss = 0;
+      }
       x.exporting = true;
       x.doneError = "";
       x.doneCode = "";
@@ -5637,6 +5746,8 @@
         // 导出成功即重拉项目面（状态推进 EXPORTED、门台账可能翻新）
         ui.loadBid(true);
         if (state.bidGates.status !== "idle") ui.loadBidGates(true);
+        // R27：★确认一次性——导出完成后重置，下次导出重新面对清单
+        x.starAck = false;
       } catch (err) {
         x.done = null;
         x.doneCode = (err && err.code) || "";
@@ -5655,6 +5766,33 @@
       } catch (err) {
         ui.setStatus({ message: "定位产物失败：" + ((err && err.message) || "未知") });
       }
+    },
+    /** #47 R27（#88 Q2「用户能看到吗」）：拉取★漏标明细（bid.star_gaps
+     * 只读——逐文件 missing 明细 + warnings + next 引导）。coverage 面
+     * 板明细入口与导出兜底共用。E_STATE/not_found 由调用方按引导卡
+     * 分支（本函数只缓存，不弹横幅）。 */
+    async loadBidStarGaps(force) {
+      if (!state.bridge) return;
+      if (state.bidStarGaps.status === "loading" && !force) return;
+      state.bidStarGaps.status = "loading";
+      state.bidStarGaps.error = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.star_gaps", {}, 6e4);
+        if (r && r.present) {
+          state.bidStarGaps.data = r;
+          state.bidStarGaps.status = "ready";
+        } else {
+          state.bidStarGaps.data = null;
+          state.bidStarGaps.status = "error";
+          state.bidStarGaps.error = "当前工作区无★漏标数据";
+        }
+      } catch (err) {
+        state.bidStarGaps.data = null;
+        state.bidStarGaps.status = "error";
+        state.bidStarGaps.error = err && (err.message || err.code) || "bid.star_gaps 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
     },
     /** #20：拉取分包清单（bid.packages 只读——工作台「分包」页签）。 */
     async loadBidPackages(force) {
