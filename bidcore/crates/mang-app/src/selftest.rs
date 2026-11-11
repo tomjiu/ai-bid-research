@@ -722,6 +722,53 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         format!("{}", err_code(&resp)),
     );
 
+    // ---- #47 R26（递归目录拖入）：目录落位按原结构（rel 携带层级前缀）+
+    //      白名单分账 + 截断旗不亮（预算内）+ 幂等重放零复制
+    let dir_src = scratch_dir().join("R26材料包");
+    std::fs::create_dir_all(dir_src.join("正文")).unwrap();
+    std::fs::write(dir_src.join("正文").join("技术标.docx"), b"PK\x03\x04r26-dir-payload").unwrap();
+    std::fs::write(dir_src.join("说明书.txt"), b"not importable").unwrap();
+    let resp = call(
+        &ctx,
+        json!({"id":"t-bid-ing26","cmd":"bid.ingest_drop","paths":[dir_src.to_string_lossy()]}),
+    );
+    let ing26 = result(&resp);
+    r.check(
+        "bid.ingest_drop(目录递归落位)",
+        resp["ok"] == json!(true)
+            && ing26["copied"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+            && ing26["copied"][0]["rel"].as_str()
+                == Some("R26材料包/正文/技术标.docx")
+            && ing26["skipped"]
+                .as_array()
+                .map(|a| a.iter().any(|s| s["reason"] == json!("ext_blocked")))
+                .unwrap_or(false)
+            && ing26["truncated"] == json!(false),
+        format!(
+            "rel={:?} truncated={}",
+            ing26["copied"][0]["rel"].as_str(),
+            ing26["truncated"]
+        ),
+    );
+    let resp = call(
+        &ctx,
+        json!({"id":"t-bid-ing26b","cmd":"bid.ingest_drop","paths":[dir_src.to_string_lossy()]}),
+    );
+    let ing26b = result(&resp);
+    r.check(
+        "bid.ingest_drop(目录重拖幂等)",
+        resp["ok"] == json!(true)
+            && ing26b["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ing26b["skipped"]
+                .as_array()
+                .map(|a| a.iter().any(|s| s["reason"] == json!("already_present")))
+                .unwrap_or(false),
+        format!(
+            "copied={} skipped={}",
+            ing26b["copied"].as_array().map(|a| a.len()).unwrap_or(0),
+            ing26b["skipped"].as_array().map(|a| a.len()).unwrap_or(0)
+        ),
+    );
     // ---- #47 R8（#19 拖拽导入）：ingest_drop 落位（壳拖入路径 → 复制进工作区根；
     //      不依赖 db.json——先拖文件再建项合法；导入仍走 bid.import_files 向导确认）
     let drop_src = scratch_dir().join("招标文件.docx");

@@ -1673,6 +1673,9 @@ pub fn ingest_drop(
     let root = ws.root_canonical().to_path_buf();
     let mut copied: Vec<Value> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
+    // R26（#47）：目录拖入的诚实截断旗（预算/深度任一触顶即亮——
+    // 与 fs.tree R18 同口径：看不见 ≠ 没有）
+    let mut dir_truncated = false;
     for (i, pv) in paths.iter().enumerate() {
         let raw = match pv.as_str() {
             Some(s) => s.to_string(),
@@ -1685,16 +1688,11 @@ pub fn ingest_drop(
             }
         };
         let src = std::path::Path::new(&raw);
-        // 源必须存在且是文件（目录拖入——R17+ 递归目录导入再做，先明拒）
-        match std::fs::metadata(src) {
-            Ok(m) if m.is_file() => {}
-            Ok(_) => {
-                skipped.push(json!({
-                    "path": raw, "reason": "is_dir",
-                    "detail": "目录暂不支持（R17+ 递归目录导入）"
-                }));
-                continue;
-            }
+        // R26（#47）：目录拖入——递归展开落位（此前明拒 is_dir，代码登记
+        // 债「R17+ 递归目录导入再做」）。符号链接不跟（写路径保守面：
+        // 循环链接免疫；链到目录/文件的一律 skipped 如实报，不猜）。
+        let meta = match std::fs::symlink_metadata(src) {
+            Ok(m) => m,
             Err(_) => {
                 skipped.push(json!({
                     "path": raw, "reason": "not_found",
@@ -1702,119 +1700,264 @@ pub fn ingest_drop(
                 }));
                 continue;
             }
-        }
-        // 文件名净化：file_name() 去掉路径部分（目录穿越形态在源侧天然
-        // 失效——目标永远是根下的纯文件名）；空名/点名拒
-        let raw_name = match src
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-        {
-            Some(n) if !n.is_empty() && n != "." && n != ".." => n,
-            _ => {
-                skipped.push(json!({
-                    "path": raw, "reason": "bad_args", "detail": "无有效文件名"
-                }));
-                continue;
-            }
         };
-        // R13（#47 平台区分⑥）：落位名 NFC 归一——macOS NFD 形态
-        // （é = e + U+0301）与 NFC 是不同字节串，不归一会出现「视觉
-        // 同名两份」且占位/幂等键错位。归一发生在守卫/白名单/落位
-        // **之前**（守卫与占位键看到的都是 NFC 形态——单一口径）。
-        // CJK/ASCII 两形态字节相同，零影响。
-        let name = paths::nfc(&raw_name);
-        // 后缀白名单（单一真源 INGEST_DROP_EXTS——与 UI 的 BID_IMPORT_EXTS
-        // 同源口径：docx/xlsx/pdf/doc）。R17（#47）
-        // ① 与解析面严格对齐——bid-tools service.rs 的导入路由只认
-        //   docx/xlsx/pdf/doc 四类（其余扩展名落 `parse_file` 的
-        //   「不支持的文件类型」显式拒）；旧表里的 `.ods` 能落位但导入
-        //   必失败，违背向导白名单「不列必败件免得用户白跑一趟」的设计
-        //   意图——全链（UI 分拣 / 壳落位 / 解析路由）三面对齐后摘除。
-        // ② 源级回归双向钉死：壳侧（ingest_ods_blocked）+ UI 侧
-        //   （bid-panels BID_IMPORT_EXTS）各自锚定，改表必同步触雷。
-        let lower = name.to_lowercase();
-        if !INGEST_DROP_EXTS
-            .iter()
-            .any(|e| lower.ends_with(e))
-        {
+        if meta.file_type().is_symlink() {
             skipped.push(json!({
-                "path": raw, "reason": "ext_blocked",
-                "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc）")
+                "path": raw, "reason": "is_symlink",
+                "detail": "符号链接不递归（写路径保守面——循环链接免疫；请拖真实目录）"
             }));
             continue;
         }
-        // R10（#47 平台区分③）：基名跨平台守卫——Linux 拖入 CON.docx 能落
-        // 位，但项目库拷到 Windows 即失效。拖拽批次一件非法不毁整批
-        // （与 ext_blocked 同款分账口径：skipped + reason，不按错误回）
-        if let Err(why) = crate::paths::guard_portable_basename(&name) {
-            skipped.push(json!({
-                "path": raw, "reason": "name_not_portable",
-                "detail": why
-            }));
-            continue;
-        }
-        // R12（#47 平台区分⑤）：MAX_PATH 预检——落位路径（root + 分隔符 +
-        // 基名）超 259 字符在未开 LongPathsEnabled 的 Windows 上创建即
-        // 失败；Linux 能落但项目库拷 Win 即失效（同 R10 可迁移性口径，
-        // 双平台同拒）
-        {
-            let full_len = root.to_string_lossy().chars().count() + 1 + name.chars().count();
-            if full_len > 259 {
+        if meta.is_dir() {
+            let dir_base = match src.file_name().map(|n| n.to_string_lossy().into_owned()) {
+                Some(n) if !n.is_empty() && n != "." && n != ".." => crate::paths::nfc(&n),
+                _ => {
+                    skipped.push(json!({
+                        "path": raw, "reason": "bad_args", "detail": "无有效目录名"
+                    }));
+                    continue;
+                }
+            };
+            // 目录名同样过可移植守卫（R10 口径：目录名 CON 同罪）
+            if let Err(why) = crate::paths::guard_portable_basename(&dir_base) {
                 skipped.push(json!({
-                    "path": raw, "reason": "path_too_long",
-                    "detail": format!("落位路径 {full_len} 字符超 Windows MAX_PATH（259）——缩短文件名或工作区层级")
+                    "path": raw, "reason": "name_not_portable",
+                    "detail": format!("目录名不跨平台：{why}")
                 }));
                 continue;
             }
-        }
-        // 同名幂等/冲突后缀
-        match resolve_ingest_dst(&root, &name, src) {
-            Ok(IngestSlot::Free(dst)) => {
-                // rel = 实际落位名（冲突后缀形态——原名只作入口键）
-                let landed = dst
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| name.clone());
-                match std::fs::copy(src, &dst) {
-                    Ok(size) => copied.push(json!({
-                        "rel": landed, "name": landed, "size": size
-                    })),
-                    Err(e) => skipped.push(json!({
-                        "path": raw, "reason": "io",
-                        "detail": format!("复制失败：{e}")
-                    })),
-                }
+            let mut budget = INGEST_DIR_FILE_CAP;
+            let mut files: Vec<(std::path::PathBuf, Vec<String>)> = Vec::new();
+            if walk_drop_dir(src, INGEST_DIR_DEPTH_CAP, &mut budget, &mut files, &mut Vec::new()) {
+                dir_truncated = true;
             }
-            // 目标已存在且内容相同——幂等跳过（不是错误）。
-            // R11（#47 平台区分④）：Dup 携带实际命中的占位——CI 变体或
-            // 后缀占位都指名（用户拖 a.docx，同内容的在场件可能是
-            // A.docx 或 原名-2.docx——说清楚，不猜）
-            Ok(IngestSlot::Dup(slot)) => {
-                let present_name = slot
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| name.clone());
-                let is_variant = present_name != name;
-                let detail = if is_variant {
-                    format!("同内容文件已在工作区（占位 {present_name}——Windows 大小写同占位/后缀位，幂等跳过）")
-                } else {
-                    "同名同内容文件已在工作区（幂等跳过）".to_string()
-                };
-                skipped.push(json!({
-                    "path": raw, "reason": "already_present",
-                    "detail": detail
-                }));
+            for (fsrc, segs) in files {
+                ingest_one_file(&root, &fsrc, &dir_base, &segs, &mut copied, &mut skipped);
             }
-            Err(detail) => skipped.push(json!({
-                "path": raw, "reason": "io", "detail": detail
-            })),
+            continue;
         }
+        if !meta.is_file() {
+            skipped.push(json!({
+                "path": raw, "reason": "bad_args",
+                "detail": "只支持文件或目录（设备/特殊节点不处理）"
+            }));
+            continue;
+        }
+        // 文件直拖：落位 = 根下纯基名（R8-R14 行为零变化）
+        ingest_one_file(&root, src, "", &[], &mut copied, &mut skipped);
     }
     Ok(json!({
         "present": true,
         "copied": copied,
         "skipped": skipped,
+        "truncated": dir_truncated,
     }))
+}
+
+/// R26（#47）：拖入目录的递归预算（深度对齐 fs.tree 默认 8；文件数上限
+/// 200——超限亮 truncated 旗并停扫，不静默截断）。
+const INGEST_DIR_DEPTH_CAP: usize = 8;
+const INGEST_DIR_FILE_CAP: usize = 200;
+
+/// R26（#47）：目录递归收集（symlink_metadata 判型——符号链接不跟）。
+/// 收集时逐段 NFC 归一 + 可移植守卫（目录段 CON 同罪，失败段连同子树
+/// 不收）。返回 truncated（预算/深度触顶）。
+fn walk_drop_dir(
+    dir: &std::path::Path,
+    depth_left: usize,
+    budget: &mut usize,
+    out: &mut Vec<(std::path::PathBuf, Vec<String>)>,
+    prefix: &mut Vec<String>,
+) -> bool {
+    if depth_left == 0 {
+        return true; // 深度触顶（诚实旗）
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return false; // 单目录读不到不影响整批（复制阶段如实报）
+    };
+    let mut truncated = false;
+    for ent in rd.flatten() {
+        let path = ent.path();
+        let Ok(m) = std::fs::symlink_metadata(&path) else { continue };
+        if m.file_type().is_symlink() {
+            continue; // 符号链接不跟（写路径保守面）
+        }
+        let name = ent.file_name().to_string_lossy().into_owned();
+        if m.is_dir() {
+            let seg = crate::paths::nfc(&name);
+            if crate::paths::guard_portable_basename(&seg).is_ok() && !seg.starts_with('.') {
+                prefix.push(seg);
+                truncated |= walk_drop_dir(&path, depth_left - 1, budget, out, prefix);
+                prefix.pop();
+            }
+            continue;
+        }
+        if !m.is_file() {
+            continue;
+        }
+        if *budget == 0 {
+            return true; // 文件数触顶
+        }
+        *budget -= 1;
+        let mut segs = prefix.clone();
+        segs.push(crate::paths::nfc(&name));
+        out.push((path, segs));
+    }
+    truncated
+}
+
+/// R26（#47）：单文件落位（文件直拖与目录递归共用守卫链——文件名净化/
+/// NFC/白名单/基名守卫/MAX_PATH/占位解析/复制）。`dir_base` 空 = 文件
+/// 直拖（根下纯基名，行为与既有 R8-R14 零变化）；否则落位
+/// `root/dir_base/<segs...>`（segs 末位是文件自身名，目录段已在 walk 时
+/// 逐段 NFC + 守卫）。
+fn ingest_one_file(
+    root: &std::path::Path,
+    src: &std::path::Path,
+    dir_base: &str,
+    segs: &[String],
+    copied: &mut Vec<Value>,
+    skipped: &mut Vec<Value>,
+) {
+    let raw = src.to_string_lossy().into_owned();
+    // 文件名净化：file_name() 去掉路径部分（目录穿越形态在源侧天然
+    // 失效——目标落位由 dir_base/segs 组合，不取源路径段）；空名/点名拒
+    let raw_name = match src
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+    {
+        Some(n) if !n.is_empty() && n != "." && n != ".." => n,
+        _ => {
+            skipped.push(json!({
+                "path": raw, "reason": "bad_args", "detail": "无有效文件名"
+            }));
+            return;
+        }
+    };
+    // R13（#47 平台区分⑥）：落位名 NFC 归一——macOS NFD 形态
+    // （é = e + U+0301）与 NFC 是不同字节串，不归一会出现「视觉
+    // 同名两份」且占位/幂等键错位。归一发生在守卫/白名单/落位
+    // **之前**（守卫与占位键看到的都是 NFC 形态——单一口径）。
+    // CJK/ASCII 两形态字节相同，零影响。
+    let name = paths::nfc(&raw_name);
+    // 后缀白名单（单一真源 INGEST_DROP_EXTS——与 UI 的 BID_IMPORT_EXTS
+    // 同源口径：docx/xlsx/pdf/doc）。R17（#47）
+    // ① 与解析面严格对齐——bid-tools service.rs 的导入路由只认
+    //   docx/xlsx/pdf/doc 四类（其余扩展名落 `parse_file` 的
+    //   「不支持的文件类型」显式拒）；旧表里的 `.ods` 能落位但导入
+    //   必失败，违背向导白名单「不列必败件免得用户白跑一趟」的设计
+    //   意图——全链（UI 分拣 / 壳落位 / 解析路由）三面对齐后摘除。
+    // ② 源级回归双向钉死：壳侧（ingest_ods_blocked）+ UI 侧
+    //   （bid-panels BID_IMPORT_EXTS）各自锚定，改表必同步触雷。
+    let lower = name.to_lowercase();
+    if !INGEST_DROP_EXTS.iter().any(|e| lower.ends_with(e)) {
+        skipped.push(json!({
+            "path": raw, "reason": "ext_blocked",
+            "detail": format!("{name} 不在导入白名单（docx/xlsx/pdf/doc）")
+        }));
+        return;
+    }
+    // R10（#47 平台区分③）：基名跨平台守卫——Linux 拖入 CON.docx 能落
+    // 位，但项目库拷到 Windows 即失效。拖拽批次一件非法不毁整批
+    // （与 ext_blocked 同款分账口径：skipped + reason，不按错误回）
+    if let Err(why) = crate::paths::guard_portable_basename(&name) {
+        skipped.push(json!({
+            "path": raw, "reason": "name_not_portable",
+            "detail": why
+        }));
+        return;
+    }
+    // R26（#47）：落位目录组合——文件直拖 = 根（零变化）；目录拖入 =
+    // root/dir_base/<中间段>。rel 前缀用于 copied 回显（`/` 分隔——与
+    // fs.tree / upload_ref 同一口径）。
+    let file_seg = segs.last().cloned().unwrap_or_else(|| name.clone());
+    let rel_prefix: String = if dir_base.is_empty() {
+        String::new()
+    } else {
+        let mut parts: Vec<&str> = Vec::with_capacity(1 + segs.len());
+        parts.push(dir_base);
+        parts.extend(segs[..segs.len().saturating_sub(1)].iter().map(|s| s.as_str()));
+        parts.join("/")
+    };
+    let mut landing_dir = root.to_path_buf();
+    if !dir_base.is_empty() {
+        landing_dir = landing_dir.join(dir_base);
+        for seg in &segs[..segs.len().saturating_sub(1)] {
+            landing_dir = landing_dir.join(seg);
+        }
+    }
+    // R12（#47 平台区分⑤）：MAX_PATH 预检——落位路径（含目录拖入的
+    // 层级深度）超 259 字符在未开 LongPathsEnabled 的 Windows 上创建
+    // 即失败；Linux 能落但项目库拷 Win 即失效（同 R10 可迁移性口径，
+    // 双平台同拒）
+    {
+        let full_len = landing_dir.join(&name).to_string_lossy().chars().count();
+        if full_len > 259 {
+            skipped.push(json!({
+                "path": raw, "reason": "path_too_long",
+                "detail": format!("落位路径 {full_len} 字符超 Windows MAX_PATH（259）——缩短文件名或工作区层级")
+            }));
+            return;
+        }
+    }
+    // 同名幂等/冲突后缀（目录拖入时占位判定收敛在落位目录内）
+    match resolve_ingest_dst(&landing_dir, &name, src) {
+        Ok(IngestSlot::Free(dst)) => {
+            // 目录拖入：落位目录可能尚不存在（首拖）——建目录再复制
+            if !dir_base.is_empty() {
+                if let Err(e) = std::fs::create_dir_all(&landing_dir) {
+                    skipped.push(json!({
+                        "path": raw, "reason": "io",
+                        "detail": format!("建落位目录失败：{e}")
+                    }));
+                    return;
+                }
+            }
+            // rel = 实际落位名（冲突后缀形态——原名只作入口键）；目录
+            // 拖入的 rel 携带层级前缀（R24 口径：深层件结果面消歧依赖）
+            let landed = dst
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| file_seg.clone());
+            let rel_full = if rel_prefix.is_empty() {
+                landed.clone()
+            } else {
+                format!("{rel_prefix}/{landed}")
+            };
+            match std::fs::copy(src, &dst) {
+                Ok(size) => copied.push(json!({
+                    "rel": rel_full, "name": landed, "size": size
+                })),
+                Err(e) => skipped.push(json!({
+                    "path": raw, "reason": "io",
+                    "detail": format!("复制失败：{e}")
+                })),
+            }
+        }
+        // 目标已存在且内容相同——幂等跳过（不是错误）。
+        // R11（#47 平台区分④）：Dup 携带实际命中的占位——CI 变体或
+        // 后缀占位都指名（用户拖 a.docx，同内容的在场件可能是
+        // A.docx 或 原名-2.docx——说清楚，不猜）
+        Ok(IngestSlot::Dup(slot)) => {
+            let present_name = slot
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| name.clone());
+            let is_variant = present_name != name;
+            let detail = if is_variant {
+                format!("同内容文件已在工作区（占位 {present_name}——Windows 大小写同占位/后缀位，幂等跳过）")
+            } else {
+                "同名同内容文件已在工作区（幂等跳过）".to_string()
+            };
+            skipped.push(json!({
+                "path": raw, "reason": "already_present",
+                "detail": detail
+            }));
+        }
+        Err(detail) => skipped.push(json!({
+            "path": raw, "reason": "io", "detail": detail
+        })),
+    }
 }
 
 /// R11（#47 平台区分④）：落位解析结果——Free(落位路径) / Dup(同内容
@@ -2904,8 +3047,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// R8（#47 / #19 拖拽导入）：bid.ingest_drop 全径——复制落位 / 同名
-    /// 幂等（sha 同 skip）/ 同名异内容 -2 后缀 / 白名单与目录守卫 /
+    /// R8 + R26（#47 / #19 拖拽导入）：bid.ingest_drop 全径——复制落位 /
+    /// 同名幂等（sha 同 skip）/ 同名异内容 -2 后缀 / 白名单守卫 /
+    /// **目录递归落位（R26：结构前缀 rel + 建目录）** /
     /// 不依赖 db.json（空工作区也可拖）。
     #[test]
     fn ingest_drop_copies_idempotent_and_guards() {
@@ -2939,17 +3083,28 @@ mod tests {
         assert_eq!(r["ok"], json!(true), "ingest_drop 应成功（分账不按错误回）：{r}");
         let out = r["result"].clone();
         let copied = out["copied"].as_array().unwrap();
-        assert_eq!(copied.len(), 1, "只有 docx 落位：{out}");
+        // R26：目录拖入递归落位——直拖件在根 + 目录件带层级前缀
+        assert_eq!(copied.len(), 2, "直拖 docx + 目录内 docx 落位：{out}");
         assert_eq!(copied[0]["rel"], json!("招标文件.docx"));
+        let dir_base = src_dir.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(
+            copied[1]["rel"],
+            json!(format!("{dir_base}/招标文件.docx")),
+            "目录件 rel 携带层级前缀（/ 分隔）：{out}"
+        );
         assert!(dir.join("招标文件.docx").is_file(), "文件应已复制到工作区根");
+        assert!(
+            dir.join(&dir_base).join("招标文件.docx").is_file(),
+            "目录件应按原结构落位（root/<目录名>/文件）"
+        );
         let skipped = out["skipped"].as_array().unwrap();
-        assert_eq!(skipped.len(), 2, "txt 白名单拒 + 目录拒：{out}");
+        assert_eq!(skipped.len(), 2, "两个 txt 白名单拒（直拖 + 目录内）：{out}");
         let reasons: Vec<&str> = skipped
             .iter()
             .filter_map(|s| s["reason"].as_str())
             .collect();
         assert!(reasons.contains(&"ext_blocked"), "txt 应 ext_blocked：{skipped:?}");
-        assert!(reasons.contains(&"is_dir"), "目录应 is_dir：{skipped:?}");
+        assert_eq!(out["truncated"], json!(false), "预算内不亮截断旗：{out}");
 
         // ② 同文件再拖——同名同内容幂等 skip（不是错误）
         let r = call_args(&ctx, "bid.ingest_drop", json!({
@@ -3187,6 +3342,168 @@ mod tests {
     /// 失败）；import_files 记录的 rel 估算超限 → 请求级 bad_args。
     /// 深嵌套工作区用真目录驱动（不是 mock 长度）。
     #[test]
+    /// R26（#47）：目录拖入递归——嵌套结构落位 / 符号链接不跟 /
+    /// 深度与预算触顶亮截断旗（诚实面：看不见 ≠ 没有）。
+    #[test]
+    fn ingest_drop_recursive_dir_structure_and_budgets() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ingest26");
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+        let src_root =
+            std::env::temp_dir().join(format!("mang-bid-ingest26-src-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&src_root);
+        // 嵌套两层 + 白名单外件 + 符号链接（链回父目录——循环免疫面）
+        std::fs::create_dir_all(src_root.join("子目录").join("深层")).unwrap();
+        std::fs::write(src_root.join("子目录").join("招标文件.docx"), b"PKa").unwrap();
+        std::fs::write(
+            src_root.join("子目录").join("深层").join("资质.pdf"),
+            b"%PDF-1.4 deep",
+        )
+        .unwrap();
+        std::fs::write(src_root.join("子目录").join("note.txt"), b"txt").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&src_root, src_root.join("子目录").join("loop")).unwrap();
+
+        let r = ctx.dispatch(&crate::ipc::Request {
+            id: json!(1),
+            cmd: "bid.ingest_drop".to_string(),
+            body: serde_json::Map::from_iter([(
+                "paths".to_string(),
+                json!([src_root.to_string_lossy()]),
+            )]),
+        });
+        assert_eq!(r["ok"], json!(true), "分账不按错误回：{r}");
+        let out = r["result"].clone();
+        let copied = out["copied"].as_array().unwrap();
+        let rels: Vec<&str> = copied.iter().filter_map(|c| c["rel"].as_str()).collect();
+        let dir_base = src_root.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(
+            rels.len(),
+            2,
+            "白名单内两件（docx + 深层 pdf）落位，txt 拒：{out}"
+        );
+        assert!(
+            rels.contains(&format!("{dir_base}/子目录/招标文件.docx").as_str()),
+            "两层嵌套 rel 前缀：{rels:?}"
+        );
+        assert!(
+            rels.contains(&format!("{dir_base}/子目录/深层/资质.pdf").as_str()),
+            "三层嵌套 rel 前缀：{rels:?}"
+        );
+        assert!(
+            dir.join(&dir_base)
+                .join("子目录")
+                .join("深层")
+                .join("资质.pdf")
+                .is_file(),
+            "落位目录结构真实建出（三层）"
+        );
+        let reasons: Vec<&str> = out["skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|s| s["reason"].as_str())
+            .collect();
+        assert!(
+            reasons.contains(&"ext_blocked"),
+            "目录内 txt 拒：{reasons:?}"
+        );
+        assert_eq!(out["truncated"], json!(false), "预算内零截断：{out}");
+        // 符号链接循环免疫：递归没炸（测试活着跑到底即证）；链接本身不落位
+        assert!(
+            !dir.join(&dir_base).join("子目录").join("loop").exists(),
+            "符号链接不落位"
+        );
+
+        // 幂等重放：整目录重拖 → 零复制 + already_present 分账
+        let r2 = ctx.dispatch(&crate::ipc::Request {
+            id: json!(2),
+            cmd: "bid.ingest_drop".to_string(),
+            body: serde_json::Map::from_iter([(
+                "paths".to_string(),
+                json!([src_root.to_string_lossy()]),
+            )]),
+        });
+        let out2 = r2["result"].clone();
+        assert_eq!(
+            out2["copied"].as_array().unwrap().len(),
+            0,
+            "目录重拖幂等（sha 同 → 零复制）：{out2}"
+        );
+        assert!(
+            out2["skipped"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| s["reason"] == json!("already_present")),
+            "重拖分账 already_present：{out2}"
+        );
+        let _ = std::fs::remove_dir_all(&src_root);
+    }
+
+    /// R26（#47）：目录名可移植守卫（CON 目录同罪）+ 预算触顶亮旗。
+    #[test]
+    fn ingest_drop_dir_name_guard_and_budget_flag() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("ingest26b");
+        let ctx = Ctx::new(ws.clone(), PathBuf::new());
+        let base = std::env::temp_dir().join(format!("mang-bid-ingest26b-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+
+        // ① CON 目录名——双平台可移植守卫拒
+        let con_dir = base.join("CON");
+        std::fs::create_dir_all(&con_dir).unwrap();
+        std::fs::write(con_dir.join("招标文件.docx"), b"PKx").unwrap();
+        let r = ctx.dispatch(&crate::ipc::Request {
+            id: json!(1),
+            cmd: "bid.ingest_drop".to_string(),
+            body: serde_json::Map::from_iter([(
+                "paths".to_string(),
+                json!([con_dir.to_string_lossy()]),
+            )]),
+        });
+        let out = r["result"].clone();
+        assert_eq!(
+            out["skipped"][0]["reason"],
+            json!("name_not_portable"),
+            "CON 目录名拒：{out}"
+        );
+        assert!(!dir.join("CON").exists(), "非法目录名不落位");
+
+        // ② 预算触顶——INGEST_DIR_FILE_CAP+1 件亮 truncated 旗（落位
+        // 前 200 件，第 201 件起不扫——诚实截断，不静默）
+        let big = base.join("大目录");
+        std::fs::create_dir_all(&big).unwrap();
+        for i in 0..=super::INGEST_DIR_FILE_CAP {
+            std::fs::write(
+                big.join(format!("f{i:03}.docx")),
+                format!("PK\x03\x04payload-{i}").as_bytes(),
+            )
+            .unwrap();
+        }
+        let r2 = ctx.dispatch(&crate::ipc::Request {
+            id: json!(2),
+            cmd: "bid.ingest_drop".to_string(),
+            body: serde_json::Map::from_iter([(
+                "paths".to_string(),
+                json!([big.to_string_lossy()]),
+            )]),
+        });
+        let out2 = r2["result"].clone();
+        assert_eq!(
+            out2["copied"].as_array().unwrap().len(),
+            super::INGEST_DIR_FILE_CAP,
+            "预算内 200 件落位：{}",
+            out2["copied"].as_array().unwrap().len()
+        );
+        assert_eq!(
+            out2["truncated"],
+            json!(true),
+            "触顶亮截断旗（诚实面）：{out2}"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     fn ingest_drop_maxpath_guard() {
         let _g = workspace_files_guard();
         // 深工作区：40 层 × 6 字符 ≈ 240 + 根 ~40 = ~280 字符根——必然超限
