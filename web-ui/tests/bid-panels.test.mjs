@@ -611,6 +611,18 @@ check(
   "截断警示样式被删（横幅裸奔）"
 );
 check(
+  "R19 UI：建项警示透出（create warnings 不丢弃）",
+  /r && Array\.isArray\(r\.warnings\) && r\.warnings\.length[\s\S]{0,120}\? r\.warnings\.map\(String\)/.test(app) &&
+    /state\.bidWizard\.createWarnings = \[\]; \/\/ 每次尝试重置/.test(app),
+  "BID_DEADLINE_PAST 等建项警示被静默吞（域层 R15 产出、UI 丢弃——无编辑命令时用户永远看不到）"
+);
+check(
+  "R19 UI：建项警示随向导渲染（warn 态非阻断 + 转义）",
+  /w\.createWarnings\.map\(esc\)\.join\(\"<br>\"\)/.test(app) &&
+    /createWarnBanner[\s\S]{0,300}bid-wiz-error\" data-state=\"warn\"/.test(app),
+  "建项警示横幅渲染被删（或未转义——壳侧消息含尖括号时注入）"
+);
+check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
   "导入参数形状漂移（壳侧围栏锚定依赖 rel 形态）"
