@@ -1611,7 +1611,8 @@ impl BidService {
     /// 5. checkpoint。
     ///
     /// 暗标（anonymize = Some(bidder)）：正文与章标题的公司名 → 「投标人」。
-    /// bidder 为空 → 响亮 warning（无名字可替——用户漏配，不静默）。
+    /// bidder 为空白 → 响亮拒（#88 F-02 残余：无名可脱 = 暗标不可达，
+    /// 九类泄露面无防线不出库——fail-closed，不再退化为明标裸导）。
     pub fn export_document(
         &mut self,
         format: &str,
@@ -1854,11 +1855,17 @@ impl BidService {
         let spec = self.load_or_derive_format_spec(&mut warnings)?;
         let anonymize_effective = match anonymize {
             Some(bidder) if bidder.trim().is_empty() => {
-                warnings.push(
-                    "暗标模式但 bidder_name 为空——正文未做公司名脱敏（补 bidder_name 后重导）"
+                // #88 F-02 残余（审计 P0-1）：anonymize=Some(空白名)——工具层
+                // dark_bid=true 的传递形态。无名可脱 = 暗标不可达：此前仅告警后
+                // 置 None，darkbid 九类泄露面（正文/docProps/修订/批注/EXIF/
+                // 输出路径）整线静默跳过，裸明标件出库。改响亮拒（fail-closed；
+                // 工具层幂等键前已有同款前置拒——服务面直调者同受约，双层防御）。
+                // 匿名化没有「跳过」语义。
+                return Err(ToolError::EUnprocessable {
+                    reason: "暗标模式缺投标人名称（anonymize 为空白）——正文/docProps/修订/批注/EXIF/\
+                             输出路径九类泄露面将无防线，拒绝导出（#88 F-02 残余）；补 bidder_name 后重导"
                         .into(),
-                );
-                None
+                });
             }
             other => other,
         };
