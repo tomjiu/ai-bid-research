@@ -957,6 +957,101 @@ pub fn dark_bid_gate_findings(
     }]
 }
 
+/// #88 审计 F-08/S-4：补遗 DIRTY 门（导出门 1g 消费）。
+///
+/// **两分级**（dirty 的两个来源语义不同——「只打脏不清脏，清除归补遗
+/// 指令处置面与章节重开重走流程」的既定纪律，见 rewrite.rs
+/// mark_dirty_by_requirements 注）：
+/// - **有 pending 指令（`E_SECTION_DIRTY`，BLOCKER）**：补遗登记打脏 +
+///   改写指令未处置——章节正文确证 stale（S-4：按补遗后口径评审 →
+///   负偏离扣分；★条款则废标）。解决通道（均为显式处置，无参数豁免）：
+///   ① `rewrite_section_partial` 逐指令改写（处置完自动清脏）；
+///   ② `dismiss_rewrite_directive` 人工裁定不适用（同样清脏）。
+/// - **无 pending 指令（`W_EVIDENCE_DIRTY`，MINOR 告警）**：证据换版
+///   打脏（#456——支撑章节响应的证据已 Superseded，绑定已迁移但「依据
+///   是换了件的」的失效信号）——正文内容本身未证 stale，不硬拦；
+///   需要重做时走章节重开（reopen_section → 重起草）。
+pub fn dirty_gate_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    for n in store.sections().iter().filter(|n| n.dirty) {
+        let pending = store.pending_rewrite_directives_of(&n.id).len();
+        if pending > 0 {
+            out.push(ValidationFinding {
+                rule_code: "E_SECTION_DIRTY".into(),
+                severity: "BLOCKER",
+                section_id: Some(n.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节 {}（{}）补遗后 DIRTY：{} 条改写指令未处置——正文按旧口径起草，按补遗后口径评审将负偏离（#88 F-08/S-4）；rewrite_section_partial 逐指令改写或 dismiss_rewrite_directive 人工裁定",
+                    n.id, n.title, pending,
+                ),
+            });
+        } else {
+            out.push(ValidationFinding {
+                rule_code: "W_EVIDENCE_DIRTY".into(),
+                severity: "MINOR",
+                section_id: Some(n.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节 {}（{}）证据换版失效信号（#456——支撑响应的证据已换版，无改写指令）——需要重做时 reopen_section 重起草；本门告警不拦（#88 F-08）",
+                    n.id, n.title,
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// #88 审计 F-07/F-16/S-4：评分项未映射门（导出门 1h 消费）。
+///
+/// `unmapped_scoring_items`（#224 文档级告警面——score_section/
+/// score_document 出参同源）此前只在报告里可见，不进导出门——评委对
+/// 未映射评分项无从给分 = 按缺项计零。装配走 [`crate::scoring_wire::
+/// build_scorer`] 单一真源（派生 params.section 联结 + 「第X章」定位 +
+/// #224 持久化映射账本——与 score_document 的 unmapped 面恒同口径）。
+///
+/// 解决通道：① `upsert_scoring_mapping` 显式映射章节（AgentSubmitted/
+/// Manual 账本）；② 修抽取联结（params.section / section_title）后重建；
+/// ③ `export_bid_document.waive_unmapped_scoring` 非空理由显式豁免
+/// （无评分项语料的误抽确认等场景，理由进 warnings 审计面）。
+pub fn unmapped_scoring_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    let (scorer, _items, _ledger_effective) = crate::scoring_wire::build_scorer(store);
+    let unmapped = scorer.unmapped_items();
+    if unmapped.is_empty() {
+        return Vec::new();
+    }
+    // 明细截断（MAX 10——规模语料 250+ 未映射项全列会把错误消息撑到
+    // 数十 KB；首 10 项可定位 + 总数可对账，score_document 查全量）
+    const MAX_DETAIL: usize = 10;
+    let item_line = |u: &bid_domain::scoring::UnmappedItem| {
+        let weight = u
+            .weight
+            .map(|w| w.to_string())
+            .unwrap_or_else(|| "未给权重".into());
+        format!("{}（{}，权重 {weight}）", u.req_id, u.criteria)
+    };
+    let shown: Vec<String> = unmapped.iter().take(MAX_DETAIL).map(item_line).collect();
+    let detail = if unmapped.len() > MAX_DETAIL {
+        format!(
+            "{}；……等共 {} 个（全量明细见 score_document 的 unmapped_scoring_items）",
+            shown.join("；"),
+            unmapped.len(),
+        )
+    } else {
+        shown.join("；")
+    };
+    vec![ValidationFinding {
+        rule_code: "E_SCORING_UNMAPPED".into(),
+        severity: "BLOCKER",
+        section_id: None,
+        requirement_id: None,
+        message: format!(
+            "{} 个评分项未映射章节——评委无从给分 = 按缺项计零（#88 F-07）：{detail}；upsert_scoring_mapping 映射章节，或 export 传 waive_unmapped_scoring（非空理由）显式豁免",
+            unmapped.len(),
+        ),
+    }]
+}
+
 // ---------------------------------------------------------------- #241 裁定：提交就绪面
 
 /// 提交就绪清单项（机器可读的逐条补件面——供 Agent/Human 逐项消除）。

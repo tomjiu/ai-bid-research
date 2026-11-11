@@ -432,6 +432,10 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        star_missing>0 时门 1e 子面 b 拒导出；人工确认漏标可接受（样板句
        误判/表格装配假阳性等）才传，理由进 warnings 审计面。空串/缺省
        = 不豁免（fail-closed 不放水）；非字符串 → 响亮拒),
+       waive_unmapped_scoring?(#88 F-07：评分项未映射豁免理由——非空字符串
+       生效。unmapped_scoring_items 非空时门 1h 拒导出；人工确认未映射
+       可接受（无评分项语料误抽等）才传，理由进 warnings 审计面。
+       空串/缺省 = 不豁免；非字符串 → 响亮拒),
        profile:{dark_bid? , template?}, options:{tracked_changes?, watermark?}, project_version }
 嵌入: #68 阶段 3——章正文支持 md 块语法（无语法内容与旧版字节级同输出）：
      - 表格：连续 | 行（首行表头 + |---| 分隔行 + 数据行）→ docx 表格
@@ -480,8 +484,9 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
       申请/五资格声明/六无重大违法记录声明/七廉洁承诺书（BidderProfile
       真源；缺字段标【待填】；标题 Heading2 样式段——防关键词假阳性）。
 幂等: (project_id, content_version, format, profile, output_path, decision_fp,
-     waive_star_missing) 相同 → 返回缓存 artifact（#117：报价决策指纹入键
-     ——换报价重导是新导出；#88：豁免与否是不同的导出裁决，不吃旧键跳门）
+     waive_star_missing, waive_unmapped_scoring) 相同 → 返回缓存 artifact
+     （#117：报价决策指纹入键——换报价重导是新导出；#88：豁免与否是不同
+     的导出裁决，不吃旧键跳门）
 门禁: 三门 Approved + 全 RT DONE 之外，#180 起另校验**审核内容绑定**：
      pre_export_confirm 最后一条 Approved 的 reviewed_content_digest
      （章节树摘要——结构定位 + 叶正文）≠ 当前 → E_UNPROCESSABLE
@@ -491,7 +496,7 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
      自身/导出推进一律 bump——必误报）：过门后导入无关件、状态推进、
      不改正文重复导出均不受影响；#180 前旧快照的空摘要记录跳过判定
      （宽容载入，旧数据的洞保留——重新过门即补上绑定）。
-     **六前置门全量清单（#245 补齐 1d；#88 增 1e/1f）**：
+     **八前置门全量清单（#245 补齐 1d；#88 增 1e~1h）**：
      · 1a 矩阵门：blocking 行清零（必选未响应**或 PENDING_EVIDENCE 待补**
        ——占位绑定不清阻塞。#241 裁定（2026-11-05）：正文有实质响应
        （归属章节 content 非空）且无有效证据无占位 → RESPONDED 不阻断
@@ -527,6 +532,17 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
        防线是 opt-in 的，不开等于没有）；mode=明标 而 REQ 文本含暗标
        要求词面（正向短语非否定形命中；数据面含补遗条款文本）→
        W_DARK_BID_UNDECLARED 告警不拦（声明缺位提示，升级面 Lead 裁决）。
+     · 1g 补遗 DIRTY 门（#88 审计 F-08——两分级）：有 pending 改写指令的
+       DIRTY 章节（E_SECTION_DIRTY）→ 拒——正文确证 stale（S-4：按补遗
+       后口径评审负偏离）；解决通道 = rewrite_section_partial 逐指令改写
+       或 dismiss_rewrite_directive 人工裁定（处置完自动清脏——无参数
+       豁免，处置面即豁免）；证据换版失效信号（W_EVIDENCE_DIRTY，无
+       指令——#456 打脏）→ 告警不拦，重做通道 reopen_section。
+     · 1h 评分项未映射门（#88 审计 F-07）：unmapped_scoring_items 非空
+       （装配走 scoring_wire::build_scorer 单一真源——与 score_document
+       的 unmapped 面恒同口径；明细截断 10 项）→ 拒——评委无从给分 =
+       按缺项计零；解决通道 = upsert_scoring_mapping 显式映射，或
+       waive_unmapped_scoring 非空理由显式豁免（理由进 warnings）。
 状态: → READY_TO_EXPORT → EXPORTED
 ```
 

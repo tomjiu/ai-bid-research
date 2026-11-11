@@ -335,3 +335,123 @@ fn dark_bid_gate_warns_when_light_mode_with_dark_clause() {
         "warnings 携带暗标未声明告警: {warns:?}"
     );
 }
+
+// ---------------------------------------------------------------- 门 1g
+
+/// 补遗登记（value_changed）→ 章节 DIRTY + 改写指令 → 门 1g 拒；
+/// dismiss 指令 → 清脏 → 导出放行（处置面即豁免——无参数豁免）。
+#[test]
+fn dirty_gate_blocks_then_dismiss_frees_export() {
+    let (mut svc, pid, _dir) = drafted_with_star_req("fg-dirty", "明标");
+    // ★先豁免（隔离变量——本测只锁门 1g）
+    let star_id = star_req_id_of(&svc);
+    svc.store_mut()
+        .set_matrix_override(
+            star_id.clone(),
+            bid_domain::matrix::ResponseStatus::NotApplicable,
+            Some("聚焦 DIRTY 门的隔离豁免（人工裁定）".into()),
+            &bid_domain::TrustedPrincipal::human("fg-lead"),
+        )
+        .unwrap();
+    let _ = svc.store_mut().build_matrix().unwrap();
+    pass_pre_export_confirm(&mut svc);
+    // 补遗 value_changed：REQ-0001（资格条件，已绑证据+章节）→ 章节 DIRTY + 指令
+    let out = svc
+        .register_addendum_changes(vec![bid_domain::rewrite::ChangeSpec {
+            req_id: Some("REQ-0001".into()),
+            change_type: bid_domain::rewrite::ChangeType::ValueChanged,
+            old_text: "贰级资质".into(),
+            new_requirement: "壹级资质（补遗变更）".into(),
+            category: None,
+            clause_no: None,
+            section_id: None,
+            source_file_id: None,
+        }])
+        .unwrap();
+    assert!(!out.dirty_sections.is_empty(), "补遗登记打脏归属章节");
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+    }));
+    let msg = err_text(&reply);
+    assert!(msg.contains("DIRTY 门"), "门 1g 点火（实得：{msg}）");
+    assert!(msg.contains("改写指令未处置"), "指名 stale 语义（实得：{msg}）");
+    // 处置面：dismiss 全部 pending 指令 → 清脏 → 放行
+    let sec = out.dirty_sections[0].clone();
+    let pending: Vec<String> = svc
+        .store()
+        .pending_rewrite_directives_of(&sec)
+        .iter()
+        .map(|d| d.id.clone())
+        .collect();
+    assert!(!pending.is_empty(), "dismiss 前有 pending 指令");
+    for did in pending {
+        svc.store_mut().dismiss_rewrite_directive(&did).unwrap();
+    }
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+    }));
+    let r = ok_result(reply);
+    assert!(r["artifact"]["sha256"].is_string(), "指令处置清脏 → 导出成功: {r}");
+}
+
+// ---------------------------------------------------------------- 门 1h
+
+/// 补遗新增评分项（未映射）→ 门 1h 拒；waive_unmapped_scoring 非空理由
+/// → 显式豁免导出成功（理由进 warnings 审计面）。
+#[test]
+fn unmapped_gate_blocks_then_waive_exports() {
+    let (mut svc, pid, _dir) = drafted_with_star_req("fg-unmapped", "明标");
+    // ★先豁免（隔离变量——本测只锁门 1h）
+    let star_id = star_req_id_of(&svc);
+    svc.store_mut()
+        .set_matrix_override(
+            star_id.clone(),
+            bid_domain::matrix::ResponseStatus::NotApplicable,
+            Some("聚焦 unmapped 门的隔离豁免（人工裁定）".into()),
+            &bid_domain::TrustedPrincipal::human("fg-lead"),
+        )
+        .unwrap();
+    // 补遗新增评分项（零章节影响——不触发 1g；评分项不进纲 → unmapped）
+    let changes = svc
+        .store_mut()
+        .register_addendum_changes(&[bid_domain::rewrite::ChangeSpec {
+            req_id: None,
+            change_type: bid_domain::rewrite::ChangeType::RequirementAdded,
+            old_text: String::new(),
+            new_requirement: "补遗新增评分项：运维响应时效分级方案 5 分".into(),
+            category: Some("评分项".into()),
+            clause_no: None,
+            section_id: None,
+            source_file_id: None,
+        }])
+        .unwrap();
+    assert_eq!(changes.len(), 1, "补遗登记一条评分项");
+    let _ = svc.store_mut().build_matrix().unwrap();
+    pass_pre_export_confirm(&mut svc);
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+    }));
+    let msg = err_text(&reply);
+    assert!(msg.contains("评分项未映射"), "门 1h 点火（实得：{msg}）");
+    assert!(msg.contains("waive_unmapped_scoring"), "给出豁免通道（实得：{msg}）");
+    // 空串豁免 = 不豁免（fail-closed）
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+        "waive_unmapped_scoring": "   ",
+    }));
+    let msg = err_text(&reply);
+    assert!(msg.contains("waive_unmapped_scoring 须为非空理由"), "空串响亮拒: {msg}");
+    // 非空理由 → 豁免导出 + warnings 审计
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+        "waive_unmapped_scoring": "补遗评分项与既有运维章合并评审（人工确认无需独立映射）",
+    }));
+    let r = ok_result(reply);
+    assert!(r["artifact"]["sha256"].is_string(), "豁免后导出成功: {r}");
+    let warns: Vec<String> =
+        serde_json::from_value(r["warnings"].clone()).unwrap_or_default();
+    assert!(
+        warns.iter().any(|w| w.contains("评分项未映射") && w.contains("审计面记录")),
+        "豁免进 warnings 审计面: {warns:?}"
+    );
+}

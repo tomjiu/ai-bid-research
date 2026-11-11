@@ -422,3 +422,203 @@ fn plain_dark_bid_mention_without_positive_phrase_not_flagged() {
     let fs = dark_bid_gate_findings(&s, false);
     assert!(fs.is_empty(), "间接提及不命中: {fs:?}");
 }
+
+// ---------------------------------------------------------------- 门 1g：DIRTY
+
+#[test]
+fn dirty_with_pending_directive_is_blocker() {
+    // 补遗 value_changed → DIRTY 打标 + 改写指令 → E_SECTION_DIRTY
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期 540 天", false)],
+        "明标",
+    );
+    let changes = s
+        .register_addendum_changes(&[bid_domain::rewrite::ChangeSpec {
+            req_id: Some("REQ-0001".into()),
+            change_type: bid_domain::rewrite::ChangeType::ValueChanged,
+            old_text: "总工期 540 天".into(),
+            new_requirement: "总工期 480 天（补遗变更）".into(),
+            category: None,
+            clause_no: None,
+            section_id: None,
+            source_file_id: None,
+        }])
+        .unwrap();
+    assert!(!changes[0].affected_sections.is_empty(), "归属章节被打脏");
+    // 域层登记只打脏；pending 指令是服务层（store_rewrite_directive 的
+    // 调用方）产物——此处直接落一条 Pending 指令造真两态并存
+    s.store_rewrite_directive(&changes[0].change, &changes[0].affected_sections[0].clone(), vec![]);
+    let fs = bid_tools::validate::dirty_gate_findings(&s);
+    assert_eq!(codes(&fs), vec!["E_SECTION_DIRTY"], "补遗 DIRTY+指令 → BLOCKER");
+    assert!(fs[0].message.contains("改写指令未处置"));
+}
+
+#[test]
+fn dirty_cleared_by_dismiss_passes_gate() {
+    // dismiss 指令 → 清脏 → 门放行（处置面即豁免——无参数豁免的既定纪律）
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期 540 天", false)],
+        "明标",
+    );
+    let changes = s
+        .register_addendum_changes(&[bid_domain::rewrite::ChangeSpec {
+            req_id: Some("REQ-0001".into()),
+            change_type: bid_domain::rewrite::ChangeType::ValueChanged,
+            old_text: "总工期 540 天".into(),
+            new_requirement: "总工期 480 天（补遗变更）".into(),
+            category: None,
+            clause_no: None,
+            section_id: None,
+            source_file_id: None,
+        }])
+        .unwrap();
+    let sec = changes[0].affected_sections[0].clone();
+    s.store_rewrite_directive(&changes[0].change, &sec, vec![]);
+    let pending: Vec<String> = s
+        .pending_rewrite_directives_of(&sec)
+        .iter()
+        .map(|d| d.id.clone())
+        .collect();
+    for did in pending {
+        s.dismiss_rewrite_directive(&did).unwrap();
+    }
+    let fs = bid_tools::validate::dirty_gate_findings(&s);
+    assert!(fs.is_empty(), "指令全处置 → 清脏 → 零 findings: {fs:?}");
+}
+
+#[test]
+fn dirty_without_directives_warns_not_blocks() {
+    // 证据换版打脏（#456——无指令的失效信号）→ W_EVIDENCE_DIRTY（MINOR）
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期 540 天", false)],
+        "明标",
+    );
+    // 同语义位换版：新指纹 → 旧件 Superseded + 关联章节打脏（无指令）
+    register_evidence_tier(&mut s, "v1", None);
+    let v2 = EvidenceSpec {
+        kind: EvidenceKind::Qualification,
+        title: "证书-v1".into(), // 同语义位（kind+title+subject+scope）
+        source_file: "A-招标文件.docx".into(),
+        source_sha256: "sha-v2".into(),
+        locator: EngineLocator::DocxParagraph {
+            paragraph_index: 1,
+            text_fingerprint: "fnv64:v2".into(),
+        },
+        fingerprint: "fnv64:v2".into(),
+        valid_from: None,
+        valid_until: None,
+        subject_name: "投标人".into(),
+        scope: "测试".into(),
+        client: None,
+        amount_wan: None,
+        completed_on: None,
+        fields: Default::default(),
+        excerpt: None,
+        excerpt_locator: None,
+        verification_tier: None,
+    };
+    // 先绑 v1（让换版有关联章节），再换版
+    let req_id = "REQ-0001".to_string();
+    let evidences: Vec<String> = s.evidences().iter().map(|e| e.id.clone()).collect();
+    s.bind_evidence(&evidences[0], &req_id, "2026-12-31").unwrap();
+    let _ = s.register_evidence(v2).unwrap();
+    let fs = bid_tools::validate::dirty_gate_findings(&s);
+    assert!(
+        fs.iter().all(|f| f.rule_code == "W_EVIDENCE_DIRTY"),
+        "换版失效信号 → 告警不拦: {fs:?}"
+    );
+    assert!(
+        fs.iter().all(|f| f.severity != "BLOCKER"),
+        "无指令面零 BLOCKER"
+    );
+}
+
+#[test]
+fn clean_store_zero_dirty_findings() {
+    let s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期 540 天", false)],
+        "明标",
+    );
+    assert!(bid_tools::validate::dirty_gate_findings(&s).is_empty());
+}
+
+// ---------------------------------------------------------------- 门 1h：unmapped
+
+#[test]
+fn unmapped_scoring_item_is_blocker() {
+    // 评分项不进纲（#126）——商务要求锚 REQ 建纲，评分项只进条款集
+    let s = store_with(
+        vec![
+            req("REQ-0000", "商务要求", "常规商务条款（建纲锚）", false),
+            req("REQ-0001", "评分项", "技术方案完整性 30 分", false),
+        ],
+        "明标",
+    );
+    let fs = bid_tools::validate::unmapped_scoring_findings(&s);
+    assert_eq!(codes(&fs), vec!["E_SCORING_UNMAPPED"], "评分项未映射 → BLOCKER");
+    assert!(fs[0].message.contains("REQ-0001"));
+    assert!(fs[0].message.contains("upsert_scoring_mapping"), "给出解决通道");
+}
+
+#[test]
+fn mapped_scoring_item_passes_gate() {
+    let mut s = store_with(
+        vec![
+            req("REQ-0000", "商务要求", "常规商务条款（建纲锚）", false),
+            req("REQ-0001", "评分项", "技术方案完整性 30 分", false),
+        ],
+        "明标",
+    );
+    // 显式映射（#224 账本——门的解决通道；评分项不进叶——映射目标取首个结构节点下的叶）
+    let parents: std::collections::HashSet<String> =
+        s.sections().iter().filter_map(|n| n.parent_id.clone()).collect();
+    let any_leaf = s
+        .sections()
+        .iter()
+        .find(|n| !parents.contains(&n.id))
+        .map(|n| n.id.clone())
+        .unwrap();
+    s.upsert_scoring_mapping(
+        "REQ-0001".into(),
+        any_leaf,
+        1.0,
+        vec![],
+        bid_domain::Anchor {
+            file: "A-招标文件.docx".into(),
+            kind: "table".into(),
+            locator: "第四章 评标办法".into(),
+            excerpt: "技术方案完整性 30 分".into(),
+            block_idx: None,
+            page: None,
+            line: None,
+        },
+        bid_domain::scoring::MappingSource::AgentSubmitted,
+    )
+    .unwrap();
+    let fs = bid_tools::validate::unmapped_scoring_findings(&s);
+    assert!(fs.is_empty(), "已映射 → 零 findings: {fs:?}");
+}
+
+#[test]
+fn no_scoring_items_zero_findings() {
+    let s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期 540 天", false)],
+        "明标",
+    );
+    assert!(bid_tools::validate::unmapped_scoring_findings(&s).is_empty());
+}
+
+#[test]
+fn unmapped_detail_truncated_at_ten() {
+    // 规模面：11+ 未映射 → 明细截断 10 项 + 总数（scale_1330 实测 250 项
+    // 全列会撑到数十 KB——首 10 可定位，全量走 score_document）
+    let mut reqs = vec![req("REQ-0000", "商务要求", "常规商务条款（建纲锚）", false)];
+    for i in 0..12 {
+        reqs.push(req(&format!("REQ-{:04}", i + 1), "评分项", &format!("评分细则第 {i} 项"), false));
+    }
+    let s = store_with(reqs, "明标");
+    let fs = bid_tools::validate::unmapped_scoring_findings(&s);
+    assert_eq!(codes(&fs), vec!["E_SCORING_UNMAPPED"]);
+    assert!(fs[0].message.contains("等共 12 个"), "总数对账: {}", fs[0].message);
+    assert!(!fs[0].message.contains("REQ-0012（"), "第 12 项不进明细: {}", fs[0].message);
+}
