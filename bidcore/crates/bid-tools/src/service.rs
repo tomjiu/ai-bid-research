@@ -1568,7 +1568,7 @@ impl BidService {
     /// `export_bid_document` 业务半边（#59 阶段 2 + #117 任务 1 表格接线）。
     ///
     /// 步骤：
-    /// 1. **八前置门**（防废标的最后关口——fail-closed）：
+    /// 1. **十前置门**（防废标的最后关口——fail-closed）：
     ///    a. 矩阵 blocking 行清零（`check_export_ready`——必选未响应/待补不得
     ///       导出，#245 后 PENDING_EVIDENCE 必选行也在此面）；
     ///    b. 审核 BLOCKER findings 清零（`export_allowed`——T-7 闸门）；
@@ -1592,6 +1592,12 @@ impl BidService {
     ///    h. 评分项未映射门（#88 审计 F-07——`unmapped_scoring_findings`：
     ///       unmapped_scoring_items 非空 → 拒（按缺项计零）；
     ///       `waive_unmapped_scoring` 显式非空理由豁免，理由进 warnings）；
+    ///    i. 全局一致性冲突门（#88 审计 F-05——`global_conflict_findings`：
+    ///       #423 四类冲突（金额/工期/术语/承诺）Blocker 进导出门——此前
+    ///       只读不拦；无豁免通道，修复 = 改稿对齐）；
+    ///    j. 决策对账门（#88 审计 F-05 决策面——`decision_consistency_findings`：
+    ///       导出时点 decision（工期/报价）vs 参数账确定性比对——决策按
+    ///       设计不入库，导出是唯一对账时机；无豁免——数值只能改齐）；
     /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
     ///    缺失 → `derive_from_requirements`（从格式条款提取；零命中 → 基线
     ///    + warning，Lead 铁律「不硬编码」的降级面）；
@@ -1805,6 +1811,39 @@ impl BidService {
             }
         }
 
+        // ---- 1i. 全局一致性冲突门（#88 审计 F-05——#423 四类冲突 Blocker
+        //      进导出门；与 check_bid_quality 同源（run_review_from_store）。
+        //      无豁免通道：冲突是客观不一致，修复 = 改稿对齐（1c 同款纪律）。
+        let conflict_f = crate::validate::global_conflict_findings(self.store());
+        if !conflict_f.is_empty() {
+            let detail = conflict_f
+                .iter()
+                .map(|f| f.message.clone())
+                .collect::<Vec<_>>()
+                .join("；");
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "全局一致性门未过：{} 处跨面冲突——{detail}（#88 F-05；check_bid_quality 可查全量冲突面）",
+                    conflict_f.len(),
+                ),
+            });
+        }
+        // ---- 1j. 决策对账门（#88 审计 F-05 决策面——decision 不入库，
+        //      导出时点是唯一对账时机；工期/报价 vs 参数账确定性比对）。
+        let decision_f = crate::validate::decision_consistency_findings(self.store(), decision);
+        if !decision_f.is_empty() {
+            let detail = decision_f
+                .iter()
+                .map(|f| f.message.clone())
+                .collect::<Vec<_>>()
+                .join("；");
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "决策对账门未过：{} 处决策-参数冲突——{detail}（#88 F-05 决策面）",
+                    decision_f.len(),
+                ),
+            });
+        }
         // ---- 2. format-spec（读盘优先，derive 兜底）
         let spec = self.load_or_derive_format_spec(&mut warnings)?;
         let anonymize_effective = match anonymize {

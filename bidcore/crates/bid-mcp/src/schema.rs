@@ -923,7 +923,7 @@ pub(crate) fn describe(name: &str) -> &'static str {
         "rewrite_section_partial" => "局部改写+局部复验（#319②③——只改指令影响面内的段（rewrites⊆affected），兄弟段零改动；dry_run 预览将修改 X 段 Y 段不动；局部 validate 只跑受影响章节；全部指令处置完清 DIRTY）",
         "list_tools" => "只读：工具清单 + 行协议契约摘要（#279 发现面——无上下文代理的握手入口；返回信封形态/错误码面/CAS 纪律；JSON-RPC 客户端用 tools/list 等价）",
         "validate_bid_document" => "双层校验（确定性规则 + 模型复核）",
-        "export_bid_document" => "导出（八前置门 fail-closed：矩阵 blocking/审核门/写作验收/占位证据/#88 ★响应门/暗标联动门/补遗 DIRTY 门/评分项未映射门；时效裁决三级——bid_open_date 显式 > 截止日兜底（#88 F-03）> legacy 告警；#88 F-10 证据体检单 evidence_validity 常驻响应；暗标模式 profile.dark_bid+bidder_name；#117 表格接线；waive_star_missing/waive_unmapped_scoring 显式豁免）",
+        "export_bid_document" => "导出（十前置门 fail-closed：矩阵 blocking/审核门/写作验收/占位证据/#88 ★响应门/暗标联动门/补遗 DIRTY 门/评分项未映射门/全局冲突门/决策对账门（工期·报价 vs 参数账）；时效裁决三级——bid_open_date 显式 > 截止日兜底（#88 F-03）> legacy 告警；#88 F-10 证据体检单 evidence_validity 常驻响应；暗标模式 profile.dark_bid+bidder_name；#117 表格接线；waive_star_missing/waive_unmapped_scoring 显式豁免）",
         "get_bid_project_state" => "只读：项目状态与 allowed_next_tools + ungated_tools（无状态门恒可调工具——并集=完整可调面；#522）",
         "save_version" => "AI 主动存版本快照（mang-snap 同源）",
         "check_bid_quality" => "只读：生成质量覆盖度检查 + 全局一致性（#423——金额/工期/术语/承诺跨章冲突，位置锚 SEC-xxxx|PR-xxxx）+ 负偏离清单（A-07）+ 报告落盘（#68 阶段 2）",

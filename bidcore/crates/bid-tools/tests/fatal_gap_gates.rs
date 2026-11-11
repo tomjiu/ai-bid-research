@@ -622,3 +622,118 @@ fn unmapped_detail_truncated_at_ten() {
     assert!(fs[0].message.contains("等共 12 个"), "总数对账: {}", fs[0].message);
     assert!(!fs[0].message.contains("REQ-0012（"), "第 12 项不进明细: {}", fs[0].message);
 }
+
+// ---------------------------------------------------------------- 门 1i/1j
+
+#[test]
+fn global_amount_conflict_is_blocker() {
+    // 两叶正文同维度金额不一致（#423 AmountConflict）→ 门 1i 拦
+    let mut s = store_with(
+        vec![
+            req("REQ-0001", "商务要求", "投标保证金条款（锚 1）", false),
+            req("REQ-0002", "商务要求", "投标保证金缴纳细则（锚 2）", false),
+        ],
+        "明标",
+    );
+    let l1 = leaf_of(&s, "REQ-0001");
+    let l2 = leaf_of(&s, "REQ-0002");
+    if l1 == l2 {
+        return; // 同叶无双面对——建纲可能合并；跳过（夹具粒度限制）
+    }
+    s.set_section_content(&l1, "本项目投标保证金 50 万元，缴纳方式见下。".into()).unwrap();
+    s.set_section_content(&l2, "本项目投标保证金 60 万元，逾期不予退还。".into()).unwrap();
+    let fs = bid_tools::validate::global_conflict_findings(&s);
+    assert!(
+        fs.iter().any(|f| f.rule_code == "E_GLOBAL_CONFLICT"),
+        "同维度金额不一致 → 冲突: {fs:?}"
+    );
+}
+
+#[test]
+fn consistent_amounts_zero_conflict_findings() {
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "投标保证金条款", false)],
+        "明标",
+    );
+    let l1 = leaf_of(&s, "REQ-0001");
+    s.set_section_content(&l1, "本项目投标保证金 50 万元，缴纳方式见下。".into()).unwrap();
+    assert!(bid_tools::validate::global_conflict_findings(&s).is_empty());
+}
+
+#[test]
+fn decision_duration_conflict_is_blocker() {
+    // 参数账工期 540 天 vs 决策 480 天 → E_DECISION_CONFLICT
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期要求", false)],
+        "明标",
+    );
+    s.set_param_responses(vec![bid_domain::param::ParamInput {
+        requirement_id: "REQ-0001".into(),
+        param_name: "总工期".into(),
+        required_value: "≤600 天".into(),
+        response_value: "540 天".into(),
+        evidence_id: None,
+    }])
+    .unwrap();
+    let decision = bid_tools::export::ExportDecision {
+        duration_days: Some(480),
+        ..Default::default()
+    };
+    let fs = bid_tools::validate::decision_consistency_findings(&s, &decision);
+    assert_eq!(codes(&fs), vec!["E_DECISION_CONFLICT"], "工期不一致 → BLOCKER");
+    assert!(fs[0].message.contains("540"), "指名参数行口径: {}", fs[0].message);
+    // 改齐 → 零 findings
+    let ok = bid_tools::export::ExportDecision {
+        duration_days: Some(540),
+        ..Default::default()
+    };
+    assert!(bid_tools::validate::decision_consistency_findings(&s, &ok).is_empty());
+}
+
+#[test]
+fn decision_amount_conflict_is_blocker() {
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "报价条款", false)],
+        "明标",
+    );
+    s.set_param_responses(vec![bid_domain::param::ParamInput {
+        requirement_id: "REQ-0001".into(),
+        param_name: "投标总价".into(),
+        required_value: "≤600 万元".into(),
+        response_value: "500 万元".into(),
+        evidence_id: None,
+    }])
+    .unwrap();
+    // 500 万 = 5,000,000 元——决策 4,800,000 → 冲突
+    let bad = bid_tools::export::ExportDecision {
+        bid_amount: Some(4_800_000.0),
+        ..Default::default()
+    };
+    let fs = bid_tools::validate::decision_consistency_findings(&s, &bad);
+    assert_eq!(codes(&fs), vec!["E_DECISION_CONFLICT"], "报价不一致 → BLOCKER");
+    // 对齐 → 零 findings
+    let ok = bid_tools::export::ExportDecision {
+        bid_amount: Some(5_000_000.0),
+        ..Default::default()
+    };
+    assert!(bid_tools::validate::decision_consistency_findings(&s, &ok).is_empty());
+}
+
+#[test]
+fn decision_none_fields_skip_comparison() {
+    // decision 缺省（None = 未定——【待填】是既有降级面）→ 不比不拦
+    let mut s = store_with(
+        vec![req("REQ-0001", "商务要求", "总工期要求", false)],
+        "明标",
+    );
+    s.set_param_responses(vec![bid_domain::param::ParamInput {
+        requirement_id: "REQ-0001".into(),
+        param_name: "总工期".into(),
+        required_value: "≤600 天".into(),
+        response_value: "540 天".into(),
+        evidence_id: None,
+    }])
+    .unwrap();
+    let none = bid_tools::export::ExportDecision::default();
+    assert!(bid_tools::validate::decision_consistency_findings(&s, &none).is_empty());
+}

@@ -504,7 +504,7 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
      自身/导出推进一律 bump——必误报）：过门后导入无关件、状态推进、
      不改正文重复导出均不受影响；#180 前旧快照的空摘要记录跳过判定
      （宽容载入，旧数据的洞保留——重新过门即补上绑定）。
-     **八前置门全量清单（#245 补齐 1d；#88 增 1e~1h）**：
+     **十前置门全量清单（#245 补齐 1d；#88 增 1e~1j）**：
      · 1a 矩阵门：blocking 行清零（必选未响应**或 PENDING_EVIDENCE 待补**
        ——占位绑定不清阻塞。#241 裁定（2026-11-05）：正文有实质响应
        （归属章节 content 非空）且无有效证据无占位 → RESPONDED 不阻断
@@ -551,6 +551,16 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
        的 unmapped 面恒同口径；明细截断 10 项）→ 拒——评委无从给分 =
        按缺项计零；解决通道 = upsert_scoring_mapping 显式映射，或
        waive_unmapped_scoring 非空理由显式豁免（理由进 warnings）。
+     · 1i 全局一致性冲突门（#88 审计 F-05——#423 四类冲突 Blocker 进导出
+       门，此前只读不拦）：金额/工期/术语/承诺跨面冲突（run_review_from_
+       store 单一真源——与 check_bid_quality 恒同口径）→ 拒；**无豁免
+       通道**——冲突是客观不一致，修复 = 改稿对齐（1c 同款纪律）。
+     · 1j 决策对账门（#88 审计 F-05 决策面——decision 按设计不入库，
+       导出时点是唯一对账时机）：profile.duration_days vs 参数账工期行
+       （param_name 含「工期」）、profile.bid_amount vs 参数账报价/总价行
+       （万/亿归一到元）——确定性可比且数值不等 → 拒（报价表 500 万 vs
+       正文 480 万 = 澄清失败级事故）；决策缺省（None = 未定落【待填】）
+       不比不拦；**无豁免通道**——数值只能改齐。
 状态: → READY_TO_EXPORT → EXPORTED
 ```
 

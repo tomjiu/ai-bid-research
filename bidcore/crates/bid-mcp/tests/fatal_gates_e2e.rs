@@ -455,3 +455,50 @@ fn unmapped_gate_blocks_then_waive_exports() {
         "豁免进 warnings 审计面: {warns:?}"
     );
 }
+
+// ---------------------------------------------------------------- 门 1j
+
+/// 参数账工期 540 天 vs 导出决策 480 天 → 门 1j 拒（决策不入库——导出
+/// 时点是唯一对账时机）；改齐后导出成功。
+#[test]
+fn decision_conflict_blocks_then_aligned_exports() {
+    let (mut svc, pid, _dir) = drafted_with_star_req("fg-decision", "明标");
+    // ★先豁免（隔离变量——本测只锁门 1j）
+    let star_id = star_req_id_of(&svc);
+    svc.store_mut()
+        .set_matrix_override(
+            star_id.clone(),
+            bid_domain::matrix::ResponseStatus::NotApplicable,
+            Some("聚焦决策对账门的隔离豁免（人工裁定）".into()),
+            &bid_domain::TrustedPrincipal::human("fg-lead"),
+        )
+        .unwrap();
+    let _ = svc.store_mut().build_matrix().unwrap();
+    pass_pre_export_confirm(&mut svc);
+    // 冲突决策：工期 480 天（参数账无工期行——本项目无该维度 → 不比；
+    // 用 profile.duration_days 触发决策面，参数账同加一行制造冲突）
+    // 先加参数行（REQ-0001 工期 540 天）
+    svc.store_mut()
+        .set_param_responses(vec![bid_domain::param::ParamInput {
+            requirement_id: "REQ-0001".into(),
+            param_name: "总工期".into(),
+            required_value: "≤600 天".into(),
+            response_value: "540 天".into(),
+            evidence_id: None,
+        }])
+        .unwrap();
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+        "profile": { "duration_days": 480 },
+    }));
+    let msg = err_text(&reply);
+    assert!(msg.contains("决策对账门"), "门 1j 点火（实得：{msg}）");
+    assert!(msg.contains("540"), "指名参数口径（实得：{msg}）");
+    // 改齐（540）→ 导出成功
+    let reply = call(&mut svc, "export_bid_document", json!({
+        "project_id": &pid, "format": "docx", "output_path": "out.docx",
+        "profile": { "duration_days": 540 },
+    }));
+    let r = ok_result(reply);
+    assert!(r["artifact"]["sha256"].is_string(), "决策对齐 → 导出成功: {r}");
+}
