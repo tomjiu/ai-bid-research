@@ -611,6 +611,65 @@ check(
   "截断警示样式被删（横幅裸奔）"
 );
 check(
+  "R19 UI：建项警示透出（create warnings 不丢弃）",
+  /r && Array\.isArray\(r\.warnings\) && r\.warnings\.length[\s\S]{0,120}\? r\.warnings\.map\(String\)/.test(app) &&
+    /state\.bidWizard\.createWarnings = \[\]; \/\/ 每次尝试重置/.test(app),
+  "BID_DEADLINE_PAST 等建项警示被静默吞（域层 R15 产出、UI 丢弃——无编辑命令时用户永远看不到）"
+);
+check(
+  "R19 UI：建项警示随向导渲染（warn 态非阻断 + 转义）",
+  /w\.createWarnings\.map\(esc\)\.join\(\"<br>\"\)/.test(app) &&
+    /createWarnBanner[\s\S]{0,300}bid-wiz-error\" data-state=\"warn\"/.test(app),
+  "建项警示横幅渲染被删（或未转义——壳侧消息含尖括号时注入）"
+);
+// R20（#47）：kind 启发式行为矩阵——真源切片真跑（同 docx-highlight.test.mjs
+// 的切片纪律：从 app.js 剥出真函数在沙箱执行，断言行为不是复制品）。
+// 为什么是数据面门：kind 直接决定域层抽取分派（bid-parse extract.rs——
+// 附件/图纸/证据/格式模板走无条款面静默零抽取），错猜成「附件」= 该件
+// 条款全丢且工具面 ok:true（#196 同款假绿形态）。
+{
+  const m = app.match(/function guessBidFileKind\(name\) \{[\s\S]*?\n  \}/);
+  check(
+    "R20 启发式：函数切片在场（锚点 + 两个新模式）",
+    !!m && /资格预审\(\?!申请\)/.test(m[0]) && /评分\|评标\|办法/.test(m[0]),
+    "guessBidFileKind 切片锚消失（或 R20 两个新模式被回退）"
+  );
+  if (m) {
+    const guess = new Function(m[0] + "\nreturn guessBidFileKind;")();
+    const cases = [
+      // R20 新面：评标办法/方法（旧表落附件——评标规则条款静默丢）
+      ["评标办法.docx", "评分办法"],
+      ["评标方法.pdf", "评分办法"],
+      ["XX公路项目评标细则.docx", "评分办法"],
+      // R20 新面：资格预审文件（招标侧主件）；申请文件（投标人产物）不误吸
+      ["资格预审文件.docx", "招标文件"],
+      ["资格预审公告.pdf", "招标文件"],
+      ["资格预审申请文件.docx", "附件"],
+      ["资格预审申请书.pdf", "附件"],
+      // 既有面回归（启发式优先序不因新增错位）
+      ["XX市政项目招标文件.docx", "招标文件"],
+      ["采购需求书.pdf", "招标文件"],
+      ["补遗通知01.pdf", "补遗"],
+      ["澄清文件.docx", "补遗"],
+      ["答疑纪要.docx", "答疑"],
+      ["图纸目录.xlsx", "图纸"],
+      ["评分办法.docx", "评分办法"],
+      ["投标文件格式模板.docx", "格式模板"],
+      ["其他说明材料.docx", "附件"],
+    ];
+    const fails = [];
+    for (const [n, want] of cases) {
+      const got = guess(n);
+      if (got !== want) fails.push(`${n}→${got}（预期 ${want}）`);
+    }
+    check(
+      `R20 启发式：行为矩阵 ${cases.length} 例（真源切片真跑）`,
+      fails.length === 0,
+      fails.join("；")
+    );
+  }
+}
+check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
   "导入参数形状漂移（壳侧围栏锚定依赖 rel 形态）"

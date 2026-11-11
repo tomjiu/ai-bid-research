@@ -828,7 +828,7 @@
     // 导入招标文件（bid.import_files）。向导是工作台空态的主内容，
     // 独立于面板态（面板数据由 bid.state 系列管理，向导只管表单/选择/结果）
     bidWizard: {
-      createBusy: false, createError: "",
+      createBusy: false, createError: "", createWarnings: [],
       treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
       importBusy: false, importError: "", result: null
     },
@@ -1672,7 +1672,13 @@
     if (/补遗|澄清|更正/.test(n)) return "补遗";
     if (/答疑|质疑|回答/.test(n)) return "答疑";
     if (/图纸/.test(n)) return "图纸";
-    if (/评分|办法/.test(n)) return "评分办法";
+    // R20（#47）：补「评标」——评标办法/评标方法文件无「评分」字样时
+    // 旧表落附件；kind 直接决定域层抽取分派（extract.rs：附件/图纸/
+    // 证据/格式模板 → 无条款面静默零抽取），错猜 = 评标规则条款全丢
+    if (/评分|评标|办法/.test(n)) return "评分办法";
+    // R20（#47）：资格预审文件是招标侧主件（无「招标」字样的高频形态）
+    // ——「资格预审申请文件」是投标人产物，负向断言排除不误吸
+    if (/资格预审(?!申请)/.test(n)) return "招标文件";
     if (/格式|模板/.test(n)) return "格式模板";
     if (/招标|采购|比选|竞谈/.test(n)) return "招标文件";
     return "附件";
@@ -1765,12 +1771,20 @@
         + '<button class="btn btn-primary" data-bid-act="wizard-go"' + (w.importBusy || !selCount ? " disabled" : "") + ">" + (w.importBusy ? "解析入库中…" : "导入 " + selCount + " 件") + "</button>"
         + '<button class="btn" data-bid-act="wizard-refresh-tree" title="重读工作区文件">' + ICON.refresh + "</button></div>";
     }
+    // R19（#47）：建项警示透出——BID_DEADLINE_PAST 等（建项时域层产出、
+    // 无编辑命令可消除）随向导带到导入卡持续可见；warn 态非阻断
+    //（建项已成功，警示不改流程）
+    const createWarnBanner =
+      w.createWarnings && w.createWarnings.length
+        ? '<div class="bid-wiz-error" data-state="warn">' + w.createWarnings.map(esc).join("<br>") + "</div>"
+        : "";
     treeEl.innerHTML =
       '<div class="bid-wizard">'
       + '<div class="bid-wiz-card">'
       + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">2</span>导入招标文件</div>'
       + '<div class="bid-wiz-title">' + ICON.folderOpen + "导入招标文件</div>"
       + '<div class="bid-wiz-sub">解析 → 结构化切块 → 证据注册（失败件全程禁引，成功件即时入库）</div>'
+      + createWarnBanner
       + bodyHtml
       + (w.importError ? '<div class="bid-wiz-error" data-state="error">' + esc(w.importError) + "</div>" : "")
       + "</div></div>";
@@ -5135,7 +5149,7 @@
       // 导入现场，泄漏到新工作区会把「文件已入库」+ 旧结果表错挂到新项目
       // （与上面 bid/bidQuality/bidGates 同列，漏列即跨根泄漏）
       state.bidWizard = {
-        createBusy: false, createError: "",
+        createBusy: false, createError: "", createWarnings: [],
         treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
         importBusy: false, importError: "", result: null
       };
@@ -5317,9 +5331,10 @@
       if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) { state.bidWizard.createError = "投标截止须为日期（YYYY-MM-DD）"; renderBidWorkbenchIfOpen(); return; }
       state.bidWizard.createBusy = true;
       state.bidWizard.createError = "";
+      state.bidWizard.createWarnings = []; // 每次尝试重置（旧警示不跨次泄漏）
       renderBidWorkbenchIfOpen();
       try {
-        await ipc("bid.create_project", {
+        const r = await ipc("bid.create_project", {
           name: name, mode: mode, bid_deadline: deadline,
           ...(notice ? { tender_notice_ref: notice } : {})
         }, 3e4);
@@ -5327,6 +5342,14 @@
         state.bidWizard.result = null;        // 新项目 → 上次导入结果作废
         state.bidWizard.sel = {};
         state.bidWizard.treeStatus = "idle";  // 进入第二步时重拉文件列表
+        // R19（#47）：建项响应的 warnings 透出——域层在截止日已过时给
+        // BID_DEADLINE_PAST（R15 本地日历口径），旧实现丢弃响应 = 静默
+        // 吞警示。无「编辑项目」命令，警示是唯一信息面——随向导带到
+        // 第二步持续可见（与 importError 同面不同源：建项警示不可消）
+        state.bidWizard.createWarnings =
+          r && Array.isArray(r.warnings) && r.warnings.length
+            ? r.warnings.map(String)
+            : [];
         await ui.loadBid(true);               // present → DRAFT → 导入卡接管
       } catch (err) {
         state.bidWizard.createBusy = false;
