@@ -206,6 +206,13 @@ const full = await (await fetch(url)).json();  // 与内联时那个帧完全一
 - `includeHidden=false`（默认）时跳过所有以 `.` 开头的条目。
 - 单目录读失败（权限）只跳过该目录，不失败整棵树。
 - 节点上限 4000：超出置 `truncated:true`（先序遍历，先满足目录）。
+- **深度截断也亮旗（R18，#47 截断诚实面）**：到达 `depth` 上限的目录若
+  实际有**可收录**条目（按同一套过滤口径：隐藏/SKIP_DIRS/非常规文件不
+  算），同样置 `truncated:true`——旧实现静默空导致消费方把「看不见」当
+  「没有」（向导宣称「工作区里没有可导入的文件」/侧栏宣称「工作区是空
+  的」）。探测只看一层、不耗节点预算、不建节点（深度上限语义不变）。
+  消费方契约：`truncated:true` 时**不得宣称「空」/「全部」**（向导与
+  侧栏已接警示横幅——`bidWizTruncBanner` / `tree-trunc-warn`）。
 
 ```jsonc
 → {
@@ -634,8 +641,10 @@ E_UNPROCESSABLE（壳侧仍是形态检查先行——10 字符数字，分层�
 导入（导入仍走 `bid.import_files`，向导第二步用户确认 kind）。**不依赖 db.json**（先拖
 文件再建项合法——不碰 DomainStore）。落位规则：同名且 sha256 相同 → `skipped:
 already_present`（幂等）；同名不同内容 → `{stem}-2/-3/…{ext}` 找空位。白名单与
-`BID_IMPORT_EXTS` 同源（docx/xlsx/pdf/doc/ods）；目录拖入明拒（`is_dir`——R17+ 递归导
-入）；不存在的路径 `not_found`。
+`BID_IMPORT_EXTS` 同源（**docx/xlsx/pdf/doc**——R17 与解析面对齐：bid-tools `service.rs`
+导入路由只认这四类，其余扩展名（含旧表的 `.ods`）落 `parse_file`「不支持的文件类型」
+显式拒；能落位但导入必失败的件在壳侧就拒，分账 `ext_blocked` + detail 指明合法四类）；
+目录拖入明拒（`is_dir`——后续硬化轮可做递归导入）；不存在的路径 `not_found`。
 
 **基名跨平台守卫（R10，#47 平台区分③——R8 注释预留硬化项落地）**：`paths::guard_portable_basename`
 在壳侧入口拦截不可跨 Windows 迁移的基名，**双平台同拒**（不是 cfg 分支）——

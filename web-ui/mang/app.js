@@ -828,8 +828,8 @@
     // 导入招标文件（bid.import_files）。向导是工作台空态的主内容，
     // 独立于面板态（面板数据由 bid.state 系列管理，向导只管表单/选择/结果）
     bidWizard: {
-      createBusy: false, createError: "",
-      treeStatus: "idle", treeError: "", files: [], sel: {},
+      createBusy: false, createError: "", createWarnings: [],
+      treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
       importBusy: false, importError: "", result: null
     },
     // #18 出口闭环（校验报告 + 导出落盘）：validate 报告面与 export 写面
@@ -1665,21 +1665,37 @@
     renderBidActivePanel(host);
   }
   // #19：招标文件业务角色（契约 §2 kind 合法值——与工具面 TENDER_FILE_KINDS 同源；
-  // UI 缺省「附件」，按文件名启发式预选最常见角色）
-  var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];
+  // UI 缺省「附件」，按文件名启发式预选最常见角色）。
+  // R23（#47）：值域 7→9 对齐 #473——工具面早已并入「报价文件」「扫描件」
+  //（B1/B2 抽取分支的 kind 判据，bid-mcp tools.rs），但 UI 只出 7 值：
+  // 不叫 B1/B2 前缀的报价/扫描件在向导里选不到对应 kind，#473 给的
+  // kind 路径对向导不可达（注释宣称的「同源」失实）。本面对齐后
+  // 双向等值门（bid-panels R23）锁死四面（工具面/契约/UI/测试）。
+  var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板", "报价文件", "扫描件"];
   function guessBidFileKind(name) {
     const n = String(name || "");
     if (/补遗|澄清|更正/.test(n)) return "补遗";
     if (/答疑|质疑|回答/.test(n)) return "答疑";
     if (/图纸/.test(n)) return "图纸";
-    if (/评分|办法/.test(n)) return "评分办法";
+    // R20（#47）：补「评标」——评标办法/评标方法文件无「评分」字样时
+    // 旧表落附件；kind 直接决定域层抽取分派（extract.rs：附件/图纸/
+    // 证据/格式模板 → 无条款面静默零抽取），错猜 = 评标规则条款全丢
+    if (/评分|评标|办法/.test(n)) return "评分办法";
+    // R20（#47）：资格预审文件是招标侧主件（无「招标」字样的高频形态）
+    // ——「资格预审申请文件」是投标人产物，负向断言排除不误吸
+    if (/资格预审(?!申请)/.test(n)) return "招标文件";
     if (/格式|模板/.test(n)) return "格式模板";
     if (/招标|采购|比选|竞谈/.test(n)) return "招标文件";
     return "附件";
   }
   // #19：导入候选扩展名白名单（解析管线支持面：docx/xlsx 引擎 + pdf 三降级链
-  // + .doc 转换通道；其余扩展名必 parse FAILED，不列进来免得用户白跑一趟）
-  var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc|ods)$/i;
+  // + .doc 转换通道；其余扩展名必 parse FAILED，不列进来免得用户白跑一趟）。
+  // R17（#47）：与解析面严格对齐——旧表的 .ods 在 bid-tools service.rs 的
+  // 导入路由里无臂（落 parse_file「不支持的文件类型」显式拒），能被列进
+  // 向导但导入必失败。摘除后与壳侧 INGEST_DROP_EXTS（bid.rs）单一真源
+  // 口径一致：docx/xlsx/pdf/doc 四类（改表三面同改：本表 / 壳常量 /
+  // bid-panels 白名单锚）。
+  var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc)$/i;
 
   // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） ============
   // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；
@@ -1710,6 +1726,15 @@
     if (form) form.addEventListener("submit", (ev) => { ev.preventDefault(); ui.submitBidWizardCreate(form); });
   }
 
+  /** R18（#47）：截断诚实横幅——fs.tree 超限（节点预算 4000 / 深度 8）
+   * 时文件清单只是「可见部分」，宣称「全部」或「没有」都是说谎。非阻断
+   * 警示面（data-state="warn"——区别于 error：截断不是失败）。 */
+  function bidWizTruncBanner(truncated) {
+    return truncated
+      ? '<div class="bid-wiz-error" data-state="warn">文件列表超出读取上限被截断——下面只是可见部分，深层目录或未列出的文件可能还有：要导入的文件不在列表里时，直接把它拖进窗口落位，或移动到工作区根后刷新。</div>'
+      : "";
+  }
+
   /** 向导第二步：导入招标文件（bid.import_files——工作区文件勾选 + kind 分派） */
   function renderBidWizardImport(treeEl, host) {
     const w = state.bidWizard;
@@ -1725,34 +1750,51 @@
     } else if (w.treeStatus === "error") {
       bodyHtml = '<div class="view-state" data-kind="error"><div class="view-state-title">读取工作区失败</div><div>' + esc(w.treeError) + '</div><button class="btn" data-bid-act="wizard-refresh-tree">重试</button></div>';
     } else if (!w.files.length) {
-      bodyHtml = '<div class="view-state"><div class="view-state-title">工作区里没有可导入的文件</div><div>把招标文件（.docx / .xlsx / .pdf / .doc）放进当前工作区后点刷新——导入围栏只认本工作区内的文件</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>";
+      // R18（#47）：截断时不得宣称「没有」——看不见 ≠ 不存在
+      bodyHtml = w.treeTruncated
+        ? '<div class="view-state"><div class="view-state-title">无法确认工作区没有可导入文件</div><div>文件列表被截断（超出读取上限），深层目录里的文件未显示。把要导入的文件直接拖进窗口落位，或移动到工作区根后刷新。</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>"
+        : '<div class="view-state"><div class="view-state-title">工作区里没有可导入的文件</div><div>把招标文件（.docx / .xlsx / .pdf / .doc）放进当前工作区后点刷新——导入围栏只认本工作区内的文件</div><button class="btn" data-bid-act="wizard-refresh-tree">' + ICON.refresh + "刷新文件列表</button></div>";
     } else {
       let rows = "";
       for (const f of w.files) {
         const checked = Object.prototype.hasOwnProperty.call(w.sel, f.rel);
         // kind 默认值：勾选过的用勾选值，否则按文件名启发式预选（用户可改）
         const kindDef = checked ? w.sel[f.rel] : guessBidFileKind(f.name);
+        // R21（#47）：深层文件显示 rel 消歧——列表只显基名时，
+        // 「sub/图纸/A.dwg」与「成图/A.dwg」两行不可区分（title 提示
+        // 要悬停才见）。根下文件 rel === name 零变化；深层件显
+        // rel（fs.tree 的 rel 一律 / 分隔——R14 单一口径）。
+        const shown = f.rel && f.rel !== f.name ? f.rel : f.name;
         rows +=
           '<label class="bid-wiz-file" data-on="' + String(checked) + '">'
           + '<input type="checkbox" data-rel="' + esc(f.rel) + '"' + (checked ? " checked" : "") + ">"
-          + '<span class="bid-wiz-file-name" title="' + esc(f.rel) + '">' + esc(f.name) + "</span>"
+          + '<span class="bid-wiz-file-name" title="' + esc(f.rel) + '">' + esc(shown) + "</span>"
           + '<span class="bid-wiz-file-meta">' + fmtBytes(f.size || 0) + "</span>"
           + '<select data-kind-for="' + esc(f.rel) + '">'
           + BID_FILE_KINDS.map((k) => '<option value="' + k + '"' + (kindDef === k ? " selected" : "") + ">" + k + "</option>").join("")
           + "</select></label>";
       }
       bodyHtml =
-        '<div class="bid-wiz-files">' + rows + "</div>"
+        bidWizTruncBanner(w.treeTruncated)
+        + '<div class="bid-wiz-files">' + rows + "</div>"
         + '<div class="bid-wiz-bar"><span class="bid-wiz-count">已选 ' + selCount + " / " + w.files.length + " 件</span>"
         + '<button class="btn btn-primary" data-bid-act="wizard-go"' + (w.importBusy || !selCount ? " disabled" : "") + ">" + (w.importBusy ? "解析入库中…" : "导入 " + selCount + " 件") + "</button>"
         + '<button class="btn" data-bid-act="wizard-refresh-tree" title="重读工作区文件">' + ICON.refresh + "</button></div>";
     }
+    // R19（#47）：建项警示透出——BID_DEADLINE_PAST 等（建项时域层产出、
+    // 无编辑命令可消除）随向导带到导入卡持续可见；warn 态非阻断
+    //（建项已成功，警示不改流程）
+    const createWarnBanner =
+      w.createWarnings && w.createWarnings.length
+        ? '<div class="bid-wiz-error" data-state="warn">' + w.createWarnings.map(esc).join("<br>") + "</div>"
+        : "";
     treeEl.innerHTML =
       '<div class="bid-wizard">'
       + '<div class="bid-wiz-card">'
       + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">2</span>导入招标文件</div>'
       + '<div class="bid-wiz-title">' + ICON.folderOpen + "导入招标文件</div>"
       + '<div class="bid-wiz-sub">解析 → 结构化切块 → 证据注册（失败件全程禁引，成功件即时入库）</div>'
+      + createWarnBanner
       + bodyHtml
       + (w.importError ? '<div class="bid-wiz-error" data-state="error">' + esc(w.importError) + "</div>" : "")
       + "</div></div>";
@@ -3600,11 +3642,18 @@
       return;
     }
     const rows = renderTreeNodes(state.tree.nodes, 0, []);
+    // R18（#47）：截断诚实面——侧栏树与向导同款口径：截断时不得宣称
+    // 「工作区是空的」，列表态亮警示横幅（深层内容未显示）
+    const trunc18 = !!(state.tree && state.tree.truncated);
     if (!rows.length) {
-      host.innerHTML = '<div class="panel-empty">\u5DE5\u4F5C\u533A\u662F\u7A7A\u7684</div>';
+      host.innerHTML = trunc18
+        ? '<div class="panel-empty">无法确认工作区是空的——文件树超出读取上限被截断，深层内容未显示</div>'
+        : '<div class="panel-empty">\u5DE5\u4F5C\u533A\u662F\u7A7A\u7684</div>';
       return;
     }
-    host.innerHTML = '<div class="tree" role="tree">' + rows.join("") + "</div>";
+    host.innerHTML =
+      (trunc18 ? '<div class="tree-trunc-warn">部分文件未显示——文件树超出读取上限被截断（深层目录未展开）</div>' : "")
+      + '<div class="tree" role="tree">' + rows.join("") + "</div>";
     const treeEl = host.querySelector(".tree");
     treeEl.addEventListener("click", (e) => {
       const row = e.target.closest("[data-rel]");
@@ -5110,8 +5159,8 @@
       // 导入现场，泄漏到新工作区会把「文件已入库」+ 旧结果表错挂到新项目
       // （与上面 bid/bidQuality/bidGates 同列，漏列即跨根泄漏）
       state.bidWizard = {
-        createBusy: false, createError: "",
-        treeStatus: "idle", treeError: "", files: [], sel: {},
+        createBusy: false, createError: "", createWarnings: [],
+        treeStatus: "idle", treeError: "", files: [], sel: {}, treeTruncated: false,
         importBusy: false, importError: "", result: null
       };
       // #603 批 C：补遗面同理随根失效（不留旧项目数据）
@@ -5247,9 +5296,14 @@
       if (state.bidWizard.treeStatus === "loading" && !force) return;
       state.bidWizard.treeStatus = "loading";
       state.bidWizard.treeError = "";
+      state.bidWizard.treeTruncated = false; // 重拉时清旗（与 treeError 同生命周期）
       renderBidWorkbenchIfOpen();
       try {
         const r = await ipc("fs.tree", { depth: 8 }, 3e4);
+        // R18（#47）：截断诚实面——fs.tree 超节点/深度上限时 truncated=true。
+        // 旧实现在此丢弃旗标：深层/超大工作区的文件清单静默不完整，
+        // 向导宣称「工作区里没有可导入的文件」误导用户（实际只是看不见）。
+        state.bidWizard.treeTruncated = !!(r && r.truncated);
         const files = [];
         const walk = (nodes) => {
           (nodes || []).forEach((n) => {
@@ -5270,6 +5324,7 @@
       } catch (err) {
         state.bidWizard.treeStatus = "error";
         state.bidWizard.treeError = err && (err.message || err.code) || "fs.tree 读取失败";
+        state.bidWizard.treeTruncated = false; // 失败面不走截断口径（错误自有横幅）
       }
       renderBidWorkbenchIfOpen();
     },
@@ -5286,9 +5341,10 @@
       if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) { state.bidWizard.createError = "投标截止须为日期（YYYY-MM-DD）"; renderBidWorkbenchIfOpen(); return; }
       state.bidWizard.createBusy = true;
       state.bidWizard.createError = "";
+      state.bidWizard.createWarnings = []; // 每次尝试重置（旧警示不跨次泄漏）
       renderBidWorkbenchIfOpen();
       try {
-        await ipc("bid.create_project", {
+        const r = await ipc("bid.create_project", {
           name: name, mode: mode, bid_deadline: deadline,
           ...(notice ? { tender_notice_ref: notice } : {})
         }, 3e4);
@@ -5296,6 +5352,14 @@
         state.bidWizard.result = null;        // 新项目 → 上次导入结果作废
         state.bidWizard.sel = {};
         state.bidWizard.treeStatus = "idle";  // 进入第二步时重拉文件列表
+        // R19（#47）：建项响应的 warnings 透出——域层在截止日已过时给
+        // BID_DEADLINE_PAST（R15 本地日历口径），旧实现丢弃响应 = 静默
+        // 吞警示。无「编辑项目」命令，警示是唯一信息面——随向导带到
+        // 第二步持续可见（与 importError 同面不同源：建项警示不可消）
+        state.bidWizard.createWarnings =
+          r && Array.isArray(r.warnings) && r.warnings.length
+            ? r.warnings.map(String)
+            : [];
         await ui.loadBid(true);               // present → DRAFT → 导入卡接管
       } catch (err) {
         state.bidWizard.createBusy = false;

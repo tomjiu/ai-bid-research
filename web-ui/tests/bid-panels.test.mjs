@@ -582,10 +582,149 @@ check(
 );
 check(
   "#19 UI：kind 清单 + 扩展名白名单（契约 §2 同源）",
-  app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板"];') &&
-    app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc|ods)$/i;'),
+  app.includes('var BID_FILE_KINDS = ["招标文件", "附件", "图纸", "补遗", "答疑", "评分办法", "格式模板", "报价文件", "扫描件"];') &&
+    app.includes('var BID_IMPORT_EXTS = /\\.(docx|xlsx|pdf|doc)$/i;'),
   "kind 合法值/可解析扩展名漂移"
 );
+check(
+  "R17 UI：白名单与解析面对齐（.ods 摘除）+ 对齐理由在场",
+  /R17（#47）：与解析面严格对齐/.test(app) &&
+    /service\.rs[\s\S]{0,200}导入路由/.test(app) &&
+    !/\\\.\(docx\|xlsx\|pdf\|doc\|ods\)\$/.test(app),
+  "白名单重新混入解析面必拒的扩展名（导入必失败件——service.rs 只路由 docx/xlsx/pdf/doc）"
+);
+check(
+  "R18 UI：向导消费 fs.tree 截断旗（诚实面接线）",
+  /state\.bidWizard\.treeTruncated = !!\(r && r\.truncated\)/.test(app) &&
+    /bidWizTruncBanner\(w\.treeTruncated\)/.test(app) &&
+    /无法确认工作区没有可导入文件/.test(app),
+  "截断旗被丢弃——深层/超大工作区清单静默不完整，向导宣称「没有可导入文件」误导回归"
+);
+check(
+  "R18 UI：侧栏文件树同款截断诚实面",
+  /无法确认工作区是空的——文件树超出读取上限被截断/.test(app) && /tree-trunc-warn/.test(app),
+  "侧栏宣称「工作区是空的」误导回归"
+);
+check(
+  "R18 样式：截断警示横幅双面（向导 warn 态 + 侧栏 tree-trunc-warn）",
+  css.includes('.bid-wiz-error[data-state="warn"]') && css.includes(".tree-trunc-warn"),
+  "截断警示样式被删（横幅裸奔）"
+);
+check(
+  "R19 UI：建项警示透出（create warnings 不丢弃）",
+  /r && Array\.isArray\(r\.warnings\) && r\.warnings\.length[\s\S]{0,120}\? r\.warnings\.map\(String\)/.test(app) &&
+    /state\.bidWizard\.createWarnings = \[\]; \/\/ 每次尝试重置/.test(app),
+  "BID_DEADLINE_PAST 等建项警示被静默吞（域层 R15 产出、UI 丢弃——无编辑命令时用户永远看不到）"
+);
+check(
+  "R19 UI：建项警示随向导渲染（warn 态非阻断 + 转义）",
+  /w\.createWarnings\.map\(esc\)\.join\(\"<br>\"\)/.test(app) &&
+    /createWarnBanner[\s\S]{0,300}bid-wiz-error\" data-state=\"warn\"/.test(app),
+  "建项警示横幅渲染被删（或未转义——壳侧消息含尖括号时注入）"
+);
+// R20（#47）：kind 启发式行为矩阵——真源切片真跑（同 docx-highlight.test.mjs
+// 的切片纪律：从 app.js 剥出真函数在沙箱执行，断言行为不是复制品）。
+// 为什么是数据面门：kind 直接决定域层抽取分派（bid-parse extract.rs——
+// 附件/图纸/证据/格式模板走无条款面静默零抽取），错猜成「附件」= 该件
+// 条款全丢且工具面 ok:true（#196 同款假绿形态）。
+{
+  const m = app.match(/function guessBidFileKind\(name\) \{[\s\S]*?\n  \}/);
+  check(
+    "R20 启发式：函数切片在场（锚点 + 两个新模式）",
+    !!m && /资格预审\(\?!申请\)/.test(m[0]) && /评分\|评标\|办法/.test(m[0]),
+    "guessBidFileKind 切片锚消失（或 R20 两个新模式被回退）"
+  );
+  if (m) {
+    const guess = new Function(m[0] + "\nreturn guessBidFileKind;")();
+    const cases = [
+      // R20 新面：评标办法/方法（旧表落附件——评标规则条款静默丢）
+      ["评标办法.docx", "评分办法"],
+      ["评标方法.pdf", "评分办法"],
+      ["XX公路项目评标细则.docx", "评分办法"],
+      // R20 新面：资格预审文件（招标侧主件）；申请文件（投标人产物）不误吸
+      ["资格预审文件.docx", "招标文件"],
+      ["资格预审公告.pdf", "招标文件"],
+      ["资格预审申请文件.docx", "附件"],
+      ["资格预审申请书.pdf", "附件"],
+      // 既有面回归（启发式优先序不因新增错位）
+      ["XX市政项目招标文件.docx", "招标文件"],
+      ["采购需求书.pdf", "招标文件"],
+      ["补遗通知01.pdf", "补遗"],
+      ["澄清文件.docx", "补遗"],
+      ["答疑纪要.docx", "答疑"],
+      ["图纸目录.xlsx", "图纸"],
+      ["评分办法.docx", "评分办法"],
+      ["投标文件格式模板.docx", "格式模板"],
+      ["其他说明材料.docx", "附件"],
+    ];
+    const fails = [];
+    for (const [n, want] of cases) {
+      const got = guess(n);
+      if (got !== want) fails.push(`${n}→${got}（预期 ${want}）`);
+    }
+    check(
+      `R20 启发式：行为矩阵 ${cases.length} 例（真源切片真跑）`,
+      fails.length === 0,
+      fails.join("；")
+    );
+  }
+}
+check(
+  "R21 UI：深层文件显示 rel 消歧（同名不同目录可区分）",
+  /const shown = f\.rel && f\.rel !== f\.name \? f\.rel : f\.name;/.test(app) &&
+    /' \+ esc\(shown\) \+ "<\/span>"/.test(app),
+  "深层文件退回只显基名——sub/图纸/A 与 成图/A 两行不可区分（勾错件无从察觉）"
+);
+// R22（#47）：白名单跨面等值门——壳常量 INGEST_DROP_EXTS（bid.rs）与 UI
+// 的 BID_IMPORT_EXTS（app.js）是同一口径的两份声明（R17 收口三面同改）。
+// R17 的两个独立锚只能各自钉「长这样」，改一面不改另一面时各自仍绿——
+// 本门提取两面真值**双向比对**：任一方向的差集非空即红（真单一真源）。
+{
+  const shellConst = bidRs.match(/const INGEST_DROP_EXTS: &\[&str\] = &\[([^\]]+)\]/);
+  const uiIdx = app.indexOf("var BID_IMPORT_EXTS =");
+  const uiLine = uiIdx >= 0 ? app.slice(uiIdx, app.indexOf(";", uiIdx)) : "";
+  const uiGroup = uiLine.match(/\(([^)]+)\)\$/);
+  check(
+    "R22 白名单：两面声明锚在场（壳常量 + UI 正则）",
+    !!shellConst && !!uiGroup,
+    "INGEST_DROP_EXTS（bid.rs）或 BID_IMPORT_EXTS（app.js）改名/删除——提取失败"
+  );
+  if (shellConst && uiGroup) {
+    const shellExts = (shellConst[1].match(/"\.([a-z]+)"/g) || [])
+      .map((s) => s.slice(2, -1));
+    const uiExts = uiGroup[1].split("|").map((s) => s.replace(/^\./, "").trim()).filter(Boolean);
+    const onlyShell = shellExts.filter((e) => !uiExts.includes(e));
+    const onlyUi = uiExts.filter((e) => !shellExts.includes(e));
+    check(
+      `R22 白名单：跨面等值（壳 ${shellExts.length} 类 = UI ${uiExts.length} 类，双向零差）`,
+      onlyShell.length === 0 && onlyUi.length === 0,
+      `壳有 UI 无：[${onlyShell}]；UI 有壳无：[${onlyUi}]——改一面必须同步另一面（R17 三面同改纪律）`
+    );
+  }
+}
+// R23（#47）：kind 值域跨面等值门——UI BID_FILE_KINDS（app.js）与工具面
+// TENDER_FILE_KINDS（bid-mcp tools.rs，含 #473 并入的报价文件/扫描件）
+// 同为值域声明。漂移四面（工具面/MCP 契约/UI/测试）任一不同步即红。
+{
+  const uiArrMatch = app.match(/var BID_FILE_KINDS = \[([^\]]+)\]/);
+  const toolArrMatch = toolsRs.match(/const TENDER_FILE_KINDS: \[&str; \d+\] = \[([\s\S]*?)\];/);
+  check(
+    "R23 kind：两面声明锚在场（UI 数组 + 工具面常量）",
+    !!uiArrMatch && !!toolArrMatch,
+    "BID_FILE_KINDS 或 TENDER_FILE_KINDS 改名/删除——提取失败"
+  );
+  if (uiArrMatch && toolArrMatch) {
+    const uiKinds = uiArrMatch[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1));
+    const toolKinds = (toolArrMatch[1].match(/"[^"]+"/g) || []).map((s) => s.slice(1, -1));
+    const onlyUi = uiKinds.filter((k) => !toolKinds.includes(k));
+    const onlyTool = toolKinds.filter((k) => !uiKinds.includes(k));
+    check(
+      `R23 kind：跨面等值（UI ${uiKinds.length} 值 = 工具面 ${toolKinds.length} 值，双向零差）`,
+      onlyUi.length === 0 && onlyTool.length === 0,
+      `UI 有工具面无：[${onlyUi}]；工具面有 UI 无：[${onlyTool}]——值域四面同改（#473/R23 纪律）`
+    );
+  }
+}
 check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),

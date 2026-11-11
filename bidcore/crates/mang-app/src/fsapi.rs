@@ -126,7 +126,19 @@ fn walk(
     truncated: &mut bool,
     count: &mut usize,
 ) -> Result<Vec<TreeNode>, IpcError> {
-    if depth_left == 0 || *budget == 0 {
+    if *budget == 0 {
+        return Ok(Vec::new());
+    }
+    if depth_left == 0 {
+        // R18（#47）：深度截断诚实面——到达深度上限的目录**可能有内容**
+        // 但不可见。旧实现静默返回空 → 响应 truncated=false，消费方把
+        // 「看不见」当「没有」：向导会说「工作区里没有可导入的文件」
+        // （实际可能只是层级深）、侧栏会说「工作区是空的」。此处探测
+        // 一层：有任何可收录条目则亮 truncated 旗（不建节点——深度
+        // 上限语义不变，只是把「有东西没显示」说出口）。
+        if dir_has_includable_entry(dir, include_hidden) {
+            *truncated = true;
+        }
         return Ok(Vec::new());
     }
     let rd = match std::fs::read_dir(dir) {
@@ -189,6 +201,38 @@ fn walk(
     files.sort_by(|a, b| natural_cmp(&a.name, &b.name));
     dirs.extend(files);
     Ok(dirs)
+}
+
+/// R18（#47）：深度上限边界探测——目录里是否有**可收录**条目。与主
+/// 循环同一套过滤口径（隐藏文件 / SKIP_DIRS / 非常规文件不算），只看
+/// 一眼、不耗预算（深度截断的目录不建节点，探测只为诚实亮旗）。
+/// 双平台同跑（std::fs read_dir 在 Windows 同语义；隐藏文件口径两平台
+/// 统一为 `.` 前缀——与主循环一致，Windows 的 attribute 隐藏位不参
+/// 与本判定，与既有 fs.tree 行为零分叉）。
+fn dir_has_includable_entry(dir: &Path, include_hidden: bool) -> bool {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    for ent in rd.flatten() {
+        let name = ent.file_name().to_string_lossy().into_owned();
+        if !include_hidden && name.starts_with('.') {
+            continue;
+        }
+        let Ok(meta) = ent.metadata() else {
+            continue;
+        };
+        if meta.is_dir() {
+            let lname = name.to_lowercase();
+            if SKIP_DIRS.iter().any(|s| *s == lname) {
+                continue;
+            }
+            return true;
+        }
+        if meta.is_file() {
+            return true;
+        }
+    }
+    false
 }
 
 /// fs.read {path} → {path, rel, bytes, text, mtimeMs}
@@ -493,6 +537,102 @@ mod tests {
         // 子目录带 nodes
         let sub = &out["nodes"][0]["nodes"];
         assert_eq!(sub.as_array().unwrap().len(), 2);
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// R18（#47）：深度截断诚实面——fs.tree 的 depth 在真实有内容的目录
+    /// 上截断时必须亮 truncated 旗（旧实现静默空——消费方把「看不见」当
+    /// 「没有」：向导宣称「工作区里没有可导入的文件」）。三个断言面：
+    /// ① 有内容的深层被截 → 亮旗；② 不截断时不虚报；③ 内容全被过滤
+    ///（隐藏/跳过表）的目录被截 → 不亮旗（「有东西」与「有可收录的东西」
+    /// 口径一致）。
+    #[test]
+    fn tree_depth_truncation_flag_honest() {
+        let (d, ws) = fixture();
+        // ① sub 下有 b.json/deep——depth=1 截断 sub 的展开，必须亮旗
+        let out = tree(&ws, Args::new(&args(json!({"depth": 1})))).unwrap();
+        assert_eq!(
+            out["truncated"],
+            json!(true),
+            "sub 有内容被深度截断必须亮旗：{out}"
+        );
+        // ② 默认 depth=8 全量可见 → 不亮旗（不虚报）
+        let out = tree(&ws, Args::new(&args(json!({})))).unwrap();
+        assert_eq!(out["truncated"], json!(false), "全量可见不亮旗：{out}");
+        // ③ 内容全被过滤（隐藏/跳过表）的目录被截 → 不亮旗——口径由
+        // dir_has_includable_entry_filter_matrix 单测直接断言（全局旗在
+        // sub 亮旗后无法隔离观测「只有隐藏」的贡献，不在树级重复断言）
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// R18（#47）：`dir_has_includable_entry` 探测口径单测——过滤规则与
+    /// 主循环一致：隐藏文件（include_hidden=false）/ SKIP_DIRS / 非
+    /// 常规文件不算「有东西」；普通文件/目录算。
+    #[test]
+    fn dir_has_includable_entry_filter_matrix() {
+        let d = std::env::temp_dir().join(format!(
+            "mang-fs-peek-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        // 全过滤：隐藏文件 + .git + node_modules → 不算有
+        std::fs::create_dir_all(d.join("a/.git")).unwrap();
+        std::fs::create_dir_all(d.join("a/node_modules/p")).unwrap();
+        std::fs::write(d.join("a/.hidden.txt"), "x").unwrap();
+        assert!(
+            !dir_has_includable_entry(&d.join("a"), false),
+            "只有隐藏/跳过内容 → 不亮旗"
+        );
+        // include_hidden=true：隐藏文件算
+        assert!(
+            dir_has_includable_entry(&d.join("a"), true),
+            "includeHidden=true 时隐藏文件算有"
+        );
+        // 一个普通文件即算有
+        std::fs::write(d.join("a/normal.txt"), "x").unwrap();
+        assert!(
+            dir_has_includable_entry(&d.join("a"), false),
+            "普通文件在场 → 有内容"
+        );
+        // 空目录不算
+        std::fs::create_dir_all(d.join("b")).unwrap();
+        assert!(!dir_has_includable_entry(&d.join("b"), false), "空目录不亮旗");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// R18（#47）：预算截断（TREE_NODE_CAP=4000）——4000 件造价高，直接
+    /// 驱动 walk 的小预算等价覆盖同一分支：预算耗尽 → truncated 必亮、
+    /// 建节点数恰等于预算（不超不欠）。
+    #[test]
+    fn walk_budget_truncation_flag() {
+        let (d, ws) = fixture();
+        fn count_nodes(n: &TreeNode) -> usize {
+            1 + n.children.iter().map(count_nodes).sum::<usize>()
+        }
+        // fixture 可收录 5 件（a.md / sub / sub/b.json / sub/deep /
+        // sub/deep/c.txt）——预算 3 耗尽 → 亮旗 + 恰 3 节点
+        let mut budget = 3usize;
+        let mut truncated = false;
+        let mut count = 0usize;
+        let nodes = walk(&ws, &d, 8, false, &mut budget, &mut truncated, &mut count)
+            .unwrap();
+        assert_eq!(count, 3, "预算耗尽即止：{count}");
+        assert!(truncated, "预算截断必须亮旗");
+        let built: usize = nodes.iter().map(count_nodes).sum();
+        assert_eq!(built, 3, "建出节点数与预算一致：{built}");
+        // 预算充足 → 不亮旗、全量建
+        let mut budget = 100usize;
+        let mut truncated = false;
+        let mut count = 0usize;
+        let nodes = walk(&ws, &d, 8, false, &mut budget, &mut truncated, &mut count)
+            .unwrap();
+        assert_eq!(count, 5, "fixture 全量 5 件：{count}");
+        assert!(!truncated, "预算充足不亮旗");
+        let built: usize = nodes.iter().map(count_nodes).sum();
+        assert_eq!(built, 5, "全量建出：{built}");
         let _ = std::fs::remove_dir_all(d);
     }
 

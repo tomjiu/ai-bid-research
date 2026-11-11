@@ -238,6 +238,22 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         result(&resp)["path"] == json!("sub") && result(&resp)["nodes"].as_array().unwrap().iter().all(|n| n["name"] == "deep"),
         format!("{}", result(&resp)["path"]),
     );
+    // ---- #47 R18：fs.tree 截断诚实面——深度上限截到有内容的目录必须
+    //      亮 truncated 旗（旧实现静默空——消费方把「看不见」当「没有」：
+    //      向导宣称「工作区里没有可导入的文件」）；全量可见时不虚报。
+    //      自检工作区 sub/deep/note.txt 三层：depth=1 截断 sub 展开 → 亮旗。
+    let resp18 = call(&ctx, json!({"id":"t-tree18","cmd":"fs.tree","depth":1}));
+    let tree18 = result(&resp18);
+    r.check(
+        "fs.tree 深度截断亮旗",
+        tree18["truncated"] == json!(true),
+        format!("truncated={}", tree18["truncated"]),
+    );
+    r.check(
+        "fs.tree 全量不虚报截断",
+        tree["truncated"] == json!(false),
+        format!("truncated={}", tree["truncated"]),
+    );
 
     // ---- fs.read
     let resp = call(&ctx, json!({"id":"t-read","cmd":"fs.read","path":"技术标.md"}));
@@ -728,6 +744,29 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             && ing2["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
             && ing2["skipped"][0]["reason"].as_str() == Some("already_present"),
         format!("{}", ing2["skipped"][0]["reason"].as_str().unwrap_or("?")),
+    );
+    // ---- #47 R17：拖拽白名单与解析面对齐——.ods 摘除。解析路由（bid-tools
+    //      service.rs）只认 docx/xlsx/pdf/doc 四类，.ods 落位后导入必失败
+    //      （「不支持的文件类型」）——白名单在壳侧拒落位（ext_blocked 分账，
+    //      不按错误回），用户得到明确的合法四类指引而不是白跑一趟。
+    let ods_src = scratch_dir().join("报价清单.ods");
+    std::fs::write(&ods_src, b"PK\x03\x04selftest-ods-zip-payload").unwrap();
+    let resp = call(&ctx, json!({"id":"t-bid-ingods","cmd":"bid.ingest_drop","paths":[ods_src.to_string_lossy()]}));
+    let ing_ods = result(&resp);
+    r.check(
+        "bid.ingest_drop(.ods 摘除对齐解析面)",
+        resp["ok"] == json!(true)
+            && ing_ods["copied"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && ing_ods["skipped"][0]["reason"].as_str() == Some("ext_blocked")
+            && ing_ods["skipped"][0]["detail"]
+                .as_str()
+                .map(|d| d.contains("docx/xlsx/pdf/doc"))
+                .unwrap_or(false),
+        format!(
+            "copied={} detail={}",
+            ing_ods["copied"].as_array().map(|a| a.len()).unwrap_or(0),
+            ing_ods["skipped"][0]["detail"].as_str().unwrap_or("?"),
+        ),
     );
     // ---- #47 R10（平台区分③）：基名跨平台守卫——CON.docx 在 Linux 真实
     //      可创建（文件在场、后缀过白名单），但落位被守卫分账拒绝
