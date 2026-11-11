@@ -173,3 +173,84 @@ class TestCollectCLI:
         assert excinfo.value.code == 0
         out = capsys.readouterr().out
         assert "collect" in out
+
+
+class TestCollectCLINoClobber:
+    """R104 collect CLI：入库走不倒退合并，实质分账明示。"""
+
+    def test_recollect_sparse_preserves_and_reports(self, tmp_path, capsys):
+        """稀疏重采：库内字段保值 + 「已入库 0 条」+ 无变化提示。"""
+        import json as _json
+
+        src = tmp_path / "ann"
+        src.mkdir()
+        (src / "a.json").write_text(
+            _json.dumps(
+                [
+                    {
+                        "bid_id": "RC-1",
+                        "project_name": "智慧校园",
+                        "budget": 200.0,
+                        "winner": "甲公司",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        db_path = tmp_path / "b.db"
+        cli.main(["collect", "--source", str(src), "--db", str(db_path)])
+        assert "已入库 1 条" in capsys.readouterr().out
+        # 另一采集批次只有编号与名称（稀疏形态）
+        (src / "a.json").write_text(
+            _json.dumps(
+                [{"bid_id": "RC-1", "project_name": "智慧校园"}],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        code = cli.main(["collect", "--source", str(src), "--db", str(db_path)])
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "已入库 0 条" in out  # 无实质写入（merged=0）
+        with BidDatabase(db_path) as db:
+            row = db.get_bid("RC-1")
+        assert row["budget"] == 200.0
+        assert row["winner"] == "甲公司"
+
+    def test_recollect_enriched_reports_substance(self, tmp_path, capsys):
+        """增补重采：分账渲染（补缺/修正）。"""
+        import json as _json
+
+        src = tmp_path / "ann"
+        src.mkdir()
+        (src / "a.json").write_text(
+            _json.dumps(
+                [{"bid_id": "RC-2", "project_name": "智慧医院", "budget": 90.0}],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        db_path = tmp_path / "b.db"
+        cli.main(["collect", "--source", str(src), "--db", str(db_path)])
+        capsys.readouterr()
+        (src / "a.json").write_text(
+            _json.dumps(
+                [
+                    {
+                        "bid_id": "RC-2",
+                        "project_name": "智慧医院",
+                        "budget": 90.0,
+                        "agency": "某代理",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        code = cli.main(["collect", "--source", str(src), "--db", str(db_path)])
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "已入库 1 条" in out  # inserted 0 + merged 1
+        assert "更新 1：补缺 1 / 修正 0 个字段" in out
+        assert db_path.exists()

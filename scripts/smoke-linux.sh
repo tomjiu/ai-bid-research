@@ -121,4 +121,57 @@ assert "\r" not in body, "行尾非 LF（R45 契约违背）"
 print("批 N 断言通过：十八至二十一节 + 跨平台信号 + 域名归一")
 PYASSERT_N
 
+
+# ---------- 批 O（R101-R104：同件合并「更完整记录胜出」） ----------
+step "批 O：同件合并——完备性 + 不倒退"
+ODB="$TMP_DIR/smoke-o.db"
+OSRC="$TMP_DIR/smoke-o-src"
+mkdir -p "$OSRC"
+# 首采：完整形态（预算 + 中标人）
+cat > "$OSRC/full.json" << 'JSON_O1'
+[{"bid_id": "SO-001", "project_name": "智慧燃气改造", "budget": 420.0, "winner": "甲公司"}]
+JSON_O1
+"$PYTHON" main.py collect --source "$OSRC/full.json" --db "$ODB"
+# 稀疏重采：另一源只收录编号与名称——不得抹库
+cat > "$OSRC/sparse.json" << 'JSON_O2'
+[{"bid_id": "SO-001", "project_name": "智慧燃气改造"}]
+JSON_O2
+"$PYTHON" main.py collect --source "$OSRC/sparse.json" --db "$ODB" > "$TMP_DIR/o-sparse.out" 2>&1
+# 变更公告形态：预算下修 + 新增截止
+cat > "$OSRC/revised.json" << 'JSON_O3'
+[{"bid_id": "SO-001", "project_name": "智慧燃气改造", "budget": 398.0, "deadline": "2026-12-15"}]
+JSON_O3
+"$PYTHON" main.py collect --source "$OSRC/revised.json" --db "$ODB" > "$TMP_DIR/o-revised.out" 2>&1
+# 导入面：稀疏导入不倒退
+cat > "$TMP_DIR/o-import.json" << 'JSON_O4'
+[{"bid_id": "SO-001", "project_name": "智慧燃气改造"}]
+JSON_O4
+"$PYTHON" main.py db --db "$ODB" --import "$TMP_DIR/o-import.json" > "$TMP_DIR/o-import.out" 2>&1
+"$PYTHON" - "$TMP_DIR" "$ODB" << 'PYASSERT_O'
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+tmp = Path(sys.argv[1])
+sparse = (tmp / "o-sparse.out").read_text(encoding="utf-8")
+revised = (tmp / "o-revised.out").read_text(encoding="utf-8")
+imp = (tmp / "o-import.out").read_text(encoding="utf-8")
+
+# 稀疏重采：无实质写入（已入库 0 条）
+assert "已入库 0 条" in sparse, f"稀疏重采应零实质写入: {sparse[-200:]}"
+# 变更公告：分账明示（补缺 1 = deadline；修正 1 = budget）
+assert "更新 1：补缺 1 / 修正 1 个字段" in revised, f"变更修正分账缺失: {revised[-200:]}"
+# 导入面：对既有行不倒退
+assert "已导入 0 条项目记录" in imp, f"稀疏导入应零实质写入: {imp[-200:]}"
+
+conn = sqlite3.connect(sys.argv[2])
+row = conn.execute(
+    "SELECT budget, winner, deadline FROM bids WHERE bid_id = 'SO-001'"
+).fetchone()
+conn.close()
+assert row == (398.0, "甲公司", "2026-12-15"), f"库值倒退/丢失: {row}"
+print("批 O 断言通过：稀疏重采保值 + 变更修正分账 + 导入不倒退")
+PYASSERT_O
+
 printf '\nSMOKE OK（Linux 离线全链）\n'

@@ -292,17 +292,20 @@ class ResearchPipeline:
         since: Optional[float] = None,
         resume_sweep: bool = False,
     ) -> tuple:
-        """collect 阶段：装载（可水位增量）→ 去重 → 新/更新分账 upsert。
+        """collect 阶段：装载（可水位增量）→ 去重（R101 完备性
+        合并）→ 新/更新分账（R103：更新走 merge_bid 不倒退）。
 
         resume_sweep（R58）：库内 ``extract_status='raw'`` 的崩溃
         残留重新视为「新」——源文件是真源，重装载拿到完整
-        AnnouncementRecord（含原文 extras），extract 才有料可抽。
-        """
+        AnnouncementRecord（含原文 extras），extract 才有料可抽；
+        补抽行同样 merge_bid（源侧新字段不因崩溃残留而丢）。"""
         loaded = load_records(source, since=since)  # SourceError 直抛
         deduped = dedupe_records(loaded.records)
 
         new_records: List[Any] = []
         updated_count = 0
+        updated_filled = 0
+        updated_changed = 0
         recovered = 0
         with BidDatabase(self.db_path) as db:
             # R62：单查询预取身份集合（消逐条 get_bid 的 N+1），
@@ -322,10 +325,16 @@ class ResearchPipeline:
                         existing_ids.add(record.bid_id)
                     elif record.bid_id in raw_ids:
                         new_records.append(record)  # 崩溃残留补抽（R58）
+                        db.merge_bid(record.to_bid_row())  # 源侧新字段不丢
                         recovered += 1
                     else:
-                        db.save_bid(record.to_bid_row())  # 幂等覆盖（可能带新字段）
+                        # 已存在：不倒退合并（R103）——稀疏重导不抹库、
+                        # 变更修正合法更新；updated 语义保持「存在即
+                        # 复核」兼容口径，真实变化另记 filled/changed
+                        merged = db.merge_bid(record.to_bid_row())
                         updated_count += 1
+                        updated_filled += merged["filled"]
+                        updated_changed += merged["changed"]
 
         stage = StageResult(
             name="collect",
@@ -336,7 +345,10 @@ class ResearchPipeline:
                 "deduped": deduped.removed,
                 "new": len(new_records),
                 "updated": updated_count,
+                "updated_filled": updated_filled,
+                "updated_changed": updated_changed,
                 **({"recovered_raw": recovered} if resume_sweep else {}),
+                **({"merged_fields": deduped.merged_events} if deduped.removed else {}),
             },
             failures=list(loaded.failures),
         )

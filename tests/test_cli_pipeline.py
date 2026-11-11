@@ -136,3 +136,69 @@ class TestPipelineCLI:
         assert code == 0
         assert "警告：未检测到" in out
         assert "[extract] skipped" in out
+
+
+class TestPipelineCLIMergeRender:
+    """R103 collect 渲染面：真实变化明示（零变化零噪音）。"""
+
+    def test_substance_line_shows_fill_and_change(self, tmp_path, capsys):
+        """补缺/修正入渲染行；同值重跑不出现「更新实质」。"""
+        src = tmp_path / "ann"
+        src.mkdir()
+        db = tmp_path / "b.db"
+        out_dir = tmp_path / "r"
+
+        def _run(records):
+            (src / "a.json").write_text(
+                json.dumps(records, ensure_ascii=False), encoding="utf-8"
+            )
+            code = cli.main(
+                [
+                    "pipeline", "--source", str(src), "--db", str(db),
+                    "--output-dir", str(out_dir), "--no-llm",
+                ]
+            )
+            assert code == 0
+            return capsys.readouterr().out
+
+        # 首跑：完整形态（预算 + 截止）
+        out1 = _run(
+            [
+                {
+                    "bid_id": "MR-1",
+                    "project_name": "智慧路灯",
+                    "budget": 40.0,
+                    "deadline": "2026-12-01",
+                }
+            ]
+        )
+        assert "更新实质" not in out1
+        # 变更公告形态：预算下修 + 新增中标人
+        out2 = _run(
+            [
+                {
+                    "bid_id": "MR-1",
+                    "project_name": "智慧路灯",
+                    "budget": 35.0,
+                    "deadline": "2026-12-01",
+                    "winner": "丙公司",
+                }
+            ]
+        )
+        assert "更新实质：补缺 1 / 修正 1 个字段" in out2
+        # 同值重跑：零变化零噪音
+        out3 = _run(
+            [
+                {
+                    "bid_id": "MR-1",
+                    "project_name": "智慧路灯",
+                    "budget": 35.0,
+                    "deadline": "2026-12-01",
+                    "winner": "丙公司",
+                }
+            ]
+        )
+        assert "更新实质" not in out3
+        with BidDatabase(db) as conn:
+            row = conn.get_bid("MR-1")
+        assert (row["budget"], row["winner"]) == (35.0, "丙公司")

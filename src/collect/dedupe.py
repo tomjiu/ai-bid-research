@@ -15,6 +15,20 @@
 确定性可复现；后到者登记进 duplicates（含原因与保留者 bid_id），
 不静默丢弃——研究面可核对每次去重判定。
 
+**完备性合并（R101，「更完整记录胜出」的保守形态）**：同件后到
+证据不只丢进 duplicates——保留者**空缺**的字段会被后到值填充
+（字段级 coalesce：保留者已有值不覆盖，确定性不受装载顺序影响
+以外的因素扰动）。合并了什么在 duplicates 明细 ``merged_fields``
+逐条可核对（不静默）。语义边界：同 dedup 键 = 同一公告的证据，
+字段填充是证据合并非臆造；冲突值 keep-first（同批快照无时间
+先后的新证据——跨批更新走 pipeline ``merge_bid`` 的时序语义）。
+
+合并副作用两则（为保证后续判重不漏）：保留者获得 source_url 后
+登记链接键；填充 publish_date/region 后指纹变化，新指纹补登记
+（旧登记保留——两枚指纹都是该件的证据）。已入库的 unique 记录
+不做级联合并（同一新指纹撞上另一保留者的极端形态不回溯重裁，
+登记先到优先——如实登记的边界，不装完备）。
+
 source_url 归一规则（比较用，不改写记录原值）：
 
 - 去首尾空白；
@@ -56,6 +70,62 @@ class DedupeResult:
     def removed(self) -> int:
         """被去除的重复条数。"""
         return len(self.duplicates)
+
+    @property
+    def merged_events(self) -> int:
+        """发生了字段填充的判重事件数（R101 完备性合并）。"""
+        return sum(1 for d in self.duplicates if d["merged_fields"])
+
+
+#: 参与完备性合并的字段（确定性顺序——merged_fields 报告序）。
+#: 不含 bid_id / project_name（身份与必填面，永不合并）。
+_MERGEABLE_FIELDS = (
+    "region",
+    "budget",
+    "publish_date",
+    "deadline",
+    "category",
+    "purchaser",
+    "agency",
+    "winner",
+    "source_url",
+    "requirements",
+)
+
+
+def _missing(value) -> bool:
+    """字段值是否算空缺（None / 空串 / 空列表）。
+
+    ``0.0`` 是记录在案的预算值（病态但如实）——不算空缺，
+    十七节语义审计负责揭示，合并面不吞证据。
+    """
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    if isinstance(value, list) and not value:
+        return True
+    return False
+
+
+def _merge_into_kept(kept: AnnouncementRecord, incoming: AnnouncementRecord):
+    """后到件填充保留者的空缺字段（字段级 coalesce，R101）。
+
+    Returns:
+        填充的字段名列表（按 ``_MERGEABLE_FIELDS`` 序，供
+        duplicates 明细 ``merged_fields`` 分账）。
+    """
+    filled: List[str] = []
+    for name in _MERGEABLE_FIELDS:
+        if _missing(getattr(kept, name)) and not _missing(
+            getattr(incoming, name)
+        ):
+            value = getattr(incoming, name)
+            if isinstance(value, list):
+                value = list(value)  # 拷贝——后到件后续变化不影响保留者
+            setattr(kept, name, value)
+            filled.append(name)
+    return filled
 
 
 def normalize_source_url(url: Optional[str]) -> Optional[str]:
@@ -111,18 +181,35 @@ def dedupe_records(
     seen_bid_ids: Dict[str, str] = {}
     seen_urls: Dict[str, str] = {}
     seen_fingerprints: Dict[str, str] = {}
+    kept_records: Dict[str, AnnouncementRecord] = {}
+
+    def _register_evidence(record: AnnouncementRecord) -> None:
+        """收编新记录（或合并后补登记）的三类证据键。"""
+        seen_bid_ids[record.bid_id.strip().upper()] = record.bid_id
+        kept_records[record.bid_id] = record
+        url_key = normalize_source_url(record.source_url)
+        if url_key is not None and url_key not in seen_urls:
+            seen_urls[url_key] = record.bid_id
+        fp_key = record.fingerprint()
+        if fp_key not in seen_fingerprints:
+            seen_fingerprints[fp_key] = record.bid_id
 
     for record in records:
         # 证据强度 1：bid_id（大小写/空白不敏感）
         bid_key = record.bid_id.strip().upper()
         kept = seen_bid_ids.get(bid_key)
         if kept is not None:
+            merged = _merge_into_kept(kept_records[kept], record)
+            # 填充 publish_date/region 会变指纹、获得 source_url 会增
+            # 链接键——无条件补登记（幂等），后续判重不漏
+            _register_evidence(kept_records[kept])
             result.by_bid_id += 1
             result.duplicates.append(
                 {
                     "bid_id": record.bid_id,
                     "reason": "bid_id",
                     "duplicate_of": kept,
+                    "merged_fields": merged,
                 }
             )
             continue
@@ -132,12 +219,15 @@ def dedupe_records(
         if url_key is not None:
             kept = seen_urls.get(url_key)
             if kept is not None:
+                merged = _merge_into_kept(kept_records[kept], record)
+                _register_evidence(kept_records[kept])
                 result.by_source_url += 1
                 result.duplicates.append(
                     {
                         "bid_id": record.bid_id,
                         "reason": "source_url",
                         "duplicate_of": kept,
+                        "merged_fields": merged,
                     }
                 )
                 continue
@@ -148,20 +238,20 @@ def dedupe_records(
         fp_key = record.fingerprint()
         kept = seen_fingerprints.get(fp_key)
         if kept is not None:
+            merged = _merge_into_kept(kept_records[kept], record)
+            _register_evidence(kept_records[kept])
             result.by_fingerprint += 1
             result.duplicates.append(
                 {
                     "bid_id": record.bid_id,
                     "reason": "fingerprint",
                     "duplicate_of": kept,
+                    "merged_fields": merged,
                 }
             )
             continue
 
         # 新记录——登记三类证据键后收编
         result.unique.append(record)
-        seen_bid_ids[bid_key] = record.bid_id
-        if url_key is not None:
-            seen_urls[url_key] = record.bid_id
-        seen_fingerprints[fp_key] = record.bid_id
+        _register_evidence(record)
     return result

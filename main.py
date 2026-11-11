@@ -608,7 +608,17 @@ def run_collect(args: argparse.Namespace) -> int:
           f" / 指纹 {deduped.by_fingerprint}），"
           f"待入库 {len(deduped.unique)} 条")
     for dup in deduped.duplicates:
-        print(f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件（{dup['reason']}）")
+        merged = dup.get("merged_fields") or []
+        suffix = f"；补全 {'/'.join(merged)}" if merged else ""
+        print(
+            f"  ≈ {dup['bid_id']} 与 {dup['duplicate_of']} 同件"
+            f"（{dup['reason']}{suffix}）"
+        )
+    if deduped.merged_events:
+        print(
+            f"  其中 {deduped.merged_events} 条补全了保留者空缺字段"
+            "（字段级合并，不覆盖已有值）"
+        )
 
     # 健全性告警面（R33）——告警不拒收，逐条可见供复核
     warned = [r for r in deduped.unique if r.warnings]
@@ -624,8 +634,16 @@ def run_collect(args: argparse.Namespace) -> int:
         return 0
 
     with BidDatabase(args.db) as db:
-        saved = db.import_bids([r.to_bid_row() for r in deduped.unique])
-    print(f"已入库 {saved} 条 → {args.db}")
+        stats = db.merge_bids([r.to_bid_row() for r in deduped.unique])
+    written = stats["inserted"] + stats["merged"]
+    line = f"已入库 {written} 条 → {args.db}"
+    if stats["merged"]:
+        # R104：不倒退合并的实质分账明示（零变化零噪音）
+        line += (
+            f"（更新 {stats['merged']}：补缺 {stats['filled']}"
+            f" / 修正 {stats['changed']} 个字段；{stats['unchanged']} 条无变化）"
+        )
+    print(line)
     return 0
 
 
@@ -941,6 +959,15 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 f"（新 {detail['new']} / 更新 {detail['updated']}），"
                 f"去重 {detail['deduped']}，失败 {len(stage.failures)}"
             )
+            # R103/R101：真实变化明示——不倒退合并的补缺/修正字段数
+            # 与批内完备性补全件数（零变化零噪音）
+            if detail.get("updated_filled") or detail.get("updated_changed"):
+                line += (
+                    f"；更新实质：补缺 {detail['updated_filled']}"
+                    f" / 修正 {detail['updated_changed']} 个字段"
+                )
+            if detail.get("merged_fields"):
+                line += f"；批内补全 {detail['merged_fields']} 件"
         elif stage.name == "extract":
             line = (
                 f"抽取 {detail['extracted']} 条"
@@ -1178,8 +1205,17 @@ def run_db(args: argparse.Namespace) -> int:
                 print(f"错误：导入 JSON 解析失败: {exc}", file=sys.stderr)
                 return EXIT_DATA
             bids = payload if isinstance(payload, list) else [payload]
-            saved = db.import_bids(bids)
-            print(f"已导入 {saved} 条项目记录 → {db_path}")
+            stats = db.merge_bids(bids)
+            written = stats["inserted"] + stats["merged"]
+            line = f"已导入 {written} 条项目记录 → {db_path}"
+            if stats["merged"]:
+                # R104：导入对既有行不倒退合并——库内更完整记录胜出
+                line += (
+                    f"（更新 {stats['merged']}：补缺 {stats['filled']}"
+                    f" / 修正 {stats['changed']} 个字段；"
+                    f"{stats['unchanged']} 条无变化）"
+                )
+            print(line)
 
         if args.query:
             rows = db.query_bids(keyword=args.query, days=args.days)

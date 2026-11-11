@@ -110,3 +110,41 @@ class TestBatchNDocs:
         )
         for module in ("agencies.py", "categories.py", "platforms.py"):
             assert f"`{module}`" in boundary, f"[{module}] 未见于边界表"
+
+
+class TestBatchODocs:
+    """批 O 文档增量契约（R101-R104：同件合并「更完整记录胜出」）。"""
+
+    @pytest.mark.parametrize(
+        "feature,marker",
+        [
+            ("批内完备性合并登记", "完备性合并"),
+            ("merge_bid 存储面登记", "merge_bid"),
+            ("不倒退口径声明", "不抹库"),
+            ("冲突值 keep-first 口径", "keep-first"),
+            ("变更修正合法更新口径", "新证据"),
+            ("批 O 迭代总结", "R101"),
+        ],
+    )
+    def test_boundary_and_guide_updated(self, feature, marker):
+        root = Path(__file__).resolve().parent.parent
+        boundary = (root / "docs" / "PYTHON-BOUNDARY.md").read_text(
+            encoding="utf-8"
+        )
+        guide = (root / "docs" / "USER-GUIDE.md").read_text(encoding="utf-8")
+        assert marker in boundary or marker in guide, (
+            f"[{feature}] 标记 [{marker}] 未见于任何文档"
+        )
+
+    def test_batch_o_modules_in_boundary_table(self):
+        """两新面成行登记（§2 表——边界声明的唯一真源）。"""
+        root = Path(__file__).resolve().parent.parent
+        boundary = (root / "docs" / "PYTHON-BOUNDARY.md").read_text(
+            encoding="utf-8"
+        )
+        assert "`src/collect/dedupe.py` 完备性合并（R101）" in boundary, (
+            "R101 模块行未登记于 PYTHON-BOUNDARY §2"
+        )
+        assert "`merge_bid`/`merge_bids`（R102/R104）" in boundary, (
+            "R102/R104 模块行未登记于 PYTHON-BOUNDARY §2"
+        )

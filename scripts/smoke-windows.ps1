@@ -119,6 +119,66 @@ print('批 N 断言通过：十八至二十一节 + 跨平台信号 + 域名归�
 "@
 
     Write-Host ''
+    Write-Host '== 批 O 同件合并：完备性 + 不倒退（R101-R104） =='
+    & $Python -c @"
+import json
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+tmp = Path(r'$TmpDir')
+src = tmp / 'smoke-o-src'
+src.mkdir(exist_ok=True)
+src.joinpath('full.json').write_text(
+    json.dumps([{"bid_id": "SO-001", "project_name": "智慧燃气改造",
+                 "budget": 420.0, "winner": "甲公司"}], ensure_ascii=False),
+    encoding='utf-8')
+src.joinpath('sparse.json').write_text(
+    json.dumps([{"bid_id": "SO-001", "project_name": "智慧燃气改造"}],
+               ensure_ascii=False),
+    encoding='utf-8')
+src.joinpath('revised.json').write_text(
+    json.dumps([{"bid_id": "SO-001", "project_name": "智慧燃气改造",
+                 "budget": 398.0, "deadline": "2026-12-15"}],
+               ensure_ascii=False),
+    encoding='utf-8')
+imp = tmp / 'o-import.json'
+imp.write_text(
+    json.dumps([{"bid_id": "SO-001", "project_name": "智慧燃气改造"}],
+               ensure_ascii=False),
+    encoding='utf-8')
+db = (tmp / 'smoke-o.db').as_posix()
+
+
+def run(*args):
+    p = subprocess.run(
+        [sys.executable, 'main.py', *args],
+        capture_output=True, text=True, encoding='utf-8',
+    )
+    assert p.returncode == 0, p.stderr[-300:]
+    return p.stdout
+
+
+run('collect', '--source', (src / 'full.json').as_posix(), '--db', db)
+sparse = run('collect', '--source', (src / 'sparse.json').as_posix(),
+             '--db', db)
+revised = run('collect', '--source', (src / 'revised.json').as_posix(),
+              '--db', db)
+imp_out = run('db', '--db', db, '--import', imp.as_posix())
+assert '已入库 0 条' in sparse, '稀疏重采应零实质写入'
+assert '更新 1：补缺 1 / 修正 1 个字段' in revised, '变更修正分账缺失'
+assert '已导入 0 条项目记录' in imp_out, '稀疏导入应零实质写入'
+conn = sqlite3.connect(db)
+row = conn.execute(
+    "SELECT budget, winner, deadline FROM bids WHERE bid_id = 'SO-001'"
+).fetchone()
+conn.close()
+assert row == (398.0, '甲公司', '2026-12-15'), '库值倒退/丢失: %r' % (row,)
+print('批 O 断言通过：稀疏重采保值 + 变更修正分账 + 导入不倒退')
+"@
+
+    Write-Host ''
     Write-Host 'SMOKE OK（Windows 离线全链）'
 }
 finally {

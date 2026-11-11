@@ -190,3 +190,126 @@ class TestPipelineFailureFaces:
         import pathlib
 
         assert pathlib.Path(result.payload["_html_path"]).exists()
+
+
+class TestNoClobberCollect:
+    """R103 不倒退合并接链：collect 更新走 merge_bid。
+
+    「更完整记录胜出」的管道面——稀疏源重导不抹库、变更修正
+    合法更新、真实变化 filled/changed 分账可见。
+    """
+
+    def _write(self, src, records):
+        (src / "a.json").write_text(
+            json.dumps(records, ensure_ascii=False), encoding="utf-8"
+        )
+
+    @pytest.fixture()
+    def src(self, tmp_path):
+        d = tmp_path / "ann"
+        d.mkdir()
+        return d
+
+    def test_sparse_rerun_preserves_db(self, src, tmp_path):
+        """稀疏源重跑：库内 budget/agency/winner 全保值不倒退。"""
+        self._write(
+            src,
+            [
+                {
+                    "bid_id": "NC-1",
+                    "project_name": "智慧水务",
+                    "budget": 350.0,
+                    "agency": "某代理",
+                    "winner": "甲公司",
+                }
+            ],
+        )
+        db_path = tmp_path / "b.db"
+        pipeline = ResearchPipeline(db_path, output_dir=tmp_path / "r")
+        pipeline.run(src)
+        # 另一源只收录了编号与名称——盲覆盖会抹掉三个字段
+        self._write(src, [{"bid_id": "NC-1", "project_name": "智慧水务"}])
+        second = pipeline.run(src)
+        detail = second.stage("collect").detail
+        assert detail["updated"] == 1
+        assert detail["updated_filled"] == 0
+        assert detail["updated_changed"] == 0
+        with BidDatabase(db_path) as db:
+            row = db.get_bid("NC-1")
+        assert row["budget"] == 350.0
+        assert row["agency"] == "某代理"
+        assert row["winner"] == "甲公司"
+
+    def test_enriched_rerun_fills_and_changes(self, src, tmp_path):
+        """源侧修订（变更公告形态）：补缺 + 修正都入账。"""
+        self._write(
+            src,
+            [
+                {
+                    "bid_id": "NC-2",
+                    "project_name": "智慧交通",
+                    "budget": 100.0,
+                }
+            ],
+        )
+        db_path = tmp_path / "b.db"
+        pipeline = ResearchPipeline(db_path, output_dir=tmp_path / "r")
+        pipeline.run(src)
+        # 变更公告：预算下修 + 新增截止日与中标人
+        self._write(
+            src,
+            [
+                {
+                    "bid_id": "NC-2",
+                    "project_name": "智慧交通",
+                    "budget": 88.0,
+                    "deadline": "2026-12-20",
+                    "winner": "乙公司",
+                }
+            ],
+        )
+        second = pipeline.run(src)
+        detail = second.stage("collect").detail
+        assert detail["updated_filled"] == 2  # deadline + winner
+        assert detail["updated_changed"] == 1  # budget 100→88
+        with BidDatabase(db_path) as db:
+            row = db.get_bid("NC-2")
+        assert row["budget"] == 88.0
+        assert row["deadline"] == "2026-12-20"
+        assert row["winner"] == "乙公司"
+
+    def test_identical_rerun_zero_substance(self, src, tmp_path):
+        """同值重跑：updated 计数（存在即复核口径）但实质分账为零。"""
+        records = [
+            {"bid_id": "NC-3", "project_name": "智慧园区", "budget": 50.0}
+        ]
+        self._write(src, records)
+        db_path = tmp_path / "b.db"
+        pipeline = ResearchPipeline(db_path, output_dir=tmp_path / "r")
+        pipeline.run(src)
+        second = pipeline.run(src)
+        detail = second.stage("collect").detail
+        assert detail["updated"] == 1
+        assert detail["updated_filled"] == 0
+        assert detail["updated_changed"] == 0
+
+    def test_batch_merge_flows_to_db(self, src, tmp_path):
+        """R101 批内补全 + R103 首跑入库链通：同件两源合并后一次入库。"""
+        self._write(
+            src,
+            [
+                {"bid_id": "NC-4", "project_name": "智慧安防", "region": "浙江"},
+                {"bid_id": "nc-4", "project_name": "智慧安防", "budget": 66.0},
+            ],
+        )
+        db_path = tmp_path / "b.db"
+        pipeline = ResearchPipeline(db_path, output_dir=tmp_path / "r")
+        result = pipeline.run(src)
+        detail = result.stage("collect").detail
+        assert detail["deduped"] == 1
+        assert detail["merged_fields"] == 1  # 批内补全事件数
+        assert detail["new"] == 1
+        with BidDatabase(db_path) as db:
+            row = db.get_bid("NC-4")
+        assert row["region"] == "浙江"
+        assert row["budget"] == 66.0  # 后到件补全的字段随首跑入库
