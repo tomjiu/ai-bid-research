@@ -3584,6 +3584,8 @@ fn parse_export_decision(profile: &Value) -> Result<bid_tools::export::ExportDec
     }
     // #117 任务 2：格式件决策面（全部可选；类型不对响亮拒）
     d.project_name = opt_str(profile, "project_name", TOOL)?;
+    // #88 修复 7：项目编号显式决策面（缺省回落 REQ 参数账 model 键）
+    d.project_no = opt_str(profile, "project_no", TOOL)?;
     match profile.get("duration_days") {
         None | Some(Value::Null) => {}
         Some(v) if v.is_u64() => {
@@ -3984,13 +3986,105 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
             })
         }
     };
+    // ---- #88 修复 7（F-06/P0-4）：三件套数据缺位豁免（显式理由——
+    //      非空才生效；进幂等键：豁免与否是不同的导出裁决）
+    let waive_format_placeholder: Option<String> = match args.get("waive_format_placeholder") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_format_placeholder 须为非空理由（空串 = 不豁免——fail-closed 不放水；无法定授权委托/确认带【待填】导出等场景请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_format_placeholder 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // ---- #88 修复 8a（F-09）：超篇幅豁免 + 可配阈值（进幂等键：阈值/
+    //      豁免变化 = 不同门裁决，不吃旧键缓存跳门）
+    let waive_length_overrun: Option<String> = match args.get("waive_length_overrun") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_length_overrun 须为非空理由（空串 = 不豁免——fail-closed 不放水；评标办法不设页数限制等场景请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_length_overrun 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // 阈值：1..=10000（缺省 50——审计建议值；0 语义为「一字不许超」过苛且
+    // 多为误传，响亮拒并给出区间）
+    let max_overrun_pct: u32 = match args.get("max_overrun_pct") {
+        None | Some(Value::Null) => 50,
+        Some(Value::Number(n)) => {
+            let v = n.as_u64().ok_or_else(|| ToolError::EUnprocessable {
+                what: format!("{TOOL}: max_overrun_pct 须为正整数（1..=10000），实际：{n}"),
+            })?;
+            if !(1..=10000).contains(&v) {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: max_overrun_pct 值域 1..=10000（%——超出配额该比例拒；缺省 50 审计建议值；实质停用传 10000），实际：{v}"
+                    ),
+                });
+            }
+            v as u32
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: max_overrun_pct 须为正整数（1..=10000），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // ---- #88 修复 8b（F-14）：抽取健康度常驻（coverage_scan 单一真源
+    //      ——face/marked/regex_fallback/excluded + REQ 总数；零标记文件
+    //      走正则兜底 → 响亮告知核对通道）
+    let (cov_summary, _cov_gaps, _cov_unjudged) = coverage_scan(svc);
+    let extraction_health = json!({
+        "face_files": cov_summary.face_files,
+        "marked_files": cov_summary.marked_files,
+        "regex_fallback_files": cov_summary.regex_fallback_files,
+        "excluded_blocks": cov_summary.excluded_blocks,
+        "requirements": svc.store().requirements().len(),
+    });
+    if cov_summary.regex_fallback_files > 0 {
+        warnings_pre.push(format!(
+            "抽取健康度（#88 F-14）：{} 件文件零标记走正则兜底（条款面可能欠覆盖）——get_coverage_report 核对后 submit_block_marks 补标可提升抽取准确面",
+            cov_summary.regex_fallback_files,
+        ));
+    }
     let ikey = format!(
-        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}:{}:{}",
+        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}:{}:{}:{}:{}:{}",
         svc.store().content_version(),
         dark_bid,
         anonymize.unwrap_or(""),
         waive_star_missing.as_deref().unwrap_or(""),
         waive_unmapped_scoring.as_deref().unwrap_or(""),
+        waive_format_placeholder.as_deref().unwrap_or(""),
+        waive_length_overrun.as_deref().unwrap_or(""),
+        max_overrun_pct,
     );
     if let Some(first) = svc.store().idempotent_hit(&ikey).cloned() {
         let mut out = first;
@@ -4024,6 +4118,9 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
             &bid_tools::service::FatalGapWaivers {
                 star_missing: waive_star_missing,
                 unmapped_scoring: waive_unmapped_scoring,
+                format_placeholder: waive_format_placeholder,
+                length_overrun: waive_length_overrun,
+                max_overrun_pct,
             },
         )
         .map_err(ToolError::from)?;
@@ -4043,6 +4140,9 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "toc_field_present": outcome.report.toc_field_present,
         // #88 F-10 证据体检单（四态计数 + Expiring 明细——常驻导出响应）
         "evidence_validity": evidence_validity,
+        // #88 修复 8b（F-14）抽取健康度（常驻——正则兜底/标记覆盖/REQ
+        // 计数；导出成功 ≠ 抽取充分，回执同步携带诚实面）
+        "extraction_health": extraction_health,
         // #317 暗标清理报告（dark 导出在场）：blockers 恒 0（复验不过则
         // 导出被拦）；manual_review 是人工确认清单（WARNING 面——不静默跳过）
         "dark_bid": outcome.report.dark_bid.as_ref().map(|r| serde_json::json!({
@@ -4334,29 +4434,21 @@ struct CoverageGateSummary {
     excluded_blocks: usize,
 }
 
-/// #244 建纲前覆盖闭环门：每个有抽取面的块必居三态之一。
+/// 覆盖闭环扫描（#244 建纲门与 #88 修复 8b 导出健康度的**单一真源**）：
+/// 每文件归入 face/marked/regex_fallback 三态 + C 态区间清单。
 ///
-/// - **A 已判定为要求**：requirement / review_table 标记（产 REQ / 结构化提取）；
-/// - **B 已排除**：noise / rule 标记（理由 `marks.reason`——要求 3 可追溯：
-///   块 ID / 文件 / 区间 / 判定来源都在标记集与解析产物里）；
-/// - **C 未判定**：压根没标记 → 本门阻断（E_COVERAGE_INCOMPLETE +
-///   带块内容摘要的清单——Agent 得知道是什么内容才能判，只给区间号等于没给）。
+/// 零副作用：只读 store + parsed，不落盘、不推版本。返回
+/// (汇总, gap 清单, C 态块总数)——门判（建纲拒）归调用方：
+/// - `build_outline`：C 态非零 → E_COVERAGE_INCOMPLETE（半途而废拒）；
+/// - `export_bid_document`（#88 F-14）：只消费汇总（抽取健康度常驻
+///   导出回执——regex_fallback_files/excluded_blocks 等计数进响应），
+///   不拒（建纲门已把过关；导出面是诚实告知，不是二道门）。
 ///
-/// **门只拦「半途而废」**：文件标记集非空且存在 C 态块才拦；零标记文件
-/// 走正则兜底（#219 前的既有合法路径）——否则 real_corpus_e2e（纯正则
-/// 全链）等既有流程被新门卡死（验收 6：新门不能卡死正常流程）。
-///
-/// **按文件粒度裁决**：「Agent 标了主件、忘了补遗件」时，补遗件零标记
-/// → 正则兜底放行（兜底是既有语义），本门只承诺「开始标的必须标完」。
-///
-/// 零副作用：只读 store + parsed，不落盘、不推版本。
-fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
-    const TOOL: &str = "build_outline";
-    // 每区间展示的块内容摘要条数（够定位 + 不吃爆错误消息）。
-    const SAMPLES_PER_GAP: usize = 3;
-    // 错误消息里 gap 条数上限（超出汇总——全量用 get_coverage_report 查）。
-    const MAX_GAPS_IN_ERROR: usize = 20;
-
+/// 每区间展示的块内容摘要条数（够定位 + 不吃爆错误消息）/ gap 条数上限
+/// （超出汇总——全量用 get_coverage_report 查）：门判与扫描共用同源常量。
+const SAMPLES_PER_GAP: usize = 3;
+const MAX_GAPS_IN_ERROR: usize = 20;
+fn coverage_scan(svc: &BidService) -> (CoverageGateSummary, Vec<String>, usize) {
     let kind_map: std::collections::HashMap<&str, &str> = svc
         .store()
         .files()
@@ -4382,7 +4474,7 @@ fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
         let total = parsed.blocks.len();
         let marks = svc.store().block_marks_of(&f.id);
         if marks.is_empty() {
-            // 零标记：正则兜底路径（GT 红线保护）——不是本门的对象。
+            // 零标记：正则兜底路径（GT 红线保护）——不是门的对象。
             summary.regex_fallback_files += 1;
             continue;
         }
@@ -4426,21 +4518,38 @@ fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
             gaps.push(gap);
         }
     }
+    (summary, gaps, unjudged_total)
+}
 
+/// #244 建纲前覆盖闭环门：每个有抽取面的块必居三态之一（
+/// [`coverage_scan`] 的门判包装——C 态非零拒）。
+///
+/// - **A 已判定为要求**：requirement / review_table 标记（产 REQ / 结构化提取）；
+/// - **B 已排除**：noise / rule 标记（理由 `marks.reason`——要求 3 可追溯：
+///   块 ID / 文件 / 区间 / 判定来源都在标记集与解析产物里）；
+/// - **C 未判定**：压根没标记 → 本门阻断（E_COVERAGE_INCOMPLETE +
+///   带块内容摘要的清单——Agent 得知道是什么内容才能判，只给区间号等于没给）。
+///
+/// **门只拦「半途而废」**：文件标记集非空且存在 C 态块才拦；零标记文件
+/// 走正则兜底（#219 前的既有合法路径）——否则 real_corpus_e2e（纯正则
+/// 全链）等既有流程被新门卡死（验收 6：新门不能卡死正常流程）。
+///
+/// **按文件粒度裁决**：「Agent 标了主件、忘了补遗件」时，补遗件零标记
+/// → 正则兜底放行（兜底是既有语义），本门只承诺「开始标的必须标完」。
+fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
+    let (summary, mut gaps, unjudged_total) = coverage_scan(svc);
     if unjudged_total > 0 {
         let extra = report_gap_overflow(gaps.len(), MAX_GAPS_IN_ERROR);
         return Err(ToolError::ECoverageIncomplete {
             unjudged_blocks: unjudged_total,
             gaps: {
-                let mut g = gaps;
                 if let Some(e) = extra {
-                    g.push(e);
+                    gaps.push(e);
                 }
-                g
+                gaps
             },
         });
     }
-    let _ = TOOL; // 错误面自带工具语境（E_COVERAGE_INCOMPLETE 仅建纲门产生）
     Ok(summary)
 }
 

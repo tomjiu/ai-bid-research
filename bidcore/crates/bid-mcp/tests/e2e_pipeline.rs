@@ -36,6 +36,41 @@ use serde_json::{json, Value};
 use std::io::Read;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        // 语料 REQ 原文工期 90 日历天——决策与正文同值（门 1i 对账面：
+        // 夹具不制造自相矛盾的两个数）
+        "duration_days": 90,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn fixtures() -> PathBuf {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/corpus-A/files");
     // #183 围栏：词法 `..` 会被围栏预拒——受信夹具根统一 canonical 绝对路径
@@ -84,6 +119,7 @@ fn e2e_tender_in_docx_out() {
     }
     let ws = e2e_dir();
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(fixtures());
+    b4_write_profile(&ws);
 
     // ① 建项目（MCP §1——external_key 幂等）
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
@@ -214,6 +250,8 @@ fn e2e_tender_in_docx_out() {
 
     // ⑧ 导出（MCP §8——成品 docx）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-技术标.docx",
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();
@@ -266,6 +304,7 @@ fn e2e_idempotent_rerun_zero_waste() {
     }
     let ws = e2e_dir();
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(fixtures());
+    b4_write_profile(&ws);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "e2e 幂等", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": "e2e-idem",
     })))["project_id"].as_str().unwrap().to_string();

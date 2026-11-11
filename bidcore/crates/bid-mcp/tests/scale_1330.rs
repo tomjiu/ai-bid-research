@@ -27,6 +27,39 @@ use bid_mcp::{dispatch_with, BidService, ToolCall, ToolReply};
 use serde_json::{json, Value};
 use std::time::Instant;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 /// VmHWM 千字节（Linux /proc——进程生命周期内存峰值）。
 fn vm_hwm_kb() -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
@@ -102,6 +135,7 @@ fn scale_500k_chars_full_pipeline_under_redlines() {
 
     let ws = tmp_dir();
     let mut svc = BidService::open(&ws).unwrap();
+    b4_write_profile(&ws);
     let t_all = Instant::now();
 
     // ① 项目 + 抽取面注入（导入解析在 e2e #64 真件验证——规模测试聚焦
@@ -217,6 +251,7 @@ fn scale_500k_chars_full_pipeline_under_redlines() {
     // ⑥ 导出（Lead 红线：< 120s）——含内存峰值断言（< 2GB）
     let t = Instant::now();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out/规模验证-50万字.docx",
     })));
     let export_ms = t.elapsed().as_millis();

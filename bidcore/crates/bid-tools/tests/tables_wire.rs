@@ -279,6 +279,9 @@ fn full_decision() -> ExportDecision {
         deposit_amount: Some(300_000.0),
         legal_rep_gender: Some("男".into()),
         project_name: Some("智慧病房物联网平台建设项目".into()),
+        // project_no 保持 None——REQ 参数账兜底路径由本测试的夹具验证
+        //（显式决策面路径见 fatal_gates_b4.rs）
+        project_no: None,
         price_breakdown: vec![
             PriceItem {
                 item: "设备采购".into(),

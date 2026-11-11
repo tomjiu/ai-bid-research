@@ -17,6 +17,39 @@ use bid_mcp::{dispatch_with, BidService, ToolCall, ToolReply};
 use serde_json::{json, Value};
 use std::io::Read;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn call(svc: &mut BidService, tool: &str, args: Value) -> ToolReply {
     dispatch_with(svc, ToolCall { tool: tool.to_string(), args })
 }
@@ -102,6 +135,7 @@ fn tmp_dir(tag: &str) -> std::path::PathBuf {
 fn svc_drafted(tag: &str, format_req: bool) -> (BidService, String, std::path::PathBuf) {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "导出测试项目", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": tag,
     })))["project_id"].as_str().unwrap().to_string();
@@ -181,6 +215,7 @@ fn part_text(path: &std::path::Path, name: &str) -> String {
 fn export_full_chain_and_contract_shape() {
     let (mut svc, pid, _dir) = svc_drafted("shape", true);
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     // 契约 §8 out
@@ -213,17 +248,20 @@ fn export_idempotent_replay() {
     // ② 幂等键层（EXPORTED 稳定态下同键重放 → deduplicated=true 零 IO）。
     let (mut svc, pid, _dir) = svc_drafted("idem", false);
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     // 第二次：状态推进后的 content_version 与首键不同——走 manifest no-op
     // （结果全等；产物零重写）
     let b = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(a["artifact"]["sha256"], b["artifact"]["sha256"], "产物 sha 全等（manifest no-op）");
     assert_eq!(a["chapters_written"], b["chapters_written"]);
     // 第三次：EXPORTED 稳定态（content_version 不再变）——幂等键命中
     let c = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(c["deduplicated"], json!(true), "稳定态重放 → deduplicated");
@@ -236,6 +274,7 @@ fn export_pdf_channel_or_env_honest() {
     // （两条路径都不得是「空成功」或「未实现」）
     let (mut svc, pid, _) = svc_drafted("pdf", false);
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "pdf", "output_path": "out/标书.pdf",
     }));
     match &reply {
@@ -257,6 +296,7 @@ fn export_rejects_path_escape() {
     let (mut svc, pid, _) = svc_drafted("escape", false);
     for bad in ["../outside.docx", "/abs/path.docx"] {
         let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
             "project_id": pid, "format": "docx", "output_path": bad,
         }));
         assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "路径逃逸必须拒: {bad}");
@@ -267,10 +307,12 @@ fn export_rejects_path_escape() {
 fn export_rejects_wrong_project_and_version_conflict() {
     let (mut svc, pid, _) = svc_drafted("route", false);
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": "PRJ-9999", "format": "docx", "output_path": "o.docx",
     }));
     assert_eq!(err_code(&reply), "E_NOTFOUND");
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "o.docx", "project_version": 1,
     }));
     assert_eq!(err_code(&reply), "E_CONFLICT");
@@ -284,6 +326,7 @@ fn export_blocked_by_unresponded_mandatory_rows() {
     // → E_UNPROCESSABLE 逐行列出——防废标门（R-03/R-04 闸门）
     let dir = tmp_dir("blocking");
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "阻断测试", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": "blocking",
     })))["project_id"].as_str().unwrap().to_string();
@@ -345,6 +388,7 @@ fn export_blocked_by_unresponded_mandatory_rows() {
     // 走 evidence_missing/提交就绪面，不拦导出）；未起草的否决叶 REQ-0002 仍
     // NotResponded → 导出必须拒且逐行列出（闸门语义由该行承载）。
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE");
@@ -379,6 +423,7 @@ fn export_blocked_by_unresponded_mandatory_rows() {
     pass_setup_gates(&mut svc);
     pass_pre_export_confirm(&mut svc); // #180：正文最后一次写入后记审
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "覆写响应 + 三门过审后导出放行");
@@ -392,6 +437,7 @@ fn export_requires_persisted_workspace() {
         "name": "内存态", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": "mem",
     })))["project_id"].as_str().unwrap().to_string();
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "o.docx",
     }));
     let code = err_code(&reply);
@@ -426,7 +472,7 @@ fn export_dark_bid_anonymizes_company_name() {
 
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "docx", "output_path": "out/暗标.docx",
-        "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司" },
+        "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET" },
     })));
     let url = r["artifact"]["url"].as_str().unwrap();
     let doc_xml = part_text(std::path::Path::new(url), "word/document.xml");
@@ -446,7 +492,8 @@ fn export_dark_bid_missing_bidder_rejects() {
         "project_id": pid, "format": "docx", "output_path": "out/d.docx",
         "profile": profile,
     });
-    // ① 显式 dark_bid=true、bidder_name 缺失 → 拒（幂等键之前的参数前置校验）
+    // ① 显式 dark_bid=true、bidder_name 缺失 → 拒（幂等键之前的参数前置校验——
+    //    早于服务层批次4门，无需决策面）
     let r = call(&mut svc, "export_bid_document", call_args(json!({ "dark_bid": true })));
     assert_eq!(err_code(&r), "E_UNPROCESSABLE");
     let msg = err_text(&r);
@@ -459,8 +506,10 @@ fn export_dark_bid_missing_bidder_rejects() {
     let r = call(&mut svc, "export_bid_document",
         call_args(json!({ "dark_bid": true, "bidder_name": "   " })));
     assert_eq!(err_code(&r), "E_UNPROCESSABLE");
-    // ③ 对照组：不传 dark_bid 的明标导出不受本门影响（既有行为零变化）
-    let ok = ok_result(call(&mut svc, "export_bid_document", call_args(json!({}))));
+    // ③ 对照组：不传 dark_bid 的明标导出不受本门影响（既有行为零变化）。
+    //    决策面用 b4 齐备 profile——批次4门 1j-2/1l/1m 与暗标名门各管各面，
+    //    对照组只验 F-02 不误伤明标，不混入缺位拒（缺位场景见 fatal_gates_b4_e2e）。
+    let ok = ok_result(call(&mut svc, "export_bid_document", call_args(b4_profile())));
     assert!(ok["artifact"]["url"].is_string(), "明标导出不受暗标名门影响");
 }
 
@@ -504,6 +553,7 @@ fn export_handwritten_spec_overrides_derivation() {
         }
     }).to_string()).unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/s.docx",
     })));
     assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("format-spec.json 装载")));
@@ -520,6 +570,7 @@ fn export_rejects_corrupt_spec_file() {
     std::fs::create_dir_all(&mang).unwrap();
     std::fs::write(mang.join("format-spec.json"), "{ not valid json").unwrap();
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "坏 spec 必须拒（fail-closed，不静默降级）");
@@ -529,6 +580,7 @@ fn export_rejects_corrupt_spec_file() {
 fn export_baseline_fallback_when_no_format_clauses() {
     let (mut svc, pid, _) = svc_drafted("baseline", false); // 无格式条款
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/b.docx",
     })));
     assert!(
@@ -549,6 +601,7 @@ fn export_watermark_false_does_not_warn() {
     // 在场即告警，噪音面）；watermark:true 仍应如实告警（未支持面不静默）
     let (mut svc, pid, _) = svc_drafted("wm-false", false);
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书-a.docx",
         "options": { "watermark": false },
     })));
@@ -560,6 +613,7 @@ fn export_watermark_false_does_not_warn() {
 
     let (mut svc2, pid2, _) = svc_drafted("wm-true", false);
     let r2 = ok_result(call(&mut svc2, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid2, "format": "docx", "output_path": "out/标书-b.docx",
         "options": { "watermark": true },
     })));
@@ -607,6 +661,7 @@ fn mk_agent_mandatory_req(id: &str, excerpt: &str) -> Requirement {
 fn svc_drafted_validity(tag: &str) -> (BidService, String, std::path::PathBuf) {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "时效裁决测试项目", "bid_deadline": "2027-12-31", "mode": "明标", "external_key": tag,
     })))["project_id"].as_str().unwrap().to_string();
@@ -674,6 +729,7 @@ fn svc_drafted_validity(tag: &str) -> (BidService, String, std::path::PathBuf) {
 fn export_with_bid_open_date_flips_expired_and_blocks() {
     let (mut svc, pid, _dir) = svc_drafted_validity("flip-block");
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
         "bid_open_date": "2027-07-01",
     }));
@@ -689,6 +745,7 @@ fn export_with_bid_open_date_flips_expired_and_blocks() {
     // 只降不升：同项目换回合法开标日也不复活（Expired 不可逆——重新登记
     // 新版证据（register renewal）才是正路，这是 apply_validity 的单向语义）
     let reply2 = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
         "bid_open_date": "2026-12-31",
     }));
@@ -700,6 +757,7 @@ fn export_with_bid_open_date_flips_expired_and_blocks() {
 fn export_with_bid_open_date_no_flip_succeeds() {
     let (mut svc, pid, _dir) = svc_drafted_validity("no-flip-ok");
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
         "bid_open_date": "2026-12-31",
     })));
@@ -723,6 +781,7 @@ fn export_with_bid_open_date_no_flip_succeeds() {
 fn export_without_open_date_deadline_fallback_flips_and_blocks() {
     let (mut svc, pid, _dir) = svc_drafted_validity("no-date-fallback");
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     }));
     let msg = err_text(&reply);
@@ -743,6 +802,7 @@ fn export_without_open_date_deadline_fallback_no_flip_exports() {
     svc.store_mut().set_bid_deadline("2026-06-30").unwrap();
     // 截止日变更不改章节正文——#180 摘要不受影响；直接导出
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "兜底零翻转 → 导出成功");
@@ -775,6 +835,7 @@ fn export_legacy_snapshot_without_deadline_warns_only() {
     let snap: bid_domain::StoreSnapshot = serde_json::from_value(v).unwrap();
     *svc.store_mut() = bid_domain::DomainStore::restore(snap).unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "legacy 缺档 → 告警不硬拒");
@@ -790,6 +851,7 @@ fn export_legacy_snapshot_without_deadline_warns_only() {
 fn export_bid_open_date_input_validation() {
     let (mut svc, pid, _dir) = svc_drafted_validity("bad-date");
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
         "bid_open_date": "2026/12/31",
     }));
@@ -797,6 +859,7 @@ fn export_bid_open_date_input_validation() {
     assert!(format!("{reply:?}").contains("YYYY-MM-DD"), "错误带格式指引");
 
     let reply2 = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
         "bid_open_date": 20261231,
     }));
@@ -840,7 +903,7 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
     // 第一次：暗标 = 甲公司（正文脱敏：甲公司 → 投标人）
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "docx", "output_path": out_docx,
-        "profile": {"dark_bid": true, "bidder_name": "甲公司"},
+        "profile": {"dark_bid": true, "bidder_name": "甲公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET"},
     })));
     let doc1 = part_text(&docx_path, "word/document.xml");
     assert!(!doc1.contains("甲公司"), "暗标脱敏在位（甲公司 → 投标人）");
@@ -852,7 +915,7 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
     // 第二次：换投标人名（同章节/同路径/同格式）——C-07 修复后必须重建
     let b = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "docx", "output_path": out_docx,
-        "profile": {"dark_bid": true, "bidder_name": "乙公司"},
+        "profile": {"dark_bid": true, "bidder_name": "乙公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET"},
     })));
     assert_ne!(
         a["artifact"]["sha256"], b["artifact"]["sha256"],
@@ -876,7 +939,7 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
     // 第三次：同名（乙公司）重放——修复后的键/指纹语义不破坏既有幂等
     let c = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "docx", "output_path": out_docx,
-        "profile": {"dark_bid": true, "bidder_name": "乙公司"},
+        "profile": {"dark_bid": true, "bidder_name": "乙公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET"},
     })));
     assert_eq!(c["deduplicated"], json!(true), "同名重放 → 幂等命中（语义不回归）");
     assert_eq!(b["artifact"]["sha256"], c["artifact"]["sha256"]);

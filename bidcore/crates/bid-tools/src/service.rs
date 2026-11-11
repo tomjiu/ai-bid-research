@@ -1597,8 +1597,19 @@ impl BidService {
     ///       只读不拦；无豁免通道，修复 = 改稿对齐）；
     ///    j. 决策对账门（#88 审计 F-05 决策面——`decision_consistency_findings`：
     ///       导出时点 decision（工期/报价）vs 参数账确定性比对——决策按
-    ///       设计不入库，导出是唯一对账时机；无豁免——数值只能改齐）；
-    /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
+    ///       设计不入库，导出是唯一对账时机；无豁免——数值只能改齐）；    ///    j-2. 决策对账门·正文面（#88 F-05 决策面的注入扩展——agent-q7vx
+    ///       #105：决策值临时注入 run_review 比对面（DECISION 合成行），
+    ///       章正文 vs 决策值冲突同拒——参数面（1j）之外的正文覆盖；
+    ///       无豁免通道）；
+    ///    k. 格式件核对清单（#88 审计 F-06——**可见面**告警不拦，硬化
+    ///       待件名抽取产品化后 Lead 裁决）；
+    ///    l. 三件套数据缺位门（#88 修复 7 硬化面/F-06 P0-4——投标函/
+    ///       法定代表人身份证明/授权委托书**数据字段**缺位（字段级确定性
+    ///       检查，与构造器入参同源——设计性空位不误拦）→ 拒；
+    ///       `waive_format_placeholder` 显式理由豁免）；
+    ///    m. 超篇幅可配置门（#88 修复 8a/F-09——超带超阈值（默认 +50%，
+    ///       `max_overrun_pct` 可配）→ 拒；`waive_length_overrun` 显式
+    ///       理由豁免）；    /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
     ///    缺失 → `derive_from_requirements`（从格式条款提取；零命中 → 基线
     ///    + warning，Lead 铁律「不硬编码」的降级面）；
     /// 2b. #117：主体信息装载（工作区 bidder-profile.json；缺档 → 空档 +
@@ -1845,10 +1856,75 @@ impl BidService {
                 ),
             });
         }
+        // ---- 1j-2. 决策对账门·正文面（#88 F-05 决策面的注入扩展——
+        //      agent-q7vx #105：run_review_from_store_with_decision 把
+        //      决策值（投标总报价/工期）临时注入比对面（合成 DECISION 行，
+        //      不落库），**章正文 vs 决策值**的跨面冲突同拒——1j 参数面
+        //      （参数账行名匹配）之外的正文覆盖。只取 DECISION 相关
+        //      findings：非决策冲突归 1i（同源扫描，不双报）；无豁免面。
+        let cross_outcome =
+            crate::review_wire::run_review_from_store_with_decision(self.store(), decision);
+        let cross_blockers: Vec<&crate::check::CheckFinding> = cross_outcome
+            .findings
+            .iter()
+            .filter(|f| f.kind.is_global() && f.message.contains("DECISION"))
+            .collect();
+        if !cross_blockers.is_empty() {
+            const MAX_DETAIL: usize = 10;
+            let shown: Vec<&str> = cross_blockers
+                .iter()
+                .take(MAX_DETAIL)
+                .map(|f| f.message.as_str())
+                .collect();
+            let detail = if cross_blockers.len() > MAX_DETAIL {
+                format!("{}；……等共 {} 处", shown.join("；"), cross_blockers.len())
+            } else {
+                shown.join("；")
+            };
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "决策对账门未过（正文面）：{} 处决策-正文冲突（决策值与章正文同维度不同值 = 评标否决点，#88 F-05）：{detail}；改决策值或改正文使一致后重导（无豁免通道——客观不一致只能修不能绕）",
+                    cross_blockers.len(),
+                ),
+            });
+        }
         // ---- 1k. 格式件核对清单（#88 审计 F-06——可见面：格式要求类 REQ
         //      指名的件不在七件标准面 → 告警不拦；硬化待件名抽取产品化）。
         for w in crate::validate::format_docs_checklist(self.store()) {
             warnings.push(w);
+        }
+        // ---- 1m. 超篇幅可配置门（#88 修复 8a/F-09——超带超阈值拒；
+        //      阈值调用方可配，显式理由豁免）。带内（≤阈值）仍走既有
+        //      W_CHARS_OFF_TARGET MINOR 提示，双层信号不冲突。
+        let overrun_f =
+            crate::validate::length_overrun_gate_findings(self.store(), waivers.max_overrun_pct);
+        if !overrun_f.is_empty() {
+            let waived = waivers
+                .length_overrun
+                .as_deref()
+                .map(|r| !r.trim().is_empty())
+                .unwrap_or(false);
+            if waived {
+                warnings.push(format!(
+                    "#88 豁免：超篇幅（{} 处超带）经显式豁免跳过（理由：{}）——审计面记录；压缩正文通道仍开放",
+                    overrun_f.len(),
+                    waivers.length_overrun.as_deref().unwrap_or("").trim(),
+                ));
+            } else {
+                let detail = overrun_f
+                    .iter()
+                    .map(|f| f.section_id.as_deref().unwrap_or("?"))
+                    .collect::<Vec<_>>()
+                    .join("、");
+                return Err(ToolError::EUnprocessable {
+                    reason: format!(
+                        "超篇幅门未过（阈值 +{}%）：{} 个章节超带（{detail}）——{}；压缩正文/调大 max_overrun_pct/waive_length_overrun 显式豁免",
+                        waivers.max_overrun_pct,
+                        overrun_f.len(),
+                        overrun_f[0].message,
+                    ),
+                });
+            }
         }
 
         // ---- 2. format-spec（读盘优先，derive 兜底）
@@ -1896,6 +1972,41 @@ impl BidService {
         };
         if let Some(w) = profile_warn {
             warnings.push(w);
+        }
+        // ---- 1l. 三件套数据缺位门（#88 修复 7 硬化面/F-06 P0-4——审计修复
+        //      优先序第 1 位）。门在 extras 装配后、消费 profile/decision
+        //      的同一真源（字段级检查：构造器消费什么字段门就查什么字段
+        //      ——设计性空位【签字/日期】不误伤；见 validate 函数注记）。
+        let fp_f = crate::validate::format_placeholder_gate_findings(
+            self.store(),
+            &profile,
+            decision,
+        );
+        if !fp_f.is_empty() {
+            let waived = waivers
+                .format_placeholder
+                .as_deref()
+                .map(|r| !r.trim().is_empty())
+                .unwrap_or(false);
+            if waived {
+                warnings.push(format!(
+                    "#88 豁免：三件套数据缺位（{} 件）经显式豁免跳过（理由：{}）——审计面记录；补档通道（bidder-profile.json / 导出 profile 决策字段）仍开放",
+                    fp_f.len(),
+                    waivers.format_placeholder.as_deref().unwrap_or("").trim(),
+                ));
+            } else {
+                let detail = fp_f
+                    .iter()
+                    .map(|f| f.message.clone())
+                    .collect::<Vec<_>>()
+                    .join("；");
+                return Err(ToolError::EUnprocessable {
+                    reason: format!(
+                        "格式件门未过：{} 件三件套数据缺位（#88 F-06/P0-4）——{detail}",
+                        fp_f.len(),
+                    ),
+                });
+            }
         }
         let (extras, extras_warnings) =
             crate::export::build_export_extras(&self.store, &profile, decision);
@@ -2133,7 +2244,8 @@ impl Default for BidService {
     }
 }
 
-/// #88 审计 F-01/F-02：致命项门（导出门 1e/1f）的显式豁免面。
+/// #88 审计 F-01/F-02：致命项门（导出门 1e/1f）的显式豁免面；批次 4
+/// 增补 F-06/F-09 两门（1k/1j）与 1j 的阈值配置。
 ///
 /// 设计纪律（与 `bid_open_date` 的 opt-in 取舍同族，但方向相反——门是
 /// 默认 fail-closed，豁免是显式 opt-out）：
@@ -2142,14 +2254,40 @@ impl Default for BidService {
 ///   事实（与 #277 agent 过门横幅同款「可见性」纪律）；
 /// - **粒度对齐门**：`star_missing` 只豁免漏标子面 b；子面 a
 ///   （E_STAR_UNRESPONDED 已抽取未响应）与暗标门（mode=暗标 未启用）
-///   无参数豁免——修复通道是补响应/开暗标，不是绕过。
-#[derive(Debug, Clone, Default)]
+///   无参数豁免——修复通道是补响应/开暗标，不是绕过；
+/// - **决策对账门（1i）无豁免**：金额/工期/术语/承诺冲突是客观事实
+///   不一致（评标否决点），修复通道是改一致，不是绕过（与 1c 写作
+///   验收门同款无豁免纪律）。
+#[derive(Debug, Clone)]
 pub struct FatalGapWaivers {
     /// ★漏标面（E_STAR_MISSING）人工确认豁免——非空理由生效。
     pub star_missing: Option<String>,
     /// 评分项未映射面（E_SCORING_UNMAPPED）人工确认豁免——非空理由生效
     ///（#88 门 1h：无评分项语料误抽确认等场景；映射通道 upsert_scoring_mapping 仍开放）。
     pub unmapped_scoring: Option<String>,
+    /// 三件套数据缺位面（E_FORMAT_PLACEHOLDER，#88 门 1k/F-06）人工确认
+    /// 豁免——非空理由生效（无法定授权委托、确认带【待填】导出等场景）。
+    pub format_placeholder: Option<String>,
+    /// 超篇幅面（E_CHARS_OVER_LIMIT，#88 门 1j/F-09）人工确认豁免——
+    /// 非空理由生效（评标办法不设页数限制等场景）。
+    pub length_overrun: Option<String>,
+    /// 超篇幅阈值（%——门 1j 判据 `chars×100 > target×(100+pct)`，
+    /// 审计建议默认 50；调用方可配 1..=10000）。
+    pub max_overrun_pct: u32,
+}
+
+impl Default for FatalGapWaivers {
+    fn default() -> Self {
+        Self {
+            star_missing: None,
+            unmapped_scoring: None,
+            format_placeholder: None,
+            length_overrun: None,
+            // 审计建议值（#88 F-09「超带超阈值（如 +50%）」）——超 50%
+            // 的系统性超带在页数受限/暗标场景拦下，带内上沿不误伤
+            max_overrun_pct: 50,
+        }
+    }
 }
 
 /// 项目推进 EXPORTED 的合法链补齐（#59 阶段 2——export 的成功后半边）。

@@ -20,6 +20,39 @@ use bid_mcp::{dispatch_with, BidService, ToolCall, ToolReply};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 /// #182 宿主签发面（测试进程即宿主——持 svc 即持钥）：门级 receipt。
 /// scope 格式 `review_gate:{gate}` 与 bid-tools 服务层 review_gate_scope 同源
 /// （此处内联——测试面不引服务层符号，格式由 #182 域层 receipt 契约钉死）。
@@ -85,6 +118,7 @@ fn matrix_reqs(svc: &mut BidService, pid: &str, category: &str) -> Vec<String> {
 fn prepared(ws: &PathBuf, external_key: &str) -> (BidService, String, String) {
     std::fs::create_dir_all(ws).unwrap();
     let mut svc = BidService::open(ws).unwrap().with_fs_root(files_dir());
+    b4_write_profile(ws);
     let pid = ok(call(
         &mut svc,
         "create_bid_project",
@@ -309,6 +343,7 @@ fn mcp_only_full_pipeline_drives_to_export() {
         json!({
             "project_id": &pid, "format": "docx",
             "output_path": "out/mcp纯工具面-投标文件-技术标.docx",
+            "profile": b4_profile(),
             // #88 门 1h（#100）夹具补面：评分项不进正文（#126）且 TOOL 面
             // 尚无映射工具——纯 MCP 驱动（本测试的核心断言）唯一的线路级
             // 通道是导出参数显式豁免（门错误消息自文档化）；映射工具面
@@ -336,6 +371,7 @@ fn scaffold_guards_and_error_paths() {
     let ws = std::env::temp_dir().join(format!("mcp-scaffold-err-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(files_dir());
+    b4_write_profile(&ws);
 
     // ---- G1 状态门：DRAFT / FILES_IMPORTED 态建纲 → E_STATE（白名单从
     //      REQUIREMENTS_EXTRACTED 才放行 build_outline）

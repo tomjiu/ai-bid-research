@@ -19,6 +19,39 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn call(svc: &mut BidService, tool: &str, args: Value) -> ToolReply {
     dispatch_with(svc, ToolCall { tool: tool.to_string(), args })
 }
@@ -99,6 +132,7 @@ fn pass_pre_export_confirm(svc: &mut BidService) {
 fn drafted_with_star_req(tag: &str, mode: &str) -> (BidService, String, PathBuf) {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "#88 门接线", "bid_deadline": "2026-12-31", "mode": mode,
         "external_key": tag,
@@ -228,6 +262,7 @@ fn star_gate_blocks_export_through_mcp() {
     let (mut svc, pid, _dir) = drafted_with_star_req("fg-star-block", "明标");
     let star_id = star_req_id_of(&svc);
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let msg = err_text(&reply);
@@ -251,6 +286,7 @@ fn star_gate_legit_na_exemption_exports() {
     let _ = svc.store_mut().build_matrix().unwrap();
     pass_pre_export_confirm(&mut svc); // #474：覆写动了计分面——重过门再导
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let r = ok_result(reply);
@@ -276,6 +312,7 @@ fn dark_bid_gate_blocks_light_export_when_mode_dark() {
     let _ = svc.store_mut().build_matrix().unwrap();
     pass_pre_export_confirm(&mut svc); // #474：覆写动了计分面——重过门再导
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let msg = err_text(&reply);
@@ -300,7 +337,7 @@ fn dark_bid_gate_passes_when_profile_dark_bid() {
     pass_pre_export_confirm(&mut svc); // #474：覆写动了计分面——重过门再导
     let reply = call(&mut svc, "export_bid_document", json!({
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
-        "profile": { "dark_bid": true, "bidder_name": "测试建设工程有限公司" },
+        "profile": { "dark_bid": true, "bidder_name": "测试建设工程有限公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-FG" },
     }));
     let r = ok_result(reply);
     assert!(r["artifact"]["sha256"].is_string(), "暗标启用导出成功: {r}");
@@ -324,6 +361,7 @@ fn dark_bid_gate_warns_when_light_mode_with_dark_clause() {
     let _ = svc.store_mut().build_matrix().unwrap();
     pass_pre_export_confirm(&mut svc); // #474：覆写动了计分面——重过门再导
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let r = ok_result(reply);
@@ -370,6 +408,7 @@ fn dirty_gate_blocks_then_dismiss_frees_export() {
         .unwrap();
     assert!(!out.dirty_sections.is_empty(), "补遗登记打脏归属章节");
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let msg = err_text(&reply);
@@ -388,6 +427,7 @@ fn dirty_gate_blocks_then_dismiss_frees_export() {
         svc.store_mut().dismiss_rewrite_directive(&did).unwrap();
     }
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let r = ok_result(reply);
@@ -429,6 +469,7 @@ fn unmapped_gate_blocks_then_waive_exports() {
     let _ = svc.store_mut().build_matrix().unwrap();
     pass_pre_export_confirm(&mut svc);
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
     }));
     let msg = err_text(&reply);
@@ -436,6 +477,7 @@ fn unmapped_gate_blocks_then_waive_exports() {
     assert!(msg.contains("waive_unmapped_scoring"), "给出豁免通道（实得：{msg}）");
     // 空串豁免 = 不豁免（fail-closed）
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
         "waive_unmapped_scoring": "   ",
     }));
@@ -443,6 +485,7 @@ fn unmapped_gate_blocks_then_waive_exports() {
     assert!(msg.contains("waive_unmapped_scoring 须为非空理由"), "空串响亮拒: {msg}");
     // 非空理由 → 豁免导出 + warnings 审计
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
         "waive_unmapped_scoring": "补遗评分项与既有运维章合并评审（人工确认无需独立映射）",
     }));
@@ -487,17 +530,21 @@ fn decision_conflict_blocks_then_aligned_exports() {
             evidence_id: None,
         }])
         .unwrap();
+    let mut prof = b4_profile();
+    prof["duration_days"] = json!(480);
     let reply = call(&mut svc, "export_bid_document", json!({
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
-        "profile": { "duration_days": 480 },
+        "profile": prof,
     }));
     let msg = err_text(&reply);
     assert!(msg.contains("决策对账门"), "门 1j 点火（实得：{msg}）");
     assert!(msg.contains("540"), "指名参数口径（实得：{msg}）");
     // 改齐（540）→ 导出成功
+    let mut prof2 = b4_profile();
+    prof2["duration_days"] = json!(540);
     let reply = call(&mut svc, "export_bid_document", json!({
         "project_id": &pid, "format": "docx", "output_path": "out.docx",
-        "profile": { "duration_days": 540 },
+        "profile": prof2,
     }));
     let r = ok_result(reply);
     assert!(r["artifact"]["sha256"].is_string(), "决策对齐 → 导出成功: {r}");

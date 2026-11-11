@@ -30,12 +30,15 @@
 //! validate_bid_document 已用既有规则码（W_PLACEHOLDER/E_CITATION_GHOST/
 //! W_CHARS_OFF_TARGET）覆盖同域信号，双工具异阈值双报只会制造信号冲突。
 //!
-//! 已知范围边界（如实声明，不伪装全覆盖）：导出层的报价决策（ExportDecision
-//! 的 bid_amount/price_breakdown）按设计**不入库**（「调用方显式给出，不入库、
-//! 不猜测」——真源在决策方手上），check 时不可得，故不参与本比对面；报价面
-//! 数值的一致性由它们最终落进章节正文/参数账的部分覆盖。
+//! 已知范围边界（#88 修复 6/F-05 勘误后口径更新）：导出层的报价决策
+//! （`ExportDecision`）仍然**不入库**（「调用方显式给出，不入库、不
+//! 猜测」——真源在决策方手上），但导出时点决策值**可得**——
+//! [`run_review_from_store_with_decision`] 把决策值临时注入比对面
+//!（合成 DECISION 行，不落库），「投标函报价 vs 正文/参数账」的跨面
+//! 冲突从此可比（审计 P1-11 典型失守场景收口）。
 
 use crate::check::{self, ChapterInput, ReviewOutcome};
+use crate::export::ExportDecision;
 use bid_domain::param::ParamResponse;
 use bid_domain::DomainStore;
 use std::collections::HashSet;
@@ -110,6 +113,63 @@ pub fn run_review_from_store(store: &DomainStore) -> ReviewOutcome {
         .iter()
         .map(|r| (r.id.clone(), param_row_content(r)))
         .collect();
+    let inputs = chapter_inputs(store, &ledger);
+    let refs = known_refs(store);
+    check::run_review(&inputs, &refs)
+}
+
+/// 导出决策 → 合成比对行（#88 修复 6/F-05——决策值不入库，但导出时点
+/// 可得；临时注入比对面，不落库不推版本）。
+///
+/// 行口径与参数行同构（`{维度词}：{值}。`句号收尾）：
+/// - `bid_amount`（>0 有限值）→「投标总报价：{v}元。」（AMOUNT_DIMS 的
+///   #88 前提词）；
+/// - `duration_days`（>0）→「工期：{n} 日历天。」（既有 SCHEDULE_DIMS）。
+///
+/// 位置锚 = `DECISION`（伪 id——冲突 finding 的少数派首现位会指向它，
+/// 修复通道是改决策值或改正文，不是绕过）。
+///
+/// 有效期（validity_days）不注入：审计修复 6 的失守面是报价/工期两项
+/// （P1-11 原文锚点），「投标有效期」不在 SCHEDULE_DIMS 词表——扩它
+/// 属 T-7 词面裁决，不在此越界（诚实面：本门不假装覆盖它）。
+///
+/// `price_breakdown` 不单独注入：合计与 `bid_amount` 的一致性已由
+/// `build_export_extras` 的响亮告警承载（决策内部一致性），跨面比对由
+/// 注入的 `bid_amount` 单值承载（多行注入只会稀释锚点定位）。
+#[must_use]
+pub fn decision_rows(decision: &ExportDecision) -> Vec<(String, String)> {
+    let mut rows = Vec::new();
+    if let Some(v) = decision.bid_amount {
+        if v.is_finite() && v > 0.0 {
+            // 整数元口径（与 scan_amount 归一同形——小数报价在此截断到分位
+            // 以上精度足够；决策值来自调用方 JSON，非正文噪声面）
+            rows.push(("DECISION".into(), format!("投标总报价：{v:.2}元。")));
+        }
+    }
+    if let Some(d) = decision.duration_days {
+        if d > 0 {
+            rows.push(("DECISION".into(), format!("工期：{d} 日历天。")));
+        }
+    }
+    rows
+}
+
+/// 带**导出决策注入**的全量审核（#88 修复 6——门 1i 的消费面）。
+///
+/// 与 [`run_review_from_store`] 的唯一差异：合成账本 = 参数响应账 +
+/// [`decision_rows`]（决策行）。决策值与章正文/参数账同维度不同值 →
+/// 全局冲突 finding（BLOCKER）——「投标函报价 350 万 vs 正文手写
+/// 358 万」这类评标否决点从此进导出门。
+pub fn run_review_from_store_with_decision(
+    store: &DomainStore,
+    decision: &ExportDecision,
+) -> ReviewOutcome {
+    let mut ledger: Vec<(String, String)> = store
+        .param_responses()
+        .iter()
+        .map(|r| (r.id.clone(), param_row_content(r)))
+        .collect();
+    ledger.extend(decision_rows(decision));
     let inputs = chapter_inputs(store, &ledger);
     let refs = known_refs(store);
     check::run_review(&inputs, &refs)

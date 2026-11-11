@@ -17,6 +17,39 @@ use bid_mcp::{dispatch_with, BidService, ToolCall, ToolReply};
 use bid_tools::service::review_gate_scope;
 use serde_json::{json, Value};
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn call(svc: &mut BidService, tool: &str, args: Value) -> ToolReply {
     dispatch_with(svc, ToolCall { tool: tool.to_string(), args })
 }
@@ -78,6 +111,7 @@ fn tmp_dir(tag: &str) -> std::path::PathBuf {
 fn svc_drafted(tag: &str) -> (BidService, String, std::path::PathBuf) {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "RT 工具族测试", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": tag,
     })))["project_id"].as_str().unwrap().to_string();
@@ -277,6 +311,7 @@ fn e2e_reject_spawn_resolve_export() {
 
     // 死锁面直接证据：导出被 RT 面拦（三门齐、内容未变——只剩 RT 未关单）
     let blocked = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     }));
     assert_eq!(err_code(&blocked), "E_UNPROCESSABLE");
@@ -300,6 +335,7 @@ fn e2e_reject_spawn_resolve_export() {
 
     // 导出放行（RT 面清零 → 全门通过 → EXPORTED）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "死锁面已打通");
@@ -327,6 +363,7 @@ fn e2e_reject_spawn_resolve_export() {
     assert_eq!(ro["section"]["status"], "REVISING");
     assert_eq!(ro["section"]["dirty"], true);
     let blocked2 = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/标书-v2.docx",
     }));
     assert_eq!(err_code(&blocked2), "E_UNPROCESSABLE");
@@ -480,6 +517,7 @@ fn set_param_responses_tool() {
 fn rt_tools_state_gated() {
     let dir = tmp_dir("rt-gate");
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "状态窗测试", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": "rt-gate",
     })))["project_id"].as_str().unwrap().to_string();

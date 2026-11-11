@@ -21,6 +21,39 @@ use bid_domain::{Anchor, ParseStatus, ProjectStatus, Requirement};
 use bid_mcp::{dispatch_with, BidService, ToolCall, ToolError, ToolReply};
 use serde_json::{json, Value};
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn call(svc: &mut BidService, tool: &str, args: Value) -> ToolReply {
     dispatch_with(svc, ToolCall { tool: tool.to_string(), args })
 }
@@ -86,6 +119,7 @@ fn incomplete(svc: &BidService) -> Vec<String> {
 fn build_two_leaf_project(tag: &str) -> (BidService, String) {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "243 工具层", "bid_deadline": "2026-12-31", "mode": "明标",
         "external_key": &format!("ext-243-mcp-{tag}"),
@@ -134,6 +168,7 @@ fn build_two_leaf_project(tag: &str) -> (BidService, String) {
 fn build_unmapped_qual_project(tag: &str) -> (BidService, String) {
     let dir = tmp_dir(tag);
     let mut svc = BidService::open(&dir).unwrap();
+    b4_write_profile(&dir);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "243 工具层", "bid_deadline": "2026-12-31", "mode": "明标",
         "external_key": &format!("ext-243-mcp-{tag}"),
@@ -307,6 +342,7 @@ fn full_order_rejected_then_draft_validate_export() {
         "receipt": receipt,
     })));
     let e = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/投标文件-243.docx",
     })));
     assert_eq!(e["project_status"], "EXPORTED", "⑤ 修复后正常进入导出流程");
