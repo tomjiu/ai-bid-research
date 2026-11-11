@@ -359,8 +359,11 @@ if (mang) {
             check("R25 退出：重入态给「返回」按钮", !!exitBtn, "按钮未解析出");
             if (exitBtn) {
               exitBtn.click();
-              const exited = await waitFor(() => treeHtml().indexOf("文件已入库") >= 0, "退出重入渲染");
-              check("R25 退出：点击返回 → 「文件已入库」引导态（已入库件不受影响）", exited,
+              // R25 集成态（#93 合并后）：退出重入回树区建纲流卡（原「文件已入库」
+              // 死文案收口）。前置改写 files=5 且 requirements 沿演示值 1120 →
+              // 卡进相位②（推荐选档面——已抽取计数在场即证数据面未受重入扰动）
+              const exited = await waitFor(() => treeHtml().indexOf("选择篇幅档位") >= 0 && treeHtml().indexOf("已抽取") >= 0, "退出重入渲染");
+              check("R25 退出：点击返回 → 建纲流卡（已抽取计数在场，已入库件不受影响）", exited,
                 "树区片段：" + treeHtml().slice(0, 80));
             }
           }
