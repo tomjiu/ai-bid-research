@@ -11,15 +11,20 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from src.analyze.dataset import AnalysisDataset
+from src.analyze.agencies import agency_profiles
 from src.analyze.buyers import buyer_profiles
+from src.analyze.categories import category_distribution
 from src.analyze.cooccurrence import keyword_cooccurrence
 from src.analyze.outliers import budget_outliers
+from src.analyze.platforms import platform_source_distribution
 from src.analyze.regions import province_distribution
 from src.analyze.relationships import purchaser_supplier_pairs
 from src.analyze.rolling import rolling_comparison
 from src.analyze.suppliers import supplier_profiles
 from src.analyze.density import competition_density, concentration_trend
-from src.analyze.quality import field_quality
+from src.analyze.duplicates import find_duplicate_clusters, render_duplicates_markdown
+from src.analyze.quality import field_quality, semantic_health, render_semantic_health_markdown
+from src.analyze.windows import response_windows
 from src.analyze.keywords import (
     common_bigrams,
     keyword_frequency,
@@ -50,6 +55,9 @@ def build_analysis_payload(
     Returns:
         JSON 可序列化的分析 payload。
     """
+    # duplicates 先算一次：十六节渲染与二十一节跨平台信号共用
+    # （同一数据同一簇——两处各自重算既浪费又有口径漂移风险）
+    duplicates = find_duplicate_clusters(dataset)
     return {
         "keyword": keyword,
         "days": days,
@@ -74,6 +82,14 @@ def build_analysis_payload(
         "budget_region_crosstab": budget_region_crosstab(dataset),
         "keyword_trends": keyword_monthly_trend(dataset),
         "concentration_trend": concentration_trend(dataset),
+        "duplicates": duplicates,
+        "semantic_health": semantic_health(dataset),
+        "response_windows": response_windows(dataset),
+        "agency_profiles": agency_profiles(dataset),
+        "category_distribution": category_distribution(dataset),
+        "platform_distribution": platform_source_distribution(
+            dataset, duplicate_clusters=duplicates
+        ),
     }
 
 
@@ -551,6 +567,187 @@ def render_analysis_markdown(payload: Dict[str, Any]) -> str:
             ),
             "",
         ]
+
+    # 第十六节：近重复（有簇才有行动面；无簇一句带过也保留节——
+    # 研究者需要看到「查过了且干净」的明示，而非留白猜测）
+    duplicates = payload.get("duplicates") or {}
+    if count >= 2 and duplicates.get("total"):
+        sections += [
+            render_duplicates_markdown(duplicates, ordinal="十六").rstrip("\n"),
+            "",
+        ]
+
+    # 第十七节：语义质量（clean 与否统一走 render——单点文案防漂移）
+    semantic = payload.get("semantic_health") or {}
+    if count and semantic.get("records"):
+        sections += [
+            render_semantic_health_markdown(
+                semantic, ordinal="十七"
+            ).rstrip("\n"),
+            "",
+        ]
+
+    # 第十八节：响应窗口（发布→截止）——deadline 字段首次进分析面
+    windows = payload.get("response_windows") or {}
+    if windows.get("sample_count"):
+        line = windows["short_window_days"]
+        rows = [
+            ["有效样本 / 缺日期 / 倒挂", (
+                f"{windows['sample_count']} / {windows['missing_count']}"
+                f" / {windows['invalid_count']}"
+            )],
+            ["中位（天）", str(windows["median_days"])],
+            ["P25 / P75（天）", (
+                f"{windows['p25_days']} / {windows['p75_days']}"
+            )],
+            ["最短 / 最长（天）", (
+                f"{windows['min_days']} / {windows['max_days']}"
+            )],
+            [f"短窗（< {line} 日）", (
+                f"{windows['short_window_count']} 条"
+                f"（占有效样本 {_fmt_pct(windows['short_window_rate'])}）"
+            )],
+        ]
+        sections += [
+            "## 十八、响应窗口期（发布→截止，天）",
+            "",
+            _render_table(["指标", "值"], rows),
+            "",
+        ]
+        if windows.get("short_window_examples"):
+            example_rows = [
+                [
+                    example["project_name"],
+                    str(example["window_days"]),
+                    example["region"] or "——",
+                    example["publish_date"],
+                    example["deadline"],
+                ]
+                for example in windows["short_window_examples"]
+            ]
+            sections += [
+                f"### 最紧迫短窗 Top {len(example_rows)}（供人工复核）",
+                "",
+                _render_table(
+                    ["项目", "窗口(天)", "区域", "发布日", "截止日"],
+                    example_rows,
+                ),
+                "",
+            ]
+        sections += [
+            "注：短窗是**研究提示非违规认定**——法定最短 20 日的起算点是",
+            "「招标文件开始发出之日」，本节以公告发布日近似（**偏短估计**）；",
+            "竞争性磋商/询价等采购方式法定期限更短。截止早于发布的倒挂",
+            "记录是数据问题（十七节揭示），不进本节分布。",
+            "",
+        ]
+
+    # 第十九节：代理机构画像（agency 字段首次进分析面——与八节
+    # 采购人/十二节供应商三位对偶）
+    agencies = payload.get("agency_profiles") or []
+    if agencies:
+        rows = [
+            [
+                profile["agency"],
+                str(profile["project_count"]),
+                _fmt_money(profile["budget_total"]),
+                _fmt_money(profile["budget_mean"]),
+                str(profile["purchaser_count"]),
+                "、".join(profile["categories"]) or "——",
+            ]
+            for profile in agencies
+        ]
+        sections += [
+            "## 十九、代理机构画像（代理项目数 Top）",
+            "",
+            _render_table(
+                ["代理机构", "项目数", "代理项目预算合计(万)", "平均预算(万)", "合作采购人数", "领域"],
+                rows,
+            ),
+            "",
+            "注：无代理记录（采购人自采等）不参与聚合；预算口径只计有值样本（样本数见 payload budget_sample_count），缺失不折零。",
+            "",
+        ]
+
+    # 第二十节：品类分布（category 字段首次进分析面——抽取面
+    # 自由文本，精确匹配归并不做词表归一）
+    categories = payload.get("category_distribution") or {}
+    if categories.get("filled_count"):
+        cat_rows = [
+            [
+                entry["category"],
+                str(entry["count"]),
+                _fmt_money(entry["budget_total"]),
+                _fmt_money(entry["budget_mean"]),
+                str(entry["budget_sample_count"]),
+                str(entry["awarded_count"]),
+            ]
+            for entry in categories["categories"]
+        ]
+        distinct = categories["distinct_count"]
+        shown = len(categories["categories"])
+        overflow = f"（仅列 Top {shown} / 共 {distinct} 类）" if shown < distinct else ""
+        # filled_count>0 保证 filled_rate 非 None（分母非零）
+        missing_rate = 1 - categories["filled_rate"]
+        sections += [
+            "## 二十、品类分布",
+            "",
+            _render_table(
+                ["品类", "项目数", "预算合计(万)", "平均预算(万)", "预算样本数", "定标数"],
+                cat_rows,
+            ),
+            "",
+            f"注：品类为抽取面自由文本，清洗后**精确匹配**归并（近义不折叠——映射由研究者判断）；"
+            f"填充 {_fmt_pct(categories['filled_rate'])}（缺 {_fmt_pct(missing_rate)}，七节填充率已揭示）{overflow}。",
+            "",
+        ]
+
+    # 第二十一节：平台来源（source_url 字段首次进分析面）——
+    # 发布平台分布 + 与十六节簇交叉的跨平台转发实证
+    platforms = payload.get("platform_distribution") or {}
+    if platforms.get("sample_count"):
+        platform_rows = [
+            [
+                entry["platform"],
+                str(entry["count"]),
+                _fmt_money(entry["budget_total"]),
+                _fmt_money(entry["budget_mean"]),
+                entry["latest_date"] or "——",
+            ]
+            for entry in platforms["platforms"]
+        ]
+        sections += [
+            "## 二十一、平台来源分布",
+            "",
+            _render_table(
+                ["发布平台", "项目数", "预算合计(万)", "平均预算(万)", "最近发布"],
+                platform_rows,
+            ),
+            "",
+            f"注：域名归一（小写、去首 www.，其余子域保留）；"
+            f"无可用 URL {platforms['missing_count']} 条如实计缺。",
+            "",
+        ]
+        multi = platforms.get("multi_platform") or {}
+        if multi.get("clusters"):
+            multi_rows = [
+                [
+                    str(example["size"]),
+                    example["normalized"] or "（空）",
+                    "、".join(example["platforms"]),
+                ]
+                for example in multi["examples"]
+            ]
+            sections += [
+                f"### 跨平台转发信号（{multi['clusters']} 簇 / 涉及 {multi['records']} 条）",
+                "",
+                _render_table(
+                    ["簇大小", "归一后项目名", "平台跨度"], multi_rows
+                ),
+                "",
+                "注：同一近重复簇（十六节）成员出现在 ≥2 个平台——多平台转发的**实证**（非猜测）；簇内缺 URL 成员不参与判定。",
+                "",
+            ]
 
     sections += [
         "## 口径说明",

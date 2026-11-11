@@ -15,14 +15,15 @@
 | `d-损坏.json` | 坏 JSON | 文件级失败登记（不殃及后续文件） |
 | `e-缺字段.json` | 缺 project_name | 记录级校验失败（RecordValidationError → failures 明细） |
 | `f-定标面.json` | JSON 数组 ×5 | 同词多项目（智慧水务×5——词表命中/密度/定标率统计面） |
+| `g-沉睡字段.json` | JSON 数组 ×5 | 批 N 四字段全填：响应窗口（含 14 日短窗）/代理机构画像/品类分布/平台来源（含 www·裸域名·http 三形态归一 + 跨平台转发族：同名不同发布日穿过采集指纹、在近重复面成簇） |
 
 ## 分账预期（`test_e2e_pipeline.py` 对账口径）
 
 ```
-files_read = 6          # 全部源文件进入读取
-loaded     = 11         # 3(a) + 2(b 好行) + 1(c) + 5(f)
-deduped    = 1          # FX-001 同件重复
-new        = 10         # 去重后入库
+files_read = 7          # 全部源文件进入读取（批 N 加 g）
+loaded     = 16         # 3(a) + 2(b 好行) + 1(c) + 5(f) + 5(g)
+deduped    = 1          # FX-001 同件重复（g 同名族发布日不同——指纹不同不算采集重）
+new        = 15         # 去重后入库
 failures   = 3          # d-损坏.json（文件级）+ b-原文流.jsonl:2（行级）+ e-缺字段.json（记录级）
 ```
 

@@ -59,6 +59,7 @@ class StageResult:
     status: str
     detail: Dict[str, Any] = field(default_factory=dict)
     failures: List[Dict[str, str]] = field(default_factory=list)
+    duration_seconds: Optional[float] = None  # R83：阶段耗时（可观测面）
 
 
 @dataclass
@@ -200,6 +201,7 @@ class ResearchPipeline:
                         "status": s.status,
                         "detail": s.detail,
                         "failures": s.failures,
+                        "duration_seconds": s.duration_seconds,
                     }
                     for s in result.stages
                 ],
@@ -222,10 +224,16 @@ class ResearchPipeline:
     ) -> PipelineResult:
         result = PipelineResult()
 
+        import time as _t
+
         new_records: List[Any] = []
         if source is not None:
+            t0 = _t.monotonic()
             new_records, collect_stage = self._stage_collect(
                 source, since=since, resume_sweep=resume_sweep
+            )
+            collect_stage.duration_seconds = round(
+                _t.monotonic() - t0, 3
             )
             result.stages.append(collect_stage)
         else:
@@ -238,7 +246,12 @@ class ResearchPipeline:
             )
 
         if self.extractor is not None and new_records:
-            result.stages.append(self._stage_extract(new_records))
+            t0 = _t.monotonic()
+            extract_stage = self._stage_extract(new_records)
+            extract_stage.duration_seconds = round(
+                _t.monotonic() - t0, 3
+            )
+            result.stages.append(extract_stage)
         else:
             result.stages.append(
                 StageResult(
@@ -253,13 +266,17 @@ class ResearchPipeline:
                 )
             )
 
+        t0 = _t.monotonic()
         payload_stage, payload = self._stage_analyze(keyword, days)
+        payload_stage.duration_seconds = round(_t.monotonic() - t0, 3)
         result.stages.append(payload_stage)
         result.payload = payload
 
+        t0 = _t.monotonic()
         report_stage, report_path = self._stage_report(
             payload, keyword, html=html
         )
+        report_stage.duration_seconds = round(_t.monotonic() - t0, 3)
         result.stages.append(report_stage)
         result.report_path = report_path
         return result

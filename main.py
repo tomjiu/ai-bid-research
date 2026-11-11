@@ -406,6 +406,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="导出条数上限（配合 --export；缺省导出全部命中）",
     )
     db.add_argument(
+        "--runs",
+        type=int,
+        nargs="?",
+        const=10,
+        default=None,
+        metavar="N",
+        help=(
+            "列出最近 N 次管道运行台账（状态/参数/各阶段耗时；"
+            "缺省 N=10）——断点续跑/增量水位可追溯"
+        ),
+    )
+    db.add_argument(
+        "--dedupe",
+        action="store_true",
+        help=(
+            "配合 --export：近重复感知去重（改包重发/多平台转发"
+            "簇内保留首条，剔除明细走 stderr；库不动）"
+        ),
+    )
+    db.add_argument(
         "--pending",
         action="store_true",
         help="列出 pending 面待处理公告（LLM 失败/拒收的降级队列）",
@@ -422,6 +442,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--pending-stats",
         action="store_true",
         help="pending 面统计（按状态/原因分组）",
+    )
+
+    # data-quality 子命令（R82：轻量审计——不跑全分析面，秒级）
+    dq = sub.add_parser(
+        "data-quality",
+        help="数据质量审计（字段填充率 + 语义健康分，不跑全分析）",
+    )
+    dq.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=f"数据库路径（默认 {DEFAULT_DB_PATH}）",
+    )
+    dq.add_argument(
+        "--keyword",
+        default=None,
+        help="限定审计范围的关键词命中记录（缺省全量）",
+    )
+    dq.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="限定审计范围的时间窗口天数（缺省不限）",
+    )
+    dq.add_argument(
+        "--json",
+        action="store_true",
+        help="机器可读 JSON 输出（供 CI 门槛/外部审计消费）",
+    )
+    dq.add_argument(
+        "--min-score",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "健康分门槛：低于 N 退出码 2（数据错误域——CI 可判）；"
+            "缺省不设门槛（纯揭示，发现问题也 0）"
+        ),
     )
 
     # templates 子命令
@@ -908,12 +966,42 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dedupe_rows(rows):
+    """近重复感知去重（R88）——簇内保留首条，其余剔除。
+
+    统计分析前改包重发/多平台转发双计会污染口径；导出面
+    一键收编（原始库不动——快照是研究视图不是库操作）。
+    剔除明细走 stderr 分账，快照本体保持纯数组（--diff 消费方
+    不变）。
+
+    Args:
+        rows: query_bids 命中行。
+
+    Returns:
+        (去重后行, 剔除的 bid_id 集合, 预算耗尽标志)。
+    """
+    from src.analyze.dataset import AnalysisDataset
+    from src.analyze.duplicates import find_duplicate_clusters
+
+    payload = find_duplicate_clusters(AnalysisDataset(records=rows))
+    drop_ids = set()
+    for cluster in payload["clusters"]:
+        # 簇内保留首条（成员已按库序稳定排序），其余剔除
+        for member in cluster["members"][1:]:
+            if member["bid_id"] is not None:
+                drop_ids.add(str(member["bid_id"]))
+    kept = [
+        r for r in rows if str(r.get("bid_id")) not in drop_ids
+    ]
+    return kept, drop_ids, payload.get("budget_exhausted", False)
+
+
 def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
     """导出项目记录为研究快照（CSV/JSON，#601 R34）。
 
     Args:
         db: 已打开的数据库。
-        args: 命令行参数（--export/--out/--limit/--query/--days）。
+        args: 命令行参数（--export/--out/--limit/--query/--days/--dedupe）。
 
     Returns:
         进程退出码（0 正常；2 目标路径不可写）。
@@ -925,6 +1013,23 @@ def _export_bids(db: BidDatabase, args: argparse.Namespace) -> int:
     total = db.count_bids(keyword=keyword, days=days)
     limit = args.limit if args.limit is not None else max(total, 1)
     rows = db.query_bids(keyword=keyword, days=days, limit=limit)
+
+    if getattr(args, "dedupe", False):
+        rows, drop_ids, exhausted = _dedupe_rows(rows)
+        if drop_ids:
+            _err(
+                f"近重复去重：剔除 {len(drop_ids)} 条"
+                f"（簇代表保留；剔除 bid_id: "
+                + ", ".join(sorted(drop_ids)[:10])
+                + ("…" if len(drop_ids) > 10 else "")
+                + "）"
+            )
+        else:
+            _err("近重复去重：无剔除（未检出近重复）")
+        if exhausted:
+            _err(
+                "注意：检测对比预算耗尽，去重结论保守（详见 analyze 报告十六节）"
+            )
 
     # 只导业务列（id/created_at 是库内账面，不入研究快照）
     columns = list(_BID_COLUMNS)
@@ -1052,6 +1157,9 @@ def run_db(args: argparse.Namespace) -> int:
                 print(f"  {table}: {count}")
             print(f"PRAGMA 生效：{db.pragmas}")
             return 0
+
+        if args.runs is not None:
+            return _run_pipeline_runs(db, args.runs)
 
         if args.export:
             return _export_bids(db, args)
@@ -1198,6 +1306,134 @@ def run_templates(args: Optional[argparse.Namespace] = None) -> int:
     return 0
 
 
+def _run_pipeline_runs(db: BidDatabase, limit: int) -> int:
+    """渲染 pipeline_runs 台账（db --runs）。
+
+    每行：ID、状态、开始/结束、关键词、源、阶段链（名@状态+耗时）。
+    耗时只有 done 运行有（failed 在收口时未写 stages——如实显示 ——）。
+    """
+    runs = db.pipeline_runs_list(limit=limit)
+    if not runs:
+        print("（无管道运行记录——pipeline 跑一次就有了）")
+        return 0
+    for run in runs:
+        status = run.get("status", "?")
+        keyword = run.get("keyword") or "——"
+        source = run.get("source") or "（无源）"
+        days = run.get("days")
+        window = f"近 {days} 天" if days else "不限"
+        finished = run.get("finished_at") or "（未收口）"
+        print(
+            f"#{run['id']} [{status}] {run.get('started_at', '?')}"
+            f" → {finished}"
+        )
+        print(f"    关键词「{keyword}」（{window}）｜源 {source}")
+        stages = run.get("stages") or []
+        if stages:
+            chain = " → ".join(
+                f"{s.get('name')}@{s.get('status')}"
+                + (
+                    f"({s['duration_seconds']}s)"
+                    if s.get("duration_seconds") is not None
+                    else ""
+                )
+                for s in stages
+            )
+            print(f"    阶段：{chain}")
+        else:
+            print("    阶段：——（未收口或崩溃于收口前）")
+        if run.get("report_path"):
+            print(f"    报告：{run['report_path']}")
+    return 0
+
+
+def run_data_quality(args: argparse.Namespace) -> int:
+    """执行 data-quality 子命令：填充率 + 语义健康审计。
+
+    与 ``analyze`` 的分工：analyze 跑全部分析面（含质量两节），
+    data-quality 只做质量面——秒级返回，适合入库后例行巡检、
+    CI 门槛（``--json`` + 健康分阈值）。
+
+    Args:
+        args: 已解析的命令行参数。
+
+    Returns:
+        进程退出码（0 正常——无门槛时发现问题也 0，审计的职责是
+        揭示而非拦截；2 = 库不存在 **或** --min-score 门槛不过
+        [数据错误域]）。
+    """
+    from src.analyze import load_dataset
+    from src.analyze.quality import (
+        field_quality,
+        render_semantic_health_markdown,
+        semantic_health,
+    )
+
+    if not args.db.exists():
+        _err(f"错误：数据库不存在: {args.db}")
+        return EXIT_DATA
+
+    dataset = load_dataset(args.db, keyword=args.keyword, days=args.days)
+    scope = f"「{args.keyword}」" if args.keyword else "全量"
+    if args.days:
+        scope += f"（近 {args.days} 天）"
+
+    semantic = semantic_health(dataset)
+    filled = field_quality(dataset)
+
+    if args.json:
+        import json as json_mod
+
+        print(
+            json_mod.dumps(
+                {
+                    "scope": scope,
+                    "records": len(dataset),
+                    "field_quality": filled,
+                    "semantic_health": semantic,
+                    "min_score": args.min_score,
+                    "gate_passed": (
+                        True
+                        if args.min_score is None
+                        else semantic["health_score"] >= args.min_score
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(f"数据质量审计：{scope} {len(dataset)} 条记录")
+        print("")
+        # 语义面（Markdown 表直出——与报告第十七节同源单点）
+        print(render_semantic_health_markdown(semantic).rstrip("\n"))
+        print("")
+        # 填充率摘要（全表见 analyze 报告七节，这里只给行动面 Top5）
+        if filled["most_missing"]:
+            print("最缺字段（填充率——下一步补采行动面）：")
+            for name in filled["most_missing"]:
+                rate = filled["fields"][name]["rate"]
+                print(f"  {name}: {rate * 100:.1f}%")
+        else:
+            print("字段填充率：无缺口（12 字段全满）。")
+        print(
+            f"整体字段填充率："
+            f"{(filled['overall'] or 0) * 100:.1f}%"
+        )
+
+    # 门槛面（--min-score）：JSON 面也含 gate_passed，退出码供 CI 判
+    if (
+        args.min_score is not None
+        and semantic["health_score"] < args.min_score
+    ):
+        _err(
+            f"质量门槛未过：健康分 {semantic['health_score']}"
+            f" < 门槛 {args.min_score}"
+        )
+        return EXIT_DATA
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """命令行入口。
 
@@ -1264,6 +1500,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return run_pipeline(args)
     if args.command == "db":
         return run_db(args)
+    if args.command == "data-quality":
+        return run_data_quality(args)
     if args.command == "templates":
         return run_templates(args)
     parser.print_help()
