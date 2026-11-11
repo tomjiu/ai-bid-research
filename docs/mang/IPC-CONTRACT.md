@@ -738,12 +738,75 @@ NFC，**`upload_ref`（定位键）原样保留**——必须与磁盘真实文�
     "skipped": [ { "path": "/home/u/笔记.txt", "reason": "ext_blocked", "detail": "…" } ] }
 ```
 
+### bid.extract `{}` （写面：条款抽取；#47 R25——向导深水区·建纲流①）
+
+无参数（工具面 `scope=all` 是唯一支持值——文件子集过滤属 M2 扩展）。经
+`bid_mcp::dispatch_with(extract_requirements)` 走真实工具面——**确定性规则抽取**
+（无 LLM）：评分细则 / 资格条件 / 技术参数 / ★标记正则面 + #219 标记合并（Agent
+标记优先 + 正则兜底）。状态机：FILES_IMPORTED → REQUIREMENTS_EXTRACTED。
+**零抽取是响亮警告而非错误**（#196 纪律——`warnings.ZERO_REQUIREMENTS` 逐条透出，
+不伪装成功）。UI 消费（树区空态卡）：files>0 且 requirements==0 时给「抽取条款」
+入口；成功后 `loadBid(true)` 重载——推荐卡自然接续。
+
+```jsonc
+→ { "present": true, "workspace": "…", "project": { "id", "name", "status" },
+    "extract": { "counts": { "total", "added", "by_category" }, "merge": { … },
+                 "star_summary": { … }, "conflicts": [], "missing_sequence": [],
+                 "packages": { "detected", "items", "shared_req_count" },
+                 "warnings": [ … ], "status": "REQUIREMENTS_EXTRACTED",
+                 "project_version": n } }
+```
+
+### bid.length_profile `{}` （只读：篇幅档位推荐；#287 → UI 面 #47 R25——建纲流②）
+
+经 `bid_mcp::dispatch_with(recommend_length_profile)` 走真实工具面。信号面
+（评分细则条数 / ★数 / 预算 / 项目类型 / 明写限值）→ 推荐档 + 理由 + **四档
+alternatives**（label/chars/pages/when 全量）。**呈现义务**（工具面 `next` 字段
+自述）：把建议 + 理由 + alternatives 呈现给用户确认后 `build_outline(length_profile=…)`
+——决策权在用户，推荐可被覆盖。明写限值在场时 `from_tender_spec` 非空（档位选择
+让位明写值——UI 显示「直接采用」提示，不设单选）。
+
+```jsonc
+→ { "present": true, "workspace": "…", "project": { … },
+    "recommendation": { "recommended_profile": "standard", "profile_label": "…",
+                        "target_chars": n, "approx_pages": n, "confidence": "…",
+                        "reasons": [ … ], "from_tender_spec": null,
+                        "alternatives": [ { "profile", "label", "chars", "pages", "when" } ×4 ],
+                        "signals": { "scoring_detail_count", "star_count",
+                                     "budget_yuan", "tender_type", "explicit_limit_chars" },
+                        "next": "…" } }
+```
+
+### bid.build_outline `{ length_profile?, target_total_chars?, max_reqs_per_leaf?, package?, project_version? }` （写面：建纲；#47 R25——建纲流③）
+
+经 `bid_mcp::dispatch_with(build_outline)` 走真实工具面（章节树 + 合规矩阵一体
+生成——`prepare_outline_and_matrix`）。可选参数与工具面同名同义；**壳侧只做形态级
+早拒**（package 纯空白 → `bad_args`，与 no_addendum_confirm 的 reason 早拒同构），
+四档值域 / 字数值域 / 分包命中 / 状态窗全在域层单一真源（E_STATE → `state` 码、
+EUnprocessable → `bad_args` 码透传——工具面文案自带合法值清单与下一步指引）。
+状态机：REQUIREMENTS_EXTRACTED → MATRIX_READY。UI 消费口径：明写限值在场时发
+`target_total_chars`（明写值），否则发用户选档（默认推荐档）；分包 `detected ≥2`
+时 `package` 必选（单包自动选定、零包不传）；成功后 `loadBid(true)` 重载——
+章节树呈现，建纲流卡自然退场。
+
+```jsonc
+→ { "present": true, "workspace": "…", "project": { … },
+    "outline_build": { "counts": { "sections", "leaves", "requirements",
+                                   "total_requirements", "total_target_chars",
+                                   "matrix_rows", "matrix_blocking" },
+                       "package": { "selected": { … }, "auto_selected": bool, "shared_req_count": n },
+                       "leaf_quotas": [ … ], "warnings": [ … ],
+                       "effective_profile": "…", "status": "MATRIX_READY",
+                       "project_version": n } }
+```
+
 ### bid.packages —— 分包清单（只读；#20/#316——多标段/多包识别面）
 `{}`（project_id 由壳从当前项目路由）
 
 经 `bid_mcp::dispatch_with(list_packages)` 走真实工具面（#316 识别结果
 + 逐包条款数 + 选包状态 + 共用条款），只读不裁决。**选包动作不在本
-命令**——选包 = `build_outline` 传 package 参数（管线动作走 MCP）。
+命令**——选包 = `build_outline` 传 package 参数（R25 起入口在树区建纲
+流卡的分包选择器；本面板保持只读呈现）。
 ```jsonc
 → { "present": true, "workspace": "D:\\项目A",
     "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
@@ -754,6 +817,65 @@ NFC，**`upload_ref`（定位键）原样保留**——必须与磁盘真实文�
                   "shared_req_count": 6, "total_requirements": 60,
                   "selected_package": { "id": "PKG-A", "label": "一标段：设备采购" },
                   "usage": "build_outline 传 package=<id|label|number> 选定投哪个包…" } }
+```
+
+### bid.evidence —— 证据台账列表（只读；#47 R25——缺口-4 读半边）
+`{ filters?: { kind?, status? }, limit?, cursor? }`（project_id 由壳从当前项目路由——恒覆写，不接受调用方伪造）
+
+经 `bid_mcp::dispatch_with(list_evidence)` 走真实工具面：kind 七值
+snake_case（qualification|performance|personnel|certificate|product_doc|
+solution_module|contract）/ status 四值大写（ACTIVE|EXPIRING|EXPIRED|
+SUPERSEDED）——值域校验与非法值拒绝在工具面单一真源（壳不重复实现）；
+id 字典序 + 游标分页。**读面任何项目阶段可调**（无 E_STATE）；
+E_NOTFOUND（无 db.json）走引导卡（§3.4）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "evidence": { "items": [ { "id": "EV-0001", "kind": "product_doc",
+                                "title": "并发压测报告", "status": "ACTIVE",
+                                "subject_name": "演示科技", "valid_until": "2027-06-30",
+                                "verification_tier": "SELF_TEST" } ],
+                  "total": 13, "limit": 50, "cursor": null, "next_cursor": null,
+                  "project_version": 12 } }
+```
+
+### bid.evidence_search —— 证据检索（只读；#47 R25）
+`{ query, mode?: "hybrid"|"semantic"|"exact"（缺省 hybrid）, top_k?, threshold? }`
+
+经 `bid_mcp::dispatch_with(search_evidence)`：query 必填（空 query 由工具面
+显式拒绝）；检索面 = 标题+范围+主体+客户+正文摘录（#217）；时间面降权
+（filters.valid_at 给定才启用）产生 warnings 原样透传；**SUPERSEDED 不进
+检索池**（工具面口径）。hits 行含 score / match_type（exact|semantic|both）/
+excerpt / verification_tier。值域（mode/top_k 1..=20/threshold 0..=1）在
+工具面单一真源。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "search": { "hits": [ { "id": "EV-0001", "title": "并发压测报告", "score": 1.0,
+                             "match_type": "both", "kind": "product_doc", "status": "ACTIVE",
+                             "valid_until": "2027-06-30", "excerpt": "2000 路并发压测全通过…" } ],
+                "total": 1, "top_k": 10, "warnings": [],
+                "trace": { "engine": "naive-token-v1（pre-M2-b）", "content_face": "title+scope+subject+client+excerpt" },
+                "project_version": 12 } }
+```
+
+### bid.evidence_register —— 证据登记（写面；#47 R26——缺口-4 写半边之登记）
+`{ kind, title, source_file_id, subject_name, scope?, valid_from?, valid_until?, client?, amount_wan?, completed_on?, placeholder?, locator?, fields?, project_version? }`（project_id 由壳从当前项目路由——恒覆写）
+
+经 `bid_mcp::dispatch_with(register_evidence)`：source_file_id **锚定已导入
+件**（import 回执 per_file[].file_id，#185——sha256/指纹由服务端从库内生成，
+不接受自报）；verification_tier 由服务端裁决（#245 自报显式拒）；
+旧来源参数 source_file/source_sha256/fingerprint 显式拒（防假成功）。
+返回 (ev_id, deduplicated)：同 key 同指纹同验证态 → **幂等重放**（原
+EV-id 直返不换版）；同 key 换版 → 旧记录单向降级 SUPERSEDED 且既有绑定
+迁移到新记录。E_UNPROCESSABLE → bad_args（表单内反馈，不走横幅）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "register": { "ev_id": "EV-0014", "deduplicated": false, "kind": "qualification",
+                  "status": "ACTIVE", "verification_tier": "VERIFIED", "placeholder": false,
+                  "excerpt": "…正文摘录", "hint": "新 EV 已签发…",
+                  "project_version": 12 } }
 ```
 
 ### bid.matrix_override —— 否决项死锁人工裁定（写面；#20/#226）

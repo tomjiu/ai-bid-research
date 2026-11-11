@@ -64,6 +64,14 @@ EXPECTED_TOOLS = {
     "advance_task",
     "reopen_section",
     "set_param_responses",
+    # 后续批次新增（与 bid-mcp/src/lib.rs TOOL_NAMES 50 对齐——#88 批4
+    # 会话发现清单漂移：CI 无 Python SDK runner 抓不到，此处补齐）
+    "check_scoring_coverage",
+    "list_packages",
+    "list_performance",
+    "recommend_performance",
+    "register_performance",
+    "write_performance_section",
 }
 
 server_bin = sys.argv[1] if len(sys.argv) > 1 else "bid-mcp-server"

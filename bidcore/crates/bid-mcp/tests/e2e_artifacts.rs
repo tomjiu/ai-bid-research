@@ -30,6 +30,30 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn repo_root() -> PathBuf {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     // #183 围栏：词法 `..` 会被围栏预拒——受信夹具根统一 canonical 绝对路径
@@ -145,6 +169,7 @@ fn e2e_artifacts_synth_tender() {
     ));
     std::fs::create_dir_all(&ws).unwrap();
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(files_dir());
+    b4_write_profile(&ws);
 
     // run-id 目录（+ latest 刷新）
     let stamp = SystemTime::now()
@@ -312,7 +337,8 @@ fn e2e_artifacts_synth_tender() {
     }
     let _ = svc.store_mut().build_matrix().unwrap();
 
-    // ---- ⑤.5 #117 任务 1：表格数据面补齐（四真源——都是投标方的真实输入，
+    // ---- ⑤.5 #117 任务 1：表格数据面补齐
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：评分项映射（记审前——#474）（四真源——都是投标方的真实输入，
     //      不是编造：业绩证据台账、参数响应账、主体信息档、报价决策）
     let t55 = Instant::now();
     // (a) 业绩证据（3 条——MIN_PERFORMANCE_COUNT 门槛；带发包人/金额/完成日期
@@ -664,7 +690,9 @@ fn e2e_artifacts_synth_tender() {
                 "validity_days": 90,
                 "deposit_amount": 300_000.0,
                 "legal_rep_gender": "男",
+                "project_no": "ZFCG-2026-ART",
             },
+            "max_overrun_pct": 10000,
         }),
     ));
     let docx_url = export_docx["artifact"]["url"].as_str().unwrap().to_string();
@@ -930,7 +958,9 @@ fn e2e_artifacts_synth_tender() {
                     "validity_days": 90,
                     "deposit_amount": 300_000.0,
                     "legal_rep_gender": "男",
+                    "project_no": "ZFCG-2026-ART",
                 },
+                "max_overrun_pct": 10000,
             }),
         ));
         let u = e["artifact"]["url"].as_str().unwrap().to_string();
@@ -1222,4 +1252,49 @@ fn chrono_like_stamp(secs: u64) -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     format!("{y:04}{m:02}{d:02}-{h:02}{mi:02}{sec:02}")
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道）。
+/// 须在记审**之前**（#474 计分面摘要）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

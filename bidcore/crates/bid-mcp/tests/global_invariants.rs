@@ -33,6 +33,39 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 // ---------------------------------------------------------------- 夹具与环境
 
 fn repo_root() -> PathBuf {
@@ -398,6 +431,7 @@ fn gi_five_global_invariants() {
     }
     let ws = ws_dir("main");
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(files_dir());
+    b4_write_profile(&ws);
 
     // ---- ① 建项目（MCP §1）
     let pid = ok_result(call(
@@ -491,6 +525,7 @@ fn gi_five_global_invariants() {
     // E_UNPROCESSABLE「未发现补遗/澄清文件」拒（实测踩到）。
     // #180 审核内容绑定：MatrixApproval/OutlineApproval 批矩阵/大纲，保持
     // 起草前原位；PreExportConfirm 绑定章节正文摘要，挪至全部叶起草完成后
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：评分项映射（记审前——#474）
     // 记审（见 ⑦' ——过门时摘要还是空正文态，起草后即失效）。
     for gate in [
         Gate::AddendumWaiver,
@@ -578,6 +613,8 @@ fn gi_five_global_invariants() {
         &mut svc,
         "export_bid_document",
         json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
             "project_id": &pid, "format": "docx",
             "output_path": "out/gi-投标文件-技术标.docx",
         }),
@@ -863,4 +900,51 @@ fn gi_invariant_checks_reject_injected_defects() {
         .is_ok(),
         "⑤ 白名单内的导出层追加标题应绿"
     );
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道；映射到
+/// 首叶 = Agent 映射动作的最小建模）。须在记审**之前**（#474 计分面摘要）。
+/// （main 存量债务补齐：批次 2 的 10 文件补面漏了本文件——#88 批4 会话
+/// 实测发现，顺手对齐同款 helper。）
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

@@ -826,6 +826,142 @@ pub fn packages(
     }))
 }
 
+/// `bid.evidence` —— 证据台账读面（只读，#47 R25——缺口-4 读半边）。
+///
+/// 经 `bid_mcp::dispatch_with(list_evidence)` 走真实工具面：kind/status
+/// 过滤 + id 字典序 + 游标分页。filters/limit/cursor 原样透传——值域
+/// 校验与非法值拒绝在工具面单一真源（壳不重复实现）；project_id 恒由
+/// 壳从当前项目路由（与 packages 同轨，不接受调用方伪造）。
+/// E_NOTFOUND（无 db.json）走引导卡（IPC-CONTRACT §3.4）。
+pub fn evidence(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // 请求参数透传 + project_id 壳侧覆写（单一真源）
+    let mut req = json!({});
+    for k in ["filters", "limit", "cursor"] {
+        if let Some(v) = a.map.get(k) {
+            if !v.is_null() {
+                req[k] = v.clone();
+            }
+        }
+    }
+    req["project_id"] = json!(project_id);
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "list_evidence".to_string(),
+            args: req,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "evidence": tool_out,
+    }))
+}
+
+/// `bid.evidence_search` —— 证据检索读面（只读，#47 R25）。
+///
+/// 经 `bid_mcp::dispatch_with(search_evidence)`：query 必填（空 query 由
+/// 工具面显式拒绝），mode hybrid|semantic|exact（缺省 hybrid），top_k/
+/// threshold 透传（值域在工具面单一真源）。检索面 = 标题+范围+主体+
+/// 客户+正文摘录（#217）；时间面降权 warnings 原样透传。
+pub fn evidence_search(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut req = json!({});
+    for k in ["query", "mode", "top_k", "threshold", "filters"] {
+        if let Some(v) = a.map.get(k) {
+            if !v.is_null() {
+                req[k] = v.clone();
+            }
+        }
+    }
+    req["project_id"] = json!(project_id);
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "search_evidence".to_string(),
+            args: req,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "search": tool_out,
+    }))
+}
+
+/// `bid.evidence_register` —— 证据登记写面（#47 R26——缺口-4 写半边之登记）。
+///
+/// 经 `bid_mcp::dispatch_with(register_evidence)`：必填 kind/title/
+/// source_file_id（锚定已导入件——import 回执 per_file[].file_id，#185：
+/// 旧来源参数 source_file/source_sha256/fingerprint 与自报 verification_tier
+/// (#245) 均由工具面显式拒）；返回 (ev_id, deduplicated)——幂等重放原 EV
+/// 直返 / 同 key 换版旧记录降级 SUPERSEDED 且绑定迁移。project_id 恒壳侧
+/// 覆写（R25 同轨）。E_UNPROCESSABLE → bad_args（表单内反馈，引导卡语义
+/// 见 IPC-CONTRACT §3.4——写面校验错不走横幅）。
+pub fn evidence_register(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // 参数透传（值域/显式拒绝在工具面单一真源）+ project_id 壳侧覆写
+    let mut req = json!({});
+    for k in [
+        "kind", "title", "source_file_id", "subject_name", "scope",
+        "valid_from", "valid_until", "client", "amount_wan", "completed_on",
+        "placeholder", "locator", "fields", "project_version",
+    ] {
+        if let Some(v) = a.map.get(k) {
+            if !v.is_null() {
+                req[k] = v.clone();
+            }
+        }
+    }
+    req["project_id"] = json!(project_id);
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "register_evidence".to_string(),
+            args: req,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "register": tool_out,
+    }))
+}
+
 /// `bid.matrix_override` —— 否决项死锁人工裁定（写面，#226）。
 ///
 /// receipt 走 #182 宿主签发面（不进 MCP 工具表——Agent 拿不到）：
@@ -1153,6 +1289,148 @@ pub fn no_addendum_confirm(
     }))
 }
 
+// ---------------------------------------------------------------- #47 R25：建纲流三面
+//
+// 向导深水区实测缺口：导入完成后 UI 断档——树区空态明文「下一步由 Agent
+// 走 extract_requirements / build_outline」（app.js 三处死文案），工具面
+// 已有的能力对 UI 用户不可达。本轮把建纲流三工具分批接线 UI：
+//   * [`extract`] —— extract_requirements（确定性规则抽取，无 LLM——
+//     评分细则/资格条件/参数表/★标记正则面 + #219 标记合并）
+//   * [`length_profile`] —— recommend_length_profile（#287 只读推荐：
+//     信号 + 理由 + 四档 alternatives，「决策权在用户，推荐可被覆盖」——
+//     工具面 next 字段自述的呈现义务，本轮在 UI 兑现）
+//   * [`build_outline`] —— build_outline（写面：档位/明写字数/分包选择）
+// 壳零裁决：全部经 `bid_mcp::dispatch_with` 走真实工具面（与 #20 治理
+// 出口三件同构）；状态机/值域/门禁单一真源在域层，壳只做形态级早拒。
+
+/// `bid.extract` —— 条款抽取（写面，#47 R25）。
+///
+/// 无参数（工具面 scope=all 是唯一支持值——文件子集过滤属 M2 扩展）。
+/// 抽取为确定性规则面（无 LLM）：FILES_IMPORTED → REQUIREMENTS_EXTRACTED。
+/// 零抽取是响亮警告而非错误（#196 纪律——warnings.ZERO_REQUIREMENTS，
+/// UI 逐条透出）。
+pub fn extract(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "extract_requirements".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "extract": tool_out,
+    }))
+}
+
+/// `bid.length_profile` —— 篇幅档位推荐（只读，#287 → UI 面 #47 R25）。
+///
+/// 信号面（评分细则条数/★数/预算/项目类型/明写限值）→ 推荐档 + 理由 +
+/// 四档 alternatives。明写限值在场时 from_tender_spec 非空（档位选择让位
+/// 明写值——UI 呈现口径同工具面 next 字段）。
+pub fn length_profile(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    _a: &Args,
+) -> Result<Value, IpcError> {
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "recommend_length_profile".to_string(),
+            args: json!({ "project_id": project_id }),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "recommendation": tool_out,
+    }))
+}
+
+/// `bid.build_outline` —— 建纲（写面，#47 R25）。
+///
+/// 可选参数与工具面同名同义：`length_profile`（四档键——值域校验单一真源
+/// 在域层 `LengthProfile::from_key`，壳不重实现）、`target_total_chars`
+/// （1,000..=5,000,000，工具面裁决）、`max_reqs_per_leaf`（1..=50）、
+/// `package`（分包选择——id/标签/序号三口径）、`project_version`（CAS）。
+/// 壳侧只做形态级早拒：package 空白（与 no_addendum_confirm 的 reason
+/// 早拒同构——纯空白无语义，进工具面也是拒，早拒省一次锁+路由）。
+pub fn build_outline(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let package = a.str("package")?.map(str::to_string);
+    if let Some(p) = &package {
+        if p.trim().is_empty() {
+            return Err(IpcError::bad_args(
+                "package 不得为空白（不选包则不传；用 bid.packages 查看识别结果）",
+            ));
+        }
+    }
+    let length_profile = a.str("length_profile")?.map(str::to_string);
+    let target_total_chars = a.u64("target_total_chars")?;
+    let max_reqs_per_leaf = a.u64("max_reqs_per_leaf")?;
+    let project_version = a.u64("project_version")?;
+
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut args = json!({ "project_id": project_id });
+    if let Some(k) = length_profile {
+        args["length_profile"] = json!(k);
+    }
+    if let Some(t) = target_total_chars {
+        args["target_total_chars"] = json!(t);
+    }
+    if let Some(m) = max_reqs_per_leaf {
+        args["max_reqs_per_leaf"] = json!(m);
+    }
+    if let Some(p) = package {
+        args["package"] = json!(p);
+    }
+    if let Some(v) = project_version {
+        args["project_version"] = json!(v);
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: "build_outline".to_string(),
+            args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    Ok(json!({
+        "present": true,
+        "workspace": ws.root_display(),
+        "project": project,
+        "outline_build": tool_out,
+    }))
+}
 
 /// 项目元信息（id 先取出供工具路由；返回 (id, 元信息 json)）——
 /// 借用面：先取后放，`dispatch_with` 要 `&mut BidService`。
@@ -3481,6 +3759,152 @@ mod tests {
         assert_eq!(r["ok"], json!(false));
         assert_eq!(r["code"], json!("bad_args"));
 
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #47 R25：建纲流全链（向导深水区——导入后直达章节树）。
+    /// 公开 IPC 面走真实工具面：create → import（corpus-A 夹具）→
+    /// bid.extract（确定性规则抽取：FILES_IMPORTED → REQUIREMENTS_EXTRACTED）
+    /// → bid.length_profile（只读推荐：推荐档 + 四档 alternatives + 信号面）
+    /// → bid.build_outline（REQUIREMENTS_EXTRACTED → MATRIX_READY）→
+    /// bid.outline 节点呈现（UI 树数据源）。拒绝面两处：先建后抽（工具面
+    /// E_STATE 透传 state 码——文案指向 extract_requirements）与 package
+    /// 空白（壳侧形态早拒 bad_args——不进工具面不取锁）。
+    #[test]
+    fn outline_build_flow_roundtrip_r25() {
+        let _g = workspace_files_guard();
+        let (dir, ws) = tmp_ws("r25-outline");
+        let ctx = Ctx::new(ws, std::path::PathBuf::from("/tmp"));
+
+        fn call(ctx: &Ctx, cmd: &str, body: Value) -> Value {
+            ctx.dispatch(&crate::ipc::Request {
+                id: json!(1),
+                cmd: cmd.to_string(),
+                body: body.as_object().cloned().unwrap_or_default(),
+            })
+        }
+
+        // 1) 建项 + 导入（夹具同 #19——corpus-A 真实招标 docx）
+        let r = call(&ctx, "bid.create_project", json!({
+            "name": "R25 建纲流项目", "bid_deadline": "2099-12-31", "mode": "明标",
+        }));
+        assert_eq!(r["ok"], json!(true), "建项：{r}");
+        const MIN_DOCX: &[u8] = include_bytes!("../../../tests/fixtures/wizard19-min.docx");
+        std::fs::create_dir_all(dir.join("files")).unwrap();
+        std::fs::write(dir.join("files").join("A-招标文件.docx"), MIN_DOCX).unwrap();
+        let r = call(&ctx, "bid.import_files", json!({
+            "files": [{ "upload_ref": "files/A-招标文件.docx", "kind": "招标文件" }]
+        }));
+        assert_eq!(r["ok"], json!(true), "导入：{r}");
+
+        // 2) 未抽取先建纲 → 工具面状态窗 E_STATE 透传（route_guard 在
+        //    FILES_IMPORTED 即拒——状态与工具名都在文案里，UI 引导卡可
+        //    据状态给出「先抽取」下一步）
+        let r = call(&ctx, "bid.build_outline", json!({}));
+        assert_eq!(r["ok"], json!(false), "未抽取建纲应拒：{r}");
+        assert_eq!(r["code"], json!("state"), "E_STATE 透传 state 码：{r}");
+        let msg = r["message"].as_str().unwrap_or("");
+        assert!(
+            msg.contains("FILES_IMPORTED") && msg.contains("build_outline"),
+            "拒绝文案要带状态与工具名（可引导）：{r}"
+        );
+
+        // 3) package 空白 → 壳侧形态早拒（bad_args，不进工具面）
+        let r = call(&ctx, "bid.build_outline", json!({ "package": "   " }));
+        assert_eq!(r["ok"], json!(false), "{r}");
+        assert_eq!(r["code"], json!("bad_args"), "纯空白 package 壳侧早拒：{r}");
+
+        // 4) bid.extract：确定性规则抽取（无 LLM）→ REQ 面 + 状态推进
+        let r = call(&ctx, "bid.extract", json!({}));
+        assert_eq!(r["ok"], json!(true), "抽取应成功：{r}");
+        let ex = &r["result"]["extract"];
+        let total = ex["counts"]["total"].as_u64().unwrap_or(0);
+        assert!(total >= 1, "corpus-A 夹具应产出条款（实得 {total}）：{ex}");
+        assert_eq!(
+            ex["status"], json!("REQUIREMENTS_EXTRACTED"),
+            "抽取推进状态机（工具面 post-call 真值）：{ex}"
+        );
+        // project 元信息是 dispatch 前快照（借用面「先取后放」——与
+        // packages/gate_pass 同构）；UI 抽取后重载 bid.state 取新态
+        assert_eq!(
+            r["result"]["project"]["id"], json!("PRJ-0001"),
+            "project 元信息随行（id 锚定）：{r}"
+        );
+
+        // 5) bid.length_profile：只读推荐（推荐档 + 四档 alternatives + 信号）
+        let r = call(&ctx, "bid.length_profile", json!({}));
+        assert_eq!(r["ok"], json!(true), "推荐应成功：{r}");
+        let rec = &r["result"]["recommendation"];
+        assert!(
+            rec["recommended_profile"].is_string(),
+            "推荐档在场（四档键）：{rec}"
+        );
+        assert!(
+            rec["profile_label"].is_string(),
+            "推荐档中文标签在场：{rec}"
+        );
+        let alts = rec["alternatives"].as_array().cloned().unwrap_or_default();
+        assert_eq!(alts.len(), 4, "四档 alternatives 全量（#287 呈现义务）：{rec}");
+        assert!(
+            alts.iter().all(|a| a["label"].is_string() && a["chars"].is_u64()),
+            "每档带标签与字数：{rec}"
+        );
+        assert!(
+            rec["signals"]["scoring_detail_count"].is_u64(),
+            "信号面在场（决策可核对）：{rec}"
+        );
+
+        // 6) bid.build_outline（practical 档——参数透传路径）→ 章节树 + 矩阵
+        let r = call(&ctx, "bid.build_outline", json!({ "length_profile": "practical" }));
+        assert_eq!(r["ok"], json!(true), "建纲应成功：{r}");
+        let ob = &r["result"]["outline_build"];
+        assert!(
+            ob["counts"]["sections"].as_u64().unwrap_or(0) >= 1,
+            "建纲产出章节树：{ob}"
+        );
+        assert!(
+            ob["counts"]["leaves"].as_u64().unwrap_or(0) >= 1,
+            "叶节点在场（配额面）：{ob}"
+        );
+        assert!(
+            ob["counts"]["matrix_rows"].as_u64().unwrap_or(0) >= 1,
+            "矩阵同步重算（prepare_outline_and_matrix 一体）：{ob}"
+        );
+        assert_eq!(ob["status"], json!("MATRIX_READY"), "建纲推进状态机：{ob}");
+
+        // 7) bid.outline：节点呈现（UI 章节树数据源）
+        let r = call(&ctx, "bid.outline", json!({}));
+        assert_eq!(r["ok"], json!(true), "大纲读取：{r}");
+        let nodes = r["result"]["nodes"].as_array().cloned().unwrap_or_default();
+        assert!(!nodes.is_empty(), "建纲后章节树非空：{r}");
+        assert!(
+            nodes.iter().all(|n| n["id"].is_string() && n["title"].is_string()),
+            "节点带 id/title（树渲染契约）：{r}"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// #47 R25：空工作区三命令干净 not_found（读推荐/写抽取/写建纲都不落
+    /// 副作用——与 #603 gates_clean_not_found_without_db 同构）。
+    #[test]
+    fn outline_flow_clean_not_found_r25() {
+        let (dir, _ws) = tmp_ws("r25-nodb");
+        let ctx = Ctx::new(Workspace::new(&dir).unwrap(), PathBuf::new());
+        for cmd in ["bid.extract", "bid.length_profile"] {
+            let frame = call(&ctx, cmd);
+            assert_eq!(frame["ok"], json!(false), "{cmd} 无 db.json 应干净 not_found：{frame}");
+            assert_eq!(err_code_of(&frame), "not_found");
+        }
+        // 写面同款（合法入参也 not_found——不落副作用）
+        let frame = call_args(
+            &ctx,
+            "bid.build_outline",
+            json!({ "length_profile": "practical" }),
+        );
+        assert_eq!(frame["ok"], json!(false), "{frame}");
+        assert_eq!(err_code_of(&frame), "not_found");
+        assert!(!dir.join(".mang").exists(), "建纲流不得在工作区留副作用");
         let _ = std::fs::remove_dir_all(dir);
     }
 

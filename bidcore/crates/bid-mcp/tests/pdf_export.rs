@@ -19,6 +19,39 @@ use bid_mcp::{dispatch_with, BidService, ToolCall, ToolReply};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        "duration_days": 180,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn call(svc: &mut BidService, tool: &str, args: Value) -> ToolReply {
     dispatch_with(svc, ToolCall { tool: tool.to_string(), args })
 }
@@ -70,7 +103,9 @@ fn tmp_dir(tag: &str) -> PathBuf {
 /// 完整导出前置夹具（绑定 + 三门 + 全叶 draft——EXPORTED 就绪态）。
 fn svc_export_ready(tag: &str, n_reqs: usize, target_chars: u32) -> (BidService, String) {
     let cats = ["资格条件", "否决项", "评分项", "技术参数", "商务要求", "格式要求"];
-    let mut svc = BidService::open(tmp_dir(tag)).unwrap();
+    let ws = tmp_dir(tag);
+    b4_write_profile(&ws);
+    let mut svc = BidService::open(&ws).unwrap();
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "PDF 导出测试", "bid_deadline": "2026-12-31", "mode": "明标", "external_key": tag,
     })))["project_id"].as_str().unwrap().to_string();
@@ -125,6 +160,7 @@ fn svc_export_ready(tag: &str, n_reqs: usize, target_chars: u32) -> (BidService,
     }
     let _ = svc.store_mut().build_matrix().unwrap();
     use bid_domain::review::{Decision, Gate};
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：评分项映射（记审前——#474）
     // #180 审核内容绑定：矩阵/大纲批的是响应面与结构面，保持起草前原位；
     // PreExportConfirm 绑定章节正文摘要，挑至全部叶起草完成后记审
     for gate in [Gate::MatrixApproval, Gate::OutlineApproval] {
@@ -172,6 +208,7 @@ fn pdf_export_full_chain_with_chinese_and_footer() {
     }
     let (mut svc, pid) = svc_export_ready("main", 24, 12_000);
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "pdf", "output_path": "out/投标文件.pdf",
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();
@@ -207,6 +244,7 @@ fn pdf_export_100pages_under_30s() {
     let (mut svc, pid) = svc_export_ready("scale", 960, 240_000);
     let t0 = std::time::Instant::now();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "pdf", "output_path": "out/百页.pdf",
     })));
     let elapsed = t0.elapsed().as_millis();
@@ -249,7 +287,7 @@ fn pdf_export_dark_bid_scrubbed() {
         .unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "project_id": pid, "format": "pdf", "output_path": "out/暗标.pdf",
-        "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司" },
+        "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-PDF" },
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();
     let text = pdf_text(std::path::Path::new(&url));
@@ -264,6 +302,7 @@ fn pdf_export_idempotent_same_artifact() {
     }
     let (mut svc, pid) = svc_export_ready("idem", 12, 6_000);
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "pdf", "output_path": "out/i.pdf",
     })));
     let mtime_a = std::fs::metadata(
@@ -271,6 +310,7 @@ fn pdf_export_idempotent_same_artifact() {
     ).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(50));
     let b = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "pdf", "output_path": "out/i.pdf",
     })));
     // 幂等：staging docx 未变 → 不重转（产物 mtime 不变——soffice 的 PDF
@@ -292,12 +332,59 @@ fn pdf_export_idempotent_same_artifact() {
 fn pdf_rejects_bad_format_and_env_honored() {
     let (mut svc, pid) = svc_export_ready("reject", 8, 4_000);
     let reply = call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "xlsx", "output_path": "out/x.xlsx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE");
     // docx 通道不受 pdf 环境影响（回归）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
         "project_id": pid, "format": "docx", "output_path": "out/回归.docx",
     })));
     assert!(r["artifact"]["url"].as_str().unwrap().ends_with(".docx"));
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道）。
+/// 须在记审**之前**（#474 计分面摘要）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

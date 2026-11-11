@@ -760,6 +760,685 @@ pub fn placeholder_evidence_findings(store: &DomainStore) -> Vec<ValidationFindi
     out
 }
 
+// ---------------------------------------------------------------- #88 审计收口：致命项门 findings
+
+/// #88 审计 F-01/S-1：★实质性条款响应门（导出门 1e 消费）。
+///
+/// 两个子面（均为 BLOCKER——★条款不响应/负偏离 = 评标委员会直接否决
+/// = 废标级，`matrix.rs` Lead 裁决「★不参与 blocking 派生」后，导出面
+/// 的分级收口落在此门）：
+/// - **子面 a（`E_STAR_UNRESPONDED`——已抽取未响应）**：矩阵行
+///   `substantive=true`（标记面 Agent 判定 ∪ 抽取面★检测双路写入）且
+///   响应态非 RESPONDED、亦非合法人工豁免。放行面只有两个：
+///   RESPONDED（证据+章节在位，或正文实写——#241 文本事实口径）；
+///   NotApplicable + 合法豁免三要件（NOT_APPLICABLE + 非空偏离说明 +
+///   可信 Human receipt，复用 [`is_legitimate_placeholder_exemption`]
+///   裁决——与占位门 1d 同款纪律）。**Partial 也不放行**：证据在绑但
+///   无归属章节 = 响应未进文档正文（导出只吃章节面——证据不落正文的
+///   ★响应等于没写）。PENDING_EVIDENCE（占位）在占位门 1d 已拦
+///   必选行，这里拦★非必选行的同型面。
+///   豁免通道：无参数豁免——人工裁决走既有矩阵覆写三要件
+///   （`set_matrix_override`）。
+/// - **子面 b（`E_STAR_MISSING`——漏标面）**：parsed 文件
+///   `star_missing > 0`（★真值块未产生任何 REQ = 条款漏抽取，响应无从
+///   谈起）。与 `get_star_coverage` 同源同口径（`star_scan::star_coverage`
+///   单一真源；file 匹配腿 `source_file == name ∪ anchors 含 name`）。
+///   豁免通道：`export_bid_document.waive_star_missing`（显式非空理由
+///   ——样板句误判/表格装配假阳性等人工确认场景，理由进 warnings 审计面）。
+pub fn star_gate_findings(
+    store: &DomainStore,
+    parsed: &[bid_parse::ParsedFile],
+) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    // ---- 子面 a：已抽取★ REQ 未响应（读持久化矩阵——与门 1a 同口径）
+    for row in store.matrix() {
+        if !row.substantive {
+            continue;
+        }
+        if row.status == ResponseStatus::Responded {
+            continue;
+        }
+        let legit_na = row.status == ResponseStatus::NotApplicable
+            && store
+                .matrix_overrides()
+                .get(&row.requirement_id)
+                .map(is_legitimate_placeholder_exemption)
+                .unwrap_or(false);
+        if legit_na {
+            continue;
+        }
+        let status_face = match row.status {
+            ResponseStatus::NotResponded => "未响应（无证据无章节）",
+            ResponseStatus::Partial => "仅证据在绑、无归属章节（响应未进文档正文）",
+            ResponseStatus::PendingEvidence => "仅占位/待核验材料（占位不构成★响应）",
+            ResponseStatus::NotApplicable => {
+                "人工不适用覆写但豁免三要件不全（缺偏离说明或可信 Human receipt）"
+            }
+            ResponseStatus::Responded => unreachable!("RESPONDED 已 continue"),
+        };
+        out.push(ValidationFinding {
+            rule_code: "E_STAR_UNRESPONDED".into(),
+            severity: "BLOCKER",
+            section_id: row.response_section.clone(),
+            requirement_id: Some(row.requirement_id.clone()),
+            message: format!(
+                "★实质性条款 {}（{}）{}——★不响应=实质性条款漏响应，废标级（#88 F-01）；补章节响应/补绑证据，或人工不适用三要件豁免（NOT_APPLICABLE+偏离说明+Human receipt）",
+                row.requirement_id, row.id, status_face,
+            ),
+        });
+    }
+    // ---- 子面 b：漏标面（★真值块无对应 REQ——与 get_star_coverage 同源）
+    for pf in parsed {
+        let reqs_of_file: Vec<bid_domain::Requirement> = store
+            .requirements()
+            .iter()
+            .filter(|r| {
+                r.source_file == pf.name || r.anchors.iter().any(|a| a.file == pf.name)
+            })
+            .cloned()
+            .collect();
+        let cov = bid_parse::star_scan::star_coverage(pf, &reqs_of_file);
+        if cov.missing_stars > 0 {
+            out.push(ValidationFinding {
+                rule_code: "E_STAR_MISSING".into(),
+                severity: "BLOCKER",
+                section_id: None,
+                requirement_id: None,
+                message: format!(
+                    "《{}》：{} 处★真值块无对应 REQ（漏抽取——响应无从谈起，#88 F-01 子面 b）；get_star_coverage 查块级明细后补标（submit_block_marks substantive=true），或确认可接受后 export 传 waive_star_missing（非空理由）显式豁免",
+                    pf.name, cov.missing_stars,
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// 暗标要求正向词面（#88 F-02——corpus-A 3.3.3 / GT-24 语料形）。
+/// 否定形不单列词表：按匹配位前置字（不/非/无/未/莫）就地判定，见
+/// [`dark_bid_required_in`]（「商务标不采用暗标评审」类反例不得误拦）。
+const DARK_BID_POSITIVE: &[&str] = &[
+    "采用暗标", "暗标评审", "暗标方式", "暗标制作", "暗标格式", "暗标要求",
+];
+
+/// 条款文本是否含暗标评审要求（正向词面存在**非否定形**命中）。
+///
+/// 保守面：仅「暗标」二字不成证据（「暗标外其他章节…」的间接提及不拦）。
+/// 否定形判定用**短语剥除**：先把「否定字 + 正向短语」整段剥掉再匹配——
+/// 单看匹配位前置字会漏判二级命中（「商务标**不**采用暗标评审」里
+/// 「暗标评审」的前置字是「用」不是「不」，但整段同样被「不」否定）。
+/// 混合句（「商务标不采用暗标评审；技术标部分采用暗标评审」）剥除后
+/// 第二个命中仍在 → 要求在场（corpus-A 3.3.3 即肯定句式）。
+fn dark_bid_required_in(text: &str) -> bool {
+    const NEGATORS: &[&str] = &["无需", "不用", "不", "非", "无", "未", "莫"];
+    let mut cleaned = text.to_string();
+    for neg in NEGATORS {
+        for p in DARK_BID_POSITIVE {
+            let pat = format!("{neg}{p}");
+            if cleaned.contains(&pat) {
+                cleaned = cleaned.replace(&pat, "◇"); // 否定形占位（不再命中）
+            }
+        }
+    }
+    DARK_BID_POSITIVE.iter().any(|p| cleaned.contains(*p))
+}
+
+/// #88 审计 F-02/S-2：暗标联动门（导出门 1f 消费）。
+///
+/// `dark_bid_active` = 导出启用了暗标模式（anonymize 有效——
+/// `profile.dark_bid=true` 且 bidder_name 非空）。启用时零 findings。
+/// 未启用时按项目 mode 分级（`BidProject.mode`——M1 透传、导出面
+/// 消费的既定设计位）：
+/// - **mode=暗标 → `E_DARK_BID_REQUIRED`（BLOCKER）**：项目自声明暗标
+///   而导出明标 = 自相矛盾，fail-closed。darkbid.rs 防线（九类泄露面
+///   + BLOCKER 复验归零）是 opt-in 的——门再好没开等于没有。
+/// - **mode=明标 且 REQ 文本含暗标要求词面 → `W_DARK_BID_UNDECLARED`
+///   （MINOR 告警）**：招标文件有暗标条款而项目登记为明标——声明缺位
+///   的响亮提示（不硬拦：既有明标项目/契约兼容；Lead 裁决后可升 BLOCKER）。
+///
+/// 词面数据源：REQ anchors 摘录 ∪ 补遗条款文本（`addendum_requirement`
+/// ——补遗引入的暗标要求同样在场）。
+pub fn dark_bid_gate_findings(
+    store: &DomainStore,
+    dark_bid_active: bool,
+) -> Vec<ValidationFinding> {
+    if dark_bid_active {
+        return Vec::new();
+    }
+    let mode = store.project().map(|p| p.mode.clone()).unwrap_or_default();
+    if mode == "暗标" {
+        return vec![ValidationFinding {
+            rule_code: "E_DARK_BID_REQUIRED".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: "项目 mode=暗标 但本次导出未启用暗标模式——\
+                      启用暗标导出（profile.dark_bid=true + bidder_name）后重试\
+                      （#88 F-02：暗标评审泄露=废标级，防线是 opt-in 的，不开等于没有）"
+                .into(),
+        }];
+    }
+    // 明标 + 暗标条款在场 → 未声明告警（不拦——升级面由 Lead 裁决）
+    let req_text = |r: &bid_domain::Requirement| {
+        let mut t = r
+            .anchors
+            .iter()
+            .map(|a| a.excerpt.as_str())
+            .collect::<Vec<_>>()
+            .join("；");
+        if let Some(addendum) = r.params.get(bid_domain::rewrite::PARAM_KEY) {
+            if let Some(s) = addendum.as_str() {
+                t.push('；');
+                t.push_str(s);
+            }
+        }
+        t
+    };
+    let hits: Vec<String> = store
+        .requirements()
+        .iter()
+        .filter(|r| dark_bid_required_in(&req_text(r)))
+        .map(|r| r.id.clone())
+        .collect();
+    if hits.is_empty() {
+        return Vec::new();
+    }
+    vec![ValidationFinding {
+        rule_code: "W_DARK_BID_UNDECLARED".into(),
+        severity: "MINOR",
+        section_id: None,
+        requirement_id: None,
+        message: format!(
+            "招标文件含暗标评审条款（{}）而项目 mode=明标、导出未启用暗标——\
+             若本项目实际需暗标评审，用 profile.dark_bid=true + bidder_name 重导\
+             （#88 F-02：泄露=废标；当前为告警不拦）",
+            hits.join("、"),
+        ),
+    }]
+}
+
+/// #88 审计 F-08/S-4：补遗 DIRTY 门（导出门 1g 消费）。
+///
+/// **两分级**（dirty 的两个来源语义不同——「只打脏不清脏，清除归补遗
+/// 指令处置面与章节重开重走流程」的既定纪律，见 rewrite.rs
+/// mark_dirty_by_requirements 注）：
+/// - **有 pending 指令（`E_SECTION_DIRTY`，BLOCKER）**：补遗登记打脏 +
+///   改写指令未处置——章节正文确证 stale（S-4：按补遗后口径评审 →
+///   负偏离扣分；★条款则废标）。解决通道（均为显式处置，无参数豁免）：
+///   ① `rewrite_section_partial` 逐指令改写（处置完自动清脏）；
+///   ② `dismiss_rewrite_directive` 人工裁定不适用（同样清脏）。
+/// - **无 pending 指令（`W_EVIDENCE_DIRTY`，MINOR 告警）**：证据换版
+///   打脏（#456——支撑章节响应的证据已 Superseded，绑定已迁移但「依据
+///   是换了件的」的失效信号）——正文内容本身未证 stale，不硬拦；
+///   需要重做时走章节重开（reopen_section → 重起草）。
+pub fn dirty_gate_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    for n in store.sections().iter().filter(|n| n.dirty) {
+        let pending = store.pending_rewrite_directives_of(&n.id).len();
+        if pending > 0 {
+            out.push(ValidationFinding {
+                rule_code: "E_SECTION_DIRTY".into(),
+                severity: "BLOCKER",
+                section_id: Some(n.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节 {}（{}）补遗后 DIRTY：{} 条改写指令未处置——正文按旧口径起草，按补遗后口径评审将负偏离（#88 F-08/S-4）；rewrite_section_partial 逐指令改写或 dismiss_rewrite_directive 人工裁定",
+                    n.id, n.title, pending,
+                ),
+            });
+        } else {
+            out.push(ValidationFinding {
+                rule_code: "W_EVIDENCE_DIRTY".into(),
+                severity: "MINOR",
+                section_id: Some(n.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节 {}（{}）证据换版失效信号（#456——支撑响应的证据已换版，无改写指令）——需要重做时 reopen_section 重起草；本门告警不拦（#88 F-08）",
+                    n.id, n.title,
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// #88 审计 F-07/F-16/S-4：评分项未映射门（导出门 1h 消费）。
+///
+/// `unmapped_scoring_items`（#224 文档级告警面——score_section/
+/// score_document 出参同源）此前只在报告里可见，不进导出门——评委对
+/// 未映射评分项无从给分 = 按缺项计零。装配走 [`crate::scoring_wire::
+/// build_scorer`] 单一真源（派生 params.section 联结 + 「第X章」定位 +
+/// #224 持久化映射账本——与 score_document 的 unmapped 面恒同口径）。
+///
+/// 解决通道：① `upsert_scoring_mapping` 显式映射章节（AgentSubmitted/
+/// Manual 账本）；② 修抽取联结（params.section / section_title）后重建；
+/// ③ `export_bid_document.waive_unmapped_scoring` 非空理由显式豁免
+/// （无评分项语料的误抽确认等场景，理由进 warnings 审计面）。
+pub fn unmapped_scoring_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    let (scorer, _items, _ledger_effective) = crate::scoring_wire::build_scorer(store);
+    let unmapped = scorer.unmapped_items();
+    if unmapped.is_empty() {
+        return Vec::new();
+    }
+    // 明细截断（MAX 10——规模语料 250+ 未映射项全列会把错误消息撑到
+    // 数十 KB；首 10 项可定位 + 总数可对账，score_document 查全量）
+    const MAX_DETAIL: usize = 10;
+    let item_line = |u: &bid_domain::scoring::UnmappedItem| {
+        let weight = u
+            .weight
+            .map(|w| w.to_string())
+            .unwrap_or_else(|| "未给权重".into());
+        format!("{}（{}，权重 {weight}）", u.req_id, u.criteria)
+    };
+    let shown: Vec<String> = unmapped.iter().take(MAX_DETAIL).map(item_line).collect();
+    let detail = if unmapped.len() > MAX_DETAIL {
+        format!(
+            "{}；……等共 {} 个（全量明细见 score_document 的 unmapped_scoring_items）",
+            shown.join("；"),
+            unmapped.len(),
+        )
+    } else {
+        shown.join("；")
+    };
+    vec![ValidationFinding {
+        rule_code: "E_SCORING_UNMAPPED".into(),
+        severity: "BLOCKER",
+        section_id: None,
+        requirement_id: None,
+        message: format!(
+            "{} 个评分项未映射章节——评委无从给分 = 按缺项计零（#88 F-07）：{detail}；upsert_scoring_mapping 映射章节，或 export 传 waive_unmapped_scoring（非空理由）显式豁免",
+            unmapped.len(),
+        ),
+    }]
+}
+
+/// #88 审计 F-06：格式件核对清单（导出 warnings 消费——先可见后硬化）。
+///
+/// 招标文件「投标文件格式」章要求的件 vs 导出七件（`StandardForm` 固定
+/// 面）+ 附表：从**格式要求类 REQ** 文本提取被指名的件（《X》书名号形态
+/// ∪ 件名词表），不在七件覆盖面内的 → 告警（「请人工确认附页/单独装订/
+/// 补 profile」）。形式评审缺件是实务最高频废标原因——本面先做**可见性**
+/// （不拦：词面匹配有假阳/假阴面，硬化待件名抽取产品化后 Lead 裁决）。
+///
+/// 覆盖面（七件的关键词归一）：投标函/法定代表人身份证明/授权委托书/
+/// 投标保证金（退还申请）/资格声明/无重大违法记录声明/廉洁承诺书。
+pub fn format_docs_checklist(store: &DomainStore) -> Vec<String> {
+    const COVERED: &[(&str, &str)] = &[
+        ("投标函", "投标函"),
+        ("法定代表人身份证明", "法定代表人身份证明书"),
+        ("授权委托书", "授权委托书"),
+        ("投标保证金", "投标保证金退还申请"),
+        ("资格声明", "资格声明"),
+        ("无重大违法", "无重大违法记录声明"),
+        ("廉洁承诺", "廉洁承诺书"),
+    ];
+    let mut missing: Vec<String> = Vec::new();
+    for r in store.requirements().iter().filter(|r| r.category == "格式要求") {
+        let text: String = r
+            .anchors
+            .iter()
+            .map(|a| a.excerpt.as_str())
+            .chain(r.params.get(bid_domain::rewrite::PARAM_KEY).and_then(|v| v.as_str()))
+            .collect::<Vec<_>>()
+            .join("；");
+        // 《X》书名号形态（格式章指名件的最常见形态）
+        let mut names: Vec<String> = text
+            .split('《')
+            .skip(1)
+            .filter_map(|seg| seg.split('》').next().map(str::to_string))
+            .collect();
+        // 「提供/附 X 函/书/声明/证明/表」词面（无书名号形态的保守补充）
+        for kw in ["投标函", "授权委托书", "法定代表人身份证明", "资格声明",
+                   "无重大违法记录声明", "廉洁承诺书", "履约保函", "财务审计报告",
+                   "信用证明", "业绩证明"] {
+            if text.contains(kw) {
+                names.push(kw.to_string());
+            }
+        }
+        for n in names {
+            let n = n.trim();
+            if n.is_empty() {
+                continue;
+            }
+            // 在七件覆盖面内（关键词归一比对）→ 不告警
+            if COVERED.iter().any(|(k, _)| n.contains(k)) {
+                continue;
+            }
+            let line = format!(
+                "招标文件指名「{n}」（REQ {} 格式要求）不在导出七件标准面内——请人工确认（附页/单独装订/主体信息补全后重导）",
+                r.id,
+            );
+            if !missing.contains(&line) {
+                missing.push(line);
+            }
+        }
+    }
+    missing
+}
+
+/// #88 审计 F-05（勘误后半面）：全局一致性冲突门（导出门 1i 消费）。
+///
+/// #423 的四类跨面冲突（金额/工期/术语/承诺——正文↔正文 + 参数账↔正文）
+/// 此前只在 check_bid_quality 只读诊断里可见，不进导出门——漏跑检查则
+/// 冲突带病导出（评标发现前后不一致 → 按不利解释/澄清失败 → 扣分乃至
+/// 废标）。本门独立复算（run_review_from_store 单一真源——与
+/// check_bid_quality 恒同口径），Blocker 冲突即拒。**无豁免通道**：
+/// 冲突是客观不一致，修复 = 改稿对齐（与写作验收门 1c 同款纪律）。
+pub fn global_conflict_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    let outcome = crate::review_wire::run_review_from_store(store);
+    outcome
+        .findings
+        .iter()
+        .filter(|f| f.kind.is_global() && f.severity == crate::check::CheckSeverity::Blocker)
+        .map(|f| ValidationFinding {
+            rule_code: "E_GLOBAL_CONFLICT".into(),
+            severity: "BLOCKER",
+            section_id: Some(f.section_id.clone()),
+            requirement_id: None,
+            message: format!(
+                "跨章一致性冲突（{}）：{}——评标发现前后不一致按不利解释（#88 F-05）；改稿对齐后重试（check_bid_quality 可查全量冲突面）",
+                conflict_label(f.kind),
+                f.message,
+            ),
+        })
+        .collect()
+}
+
+/// #88 审计 F-05（决策面对账——导出门 1j 消费）。
+///
+/// `ExportDecision` 按设计不入库（「调用方显式给出，不入库、不猜测」——
+/// review_wire.rs 自述边界），检查工具看不到它；**导出时点**是决策与
+/// 参数账对账的唯一时机。比对面（保守——只做确定性可比的行）：
+/// - **工期**：`decision.duration_days`（日历天）vs 参数账工期行
+///   （param_name 含「工期」，response_value 首个数字——天/日历天口径）；
+/// - **报价**：`decision.bid_amount`（元）vs 参数账报价/总价行
+///   （param_name 含「报价|总价」，response_value 数字带万/亿单位归一）。
+/// 任一确定性可比且数值不等 → 冲突（报价表 500 万 vs 正文 480 万 =
+/// 评标澄清失败级事故）。decision 字段缺省（None）→ 不比（未定不是
+/// 冲突——落【待填】是既有降级面）。**无豁免通道**：数值不一致只能改齐。
+pub fn decision_consistency_findings(
+    store: &DomainStore,
+    decision: &crate::export::ExportDecision,
+) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    // ---- 工期：decision.duration_days vs 参数账工期行
+    if let Some(dur) = decision.duration_days {
+        for row in store.param_responses() {
+            if !row.param_name.contains("工期") {
+                continue;
+            }
+            let Some(days) = first_number(&row.response_value) else {
+                continue;
+            };
+            if days != f64::from(dur) {
+                out.push(ValidationFinding {
+                    rule_code: "E_DECISION_CONFLICT".into(),
+                    severity: "BLOCKER",
+                    section_id: None,
+                    requirement_id: Some(row.requirement_id.clone()),
+                    message: format!(
+                        "决策对账冲突（工期）：导出决策 {dur} 天 vs 参数行 {}「{}」响应 {}——报价/工期跨面不一致评标按不利解释（#88 F-05 决策面）；改齐后重试",
+                        row.id, row.param_name, row.response_value,
+                    ),
+                });
+            }
+        }
+    }
+    // ---- 报价：decision.bid_amount vs 参数账报价/总价行（万/亿归一到元）
+    if let Some(amount) = decision.bid_amount {
+        for row in store.param_responses() {
+            if !(row.param_name.contains("报价") || row.param_name.contains("总价")) {
+                continue;
+            }
+            let Some(v) = amount_yuan(&row.response_value) else {
+                continue;
+            };
+            if (v - amount).abs() > 0.5 {
+                out.push(ValidationFinding {
+                    rule_code: "E_DECISION_CONFLICT".into(),
+                    severity: "BLOCKER",
+                    section_id: None,
+                    requirement_id: Some(row.requirement_id.clone()),
+                    message: format!(
+                        "决策对账冲突（报价）：导出决策 {amount} 元 vs 参数行 {}「{}」响应 {}（≈{v} 元）——报价表与正文不一致 = 澄清失败级事故（#88 F-05 决策面）；改齐后重试",
+                        row.id, row.param_name, row.response_value,
+                    ),
+                });
+            }        }
+    }
+    out
+}
+
+// ---------------- #88 批次 4（#105 rebase 对齐 main #102/#103 编号后）：门 1l/1m
+
+/// #88 审计 F-06/P0-4（审计修复优先序第 1 位）：三件套数据缺位门
+/// （导出门 1l 消费——#105 rebase 对齐：main #103 已把 1k 用作格式件核对清单可见面）。
+///
+/// 投标函 / 法定代表人身份证明 / 授权委托书是**形式审查首查件**——
+/// 数据字段缺位时成品落【待填】原样导出（既有口径「比编造好」是对的，
+/// 但只告警不拦 = 用户不看 warnings 就装订投标 → 报价缺项/身份缺项
+/// 废标级）。本门把三件的**数据字段**缺位升为 BLOCKER。
+///
+/// 字段级检查（非成品全文扫【】）的口径理由：三件模板自带**设计性
+/// 空位**（【签字人姓名】【出具日期】【年龄】等人工现场填写位）——
+/// 全文扫描会把每份合法标书都拦下；字段级检查与「成品数据字段缺位」
+/// 的语义精确对齐（构造器消费什么字段，门就查什么字段——单一真源）。
+///
+/// 字段清单（与 [`crate::export::build_export_forms`] 的构造入参同源）：
+/// - 投标函：投标人名称（profile.company_name）、项目编号（REQ 参数
+///   账）、投标总报价 / 工期 / 投标有效期（决策面，0/None = 未定）；
+/// - 法定代表人身份证明：姓名 / 身份证号 / 职务 / 公司 / 注册地址
+///   （profile）+ 性别（决策 legal_rep_gender——不能从身份证号推断）；
+/// - 授权委托书：委托人（= 法定代表人）+ 受托人姓名 / 身份证号
+///   （profile.agent/agent_id——无法定授权的场景走显式豁免）。
+///
+/// 解决通道：补 `bidder-profile.json` / 补导出 profile 决策字段，或
+/// `export_bid_document.waive_format_placeholder` 非空理由显式豁免
+/// （理由进 warnings 审计面——循 star_missing 先例）。
+pub fn format_placeholder_gate_findings(
+    store: &DomainStore,
+    profile: &bid_domain::party::BidderProfile,
+    decision: &crate::export::ExportDecision,
+) -> Vec<ValidationFinding> {
+    // 投标函抬头数据源（与 build_export_forms 同源解析：显式决策 >
+    // REQ 参数账 model 键——单一真源，门与成品不漂移）
+    let project_no = decision
+        .project_no
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| crate::export::req_param_by_excerpt(store, "项目编号", "model"))
+        .unwrap_or_default();
+    let mut out = Vec::new();
+
+    // ---- 投标函（决策三栏 + 抬头两面）
+    let mut missing: Vec<&str> = Vec::new();
+    if profile.company_name.trim().is_empty() {
+        missing.push("投标人名称（bidder-profile.json.company_name）");
+    }
+    if project_no.trim().is_empty() {
+        missing.push("项目编号（profile.project_no 缺省且 REQ 参数账无 model 键——抽取未捕获）");
+    }
+    if !(decision.bid_amount.map(|v| v.is_finite() && v > 0.0).unwrap_or(false)) {
+        missing.push("投标总报价（profile.bid_amount）");
+    }
+    if decision.duration_days.unwrap_or(0) == 0 {
+        missing.push("工期（profile.duration_days）");
+    }
+    if decision.validity_days.unwrap_or(0) == 0 {
+        missing.push("投标有效期（profile.validity_days）");
+    }
+    if !missing.is_empty() {
+        out.push(ValidationFinding {
+            rule_code: "E_FORMAT_PLACEHOLDER".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: format!(
+                "投标函数据缺位——{}（成品将落【待填】= 报价缺项/抬头缺项废标级，#88 F-06/P0-4）；补 bidder-profile.json 与导出 profile 决策字段，或 waive_format_placeholder 显式豁免",
+                missing.join("、"),
+            ),
+        });
+    }
+
+    // ---- 法定代表人身份证明（profile 五字段 + 决策性别）
+    let mut missing: Vec<&str> = Vec::new();
+    if profile.legal_rep.trim().is_empty() {
+        missing.push("法定代表人姓名（legal_rep）");
+    }
+    if decision.legal_rep_gender.as_deref().map(str::trim).unwrap_or("").is_empty() {
+        missing.push("性别（profile.legal_rep_gender——身份证明书要求原文写出）");
+    }
+    if profile.legal_rep_id.trim().is_empty() {
+        missing.push("身份证号（legal_rep_id）");
+    }
+    if profile.legal_rep_position.trim().is_empty() {
+        missing.push("职务（legal_rep_position）");
+    }
+    if profile.company_name.trim().is_empty() {
+        missing.push("出具单位名称（company_name）");
+    }
+    if profile.address.trim().is_empty() {
+        missing.push("注册地址（address）");
+    }
+    if !missing.is_empty() {
+        out.push(ValidationFinding {
+            rule_code: "E_FORMAT_PLACEHOLDER".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: format!(
+                "法定代表人身份证明数据缺位——{}（成品将落【待填】= 形式审查瑕疵，#88 F-06/P0-4）；补 bidder-profile.json，或 waive_format_placeholder 显式豁免",
+                missing.join("、"),
+            ),
+        });
+    }
+
+    // ---- 授权委托书（委托人 + 受托人两面）
+    let mut missing: Vec<&str> = Vec::new();
+    if profile.legal_rep.trim().is_empty() {
+        missing.push("委托人/法定代表人姓名（legal_rep）");
+    }
+    if profile.agent.trim().is_empty() {
+        missing.push("受托人姓名（agent）");
+    }
+    if profile.agent_id.trim().is_empty() {
+        missing.push("受托人身份证号（agent_id）");
+    }
+    if !missing.is_empty() {
+        out.push(ValidationFinding {
+            rule_code: "E_FORMAT_PLACEHOLDER".into(),
+            severity: "BLOCKER",
+            section_id: None,
+            requirement_id: None,
+            message: format!(
+                "授权委托书数据缺位——{}（成品将落【待填】= 签署权限链断裂废标级，#88 F-06/P0-4）；补 bidder-profile.json（无法定授权委托、由法定代表人亲签的场景请 waive_format_placeholder 显式豁免）",
+                missing.join("、"),
+            ),
+        });
+    }
+    out
+}
+
+/// #88 审计 F-09/P1-7：超篇幅可配置门（导出门 1m 消费——#105 rebase 对齐：main #102 已把 1j 用作决策对账参数面）。
+///
+/// 既有分治（validate 规则 4 上界）：超带 = `W_CHARS_OFF_TARGET` MINOR
+/// 纯提示——#47 规模轮实测 120 叶带外率 70.8%（最大 +58.8%），系统性
+/// 超带在页数受限/暗标评标场景**扣分或截断**，纯提示 = 无防护。
+/// 本门把「超带超阈值」升 BLOCKER，阈值可配（默认 50%——审计建议值）：
+///
+/// - 判据（整数算术，严格大于）：`chars × 100 > target × (100 + pct)`；
+/// - `pct` 是**调用方裁决面**（`export_bid_document.max_overrun_pct`，
+///   1..=10000）：收紧（如 20）/放宽（如 200）都合法——页数硬约束的
+///   项目收紧、无页数约束的项目放宽，产品不替用户定；
+/// - 阈值内超带仍走既有 MINOR 提示（20%~阈值之间双层信号，不冲突）；
+/// - 豁免：`waive_length_overrun` 非空理由显式豁免（理由进 warnings
+///   审计面——「评标办法不设页数限制」类人工确认场景）。
+///
+/// `target_chars == 0`（无配额叶）不判（与规则 4 同口径：没有目标就
+/// 没有带外）；空正文由 E_SECTION_EMPTY 承载，不双报。
+pub fn length_overrun_gate_findings(
+    store: &DomainStore,
+    max_overrun_pct: u32,
+) -> Vec<ValidationFinding> {
+    let mut out = Vec::new();
+    for node in store.sections() {
+        if node.target_chars == 0 {
+            continue;
+        }
+        let Some(content) = node.content.as_deref() else {
+            continue;
+        };
+        if content.trim().is_empty() {
+            continue; // 空章归 E_SECTION_EMPTY，不双报
+        }
+        let chars = content.chars().count();
+        let target = node.target_chars as usize;
+        // 严格大于：恰等于阈值（如 +50% 整）放行——带内上沿不误伤
+        if chars.saturating_mul(100) > target.saturating_mul(100 + max_overrun_pct as usize) {
+            let over_pct = chars.saturating_mul(100).saturating_sub(target.saturating_mul(100)) / target;
+            out.push(ValidationFinding {
+                rule_code: "E_CHARS_OVER_LIMIT".into(),
+                severity: "BLOCKER",
+                section_id: Some(node.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节「{}」正文字数 {chars} 超出配额 {target} 达 +{over_pct}%（阈值 +{max_overrun_pct}%，#88 F-09）——页数受限/暗标评标场景超长按违反编制要求扣分或截断；压缩正文或调大 max_overrun_pct，或 waive_length_overrun 显式豁免",
+                    node.title,
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// 冲突类别的中文标签（check_global 内联映射的只读复刻——不入公面
+/// 免得给 CheckKind 加方法面）。
+fn conflict_label(kind: crate::check::CheckKind) -> &'static str {
+    use crate::check::CheckKind;
+    match kind {
+        CheckKind::AmountConflict => "金额冲突",
+        CheckKind::ScheduleConflict => "工期冲突",
+        CheckKind::TermConflict => "术语冲突",
+        CheckKind::CommitmentConflict => "承诺冲突",
+        _ => "冲突",
+    }
+}
+
+/// 字符串首个数字（整数/小数——工期「540 天」/「18 个月」→ 540/18）。
+fn first_number(text: &str) -> Option<f64> {
+    let mut start: Option<usize> = None;
+    let mut end = 0usize;
+    for (i, c) in text.char_indices() {
+        if c.is_ascii_digit() {
+            if start.is_none() {
+                start = Some(i);
+            }
+            end = i + c.len_utf8();
+        } else if c == '.' && start.is_some() {
+            end = i + 1;
+        } else if start.is_some() {
+            break;
+        }
+    }
+    let s = &text[start?..end];
+    let t = s.trim_end_matches('.');
+    t.parse::<f64>().ok()
+}
+
+/// 金额归一：首个数字 + 万/亿单位 → 元（「500 万」→ 5_000_000；
+/// 「3.5亿」→ 350_000_000；裸数字按元）。无数字 → None。
+fn amount_yuan(text: &str) -> Option<f64> {
+    let n = first_number(text)?;
+    if text.contains('亿') {
+        Some(n * 100_000_000.0)
+    } else if text.contains('万') {
+        Some(n * 10_000.0)
+    } else {
+        Some(n)
+    }
+}
 // ---------------------------------------------------------------- #241 裁定：提交就绪面
 
 /// 提交就绪清单项（机器可读的逐条补件面——供 Agent/Human 逐项消除）。

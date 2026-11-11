@@ -1402,7 +1402,7 @@ check(
 check(
   "R25 入口①：结果面部分失败给重导按钮（失败计数同 partial 判据）",
   /failedRows\.length \? '<div class="bid-wiz-bar"><button class="btn btn-primary" data-bid-act="wizard-retry-failed">'/.test(app) &&
-    /failedR25\.length \? '<div style="margin-top:10px"><button class="btn" data-bid-act="wizard-retry-failed">'/.test(app),
+    /retryBar\.innerHTML = '<button class="btn" data-bid-act="wizard-retry-failed">'/.test(app),
   "「修复后重新导入即可」的话无 UI 路径兑现（结果面/树区重导入口被删）"
 );
 check(
@@ -1591,6 +1591,180 @@ check(
   /\.bid-star-gate-act \{/.test(css),
   "补标按钮排版类被删"
 );
+
+// ---------- #47 R25：证据台账读面（缺口-4 读半边——list/search 双工具） ----------
+check(
+  "R25 页签：证据台账页签在场（工作台页签）",
+  app.includes('data-bid-panel="evidence"') && app.includes("证据台账"),
+  "证据页签被删或改名"
+);
+check(
+  "R25 面板：渲染函数 + 两处 panes 路由 + not_found 引导卡",
+  /function renderBidEvidencePanel/.test(app)
+    && (app.match(/activePanel === "evidence"/g) || []).length >= 2
+    && app.includes('ev.code === "not_found"') && app.includes("renderBidEarlyGuide"),
+  "证据面板路由/引导卡回退"
+);
+check(
+  "R25 IPC 对齐：UI 调用与壳分发逐字一致（bid.evidence / bid.evidence_search）",
+  app.includes('ipc("bid.evidence"') && app.includes('ipc("bid.evidence_search"')
+    && ipcRs.includes('"bid.evidence" => crate::bid::evidence(&ws, &self.bid, &a)')
+    && ipcRs.includes('"bid.evidence_search" => crate::bid::evidence_search(&ws, &self.bid, &a)'),
+  "命令对齐断裂（单面漂移）"
+);
+check(
+  "R25 壳面：真实工具面直链（dispatch_with + project_id 壳侧覆写单一真源）",
+  bidRs.includes('tool: "list_evidence".to_string()') && bidRs.includes('tool: "search_evidence".to_string()')
+    && bidRs.includes('req["project_id"] = json!(project_id);'),
+  "壳侧绕开工具面（私有实现回潮）"
+);
+check(
+  "R25 值域：kind 七值 + status 四值中文映射（bid-domain as_str 同口径）",
+  app.includes("const EVIDENCE_KIND_ZH") && app.includes('product_doc: "产品资料"') && app.includes('solution_module: "方案模块"') && app.includes('contract: "合同"')
+    && app.includes("const EVIDENCE_STATUS_ZH") && app.includes('SUPERSEDED: "已作废"') && app.includes('EXPIRING: "临期"'),
+  "证据类别/状态映射回退"
+);
+check(
+  "R25 演示桥：两命令 stub 在场（e2e 数据链前提）+ SUPERSEDED 不进检索池",
+  app.includes('case "bid.evidence"') && app.includes('case "bid.evidence_search"') && app.includes("DEMO_BID.evidence")
+    && app.includes('e.status !== "SUPERSEDED"'),
+  "演示桥缺 stub（e2e 断链）"
+);
+check(
+  "R25 selftest：三检查在场（无db.json拒 + kind过滤 + 检索往返）",
+  selftestRs.includes("bid.evidence(无db.json)") && selftestRs.includes("bid.evidence(真实项目·kind过滤)")
+    && selftestRs.includes("bid.evidence_search(真实项目·检索)"),
+  "selftest 集成自检项被删"
+);
+check(
+  "R25 契约：IPC-CONTRACT 登记两命令（改代码要同步改契约）",
+  contract.includes("### bid.evidence ——") && contract.includes("### bid.evidence_search ——")
+    && contract.includes("list_evidence"),
+  "契约未登记"
+);
+
+// ---------- #47 R26：证据登记写面（register_evidence——缺口-4 写半边之登记） ----------
+check(
+  "R26 IPC 对齐：UI 调用与壳分发逐字一致（bid.evidence_register）",
+  app.includes('ipc("bid.evidence_register"')
+    && ipcRs.includes('"bid.evidence_register" => crate::bid::evidence_register(&ws, &self.bid, &a)'),
+  "登记命令对齐断裂（单面漂移）"
+);
+check(
+  "R26 壳面：真实工具面直链 + 参数透传表（source_file_id 锚定；#185/#245 拒在工具面单一真源——壳不自报 verification_tier）",
+  bidRs.includes('tool: "register_evidence".to_string()')
+    && bidRs.includes('"placeholder", "locator", "fields", "project_version"'),
+  "壳侧绕开工具面或透传表断裂"
+);
+check(
+  "R26 UI：登记表单（source 锚定导入回执 parse_status=ok + 幂等双态回显 + 表单内错误反馈）",
+  app.includes('data-ev-reg-src="source"') && app.includes('parse_status === "ok"')
+    && app.includes('rg.info.deduplicated') && app.includes("registerBidEvidence"),
+  "登记表单/幂等回显缺失"
+);
+check(
+  "R26 演示桥：可变态登记（demoEvidence 深拷贝 + register 真改台账 + 换版降级）",
+  app.includes("const demoEvidence = JSON.parse(JSON.stringify(DEMO_BID.evidence))")
+    && app.includes('case "bid.evidence_register"') && app.includes("SUPERSEDED"),
+  "演示桥缺可变登记 stub"
+);
+check(
+  "R26 selftest：三检查在场（早态 EState 拒 + 新登记 + 幂等重放）",
+  selftestRs.includes("bid.evidence_register(早态 EState 拒)") && selftestRs.includes("bid.evidence_register(新登记)")
+    && selftestRs.includes("bid.evidence_register(幂等重放)"),
+  "selftest 集成自检项被删"
+);
+check(
+  "R26 契约：IPC-CONTRACT 登记写面命令（含 #185/#245 口径）",
+  contract.includes("### bid.evidence_register —") && contract.includes("#185") && contract.includes("#245"),
+  "写面契约未登记"
+);
+// R25（#47）：建纲流三面接线——壳（bid.rs 三函数 + ipc.rs 三臂）、UI
+// （树区空态卡两相位 + 三动作 + 四档/分包选择器）、演示桥（三 stub +
+// early 相位）、selftest（真链路检查）、契约（三节）。负锚：死文案回退检测。
+check(
+  "R25 壳面：三函数在场（extract / length_profile / build_outline）",
+  /pub fn extract\(/.test(bidRs) && /pub fn length_profile\(/.test(bidRs) && /pub fn build_outline\(/.test(bidRs),
+  "壳侧建纲流函数被删/改名——UI 接线断源"
+);
+check(
+  "R25 壳面：ipc.rs 三 dispatch 臂在场",
+  ipcRs.includes('"bid.extract" =>') && ipcRs.includes('"bid.length_profile" =>') && ipcRs.includes('"bid.build_outline" =>'),
+  "分发臂缺失——UI 调用将 unknown_cmd"
+);
+check(
+  "R25 壳面：三面全走 dispatch_with 真实工具面",
+  /tool: "extract_requirements"/.test(bidRs) && /tool: "recommend_length_profile"/.test(bidRs) && /tool: "build_outline"/.test(bidRs),
+  "壳侧绕开工具面（裁决漂移风险）"
+);
+check(
+  "R25 壳面：package 空白形态早拒（与 no_addendum_confirm 同构）",
+  bidRs.includes("package 不得为空白（不选包则不传；用 bid.packages 查看识别结果）"),
+  "形态早拒被删——纯空白进工具面多走一次锁+路由"
+);
+check(
+  "R25 UI：树区空态卡两相位（renderBidBuildFlow + 抽取/推荐判据）",
+  /function renderBidBuildFlow\(treeEl, q19\)/.test(app)
+    && app.includes("reqs === 0") && app.includes("已抽取 ") && app.includes("选择篇幅档位，建立章节树"),
+  "建纲流卡被删/改名——树区空态回退死文案"
+);
+check(
+  "R25 UI：三动作接线（build-extract / build-refresh-rec / build-go）",
+  app.includes('data-bid-act="build-extract"') && app.includes('data-bid-act="build-refresh-rec"') && app.includes('data-bid-act="build-go"')
+    && /async submitBidExtract\(\)/.test(app) && /async submitBidBuildOutline\(\)/.test(app),
+  "动作绑定断链（点击无响应）"
+);
+check(
+  "R25 UI：四档单选 + 推荐标记 + 信号行（#287 呈现义务）",
+  app.includes('name="bid-build-prof"') && app.includes("bid-build-rec-tag") && app.includes("bid-build-signals")
+    && app.includes("from_tender_spec") && app.includes("target_total_chars = rec.target_chars"),
+  "推荐面缺档位选择/信号回显/明写限值分支"
+);
+check(
+  "R25 UI：分包选择器 + 建纲按钮门（detected≥2 必选）",
+  app.includes('name="bid-build-pkg"') && app.includes("needPkg && !bb.packageSel") && app.includes("args.package = bb.packageSel"),
+  "分包面缺失或无门——混包建纲靠工具面报错兜底（UX 回退）"
+);
+check(
+  "R25 UI：工作区切换清建纲流态（跨根不泄漏——R4 同列纪律）",
+  /state\.bidBuild = \{/.test(app) && app.includes("建纲流态同理随根失效"),
+  "bidBuild 未随根重置——旧项目推荐/选择错挂新工作区"
+);
+check(
+  "R25 负锚：死文案已收口（不再引导用户走 MCP 管线）",
+  !app.includes("由 Agent 走 extract_requirements") && !app.includes("MCP 管线 build_outline 之后"),
+  "空态文案回退到「由 Agent 走」死胡同（R25 主题回退）"
+);
+check(
+  "R25 演示桥：三 stub + early 相位开关在场",
+  /case "bid\.extract":/.test(app) && /case "bid\.length_profile":/.test(app) && /case "bid\.build_outline":/.test(app)
+    && app.includes("__demoBidPhase") && app.includes("demoBidEarlyState") && app.includes("demoBidEarlyOutline"),
+  "演示模式建纲流死路 / e2e 相位开关被删"
+);
+check(
+  "R25 演示桥：分包≥2 不选包同构拒（bad_args + 指引）",
+  app.includes("必须传 package 选定投哪个包（共用条款自动进纲）"),
+  "演示桥与工具面拒绝语义分叉"
+);
+check(
+  "R25 selftest：真链路六检查在场（导入→抽取→对账→推荐→建纲→呈现）",
+  selftestRs.includes("bid.extract(确定性抽取)") && selftestRs.includes("bid.state(抽取后对账)")
+    && selftestRs.includes("bid.length_profile(推荐+四档)") && selftestRs.includes("bid.build_outline(建纲+矩阵一体)")
+    && selftestRs.includes("bid.outline(章节树呈现)"),
+  "集成自检项缺失"
+);
+check(
+  "R25 契约：三节登记（extract / length_profile / build_outline）",
+  contract.includes("### bid.extract") && contract.includes("### bid.length_profile") && contract.includes("### bid.build_outline"),
+  "改代码没同步契约"
+);
+for (const sel of [".bid-build-prof", ".bid-build-pkg", ".bid-build-rec-tag", ".bid-wiz-error[data-state=\"ok\"]"]) {
+  check(
+    `R25 样式：styles.css 提供 ${sel}`,
+    css.includes(sel),
+    "建纲流卡样式被删"
+  );
+}
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

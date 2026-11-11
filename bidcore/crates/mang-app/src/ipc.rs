@@ -537,6 +537,12 @@ impl Ctx {
             //    recover_validating_state；裁决全在域层）────────────
             "bid.packages" => crate::bid::packages(&ws, &self.bid, &a),
 
+            // ── #47 R25：证据台账读面（缺口-4 读半边——list_evidence /
+            //    search_evidence 双工具直链；值域校验在工具面单一真源）──
+            "bid.evidence" => crate::bid::evidence(&ws, &self.bid, &a),
+            "bid.evidence_search" => crate::bid::evidence_search(&ws, &self.bid, &a),
+            "bid.evidence_register" => crate::bid::evidence_register(&ws, &self.bid, &a),
+
             "bid.matrix_override" => crate::bid::matrix_override(&ws, &self.bid, &a),
 
             "bid.recover_state" => crate::bid::recover_state(&ws, &self.bid, &a),
@@ -550,7 +556,15 @@ impl Ctx {
 
             "bid.no_addendum_confirm" => crate::bid::no_addendum_confirm(&ws, &self.bid, &a),
 
+            // ── #47 R25：建纲流三面（向导深水区——导入后直达章节树）。
+            //    extract（写面，确定性规则抽取）→ length_profile（只读
+            //    推荐）→ build_outline（写面：档位/明写字数/分包选择）；
+            //    全部经 bid_mcp::dispatch_with 走真实工具面，壳零裁决 ──
+            "bid.extract" => crate::bid::extract(&ws, &self.bid, &a),
 
+            "bid.length_profile" => crate::bid::length_profile(&ws, &self.bid, &a),
+
+            "bid.build_outline" => crate::bid::build_outline(&ws, &self.bid, &a),
 
             // 绝对路径（拖拽/对话框/最近打开）→ 归一成 {path, rel, kind, size, mtimeMs, insideWorkspace}
             "file.fromPath" => crate::fsapi::from_path(&ws, a),

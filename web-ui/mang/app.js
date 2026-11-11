@@ -311,6 +311,31 @@
         },
         quick_stats: { requirements: 1120, evidence: 13, evidence_bindings: 46, sections: 26, sections_leaf: 20, sections_drafted: 12, sections_accepted: 3, sections_failed: 1, sections_dirty: 1, target_total_chars: 150000, actual_total_chars: 81200, pages_estimate: 97 }
       },
+      // #47 R25：证据台账演示数据（与真实 bid.evidence 响应同形——list_evidence
+      // 工具输出原样透传；13 件与 quick_stats.evidence=13 同口径；
+      // EV-0001 与矩阵演示行（并发压测报告）同源）
+      evidence: {
+        items: [
+          { id: "EV-0001", kind: "product_doc", title: "并发压测报告", status: "ACTIVE", subject_name: "演示科技", valid_until: "2027-06-30", verification_tier: "SELF_TEST", excerpt: "2000 路并发压测全通过，P99 < 120ms。" },
+          { id: "EV-0002", kind: "qualification", title: "电子与智能化专业承包二级资质", status: "ACTIVE", subject_name: "演示科技", valid_until: "2028-03-31", verification_tier: "VERIFIED", excerpt: "资质证书编号 D2330022xx，有效期至 2028-03。" },
+          { id: "EV-0003", kind: "performance", title: "智慧园区一期弱电工程合同", status: "ACTIVE", subject_name: "演示科技", valid_until: null, verification_tier: "VERIFIED", excerpt: "合同额 3200 万元，2025-11 完工验收。" },
+          { id: "EV-0004", kind: "personnel", title: "项目经理建造师证书（张工）", status: "ACTIVE", subject_name: "张工", valid_until: "2027-12-31", verification_tier: "SELF_TEST", excerpt: "机电工程一级建造师，B 安全考核证在有效期内。" },
+          { id: "EV-0005", kind: "certificate", title: "ISO9001 质量管理体系认证", status: "EXPIRING", subject_name: "演示科技", valid_until: "2027-01-15", verification_tier: "VERIFIED", excerpt: "认证覆盖范围含弱电系统集成；复认证明已提交。" },
+          { id: "EV-0006", kind: "product_doc", title: "核心设备原厂授权书", status: "ACTIVE", subject_name: "回产主流厂商", valid_until: "2027-09-30", verification_tier: "SELF_TEST", excerpt: "授权型号与★条款一致，含 7×24 服务承诺。" },
+          { id: "EV-0007", kind: "solution_module", title: "运维平台方案模块说明书", status: "ACTIVE", subject_name: "演示科技", valid_until: null, verification_tier: "SELF_TEST", excerpt: "模块清单与投标应答章节逐条对应。" },
+          { id: "EV-0008", kind: "contract", title: "2024 年度运维框架合同", status: "ACTIVE", subject_name: "演示运维", valid_until: "2026-12-31", verification_tier: "VERIFIED", excerpt: "框架合同含 SLA 附件。" },
+          { id: "EV-0009", kind: "qualification", title: "安全生产许可证", status: "ACTIVE", subject_name: "演示科技", valid_until: "2027-05-20", verification_tier: "VERIFIED", excerpt: "许可范围含电子与智能化工程。" },
+          { id: "EV-0010", kind: "performance", title: "市政水厂自控项目业绩", status: "SUPERSEDED", subject_name: "演示科技", valid_until: null, verification_tier: "SELF_TEST", excerpt: "已被 EV-0003 替代（同口径规模更大）。" },
+          { id: "EV-0011", kind: "certificate", title: "ISO27001 信息安全认证", status: "EXPIRED", subject_name: "演示科技", valid_until: "2026-06-30", verification_tier: "VERIFIED", excerpt: "已过期，续证审核中（bind_evidence 将禁绑）。" },
+          { id: "EV-0012", kind: "personnel", title: "高级工程师职称证（李工）", status: "ACTIVE", subject_name: "李工", valid_until: "2029-04-30", verification_tier: "SELF_TEST", excerpt: "职称专业：自动化。" },
+          { id: "EV-0013", kind: "solution_module", title: "能耗监测方案白皮书", status: "ACTIVE", subject_name: "演示科技", valid_until: null, verification_tier: "SELF_TEST", excerpt: "白皮书第三章含节能测算方法。" }
+        ],
+        total: 13,
+        limit: 50,
+        cursor: null,
+        next_cursor: null,
+        project_version: 12,
+      },
       outline: {
         present: true,
         workspace: root,
@@ -471,6 +496,8 @@
     // 同语义：追认后最新条翻 human、agent_waivers 消项、human_review_complete
     // 重算；演示刷新页面即重置，与其它演示面一致）
     const demoGates = JSON.parse(JSON.stringify(DEMO_BID.gates));
+    // #47 R26：登记写面可变态（register 真改台账——与 demoGates 同款深拷贝隔离）
+    const demoEvidence = JSON.parse(JSON.stringify(DEMO_BID.evidence));
     // #603 批 C：补遗台账演示数据（与真实 bid.addenda 响应同形——
     // readiness::{total, ready, not_ready[]} + waivers）。演示态 = 2 件
     // 补遗（1 就绪 + 1 OCR 未完——逐件确认的目标件）；全局确认对它
@@ -590,6 +617,41 @@
         }
       });
     }
+    // R25（#47）：建纲流演示态——早期相位（e2e 用：window.__demoBidPhase =
+    // "early" 切入 FILES_IMPORTED 零章节起步；缺省 full = 既有 DRAFTING 完整
+    // 演示面零位移）。phase 随抽取/建纲真改——与真实壳的状态机同序。
+    let demoBuildFlow = { phase: "imported", reqs: 53 };
+    function demoBidEarlyState() {
+      const p = demoBuildFlow.phase;
+      const status = p === "imported" ? "FILES_IMPORTED" : p === "extracted" ? "REQUIREMENTS_EXTRACTED" : "MATRIX_READY";
+      return {
+        present: true,
+        workspace: root,
+        db: root + "\\db.json",
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", code: "", mode: "明标", status },
+        state: { status, allowed_next_tools: [], terminal: false, dirty_sections: [], pending_rewrite_directives: [], content_binding: { sections_digest: "demo-digest", content_version: 2 }, agent_waivers: [], human_review_complete: true },
+        quick_stats: { requirements: p === "imported" ? 0 : demoBuildFlow.reqs, evidence: 0, evidence_bindings: 0, sections: p === "built" ? 3 : 0, sections_leaf: p === "built" ? 2 : 0, sections_drafted: 0, sections_accepted: 0, sections_failed: 0, sections_dirty: 0, target_total_chars: p === "built" ? 30000 : 0, actual_total_chars: 0, pages_estimate: p === "built" ? 20 : 0, files: 2 }
+      };
+    }
+    function demoBidEarlyOutline() {
+      const built = demoBuildFlow.phase === "built";
+      return {
+        present: true,
+        workspace: root,
+        project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "MATRIX_READY" },
+        nodes: built
+          ? [
+              { id: "SEC-E01", parent_id: null, title: "第一章 技术方案", level: 1, order: 1, status: "PENDING", dirty: false, target_chars: 30000, actual_chars: 0, req_count: 10, is_leaf: false, has_content: false, content_attempt: 0, chapter_file: null },
+              { id: "SEC-E02", parent_id: "SEC-E01", title: "1.1 技术参数响应", level: 2, order: 2, status: "PENDING", dirty: false, target_chars: 18000, actual_chars: 0, req_count: 6, is_leaf: true, has_content: false, content_attempt: 0, chapter_file: null },
+              { id: "SEC-E03", parent_id: "SEC-E01", title: "1.2 资格与商务", level: 2, order: 3, status: "PENDING", dirty: false, target_chars: 12000, actual_chars: 0, req_count: 4, is_leaf: true, has_content: false, content_attempt: 0, chapter_file: null }
+            ]
+          : [],
+        stats: built
+          ? { sections: 3, sections_leaf: 2, sections_drafted: 0, sections_accepted: 0, sections_failed: 0, sections_dirty: 0, target_total_chars: 30000, actual_total_chars: 0, pages_estimate: 20 }
+          : { sections: 0, sections_leaf: 0, sections_drafted: 0, sections_accepted: 0, sections_failed: 0, sections_dirty: 0, target_total_chars: 0, actual_total_chars: 0, pages_estimate: 0 }
+      };
+    }
+    const demoEarly = () => window.__demoBidPhase === "early";
     return {
       mode: "demo",
       post(msg) {
@@ -601,9 +663,11 @@
             case "app.info":
               return respond(m.id, { version: "0.1.0-demo", workspace: root, ui_dir: "", exe: "mang-app.exe" });
             case "bid.state":
-              return respond(m.id, DEMO_BID.state);
+              // R25（#47）：早期相位（e2e 切入）——FILES_IMPORTED 起步的
+              // 建纲流现场；缺省 full（既有 DRAFTING 完整面零位移）
+              return respond(m.id, demoEarly() ? demoBidEarlyState() : DEMO_BID.state);
             case "bid.outline":
-              return respond(m.id, DEMO_BID.outline);
+              return respond(m.id, demoEarly() ? demoBidEarlyOutline() : DEMO_BID.outline);
             case "bid.matrix":
               return respond(m.id, DEMO_BID.matrix);
             case "bid.addenda":
@@ -613,6 +677,82 @@
               return demoAddendumWaiver(m);
             case "bid.no_addendum_confirm":
               return demoNoAddendumConfirm(m);
+            // ---- R25（#47）：建纲流三面（真实壳 = extract_requirements /
+            //      recommend_length_profile / build_outline 工具面；演示桥
+            //      同形回包 + phase 真改——抽取/建纲后 bid.state 重读即见）
+            case "bid.extract": {
+              demoBuildFlow.phase = "extracted";
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "FILES_IMPORTED" },
+                extract: {
+                  counts: { total: demoBuildFlow.reqs, added: demoBuildFlow.reqs, by_category: { tech_param: 30, qualification: 7, scoring: 6, commercial: 4, format: 3, veto: 3 } },
+                  merge: { regex_total: demoBuildFlow.reqs, regex_dropped_covered: 0, agent_requirements: 0, uncovered_blocks: 12, coverage_complete: false, regex_kept_unbacked_requirement: 0 },
+                  star_summary: { total: 4, captured: 4, missing: 0, declarations: 1 },
+                  conflicts: [],
+                  missing_sequence: [],
+                  packages: { detected: 2, items: [
+                    { id: "PKG-A", label: "一标段：设备采购", kind: "标段", number: "1", req_count: 42, sources: ["A-招标文件.docx"] },
+                    { id: "PKG-B", label: "二标段：安装服务", kind: "标段", number: "2", req_count: 18, sources: ["A-招标文件.docx"] }
+                  ], shared_req_count: 6 },
+                  warnings: ["UNCOVERED_BLOCKS: 12 块未标记（正则已兜底补漏——用 get_coverage_report 查看后 submit_block_marks 补标，重跑 extract 更准）"],
+                  status: "REQUIREMENTS_EXTRACTED",
+                  project_version: 2
+                }
+              });
+            }
+            case "bid.length_profile":
+              // R25（#47）：推荐面演示（真实壳 = recommend_length_profile——
+              // 信号/理由/四档 alternatives 与工具面同形）
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "REQUIREMENTS_EXTRACTED" },
+                recommendation: {
+                  project_id: "PRJ-0001",
+                  recommended_profile: "standard",
+                  profile_label: "标准档（80 万字）",
+                  target_chars: 800000,
+                  approx_pages: 534,
+                  confidence: "medium",
+                  reasons: ["评分细则 36 条（≥30 → 加档）", "★实质性条款 4 条（≥3 → 加档）"],
+                  from_tender_spec: null,
+                  alternatives: [
+                    { profile: "practical", label: "精简档（40 万字）", chars: 400000, pages: 267, when: "预算 ≤500 万或评分细则 ≤15 条" },
+                    { profile: "standard", label: "标准档（80 万字）", chars: 800000, pages: 534, when: "常规工程/货物采购" },
+                    { profile: "conservative", label: "稳健档（120 万字）", chars: 1200000, pages: 800, when: "评分细则 ≥30 或 ★条款 ≥3" },
+                    { profile: "maximum", label: "最大档（250 万字）", chars: 2500000, pages: 1667, when: "复杂 EPC / 多专业交叉" }
+                  ],
+                  signals: { scoring_detail_count: 36, star_count: 4, budget_yuan: 32000000, tender_type: "工程", explicit_limit_chars: null },
+                  next: "把建议 + 理由 + alternatives 呈现给用户确认后 build_outline(length_profile=…)——决策权在用户，推荐可被覆盖"
+                }
+              });
+            case "bid.build_outline": {
+              // R25（#47）：分包 ≥2 时必须选包（工具面同构拒绝——EUnprocessable
+              //      透传壳侧 bad_args 码）；选包后 phase → built
+              if (!m.package) {
+                return fail(m.id, "bad_args", "build_outline: 检测到 2 个分包（PKG-A(一标段：设备采购)、PKG-B(二标段：安装服务)）——必须传 package 选定投哪个包（共用条款自动进纲）；「投全部」= 每包各建一个项目分别建纲。用 list_packages 查看识别结果与证据");
+              }
+              demoBuildFlow.phase = "built";
+              return respond(m.id, {
+                present: true,
+                workspace: root,
+                project: { id: "PRJ-0001", name: "演示·智慧园区弱电工程", status: "REQUIREMENTS_EXTRACTED" },
+                outline_build: {
+                  counts: { sections: 3, leaves: 2, requirements: 18, total_requirements: demoBuildFlow.reqs, total_target_chars: 30000, matrix_rows: 18, matrix_blocking: 2 },
+                  package: { selected: { id: String(m.package), label: "一标段：设备采购", kind: "标段", number: "1" }, auto_selected: false, shared_req_count: 6 },
+                  leaf_quotas: [
+                    { section_id: "SEC-E02", title: "1.1 技术参数响应", target_chars: 18000 },
+                    { section_id: "SEC-E03", title: "1.2 资格与商务", target_chars: 12000 }
+                  ],
+                  warnings: [],
+                  effective_profile: m.length_profile || null,
+                  status: "MATRIX_READY",
+                  project_version: 3
+                }
+              });
+            }
             case "bid.quality":
               return respond(m.id, DEMO_BID.quality);
             case "bid.score":
@@ -642,6 +782,85 @@
                   project_version: 3
                 }
               });
+            case "bid.evidence":
+              // #47 R25 演示桥：过滤在桥内重放（kind/status——与工具面值域同款）
+              {
+                const f = m.filters || {};
+                let items = demoEvidence.items.slice();
+                if (f.kind) items = items.filter((e) => e.kind === f.kind);
+                if (f.status) items = items.filter((e) => e.status === f.status);
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  evidence: { items, total: items.length, limit: 50, cursor: null, next_cursor: null, project_version: 12 },
+                });
+              }
+            case "bid.evidence_search":
+              // #47 R25 演示桥：子串检索重放（pre-M2-b 朴素引擎同款语义；
+              // SUPERSEDED 不进检索池——与工具面同口径）
+              {
+                const q = String(m.query || "").toLowerCase();
+                const mode = m.mode || "hybrid";
+                const pool = demoEvidence.items.filter((e) => e.status !== "SUPERSEDED");
+                let items = pool.filter((e) => !q || (e.title + " " + (e.subject_name || "") + " " + (e.excerpt || "")).toLowerCase().includes(q));
+                if (mode === "exact") items = items.filter((e) => e.title.toLowerCase().includes(q));
+                const hits = items.map((e, i) => ({
+                  id: e.id, title: e.title, score: Math.max(0.4, 1 - i * 0.05),
+                  match_type: q ? (mode === "exact" ? "exact" : "both") : "semantic",
+                  kind: e.kind, status: e.status, valid_until: e.valid_until || null,
+                  excerpt: e.excerpt || null, verification_tier: e.verification_tier || null,
+                }));
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  search: {
+                    hits, total: hits.length, top_k: 10, warnings: [],
+                    trace: { semantic_k: hits.length, exact_k: mode === "exact" ? hits.length : 0, merged_by: "ev_id", engine: "demo（桥内重放）", content_face: "title+subject+excerpt（演示面）" },
+                    project_version: 12,
+                  },
+                });
+              }
+            case "bid.evidence_register":
+              // #47 R26 演示桥：登记真改台账（桥内重放工具面语义——
+              // 同 key 同指纹同占位 → 幂等重放原直返；同 key 换版 → 旧降
+              // SUPERSEDED 新签发；全新 → 新签发。绑定迁移面桥内无对应（登记
+              // 半边先立，R27 绑定时补）
+              {
+                const key = String(m.kind || "") + "|" + String(m.title || "") + "|" + String(m.subject_name || "");
+                const keyOf = (e) => e.kind + "|" + e.title + "|" + (e.subject_name || "");
+                const sameAll = (e) => keyOf(e) === key && (e.valid_until || null) === (m.valid_until || null) && !!e.is_placeholder === !!m.placeholder;
+                let evId, dedup;
+                const hit = demoEvidence.items.find(sameAll);
+                if (hit) {
+                  evId = hit.id; dedup = true;
+                } else {
+                  const old = demoEvidence.items.find((e) => keyOf(e) === key);
+                  if (old) old.status = "SUPERSEDED"; // 同 key 换版：旧单向降级
+                  evId = "EV-" + String(1000 + demoEvidence.items.length + 1).padStart(4, "0");
+                  dedup = false;
+                  demoEvidence.items.push({
+                    id: evId, kind: m.kind || "", title: m.title || "", status: "ACTIVE",
+                    subject_name: m.subject_name || "", valid_until: m.valid_until || null,
+                    verification_tier: m.placeholder ? null : "VERIFIED",
+                    is_placeholder: !!m.placeholder, excerpt: null,
+                  });
+                  demoEvidence.total = demoEvidence.items.length;
+                }
+                return respond(m.id, {
+                  present: true,
+                  workspace: root,
+                  project: DEMO_BID.state.project,
+                  register: {
+                    ev_id: evId, deduplicated: dedup, kind: m.kind || "", status: "ACTIVE",
+                    verification_tier: m.placeholder ? null : "VERIFIED",
+                    placeholder: !!m.placeholder, excerpt: null, excerpt_locator: null,
+                    hint: dedup ? "语义位查重命中：幂等重放（原 EV-id 直返，不换版）" : "新 EV 已签发（若为同 key 换版，旧记录已单向降级 SUPERSEDED）",
+                    project_version: 12,
+                  },
+                });
+              }
             case "bid.matrix_override":
               // #20 演示桥：人工裁定 stub（真实壳 = 宿主签发 receipt → set_matrix_override）
               return respond(m.id, {
@@ -864,8 +1083,23 @@
     // #47 R27（#88 Q2）：★漏标明细缓存（bid.star_gaps 只读——覆盖报告
     // 面板明细入口与导出兜底确认共用一份数据，不重复拉）
     bidStarGaps: { status: "idle", data: null, error: "" },
+    // #47 R25：证据台账读面（list_evidence / search_evidence——缺口-4 读半边）
+    bidEvidence: { status: "idle", data: null, error: "", code: "", kindFilter: "", statusFilter: "" },
+    bidEvidenceSearch: { status: "idle", data: null, error: "", code: "", query: "", mode: "hybrid" },
+    // #47 R26：证据登记写面（register_evidence——表单态与回执信息；错误走表单内反馈）
+    bidEvidenceReg: { busy: false, error: "", info: null },
     // #603 批 C：补遗台账 + 豁免写面（gates 面板补遗门接线用）
     bidAddenda: { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false },
+    // R25（#47）：建纲流（向导深水区——导入后直达章节树）。抽取写面 +
+    // 篇幅推荐缓存 + 建纲写面；树区空态卡消费（独立于 bidWizard——那是
+    // 导入现场，这是导入后的下一段生命周期）
+    bidBuild: {
+      extractBusy: false, extractError: "", extractInfo: "", extractWarns: [],
+      recStatus: "idle", recError: "", rec: null,
+      profileSel: "", packageSel: "",
+      pkgStatus: "idle", packages: null,
+      buildBusy: false, buildError: "", buildInfo: ""
+    },
   };
   var SIDEBARS = [
     { id: "files", icon: "files", title: "\u8D44\u6E90\u7BA1\u7406\u5668", key: "Ctrl+Shift+E" },
@@ -1298,8 +1532,7 @@
     } else if (view === "star") renderStarView(body);
     else renderSettingsView(body);
   }
-  // ============ #313 批 A：标书数据面（bid.state / bid.outline → 侧栏视图 + 标书工作台） ============
-  // 数据来源：壳侧 bid.state（经 bid_mcp::dispatch_with 走 get_bid_project_state 真实工具面
+  // ============ #313 批 A：标书数据面（bid.state / bid.outline → 侧栏视图 + 标书工作台） =====  // 数据来源：壳侧 bid.state（经 bid_mcp::dispatch_with 走 get_bid_project_state 真实工具面
   // + project 元信息 + quick_stats）与 bid.outline（DomainStore 直读章节树）。
   // 契约：docs/mang/IPC-CONTRACT.md §6。合规矩阵/自评/覆盖报告 = 批 B/C/D（占位禁用态）。
   function bidStatusZh(s) {
@@ -1373,6 +1606,10 @@
         // #19：空态向导入口（侧栏卡按钮 / 工作台空态共用）
         else if (act === "wizard") ui.openBidWorkbench("detail");
         else if (act === "wizard-refresh-tree") ui.loadBidWizardTree(true);
+        // R25（#47）：建纲流三动作（树区空态卡——抽取 / 重试推荐 / 建纲）
+        else if (act === "build-extract") ui.submitBidExtract();
+        else if (act === "build-refresh-rec") { ui.loadBidLengthProfile(true); ui.loadBidBuildPackages(true); }
+        else if (act === "build-go") ui.submitBidBuildOutline();
         else if (act === "wizard-retry-import") ui.submitBidWizardImport();
         // R25（#47）：导入卡重入动作——重导失败件（预勾选）/ 补导（新批次）/ 退出重入
         else if (act === "wizard-retry-failed") ui.enterBidWizardReentry("retry-failed");
@@ -1481,6 +1718,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="export">校验与导出</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="packages">分包</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="evidence">证据台账</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1600,25 +1838,32 @@
         if (panelElR25 && state.bidWizard.result) renderBidWizardResult(panelElR25, state.bidWizard.result);
         else if (panelElR25) renderBidWizardDone(panelElR25, b);
       } else if (state.bidWizard.result) {
-        // #19：导入刚完成——树区给「下一步」引导（对齐 bid.coverage next 语言），
-        // 右面板保留导入结果面（per_file 逐件表）；R25（#47）：部分失败
-        // 时同步给「重导失败件」入口（结果面板也有主按钮，这里是树区
-        // 近旁径——两条径同一动作）
+        // R25（#47）：导入刚完成——树区建纲流卡（原「由 Agent 走 MCP」死
+        // 文案收口为可操作入口：抽取 → 选档 → 建纲），右面板保留导入
+        // 结果面（per_file 逐件表）；R25（#47 双面）：部分失败时同步给
+        // 「重导失败件」入口（结果面板也有主按钮，这里是树区近旁径——
+        // 两条径同一动作）
+        renderBidBuildFlow(treeEl, q19);
         const failedR25 = (state.bidWizard.result.per_file || []).filter((f) => String(f.parse_status || "").toLowerCase() === "failed");
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div>'
-          + (failedR25.length ? '<div style="margin-top:10px"><button class="btn" data-bid-act="wizard-retry-failed">' + ICON.refresh + "重导失败件（" + failedR25.length + "）</button></div>" : "")
-          + "</div>";
+        if (failedR25.length) {
+          const retryBar = document.createElement("div");
+          retryBar.className = "bid-wiz-bar";
+          retryBar.style.margin = "8px";
+          retryBar.innerHTML = '<button class="btn" data-bid-act="wizard-retry-failed">' + ICON.refresh + "重导失败件（" + failedR25.length + "）</button>";
+          treeEl.appendChild(retryBar);
+        }
         const panelEl19 = host.querySelector("#bid-panel");
         if (panelEl19) renderBidWizardResult(panelEl19, state.bidWizard.result);
       } else if (q19.files > 0) {
         // R4（#47）：向导完成态首屏——重开工作区场景（无进行中向导）：
-        // 已导入未建纲，树区给 quick_stats 驱动的「已入库」引导，右面板
-        // 完成态卡（不再是泛泛「大纲未建立」占位——数据同源 bid.state）
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">文件已入库（' + (q19.files || 0) + " 件）</div><div>下一步由 Agent 走 extract_requirements 抽取条款——build_outline 建纲后，这里显示章节树</div></div>";
+        // 已导入未建纲，树区给建纲流卡（R25），右面板完成态卡（不再是
+        // 泛泛「大纲未建立」占位——数据同源 bid.state）
+        renderBidBuildFlow(treeEl, q19);
         const panelEl19 = host.querySelector("#bid-panel");
         if (panelEl19 && activePanel === "detail") renderBidWizardDone(panelEl19, b);
       } else {
-        treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——MCP 管线 build_outline 之后，这里显示章节层级、字数进度与状态标记</div></div>';
+        // 无文件无条款的罕见残态（如建项后被外部清库）——诚实占位在卡内
+        renderBidBuildFlow(treeEl, q19);
       }
       // R25（#47）：树区重导按钮的监听绑定——wizard 分支的 treeEl 重绘
       // 不经 renderBidWizardImport（那里只在导入卡内绑定），这里直接绑
@@ -1632,6 +1877,8 @@
       if (activePanel === "export") renderBidExportPanel(host);
       // #20：分包清单同样不依赖章节树（#316 识别面任何阶段可看）
       if (activePanel === "packages") renderBidPackagesPanel(host);
+      // #47 R25：证据台账不依赖章节树（读面——list 过滤 + search 检索）
+      if (activePanel === "evidence") renderBidEvidencePanel(host);
       return;
     }
     const byId = {};
@@ -1695,6 +1942,11 @@
       renderBidPackagesPanel(host);
       return;
     }
+    // #47 R25：证据台账（读面——同 packages：不依赖章节树）
+    if (activePanel === "evidence") {
+      renderBidEvidencePanel(host);
+      return;
+    }
     if (activePanel === "matrix") {
       // #21 e2e 首跑捕获的存量 bug：此处原为 renderBidMatrixPanel(host)——
       // 漏传第二参 panel，函数体首屏 panel.innerHTML 直接 TypeError，矩阵
@@ -1745,8 +1997,7 @@
   // bid-panels 白名单锚）。
   var BID_IMPORT_EXTS = /\.(docx|xlsx|pdf|doc)$/i;
 
-  // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） ============
-  // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；
+  // ============ #19：导入向导（空态引导卡——新建项目 → 导入招标文件） =====  // 交互语言对齐 bid.coverage 的 next 引导（bid-cov-next 同款「下一步」条）；
   // E_STATE / not_found 分支复用 §109 引导卡约定：空态是主路径不是故障。
 
   /** 向导第一步：新建标书项目（bid.create_project——壳侧隐式幂等键 =
@@ -1934,7 +2185,7 @@
       + (failedRows.length ? '<div class="bid-wiz-bar"><button class="btn btn-primary" data-bid-act="wizard-retry-failed">' + ICON.refresh + "重导失败件（" + failedRows.length + "）</button></div>" : "")
       + (integrity.length ? '<div class="bid-cov-next" data-state="warn"><span>输入完整性</span>' + integrity.map((f) => esc(f.name + "：" + (f.reason || ""))).join("；") + "</div>" : "")
       + (warns.length ? '<details class="bid-wiz-warns"><summary>' + warns.length + " 条告警</summary>" + warns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
-      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草</div>'
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>文件已入库——左侧「抽取条款」一键入册（确定性规则抽取），随后选篇幅档建纲，这里显示章节树</div>'
       + "</div>";
     // R25：结果面板不在 bindBidViewActions 的既有绑定面内——重导按钮直接绑
     const retryBtnR25 = panelEl.querySelector('[data-bid-act="wizard-retry-failed"]');
@@ -1965,12 +2216,139 @@
       // R25（#47）：补导入口——补遗/澄清函是标书常态，FILES_IMPORTED
       // 后追加新批次不应只能靠 Agent 直调 MCP（向导生命周期补链）
       + '<div class="bid-wiz-bar"><button class="btn" data-bid-act="wizard-supplement">' + ICON.plus + "补导文件</button></div>"
-      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>由 Agent 走 extract_requirements 抽取条款（MCP 管线），随后 build_outline 建纲进入起草——建纲后左侧显示章节树与本面板详情</div>'
+      + '<div class="bid-cov-next" data-state="ok"><span>下一步</span>左侧抽取条款并选篇幅档建纲——建纲后这里显示章节树与本面板详情（矩阵 / 门 / 自评页签同步可用）</div>'
       + "</div>";
     // R25：本卡不在 bindBidViewActions 的既有绑定面内（那里只绑侧栏/向导卡
     // /结果面板）——补导按钮直接绑（每次 innerHTML 重建后新元素）
     const suppBtnR25 = panelEl.querySelector('[data-bid-act="wizard-supplement"]');
     if (suppBtnR25) suppBtnR25.addEventListener("click", () => ui.enterBidWizardReentry("supplement"));
+  }
+
+  /** R25（#47）：建纲流卡——树区空态主内容（向导深水区：导入后直达
+   * 章节树）。两相位由 quick_stats 同源数据驱动：
+   * ① files>0 且 requirements==0 → 抽取卡（bid.extract 写面——确定性
+   *    规则抽取，无 LLM：评分细则/资格条件/技术参数/★标记）
+   * ② requirements>0 → 推荐卡（bid.length_profile 只读：推荐档 + 理由 +
+   *    信号面 + 四档 alternatives——#287「决策权在用户，推荐可被覆盖」
+   *    的 UI 兑现）+ 建纲写面（bid.build_outline——明写限值直接采用 /
+   *    档位选择 / 分包选择器 detected≥2 时必选）
+   * 成功后 loadBid(true) 重载——章节树呈现，本卡自然退场。 */
+  function renderBidBuildFlow(treeEl, q19) {
+    const bb = state.bidBuild;
+    const files = q19.files || 0;
+    const reqs = q19.requirements || 0;
+    if (!files && !reqs) {
+      treeEl.innerHTML = '<div class="view-state"><div class="view-state-title">大纲未建立</div><div>当前项目还没有章节树——导入并抽取条款后，这里显示章节层级、字数进度与状态标记</div></div>';
+      return;
+    }
+    if (reqs === 0) {
+      // 相位①：抽取卡（files>0 且未抽取）
+      treeEl.innerHTML =
+        '<div class="bid-wizard">'
+        + '<div class="bid-wiz-card">'
+        + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">✓</span>导入招标文件<span class="bid-wiz-n">3</span>抽取条款 · 建纲</div>'
+        + '<div class="bid-wiz-title">' + ICON.bid + "抽取条款</div>"
+        + '<div class="bid-wiz-sub">已入库 ' + files + " 件——确定性规则抽取（无需 AI）：评分细则 / 资格条件 / 技术参数 / ★标记逐条入册，为建纲与合规矩阵供料</div>"
+        + (bb.extractInfo ? '<div class="bid-wiz-error" data-state="ok">' + esc(bb.extractInfo) + "</div>" : "")
+        + (bb.extractWarns && bb.extractWarns.length ? '<details class="bid-wiz-warns" open><summary>' + bb.extractWarns.length + " 条告警（零抽取 / 漏标等——逐条可读，不伪装成功）</summary>" + bb.extractWarns.map((x) => "<div>" + esc(x) + "</div>").join("") + "</details>" : "")
+        + (bb.extractError ? '<div class="bid-wiz-error" data-state="error">' + esc(bb.extractError) + "</div>" : "")
+        + '<div class="bid-wiz-actions"><button class="btn btn-primary" data-bid-act="build-extract"' + (bb.extractBusy ? ' disabled="disabled"' : "") + ">" + (bb.extractBusy ? "抽取中…" : "抽取条款") + "</button></div>"
+        + "</div></div>";
+      bindBidViewActions(treeEl);
+      return;
+    }
+    // 相位②：推荐 + 建纲卡（requirements>0 且无章节树）
+    let bodyHtml = "";
+    if (bb.recStatus === "idle") {
+      bodyHtml = '<div class="view-state"><div class="view-spinner"></div><div>正在测算篇幅推荐…</div></div>';
+      ui.loadBidLengthProfile();
+    } else if (bb.recStatus === "loading") {
+      bodyHtml = '<div class="view-state"><div class="view-spinner"></div><div>正在测算篇幅推荐…</div></div>';
+    } else if (bb.recStatus === "error") {
+      bodyHtml = '<div class="view-state" data-kind="error"><div class="view-state-title">篇幅推荐读取失败</div><div>' + esc(bb.recError) + '</div><button class="btn" data-bid-act="build-refresh-rec">重试</button></div>';
+    } else {
+      const rec = bb.rec || {};
+      const alts = rec.alternatives || [];
+      const signals = rec.signals || {};
+      const spec = rec.from_tender_spec || null; // 明写限值（档位选择让位明写值）
+      let selHtml = "";
+      if (spec) {
+        selHtml = '<div class="bid-wiz-error" data-state="warn">招标文件明写篇幅：' + fmtChars(rec.target_chars) + " 字（≈" + (rec.approx_pages || 0) + " 页）——建纲将直接采用明写值，无需选档</div>";
+      } else {
+        selHtml = '<div class="bid-build-profs">'
+          + alts.map((a) => {
+            const key = String(a.profile || "");
+            const checked = bb.profileSel === key;
+            const isRec = String(rec.recommended_profile || "") === key;
+            return '<label class="bid-build-prof" data-on="' + checked + '">'
+              + '<input type="radio" name="bid-build-prof" value="' + esc(key) + '"' + (checked ? ' checked="checked"' : "") + ">"
+              + '<span class="bid-build-prof-main"><span class="bid-build-prof-label">' + esc(a.label || key) + (isRec ? ' <span class="bid-build-rec-tag">推荐</span>' : "") + "</span>"
+              + '<span class="bid-build-prof-when">' + esc(a.when || "") + "</span></span>"
+              + '<span class="bid-build-prof-chars">' + fmtChars(a.chars) + " 字<br>≈" + (a.pages || 0) + " 页</span>"
+              + "</label>";
+          }).join("")
+          + "</div>";
+      }
+      // 推荐理由 + 信号行（原始值随行回显——决策可核对，#287 口径）
+      const reasons = (rec.reasons || []).map(String);
+      const reasonsHtml = reasons.length
+        ? '<div class="bid-build-reasons">' + reasons.map((x) => "<div>· " + esc(x) + "</div>").join("") + "</div>"
+        : "";
+      const sigBits = [];
+      if (signals.scoring_detail_count != null) sigBits.push("评分细则 " + signals.scoring_detail_count + " 条");
+      if (signals.star_count != null) sigBits.push("★标记 " + signals.star_count + " 条");
+      if (signals.budget_yuan) sigBits.push("预算 " + fmtChars(signals.budget_yuan) + " 元");
+      if (signals.tender_type) sigBits.push("类型 " + esc(String(signals.tender_type)));
+      if (spec) sigBits.push("明写限值 " + fmtChars(spec) + " 字");
+      const sigHtml = sigBits.length ? '<div class="bid-build-signals">信号：' + sigBits.join(" · ") + "</div>" : "";
+      // 分包选择器（detected≥2 时必选——不选包建纲会被工具面拒，UI 先挡）
+      let pkgHtml = "";
+      if (bb.pkgStatus === "idle") ui.loadBidBuildPackages();
+      if (bb.pkgStatus === "ready" && bb.packages) {
+        const det = bb.packages.detected || 0;
+        if (det >= 2) {
+          const items = bb.packages.items || [];
+          pkgHtml = '<div class="bid-build-pkgs"><div class="bid-build-pkgs-title">选择投标分包（检测到 ' + det + " 包——建纲必须选定，共用条款自动进纲）</div>"
+            + items.map((p) => {
+              const on = bb.packageSel === p.id;
+              return '<label class="bid-build-pkg" data-on="' + on + '">'
+                + '<input type="radio" name="bid-build-pkg" value="' + esc(p.id) + '"' + (on ? ' checked="checked"' : "") + ">"
+                + "<span>" + esc(p.label || p.id) + "</span><span class=\"bid-build-pkg-meta\">" + (p.req_count || 0) + " 条</span></label>";
+            }).join("")
+            + "</div>";
+        } else if (det === 1) {
+          const only = (bb.packages.items || [])[0] || {};
+          pkgHtml = '<div class="bid-build-signals">检测到 1 个分包：' + esc(only.label || "") + "——建纲时自动选定</div>";
+        }
+      }
+      const needPkg = !!(bb.pkgStatus === "ready" && bb.packages && (bb.packages.detected || 0) >= 2);
+      const buildDisabled = bb.buildBusy || (!spec && !bb.profileSel) || (needPkg && !bb.packageSel);
+      bodyHtml = selHtml + reasonsHtml + sigHtml + pkgHtml
+        + (bb.buildError ? '<div class="bid-wiz-error" data-state="error">' + esc(bb.buildError) + "</div>" : "")
+        + '<div class="bid-wiz-actions"><button class="btn btn-primary" data-bid-act="build-go"' + (buildDisabled ? ' disabled="disabled"' : "") + ">" + (bb.buildBusy ? "建纲中…" : "建纲") + "</button></div>";
+    }
+    treeEl.innerHTML =
+      '<div class="bid-wizard">'
+      + '<div class="bid-wiz-card">'
+      + '<div class="bid-wiz-step"><span class="bid-wiz-n ok">✓</span>新建标书项目<span class="bid-wiz-n ok">✓</span>导入<span class="bid-wiz-n ok">✓</span>抽取<span class="bid-wiz-n">4</span>选档建纲</div>'
+      + '<div class="bid-wiz-title">' + ICON.bid + "选择篇幅档位，建立章节树</div>"
+      + '<div class="bid-wiz-sub">已抽取 ' + fmtChars(reqs) + " 条条款——推荐档只是建议（可改选），建纲同时生成合规矩阵</div>"
+      + (bb.extractInfo ? '<div class="bid-wiz-error" data-state="ok">' + esc(bb.extractInfo) + "</div>" : "")
+      + bodyHtml
+      + "</div></div>";
+    bindBidViewActions(treeEl);
+    treeEl.querySelectorAll('input[name="bid-build-prof"]').forEach((rb) => {
+      rb.addEventListener("change", () => {
+        state.bidBuild.profileSel = rb.value;
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    treeEl.querySelectorAll('input[name="bid-build-pkg"]').forEach((rb) => {
+      rb.addEventListener("change", () => {
+        state.bidBuild.packageSel = rb.value;
+        renderBidWorkbenchIfOpen();
+      });
+    });
   }
 
   /** 章节详情（右面板）：元信息 + 章节正文预览（chapters/{id}.json 的 content） */
@@ -2036,8 +2414,7 @@
         });
     }
   }
-  // ============ #313 批 B：矩阵面板（bid.matrix） ============
-  // 数据来源：壳侧 bid.quality（check_bid_quality 真实工具面——summary /
+  // ============ #313 批 B：矩阵面板（bid.matrix） =====  // 数据来源：壳侧 bid.quality（check_bid_quality 真实工具面——summary /
   // submission_readiness / global_conflicts / negative_deviations / artifact）与
   // bid.score（score_document——diagnostic_only / technical / commercial / price /
   // total / by_item）。契约：docs/mang/IPC-CONTRACT.md §6。
@@ -2459,8 +2836,7 @@
     bindBidViewActions(panel);
   }
 
-  // ============ #603 批 A：审核门面板（bid.gates → 五门台账 + 追认 + 人工过门） ============
-  // 数据来源：壳侧 bid.gates（DomainStore 直读——五门 approved/latest_pass/
+  // ============ #603 批 A：审核门面板（bid.gates → 五门台账 + 追认 + 人工过门） =====  // 数据来源：壳侧 bid.gates（DomainStore 直读——五门 approved/latest_pass/
   // agent_waivers/human_review_complete/reviews）；写面 bid.gate_pass（宿主
   // 签发 receipt #182 → record_review_gate 真实工具面）。门序/状态窗裁决
   // 全在域层——壳侧拒绝文案原样透传成引导，不假成功。
@@ -2852,8 +3228,7 @@
       });
   }
 
-  // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） ============
-  // 数据来源：壳侧 bid.matrix（经 bid_mcp::dispatch_with 走 get_compliance_matrix
+  // ============ #313 批 B：合规矩阵面板（bid.matrix → 表格 + 筛选 + 分页 + 导出） =====  // 数据来源：壳侧 bid.matrix（经 bid_mcp::dispatch_with 走 get_compliance_matrix
   // 真实工具面，壳内聚合 cursor 分页后的全量行）。行字段 = 工具输出原样透传；
   // 筛选（状态/类别/只看阻断）、分页、导出都在全量行上做——徽章计数与表格同一真源。
   var BID_MX_STATUS_ZH = {
@@ -3005,7 +3380,8 @@
   /** #20 分包面板（工作台右面板的 packages 页签——bid.packages 只读）
    *  多标段/多包识别（#316）：包清单 + 逐包条款数 + 选包状态 + 共用条款。
    *  只读面：选包动作不在本面板（选包 = build_outline 传 package 参数——
-   *  管线动作，走 MCP；面板只呈现识别结果与 usage 提示，不伪装可写）。 */
+   *  管线动作；R25 起选包入口在树区建纲流卡的分包选择器——本面板保持
+   *  只读呈现，不伪装可写）。 */
   function renderBidPackagesPanel(host) {
     const panel = host.querySelector("#bid-panel");
     if (!panel) return;
@@ -3053,6 +3429,169 @@
     panel.innerHTML = html;
     const rf = panel.querySelector("[data-pk-refresh]");
     if (rf) rf.addEventListener("click", () => ui.loadBidPackages(true));
+  }
+
+  /** #47 R25：证据类别/状态中文映射（与 bid-domain as_str 同口径——
+   *  machine 值（snake_case）为 IPC 过滤值，中文为展示值；
+   *  值域单一真源在工具面（parse_evidence_kind/status），此处仅展示映射） */
+  const EVIDENCE_KIND_ZH = {
+    qualification: "资质", performance: "业绩", personnel: "人员", certificate: "证书",
+    product_doc: "产品资料", solution_module: "方案模块", contract: "合同",
+  };
+  const EVIDENCE_STATUS_ZH = { ACTIVE: "有效", EXPIRING: "临期", EXPIRED: "已失效", SUPERSEDED: "已作废" };
+
+  /** #47 R25：证据台账面板（工作台 evidence 页签）——list_evidence 过滤清单
+   *  + search_evidence 检索（query/mode；命中带 score/match_type/摘录）。
+   *  E_NOTFOUND（无 db.json）→ 引导卡（R5 同款口径）；E_STATE 不存在于读面。 */
+  function renderBidEvidencePanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const ev = state.bidEvidence;
+    if (ev.status === "idle") ui.loadBidEvidence();
+    if (ev.status === "idle" || ev.status === "loading") {
+      panel.innerHTML = '<div class="bid-gt"><div class="view-state"><div class="view-spinner"></div><div>正在读取证据台账…</div></div></div>';
+      return;
+    }
+    if (ev.status === "error" && ev.code === "not_found") {
+      // R5 同款：空工作区（无 db.json）不是错误——E_NOTFOUND 引导卡口径
+      renderBidEarlyGuide(host, panel, {
+        code: "not_found",
+        title: "还没有标书项目",
+        text: "证据台账按项目归集——先建项并导入招标文件，随后由 Agent（MCP register_evidence）或后续写面登记证据材料。",
+        next: "登记后此处逐件可见（类别/状态过滤 + 关键词检索——search_evidence 检索面含正文摘录 #217）。",
+      });
+      return;
+    }
+    if (ev.status === "error") {
+      panel.innerHTML =
+        '<div class="bid-gt"><div class="view-state" data-kind="error"><div class="view-state-title">证据台账读取失败</div><div>'
+        + esc(ev.error || "无数据")
+        + '</div><div><button class="btn" data-ev-retry="retry">重试</button></div></div></div>';
+      const retry = panel.querySelector("[data-ev-retry]");
+      if (retry) retry.addEventListener("click", () => ui.loadBidEvidence(true));
+      return;
+    }
+    const d = (ev.data && ev.data.evidence) || {};
+    const items = Array.isArray(d.items) ? d.items : [];
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">证据台账（T-1 · #47 R25）</div>'
+      + '<div class="bid-card-sub">共 ' + fmtChars(d.total != null ? d.total : items.length) + ' 件'
+      + (ev.kindFilter || ev.statusFilter ? "（已过滤）" : "")
+      + " · 读面 = list_evidence（kind/status 过滤 + id 字典序）</div>";
+    html += '<div class="bid-ev-filters"><select data-ev-kind="kind"><option value="">全部类别</option>'
+      + Object.keys(EVIDENCE_KIND_ZH).map((k) => '<option value="' + k + '"' + (ev.kindFilter === k ? " selected" : "") + ">" + EVIDENCE_KIND_ZH[k] + "</option>").join("")
+      + '</select> <select data-ev-status="status"><option value="">全部状态</option>'
+      + Object.keys(EVIDENCE_STATUS_ZH).map((s) => '<option value="' + s + '"' + (ev.statusFilter === s ? " selected" : "") + ">" + EVIDENCE_STATUS_ZH[s] + "</option>").join("")
+      + "</select></div>";
+    if (!items.length) {
+      html += '<div class="bid-card-sub">当前过滤条件下无证据件（或项目尚未登记证据）</div>';
+    } else {
+      html += '<table class="bid-table"><thead><tr><th>ID</th><th>类别</th><th>标题</th><th>状态</th><th>主体</th><th>有效期至</th><th>正文验证</th></tr></thead><tbody>';
+      for (const it of items) {
+        html += "<tr><td>" + esc(it.id || "") + "</td><td>" + esc(EVIDENCE_KIND_ZH[it.kind] || it.kind || "—")
+          + "</td><td>" + esc(it.title || "") + '</td><td><span class="bid-badge" data-status="' + (it.status === "ACTIVE" ? "ok" : "") + '">'
+          + esc(EVIDENCE_STATUS_ZH[it.status] || it.status || "—") + "</span></td><td>" + esc(it.subject_name || "—") + "</td><td>"
+          + esc(it.valid_until || "—") + "</td><td>" + esc(it.verification_tier || "—") + "</td></tr>";
+      }
+      html += "</tbody></table>";
+    }
+    html += "</div>";
+    // 检索段（search_evidence——hits 含 score/match_type/摘录；warnings 原样透传）
+    const ses = state.bidEvidenceSearch;
+    html += '<div class="bid-card"><div class="bid-card-title">证据检索（search_evidence）</div>';
+    html += '<div class="bid-ev-search"><input data-ev-q="query" type="text" placeholder="关键词（标题/范围/主体/客户/正文摘录）" value="' + esc(ses.query || "") + '">'
+      + ' <select data-ev-mode="mode">' + ["hybrid", "semantic", "exact"].map((m) => '<option value="' + m + '"' + (ses.mode === m ? " selected" : "") + ">" + m + "</option>").join("") + "</select>"
+      + ' <button class="btn btn-sm" data-ev-go="search">检索</button></div>';
+    if (ses.status === "loading") html += '<div class="bid-card-sub">检索中…</div>';
+    if (ses.status === "error") html += '<div class="bid-card-sub" data-kind="error">' + esc(ses.error || "检索失败") + "</div>";
+    if (ses.status === "ready" && ses.data) {
+      const sd = (ses.data && ses.data.search) || {};
+      const hits = Array.isArray(sd.hits) ? sd.hits : [];
+      html += '<div class="bid-card-sub">命中 ' + fmtChars(sd.total != null ? sd.total : hits.length) + " 件 · top_k=" + fmtChars(sd.top_k != null ? sd.top_k : "—") + "</div>";
+      if (!hits.length) {
+        html += '<div class="bid-card-sub">无命中（换关键词或 mode 试试）</div>';
+      } else {
+        html += '<div class="bid-gt-gates">';
+        for (const h of hits) {
+          html += '<div class="bid-gt-row"><div class="bid-gt-main"><span class="bid-gt-name">' + esc(h.title || "")
+            + " <small>" + esc(h.id || "") + "</small></span>"
+            + '<span class="bid-gt-sub">' + esc(EVIDENCE_KIND_ZH[h.kind] || h.kind || "—") + " · "
+            + esc(EVIDENCE_STATUS_ZH[h.status] || h.status || "—") + (h.valid_until ? " · 有效期至 " + esc(h.valid_until) : "") + "</span></div>"
+            + '<span class="bid-badge">' + (typeof h.score === "number" ? h.score.toFixed(3) : "—") + " · " + esc(h.match_type || "—") + "</span></div>";
+          if (h.excerpt) html += '<div class="bid-gt-row"><span class="bid-gt-sub">' + esc(h.excerpt) + "</span></div>";
+        }
+        html += "</div>";
+      }
+      if (Array.isArray(sd.warnings) && sd.warnings.length) {
+        html += '<div class="bid-card-sub" data-kind="warn">' + sd.warnings.map((w) => esc(w)).join("<br>") + "</div>";
+      }
+    }
+    html += '<div class="bid-card-sub">检索面 = 标题+范围+主体+客户+正文摘录（#217）；语义引擎 pre-M2-b 为朴素 token 匹配</div>';
+    html += "</div>"; // #47 R26：检索卡在此收口——登记卡为同级卡，不嵌检索卡内
+    // 写面段（register_evidence——#47 R26；source_file_id 锚定导入回执 per_file）
+    const rg = state.bidEvidenceReg;
+    const wr = (state.bidWizard && state.bidWizard.result) || null;
+    const srcFiles = (wr && Array.isArray(wr.per_file) ? wr.per_file : []).filter((f) => f && f.parse_status === "ok" && f.file_id);
+    html += '<div class="bid-card"><div class="bid-card-title">登记证据（register_evidence · #47 R26）</div>';
+    html += '<div class="bid-ev-reg">';
+    if (!srcFiles.length) {
+      html += '<div class="bid-card-sub">本会话尚无导入回执（per_file）——登记须锚定已导入件（#185：先向导导入；Agent 持久路径走 MCP register_evidence）。</div>';
+    } else {
+      html += '<select data-ev-reg-src="source"><option value="">来源文件（必选）</option>'
+        + srcFiles.map((f) => '<option value="' + esc(f.file_id) + '">' + esc(f.file_id + " · " + (f.filename || "")) + "</option>").join("")
+        + '</select> <select data-ev-reg-kind="kind"><option value="">类别（必选）</option>'
+        + Object.keys(EVIDENCE_KIND_ZH).map((k) => '<option value="' + k + '">' + EVIDENCE_KIND_ZH[k] + "</option>").join("")
+        + '</select> <input data-ev-reg-title="title" type="text" placeholder="标题（必填）">'
+        + ' <input data-ev-reg-subject="subject" type="text" placeholder="主体名（必填）">'
+        + ' <input data-ev-reg-until="valid_until" type="date" title="有效期至（可选）">'
+        + ' <label class="bid-ev-chk"><input data-ev-reg-ph="placeholder" type="checkbox"> 占位/待核验</label>'
+        + ' <button class="btn btn-sm" data-ev-reg-go="register">登记</button>';
+    }
+    html += "</div>";
+    if (rg.error) html += '<div class="bid-card-sub" data-kind="error">' + esc(rg.error) + "</div>";
+    if (rg.info) {
+      html += '<div class="bid-card-sub" data-state="' + (rg.info.deduplicated ? "warn" : "ok") + '">'
+        + (rg.info.deduplicated
+          ? "幂等重放——原 " + esc(rg.info.ev_id || "") + " 直返（不换版）"
+          : "新 EV 签发 " + esc(rg.info.ev_id || "") + "（status=" + esc(rg.info.status || "") + (rg.info.placeholder ? " · 占位" : "") + "）")
+        + (rg.info.hint ? " · " + esc(rg.info.hint) : "")
+        + "</div>";
+    }
+    html += '<div class="bid-card-sub">写面约束（工具面单一真源）：source_file_id 锚定导入回执；#185 旧来源参数（source_file/sha256/fingerprint）与 #245 自报验证态显式拒；同 key 同指纹→幂等重放 / 换版旧记录降级 SUPERSEDED 且绑定迁移。scope/client/amount_wan/completed_on 等可选面走 Agent（MCP）。</div>';
+    html += "</div>";
+    html += "</div>";
+    panel.innerHTML = html;
+    const kindSel = panel.querySelector("[data-ev-kind]");
+    if (kindSel) kindSel.addEventListener("change", () => { state.bidEvidence.kindFilter = kindSel.value; ui.loadBidEvidence(true); });
+    const stSel = panel.querySelector("[data-ev-status]");
+    if (stSel) stSel.addEventListener("change", () => { state.bidEvidence.statusFilter = stSel.value; ui.loadBidEvidence(true); });
+    const go = panel.querySelector("[data-ev-go]");
+    if (go) go.addEventListener("click", () => {
+      const qEl = panel.querySelector("[data-ev-q]");
+      const mEl = panel.querySelector("[data-ev-mode]");
+      ui.searchBidEvidence((qEl && qEl.value) || "", (mEl && mEl.value) || "hybrid");
+    });
+    const qEl2 = panel.querySelector("[data-ev-q]");
+    if (qEl2) qEl2.addEventListener("keydown", (e) => { if (e.key === "Enter" && go) go.click(); });
+    // #47 R26：登记表单提交（必填前置校验 + ui.registerBidEvidence）
+    const regGo = panel.querySelector("[data-ev-reg-go]");
+    if (regGo) regGo.addEventListener("click", () => {
+      const gv = (n) => { const el = panel.querySelector("[data-ev-reg-" + n + "]"); return el ? String(el.value || "").trim() : ""; };
+      const phEl = panel.querySelector("[data-ev-reg-ph]");
+      const p = { source_file_id: gv("src"), kind: gv("kind"), title: gv("title"), subject_name: gv("subject") };
+      const until = gv("until");
+      if (until) p.valid_until = until;
+      if (phEl && phEl.checked) p.placeholder = true;
+      if (!p.source_file_id || !p.kind || !p.title || !p.subject_name) {
+        state.bidEvidenceReg.error = "来源文件/类别/标题/主体名均必填";
+        state.bidEvidenceReg.info = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      state.bidEvidenceReg.error = "";
+      ui.registerBidEvidence(p);
+    });
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */
   function renderBidMatrixPanel(host, panel) {
@@ -3141,7 +3680,7 @@
       + '<div class="bid-mx-sum">共 ' + fmtChars(d.total) + " 条 · 筛选后 " + fmtChars(filtered.length) + " 条 · 阻断 " + fmtChars(sum.blocking || 0) + " · ★实质性 " + fmtChars(star.total != null ? star.total : sum.substantive || 0) + (star.total > 0 ? "（已响应 " + fmtChars(star.responded || 0) + "/" + fmtChars(star.total) + "）" : "") + " · 缺证据 " + fmtChars(sum.evidence_missing || 0) + "</div>";
     if (!rows.length) {
       html +=
-        '<div class="view-state"><div class="view-state-title">条款集为空</div><div>MCP 管线 extract_requirements 之后，这里显示 REQ × 响应状态 × 证据 × 章节的合规矩阵</div></div>';
+        '<div class="view-state"><div class="view-state-title">条款集为空</div><div>抽取条款（工作台左侧建纲流卡）之后，这里显示 REQ × 响应状态 × 证据 × 章节的合规矩阵</div></div>';
     } else if (!filtered.length) {
       html += '<div class="view-state"><div class="view-state-title">当前筛选无匹配行</div><div>换个状态/类别，或取消「只看阻断」</div></div>';
     } else {
@@ -3323,8 +3862,7 @@
       .then((r) => ui.toast("ok", "已导出 " + rows.length + " 条 → " + ((r && r.rel) || rel) + "（Excel 可直接打开）"))
       .catch((err) => ui.toast("error", "导出失败：" + ((err && err.message) || err)));
   }
-  // ============ #313 批 B 矩阵面板 END ============
-
+  // ============ #313 批 B 矩阵面板 END =====
   // ============ #313 批 D：覆盖报告面板（bid.coverage → 三态分账 + ★条款覆盖 + 逐文件表） =====
   // 数据来源：壳侧 bid.coverage（经 bid_mcp::dispatch_with 走 get_coverage_report
   // 真实工具面，工具输出原样透传 + 壳侧三态分账 summary + 逐文件 get_star_coverage
@@ -3573,12 +4111,10 @@
       })
     );
   }
-  // ============ #313 批 D 覆盖报告面板 END ============
+  // ============ #313 批 D 覆盖报告面板 END =====
 
 
-
-  // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 ============
-  /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
+  // ============ #54 大纲面板：收集 / 树渲染 / 跳转 / 滚动高亮 / 折叠 =====  /** 从已渲染的 tab 面板收集标题（docx: pStyle→h1-h6；md: mdToHtml→h1-h6）。 */
   function collectOutline(tab) {
     if (!tab) return [];
     const pane = document.getElementById("pane-" + tab.id);
@@ -3848,8 +4384,7 @@
     if (btn) btn.addEventListener("click", () => ui.refreshTree());
   }
 
-  // ============ #42 阶段 7：版本快照（自动 30s 检查 + 改动面板 + 预览/回滚） ============
-  /** 只有文本文件入快照（issue #42 §八：源头是 md，二进制不做） */
+  // ============ #42 阶段 7：版本快照（自动 30s 检查 + 改动面板 + 预览/回滚） =====  /** 只有文本文件入快照（issue #42 §八：源头是 md，二进制不做） */
   function snapshotablePath(p) {
     return /\.(md|markdown|txt)$/i.test(p || "");
   }
@@ -3864,8 +4399,7 @@
     return String(p).replace(/\\/g, "/");
   }
 
-  // ============ #42 阶段 8：来源标注浮层（覆盖层，绝不修改文件） ============
-  /** 给已渲染的 tab 挂标注层：.view-scroll 内绝对定位（随内容滚动），
+  // ============ #42 阶段 8：来源标注浮层（覆盖层，绝不修改文件） =====  /** 给已渲染的 tab 挂标注层：.view-scroll 内绝对定位（随内容滚动），
    *  角标锚在目标块右下角；点角标开来源详情浮层（认校验三态可点）。 */
   function attachAnnotations(tab) {
     const pane = document.getElementById("pane-" + tab.id);
@@ -4361,8 +4895,7 @@
       if (it) ui.openPath(it.dataset.path);
     });
   }
-  // ============ #76 设置面板：诊断状态（MCP / LLM / 格式规范 / 关于） ============
-  // DIAG 是设置视图的缓存态：renderSettingsView 先用缓存渲染（无则占位），
+  // ============ #76 设置面板：诊断状态（MCP / LLM / 格式规范 / 关于） =====  // DIAG 是设置视图的缓存态：renderSettingsView 先用缓存渲染（无则占位），
   // 再异步拉真实状态、视图仍在设置页时就地补齐。demo 模式拉不到就显示
   // 「演示模式」占位——不伪造宿主数据。
   var DIAG = { mcp: null, llm: null, fspec: null, llmTest: null, llmTestBusy: false, llmSaving: false };
@@ -5318,6 +5851,14 @@
       };
       // #603 批 C：补遗面同理随根失效（不留旧项目数据）
       state.bidAddenda = { status: "idle", data: null, error: "", ts: 0, waiving: false, waiveError: "", waiveInfo: "", formOpen: false, formGlobal: false };
+      // R25（#47）：建纲流态同理随根失效（推荐/选择/抽取现场是旧项目的）
+      state.bidBuild = {
+        extractBusy: false, extractError: "", extractInfo: "", extractWarns: [],
+        recStatus: "idle", recError: "", rec: null,
+        profileSel: "", packageSel: "",
+        pkgStatus: "idle", packages: null,
+        buildBusy: false, buildError: "", buildInfo: ""
+      };
       // 重载：文件树（新根）+ 空态/侧栏/状态栏
       await ui.refreshTree();
       loadRecent().then(() => {
@@ -5381,6 +5922,101 @@
       state.bid.status = "ready";
       state.bid.ts = Date.now();
       renderBidViewIfVisible();
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：拉取篇幅推荐（bid.length_profile 只读——树区推荐卡用）。
+     * 默认选中推荐档（#287：决策权在用户，推荐可被覆盖——radio 可改选） */
+    async loadBidLengthProfile(force) {
+      if (!state.bridge) return;
+      const bb = state.bidBuild;
+      if (bb.recStatus === "loading" && !force) return;
+      bb.recStatus = "loading";
+      bb.recError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.length_profile", {}, 15e3);
+        bb.rec = (r && r.recommendation) || null;
+        bb.recStatus = "ready";
+        if (bb.rec && !bb.profileSel) bb.profileSel = String(bb.rec.recommended_profile || "");
+      } catch (err) {
+        bb.recStatus = "error";
+        bb.recError = err.message || String(err);
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：拉取分包识别（建纲选包用——detected≥2 时选择器必选；
+     * 与分包面板的 bidPackages 缓存分立：生命周期不同步，不共享） */
+    async loadBidBuildPackages(force) {
+      if (!state.bridge) return;
+      const bb = state.bidBuild;
+      if (bb.pkgStatus === "loading" && !force) return;
+      bb.pkgStatus = "loading";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.packages", {}, 15e3);
+        bb.packages = (r && r.packages) || null;
+        bb.pkgStatus = "ready";
+      } catch (err) {
+        bb.pkgStatus = "error";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：抽取条款（bid.extract 写面——确定性规则抽取，无 LLM）。
+     * 成功后 loadBid(true) 重载——状态翻 REQUIREMENTS_EXTRACTED，树区
+     * 自然切到推荐卡。零抽取是响亮警告不是成功（#196）——逐条透出。 */
+    async submitBidExtract() {
+      const bb = state.bidBuild;
+      if (bb.extractBusy) return;
+      bb.extractBusy = true;
+      bb.extractError = "";
+      bb.extractInfo = "";
+      bb.extractWarns = [];
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.extract", {}, 120e3);
+        const ex = (r && r.extract) || {};
+        const total = (ex.counts && ex.counts.total) || 0;
+        bb.extractInfo = total > 0 ? "已抽取 " + total + " 条条款" : "抽取结果为 0 条（见下方告警——排查文件 kind / 扫描件 / 条款结构）";
+        bb.extractWarns = (ex.warnings || []).map(String);
+        await ui.loadBid(true);
+      } catch (err) {
+        bb.extractError = err.message || String(err);
+      }
+      bb.extractBusy = false;
+      renderBidWorkbenchIfOpen();
+    },
+    /** R25（#47）：建纲（bid.build_outline 写面）。明写限值在场时直接采用
+     * （target_total_chars），否则用用户选档（默认推荐档）；分包 ≥2 时
+     * 必须已选包（按钮门已挡——防御再查一次）。成功后 loadBid(true)
+     * 重载——章节树呈现，本卡自然退场。 */
+    async submitBidBuildOutline() {
+      const bb = state.bidBuild;
+      if (bb.buildBusy) return;
+      const args = {};
+      const rec = bb.rec || {};
+      if (rec.from_tender_spec) {
+        args.target_total_chars = rec.target_chars;
+      } else if (bb.profileSel) {
+        args.length_profile = bb.profileSel;
+      }
+      const pkgs = bb.packages;
+      if (pkgs && (pkgs.detected || 0) >= 2) {
+        if (!bb.packageSel) return;
+        args.package = bb.packageSel;
+      }
+      bb.buildBusy = true;
+      bb.buildError = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.build_outline", args, 120e3);
+        const ob = (r && r.outline_build) || {};
+        const c = ob.counts || {};
+        bb.buildInfo = "章节树已建立：" + (c.sections || 0) + " 章 / " + (c.leaves || 0) + " 叶 · 矩阵 " + (c.matrix_rows || 0) + " 行";
+        await ui.loadBid(true);
+      } catch (err) {
+        bb.buildError = err.message || String(err);
+      }
+      bb.buildBusy = false;
       renderBidWorkbenchIfOpen();
     },
     /** #313 批 B：拉取合规矩阵（bid.matrix——壳内聚合工具面分页后的全量行） */
@@ -5845,6 +6481,94 @@
         state.bidPackages.status = "error";
         state.bidPackages.error = err && (err.message || err.code) || "bid.packages 读取失败";
       }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R25：证据台账读面（list_evidence——过滤透传；not_found 走引导卡） */
+    async loadBidEvidence(force) {
+      if (!state.bridge) return;
+      if (state.bidEvidence.status === "loading" && !force) return;
+      state.bidEvidence.status = "loading";
+      state.bidEvidence.error = "";
+      state.bidEvidence.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const payload = {};
+        const f = {};
+        if (state.bidEvidence.kindFilter) f.kind = state.bidEvidence.kindFilter;
+        if (state.bidEvidence.statusFilter) f.status = state.bidEvidence.statusFilter;
+        if (f.kind || f.status) payload.filters = f;
+        const r = await ipc("bid.evidence", payload, 15e3);
+        if (r && r.present) {
+          state.bidEvidence.data = r;
+          state.bidEvidence.status = "ready";
+        } else {
+          state.bidEvidence.data = null;
+          state.bidEvidence.status = "error";
+          state.bidEvidence.error = "当前工作区无证据台账";
+        }
+      } catch (err) {
+        state.bidEvidence.data = null;
+        state.bidEvidence.status = "error";
+        state.bidEvidence.code = (err && err.code) || "";
+        state.bidEvidence.error = (err && (err.message || err.code)) || "bid.evidence 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R25：证据检索（search_evidence——空关键词前端早拒，值域在工具面） */
+    async searchBidEvidence(query, mode) {
+      if (!state.bridge) return;
+      const q = String(query || "").trim();
+      const ses = state.bidEvidenceSearch;
+      if (!q) {
+        ses.status = "error";
+        ses.error = "关键词不能为空";
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      ses.query = q;
+      ses.mode = mode || "hybrid";
+      ses.status = "loading";
+      ses.error = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.evidence_search", { query: q, mode: ses.mode }, 15e3);
+        if (r && r.present) {
+          ses.data = r;
+          ses.status = "ready";
+        } else {
+          ses.data = null;
+          ses.status = "error";
+          ses.error = "检索无结果";
+        }
+      } catch (err) {
+        ses.data = null;
+        ses.status = "error";
+        ses.error = (err && (err.message || err.code)) || "bid.evidence_search 检索失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #47 R26：证据登记写面（register_evidence——source_file_id 锚定 + 幂等回显）
+     *  错误（含 #185/#245 显式拒）走表单内反馈（rg.error），不弹横幅。 */
+    async registerBidEvidence(payload) {
+      if (!state.bridge) return;
+      const rg = state.bidEvidenceReg;
+      if (rg.busy) return;
+      rg.busy = true;
+      rg.error = "";
+      rg.info = null;
+      renderBidWorkbenchIfOpen();
+      try {
+        const r = await ipc("bid.evidence_register", payload, 20e3);
+        if (r && r.present && r.register && r.register.ev_id) {
+          rg.info = r.register;
+          ui.loadBidEvidence(true);
+        } else {
+          rg.error = (r && r.error) || "登记未落库";
+        }
+      } catch (err) {
+        rg.error = (err && (err.message || err.code)) || "bid.evidence_register 登记失败";
+      }
+      rg.busy = false;
       renderBidWorkbenchIfOpen();
     },
     /** #20：否决项死锁人工裁定（bid.matrix_override → 工具面

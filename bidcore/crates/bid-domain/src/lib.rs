@@ -495,6 +495,11 @@ pub struct BidProject {
     pub status: ProjectStatus,
     pub content_version: u64,
     pub external_key: String, // 创建幂等键
+    /// 投标截止日（#88 F-03：创建面已校验但此前未持久化——导出时效兜底
+    /// 裁决的基准日。legacy 快照无此字段 → None → 兜底不可用（退回告警
+    /// 面，行为与旧版一致）。加性迁移，schema_version 不 bump。
+    #[serde(default)]
+    pub bid_deadline: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -935,6 +940,25 @@ impl DomainStore {
     }
 
     // ------------------------------------------------------------ create_bid_project（契约 §1）
+    /// 投标截止日落库（#88 F-03——创建面校验后存档，导出时效兜底用）。
+    /// 校验严格公历（dates::parse_ymd 单一真源）；幂等：同值 no-op。
+    pub fn set_bid_deadline(&mut self, deadline: &str) -> Result<(), ToolError> {
+        if dates::parse_ymd(deadline).is_none() {
+            return Err(ToolError::EUnprocessable {
+                reason: format!(
+                    "bid_deadline 须为合法公历日 YYYY-MM-DD（月长收紧），实际：{deadline}"
+                ),
+            });
+        }
+        let p = self.project.as_mut().ok_or_else(|| ToolError::ENotFound {
+            what: "project 未创建".into(),
+        })?;
+        if p.bid_deadline.as_deref() != Some(deadline) {
+            p.bid_deadline = Some(deadline.to_string());
+        }
+        Ok(())
+    }
+
     pub fn create_project(
         &mut self,
         name: &str,
@@ -962,6 +986,7 @@ impl DomainStore {
             status: ProjectStatus::Draft,
             content_version: 1,
             external_key: external_key.into(),
+            bid_deadline: None, // #88 F-03：set_bid_deadline 单独落（M1 签名零位移）
         };
         let r = serde_json::json!({ "project_id": id, "status": "DRAFT" });
         self.project = Some(proj);

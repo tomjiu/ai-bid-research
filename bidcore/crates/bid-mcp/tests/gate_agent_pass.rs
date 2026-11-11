@@ -39,6 +39,41 @@ use serde_json::{json, Value};
 use std::io::Read;
 use std::path::PathBuf;
 
+// ---------------------------------------------------------------- #88 批4门 1k 夹具补全
+
+/// 齐备决策 profile（投标函三件套数据面——#88 修复 7 起测试从齐备态建模；
+/// 缺位场景由 fatal_gates_b4_e2e.rs 专测）。
+fn b4_profile() -> serde_json::Value {
+    serde_json::json!({
+        "bid_amount": 3500000.0,
+        // 语料 REQ 原文工期 90 日历天——决策与正文同值（门 1i 对账面：
+        // 夹具不制造自相矛盾的两个数）
+        "duration_days": 90,
+        "validity_days": 90,
+        "legal_rep_gender": "男",
+        "project_no": "ZFCG-2026-B4",
+    })
+}
+
+/// 主体信息档落盘（工作区 bidder-profile.json——三件套的 profile 数据真源）。
+fn b4_write_profile(ws: &std::path::Path) {
+    let p = bid_domain::party::BidderProfile {
+        company_name: "测试建设工程有限公司".into(),
+        legal_rep: "王锐".into(),
+        legal_rep_id: "110101196001011234".into(),
+        legal_rep_position: "总经理".into(),
+        address: "测试市测试区测试路 1 号".into(),
+        agent: "李明".into(),
+        agent_id: "110101198505052345".into(),
+        ..Default::default()
+    };
+    std::fs::write(
+        ws.join("bidder-profile.json"),
+        serde_json::to_string(&p).unwrap(),
+    )
+    .unwrap();
+}
+
 fn fixtures() -> PathBuf {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/corpus-A/files");
     std::fs::canonicalize(&p).unwrap_or(p)
@@ -117,6 +152,7 @@ fn human_receipt(svc: &mut BidService, actor: &str, scope: &str) -> String {
 fn imported_project(tag: &str, relaxed: bool) -> Option<(BidService, String, String)> {
     let ws = tmp_ws(tag, relaxed);
     let mut svc = BidService::open(&ws).unwrap().with_fs_root(fixtures());
+    b4_write_profile(&ws);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "#277 agent 过门测试", "bid_deadline": "2026-12-31",
         "mode": "明标", "external_key": tag,
@@ -298,6 +334,7 @@ fn agent_reason_required() {
 ///   正是人类流程的时序；横幅导出是「未经追认就要成品」的告知面。）
 fn agent_e2e_ready(ws: &std::path::Path) -> (BidService, String, String, Vec<String>) {
     let mut svc = BidService::open(ws).unwrap().with_fs_root(fixtures());
+    b4_write_profile(ws);
     let pid = ok_result(call(&mut svc, "create_bid_project", json!({
         "name": "#277 e2e——agent 全门声明", "bid_deadline": "2026-12-31",
         "mode": "明标", "external_key": ws.file_name().unwrap().to_string_lossy(),
@@ -341,6 +378,7 @@ fn agent_e2e_ready(ws: &std::path::Path) -> (BidService, String, String, Vec<Str
         svc.store_mut().bind_evidence(&eid, &r.id, "2026-12-31").unwrap();
     }
     let _ = svc.store_mut().build_matrix().unwrap();
+    map_scoring_items_to_first_leaf(&mut svc); // #88 门 1h：评分项映射（记审前——#474）
 
     // 补遗门 agent 声明（MCP 面——:agent 签域 + reason）
     // #379 拆门：单件招标（无补遗件）的 NotProvided 出口是**全局显式确认**
@@ -419,6 +457,8 @@ fn agent_pass_e2e_exports_with_banner() {
 
     // ---- 验收 5：导出（响应面 + 产物横幅）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-agent声明.docx",
     })));
     assert_eq!(r["human_review_complete"], false, "全门 agent 声明 → 未完成人工复核");
@@ -502,6 +542,8 @@ fn human_ratification_before_export_clears_banner_two_ledger_records() {
     })));
 
     let r2 = ok_result(call(&mut svc, "export_bid_document", json!({
+        "profile": b4_profile(),
+        "max_overrun_pct": 10000,
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-追认后.docx",
     })));
     assert_eq!(r2["human_review_complete"], true, "追认后人工复核完成");
@@ -515,4 +557,49 @@ fn human_ratification_before_export_clears_banner_two_ledger_records() {
         !doc_xml2.contains("本标书的部分审核门由 AI 声明通过"),
         "验收 6：追认后产物横幅消失"
     );
+}
+
+/// #88 门 1h（评分项未映射）夹具补面：评分项→章节显式映射（评分项不进
+/// 正文——#126——upsert_scoring_mapping 是 unmapped 门的解决通道）。
+/// 须在记审**之前**（#474 计分面摘要）。
+fn map_scoring_items_to_first_leaf(svc: &mut BidService) {
+    let first_leaf: Option<String> = {
+        let parents: std::collections::HashSet<String> = svc
+            .store()
+            .sections()
+            .iter()
+            .filter_map(|n| n.parent_id.clone())
+            .collect();
+        svc.store()
+            .sections()
+            .iter()
+            .find(|n| !parents.contains(&n.id))
+            .map(|n| n.id.clone())
+    };
+    let Some(leaf) = first_leaf else { return };
+    let scoring_ids: Vec<String> = svc
+        .store()
+        .requirements()
+        .iter()
+        .filter(|r| r.category == "评分项")
+        .map(|r| r.id.clone())
+        .collect();
+    for rid in scoring_ids {
+        let _ = svc.store_mut().upsert_scoring_mapping(
+            rid,
+            leaf.clone(),
+            1.0,
+            vec![],
+            bid_domain::Anchor {
+                file: "A-招标文件.docx".into(),
+                kind: "table".into(),
+                locator: "第四章 评标办法".into(),
+                excerpt: "评分项映射（#88 门 1h 夹具补面）".into(),
+                block_idx: None,
+                page: None,
+                line: None,
+            },
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        );
+    }
 }

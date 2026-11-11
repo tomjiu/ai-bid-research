@@ -487,6 +487,8 @@ fn create_bid_project(svc: &mut BidService, args: Value) -> ToolResult {
     let (_, mut out) = svc
         .create_project(&name, &notice_ref.unwrap_or_default(), &mode, &external_key)
         .map_err(ToolError::from)?;
+    // #88 F-03：截止日落库（此前只校验不存——导出时效兜底裁决的基准日）
+    svc.store_mut().set_bid_deadline(&bid_deadline).map_err(ToolError::from)?;
     let mut warnings = Vec::new();
     if bid_deadline < bid_domain::dates::today_ymd() {
         warnings.push(format!(
@@ -3422,241 +3424,9 @@ fn score_document(svc: &mut BidService, args: Value) -> ToolResult {
 /// 面同口径）。解析层未填 section 槽位是常态（synth/real 均如此），不联结
 /// 则自评恒 UNMAPPED——按「条款被响应的章节」联结是确定性兜底（无 LLM），
 /// 显式 params.section 优先（解析层/人工映射不被覆盖）。
-///
-/// 返回 (scorer, 联结后首现序 items)——items 供 by_item/target 的全量
-/// 「第X章」章号归一（#170 方案 A）：中文/阿拉伯数字统一为数值——
-/// 「第8章」「第八章」「第 8 章」→ 8。中文数字支持到千（真实招标文件
-/// 章节数域：水利标书最多见「第 24 章」，千位余量足够）。非章序数
-/// （「第1页」「第2行」）因后随字符非「章」不会误触。
-fn chapter_no_of(text: &str) -> Option<u32> {
-    const CN: &[(char, u32)] = &[
-        ('零', 0), ('〇', 0), ('两', 2),
-        ('一', 1), ('二', 2), ('三', 3), ('四', 4), ('五', 5),
-        ('六', 6), ('七', 7), ('八', 8), ('九', 9),
-        ('十', 10), ('百', 100), ('千', 1000),
-    ];
-    let cs: Vec<char> = text.chars().collect();
-    let mut i = 0usize;
-    while i < cs.len() {
-        if cs[i] != '第' {
-            i += 1;
-            continue;
-        }
-        // 收集「第」与「章」之间的数字串（中文/阿拉伯分别累计）
-        let mut j = i + 1;
-        let mut has_cn = false;
-        let mut arabic = String::new();
-        while j < cs.len() {
-            let c = cs[j];
-            if c.is_ascii_digit() || ('０'..='９').contains(&c) {
-                arabic.push(c);
-                j += 1;
-            } else if CN.iter().any(|(cn, _)| *cn == c) {
-                has_cn = true;
-                j += 1;
-            } else if c.is_whitespace() {
-                // 章号边缘/内部的空白跳过（实测形态「第 8 章」——塔里木件）。
-                // 「第 1 页」类不受影响：'页' 非 '章'，整段判 None。
-                j += 1;
-            } else {
-                break;
-            }
-        }
-        let parsed = if j < cs.len() && cs[j] == '章' && j > i + 1 {
-            if !arabic.is_empty() && !has_cn {
-                // 阿拉伯段：「第 8 章」「第24章」
-                arabic.parse::<u32>().ok()
-            } else if has_cn {
-                // 中文数字段 [i+1, j)：乘法加法累计（「二十四」=24、「一百零八」=108）
-                let mut total: u32 = 0;
-                let mut current: u32 = 0;
-                for &c in &cs[i + 1..j] {
-                    let v = CN.iter().find(|(cn, _)| *cn == c).map(|(_, v)| *v).unwrap_or(0);
-                    match v {
-                        10 | 100 | 1000 => {
-                            // 十/百/千：单位——current 为 0 时按 1（「十」=10）
-                            total += current.max(1) * v;
-                            current = 0;
-                        }
-                        _ => current = current * 10 + v,
-                    }
-                }
-                Some(total + current)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        if let Some(no) = parsed {
-            return Some(no);
-        }
-        i += 1;
-    }
-    None
-}
-
-/// 节点子树的首片叶（DFS 首现序——确定性）。自身无子即自身是叶。
-fn first_leaf_under<'a>(
-    store: &'a bid_domain::DomainStore,
-    root: &str,
-) -> Option<&'a str> {
-    let children_of = |id: &str| -> Vec<&bid_domain::outline::OutlineNode> {
-        store
-            .sections()
-            .iter()
-            .filter(|n| n.parent_id.as_deref() == Some(id))
-            .collect()
-    };
-    let mut stack = vec![root.to_string()];
-    while let Some(id) = stack.pop() {
-        let kids = children_of(&id);
-        if kids.is_empty() {
-            // 自身是叶（根 id 在 sections 里存在性由调用方保证——不在则 None）
-            if store.sections().iter().any(|n| n.id == id) {
-                return Some(store.sections().iter().find(|n| n.id == id)?.id.as_str());
-            }
-            return None;
-        }
-        // DFS 首序：子节点逆序入栈（pop 时正序）
-        for k in kids.into_iter().rev() {
-            stack.push(k.id.clone());
-        }
-    }
-    None
-}
-
-/// 逃代（derive_scoring_items 首现序，确定性；HashMap 索引无序不可逃代）。
-fn build_scorer(
-    store: &bid_domain::DomainStore,
-) -> (
-    bid_domain::scoring::SectionScorer,
-    Vec<bid_domain::scoring::ScoringItem>,
-    // #224 追溯面：**生效**账本映射键集 (req_id, section_id)。账本行与派生
-    // params.section 同节时被去重（派生赢、账本行 inert 不入 mappings）——
-    // 报告只认生效来源：同节 inert 行的 source/anchor/evidence 不得误归因
-    // 给派生映射（Lead 审查 2：键集区分「账本生效」与「派生」两路）。
-    std::collections::HashSet<(String, String)>,
-) {
-    let parents: std::collections::HashSet<&str> = store
-        .sections()
-        .iter()
-        .filter_map(|n| n.parent_id.as_deref())
-        .collect();
-    let mut leaf_of: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
-    for n in store.sections() {
-        if !parents.contains(n.id.as_str()) {
-            for rid in &n.requirement_ids {
-                leaf_of.insert(rid.as_str(), n.id.as_str());
-            }
-        }
-    }
-    // #170 方案 A（联结侧）：评分项不进正文（#126）→ leaf_of 反查对评分项
-    // 永不命中（老路径保留——对正文类目 REQ 仍有效）。新增评审表章引用联结：
-    // params.section_title（bid-parse 从评审表行文本登记的「第X章…」引用）
-    // → 章号归一定位「被引用章的正文叶」——「详见第X章」的语义是第X章的
-    // **内容**，而大纲是类目重组（技术参数/商务要求…横跨物理章），故匹配
-    // 面取两路（先后优先）：
-    //   ① 锚在该章的正文 REQ 所住的叶（leaf_of 反查——语义最准：被评内容
-    //      就是那一章的条款）；
-    //   ② 大纲节点 title 自带章号（「其他」类目按章分组的形态）→ 子树首叶。
-    // 两路都取首现序（确定性可重放）。「评分项按章节自评」由此恢复；无引用
-    // 的评分项维持 section=None（数据缺引用时不虚构映射——score_section 对
-    // 该条恒空是诚实行为）。
-    let chapter_leaf: std::collections::HashMap<u32, &str> = {
-        let mut m: std::collections::HashMap<u32, &str> = std::collections::HashMap::new();
-        for r in store.requirements() {
-            // 只认正文类目：否决/资格的 REQ 住「资格与响应」响应叶——那是
-            // 「对条款的应答」的家，不是「被评内容」的家（评分项引用第X章
-            // 指的是该章的内容条款）。
-            if !bid_domain::outline::is_body_category(&r.category) {
-                continue;
-            }
-            let Some(leaf) = leaf_of.get(r.id.as_str()) else {
-                continue;
-            };
-            for a in &r.anchors {
-                for seg in a.locator.split(['>', '＞']) {
-                    if let Some(no) = chapter_no_of(seg.trim()) {
-                        m.entry(no).or_insert(leaf);
-                        break;
-                    }
-                }
-            }
-        }
-        for n in store.sections() {
-            if let Some(no) = chapter_no_of(&n.title) {
-                if let Some(leaf) = first_leaf_under(store, &n.id) {
-                    m.entry(no).or_insert(leaf);
-                }
-            }
-        }
-        m
-    };
-    let mut reqs = store.requirements().to_vec();
-    for r in &mut reqs {
-        if r.category == "评分项" && r.params.get("section").is_none() {
-            if let Some(sec) = leaf_of.get(r.id.as_str()) {
-                r.params.insert("section".into(), serde_json::json!(sec));
-            } else if let Some(title) = r.params.get("section_title").and_then(|v| v.as_str()) {
-                if let Some(no) = chapter_no_of(title) {
-                    if let Some(sec) = chapter_leaf.get(&no) {
-                        r.params.insert("section".into(), serde_json::json!(sec));
-                    }
-                }
-            }
-        }
-    }
-    // 项目专名锚（B3 ProjectContext 同源——具体性判定的锚词面）
-    let terms = bid_tools::quality::ProjectContext::from_store(store).scorer_terms();
-    let mut items = bid_domain::scoring::derive_scoring_items(&reqs);
-    let mut tree = bid_domain::scoring::derive_scoring_tree(&reqs);
-    // #224 多对多：并入持久化映射（AgentSubmitted/Manual——账本在
-    // store.scoring_mappings()，联结进 items/tree.index 两份视图）。
-    // 同 (req, section) 键与 params.section 重合时跳过（params 单值 share
-    // 恒 1.0——同章重合以账本 share 为准的语义留给后续显式覆写面，本步
-    // 保守去重防双重计入）。
-    let persistent: Vec<(String, bid_domain::scoring::SectionMapping)> = store
-        .scoring_mappings()
-        .iter()
-        .map(|m| {
-            (
-                m.scoring_req_id.clone(),
-                bid_domain::scoring::SectionMapping {
-                    section_id: m.section_id.clone(),
-                    weight_share: m.weight_share,
-                },
-            )
-        })
-        .collect();
-    let apply = |item: &mut bid_domain::scoring::ScoringItem,
-                 persistent: &[(String, bid_domain::scoring::SectionMapping)],
-                 ledger_effective: &mut std::collections::HashSet<(String, String)>| {
-        for (req_id, m) in persistent {
-            if *req_id == item.requirement_id
-                && !item.mappings.iter().any(|x| x.section_id == m.section_id)
-            {
-                item.mappings.push(m.clone());
-                // 只有真正进 mappings 的账本行才是生效映射（同节被派生
-                // 去重的 inert 行不算）——报告归因的判定面。
-                ledger_effective.insert((req_id.clone(), m.section_id.clone()));
-            }
-        }
-    };
-    let mut ledger_effective: std::collections::HashSet<(String, String)> =
-        std::collections::HashSet::new();
-    for it in &mut items {
-        apply(it, &persistent, &mut ledger_effective);
-    }
-    for (_, item) in tree.index.iter_mut() {
-        apply(item, &persistent, &mut ledger_effective);
-    }
-    (
-        bid_domain::scoring::SectionScorer::new(tree, terms),
-        items,
-        ledger_effective,
-    )
-}
+// （#88 迁移）build_scorer/chapter_no_of/first_leaf_under 已下沉
+// bid-tools/src/scoring_wire.rs（评分装配单一真源——导出门 1h 同源消费）。
+use bid_tools::scoring_wire::build_scorer;
 
 /// 价格分规格解析（score_price / score_document 共用——字符串糖 + 完整
 /// serde 对象双形态；见 `score_price` 的参数面说明）。
@@ -3814,6 +3584,8 @@ fn parse_export_decision(profile: &Value) -> Result<bid_tools::export::ExportDec
     }
     // #117 任务 2：格式件决策面（全部可选；类型不对响亮拒）
     d.project_name = opt_str(profile, "project_name", TOOL)?;
+    // #88 修复 7：项目编号显式决策面（缺省回落 REQ 参数账 model 键）
+    d.project_no = opt_str(profile, "project_no", TOOL)?;
     match profile.get("duration_days") {
         None | Some(Value::Null) => {}
         Some(v) if v.is_u64() => {
@@ -3995,14 +3767,19 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         .check_version(project_version)
         .map_err(ToolError::from)?;
 
-    // ---- #322/R-05：开标日时效裁决接线（生产锚点 = 导出前——防废标最后关口）。
-    // apply_validity 此前全仓生产调用为零（仅测试引用）——时间性过期证据
-    // 长期被当 Active 消费。接线语义：
-    //   · 提供 bid_open_date → 按开标日单向翻转（翻转后矩阵在 apply_validity
-    //     内部重算——R-04，门 1a 读到的必是翻转后状态；翻转非空进 warnings
-    //     审计面）；非法日期/非字符串 → 响亮拒（不静默忽略）。
-    //   · 未提供 → 有 valid_until 的证据存在时响亮告警「时效未裁决」，
-    //     不硬拒（契约兼容：既有调用方不带该参数不应断链）。
+    // ---- #322/R-05 + #88 F-03/S-3 硬化：开标日时效裁决接线（生产锚点 =
+    // 导出前——防废标最后关口）。apply_validity 此前全仓生产调用为零（仅
+    // 测试引用）——时间性过期证据长期被当 Active 消费。裁决基准三级：
+    //   · 提供 bid_open_date → 按开标日单向翻转（翻转后矩阵在
+    //     apply_validity 内部重算——R-04，门 1a 读到的必是翻转后状态；
+    //     翻转非空进 warnings 审计面）；非法日期/非字符串 → 响亮拒。
+    //   · 未提供 而**项目截止日在库**（#88：create 落档 bid_deadline）→
+    //     **按截止日兜底裁决**（S-3 的洞：时效裁决此前是纯 opt-in，不传
+    //     参过期证据以 Active 通关——截止日是项目自带基准，兜底后开标前
+    //     到期的证据必被翻转拦截）。兜底口径响亮告知（开标≠截止的场景
+    //     显式传 bid_open_date 覆盖）。
+    //   · 未提供 且截止日缺档（legacy 快照）→ 告警「时效未裁决」按登记
+    //     态导出（契约兼容面——新项目全覆盖，旧档重导建议补参）。
     // 幂等面：翻转使 content_version 前进 → 幂等键随之分叉（不同时效态 =
     // 不同导出，不吃旧缓存）；重放时 apply_validity 幂等（同态不动）。
     let bid_open_date: Option<String> = match args.get("bid_open_date") {
@@ -4046,12 +3823,81 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
             .filter(|e| e.valid_until.is_some())
             .count();
         if with_validity > 0 {
-            warnings_pre.push(format!(
-                "{with_validity} 份证据带 valid_until 但本次导出未提供 bid_open_date——\
-                 时效未裁决，按当前登记状态导出（提供 bid_open_date 可按开标日翻转）"
-            ));
+            // #88 F-03 兜底：截止日在库 → 按截止日裁决（S-3 洞收口）；
+            // 缺档（legacy）→ 退回告警面（兼容）
+            let deadline = svc.store().project().ok().and_then(|p| p.bid_deadline.clone());
+            match deadline {
+                Some(dl) => {
+                    let flipped = svc
+                        .store_mut()
+                        .apply_validity(&dl)
+                        .map_err(ToolError::from)?;
+                    warnings_pre.push(format!(
+                        "未提供 bid_open_date——按投标截止日 {dl} 兜底裁决证据时效（#88 F-03）；\
+                         开标日≠截止日的场景请显式传 bid_open_date 覆盖"
+                    ));
+                    if !flipped.is_empty() {
+                        warnings_pre.push(format!(
+                            "证据时效裁决（截止日 {dl} 兜底）：{} 条翻转——{}",
+                            flipped.len(),
+                            flipped.join("; ")
+                        ));
+                    }
+                }
+                None => {
+                    warnings_pre.push(format!(
+                        "{with_validity} 份证据带 valid_until 但本次导出未提供 bid_open_date 且项目截止日缺档（legacy 快照）——\
+                         时效未裁决，按当前登记状态导出（提供 bid_open_date 可按开标日翻转）"
+                    ));
+                }
+            }
         }
     }
+    // ---- #88 F-10：证据体检单（导出响应常驻——四态计数 + Expiring 明细）
+    let ev_all = svc.store().evidences();
+    let n_active = ev_all
+        .iter()
+        .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Active)
+        .count();
+    let expiring: Vec<serde_json::Value> = ev_all
+        .iter()
+        .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Expiring)
+        .map(|e| {
+            json!({
+                "ev_id": e.id,
+                "title": e.title,
+                "valid_until": e.valid_until,
+            })
+        })
+        .collect();
+    let evidence_validity = json!({
+        "active": n_active,
+        "expiring": expiring.len(),
+        "expired": ev_all
+            .iter()
+            .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Expired)
+            .count(),
+        "superseded": ev_all
+            .iter()
+            .filter(|e| e.status == bid_domain::evidence::EvidenceStatus::Superseded)
+            .count(),
+        "expiring_detail": expiring,
+    });
+    if evidence_validity["expiring"].as_u64().unwrap_or(0) > 0 {
+        warnings_pre.push(format!(
+            "证据体检（#88 F-10）：{} 份证据开标前 90 天内到期（{}）——尽快换证（开标当天复核时已过期 = 资格项存疑）",
+            evidence_validity["expiring"],
+            evidence_validity["expiring_detail"]
+                .as_array()
+                .map(|a| a
+                    .iter()
+                    .filter_map(|d| d["ev_id"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("、"))
+                .unwrap_or_default(),
+        ));
+    }
+    let evidence_validity = evidence_validity; // 竣面（供 out 组装）
 
     // ---- #117 任务 1：投标决策（报价面）——从 profile 解析，进幂等键（不同的
     //      报价决策 ≠ 同一次导出，不能吃旧缓存）
@@ -4078,11 +3924,150 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
     } else {
         None
     };
+    // ---- #88 F-01：★漏标豁免（显式理由——非空才生效；进幂等键：豁免与否
+    //      是不同的导出裁决，不能吃旧键缓存跳过门）。
+    let waive_star_missing: Option<String> = match args.get("waive_star_missing") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_star_missing 须为非空理由（空串 = 不豁免——fail-closed 不放水；确认漏标可接受请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_star_missing 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // ---- #88 F-07：评分项未映射豁免（显式理由——非空才生效；进幂等键）
+    let waive_unmapped_scoring: Option<String> = match args.get("waive_unmapped_scoring") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_unmapped_scoring 须为非空理由（空串 = 不豁免——fail-closed 不放水；确认未映射可接受请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_unmapped_scoring 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // ---- #88 修复 7（F-06/P0-4）：三件套数据缺位豁免（显式理由——
+    //      非空才生效；进幂等键：豁免与否是不同的导出裁决）
+    let waive_format_placeholder: Option<String> = match args.get("waive_format_placeholder") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_format_placeholder 须为非空理由（空串 = 不豁免——fail-closed 不放水；无法定授权委托/确认带【待填】导出等场景请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_format_placeholder 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // ---- #88 修复 8a（F-09）：超篇幅豁免 + 可配阈值（进幂等键：阈值/
+    //      豁免变化 = 不同门裁决，不吃旧键缓存跳门）
+    let waive_length_overrun: Option<String> = match args.get("waive_length_overrun") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => {
+            if s.trim().is_empty() {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_length_overrun 须为非空理由（空串 = 不豁免——fail-closed 不放水；评标办法不设页数限制等场景请给出具体理由）"
+                    ),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: waive_length_overrun 须为字符串（豁免理由），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // 阈值：1..=10000（缺省 50——审计建议值；0 语义为「一字不许超」过苛且
+    // 多为误传，响亮拒并给出区间）
+    let max_overrun_pct: u32 = match args.get("max_overrun_pct") {
+        None | Some(Value::Null) => 50,
+        Some(Value::Number(n)) => {
+            let v = n.as_u64().ok_or_else(|| ToolError::EUnprocessable {
+                what: format!("{TOOL}: max_overrun_pct 须为正整数（1..=10000），实际：{n}"),
+            })?;
+            if !(1..=10000).contains(&v) {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: max_overrun_pct 值域 1..=10000（%——超出配额该比例拒；缺省 50 审计建议值；实质停用传 10000），实际：{v}"
+                    ),
+                });
+            }
+            v as u32
+        }
+        Some(other) => {
+            return Err(ToolError::EUnprocessable {
+                what: format!(
+                    "{TOOL}: max_overrun_pct 须为正整数（1..=10000），实际类型：{}",
+                    json_type_name(other)
+                ),
+            })
+        }
+    };
+    // ---- #88 修复 8b（F-14）：抽取健康度常驻（coverage_scan 单一真源
+    //      ——face/marked/regex_fallback/excluded + REQ 总数；零标记文件
+    //      走正则兜底 → 响亮告知核对通道）
+    let (cov_summary, _cov_gaps, _cov_unjudged) = coverage_scan(svc);
+    let extraction_health = json!({
+        "face_files": cov_summary.face_files,
+        "marked_files": cov_summary.marked_files,
+        "regex_fallback_files": cov_summary.regex_fallback_files,
+        "excluded_blocks": cov_summary.excluded_blocks,
+        "requirements": svc.store().requirements().len(),
+    });
+    if cov_summary.regex_fallback_files > 0 {
+        warnings_pre.push(format!(
+            "抽取健康度（#88 F-14）：{} 件文件零标记走正则兜底（条款面可能欠覆盖）——get_coverage_report 核对后 submit_block_marks 补标可提升抽取准确面",
+            cov_summary.regex_fallback_files,
+        ));
+    }
     let ikey = format!(
-        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}",
+        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}:{}:{}:{}:{}:{}",
         svc.store().content_version(),
         dark_bid,
         anonymize.unwrap_or(""),
+        waive_star_missing.as_deref().unwrap_or(""),
+        waive_unmapped_scoring.as_deref().unwrap_or(""),
+        waive_format_placeholder.as_deref().unwrap_or(""),
+        waive_length_overrun.as_deref().unwrap_or(""),
+        max_overrun_pct,
     );
     if let Some(first) = svc.store().idempotent_hit(&ikey).cloned() {
         let mut out = first;
@@ -4118,7 +4103,19 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         })?;
     }
     let outcome = svc
-        .export_document(&format, anonymize, &abs_out, &decision)
+        .export_document(
+            &format,
+            anonymize,
+            &abs_out,
+            &decision,
+            &bid_tools::service::FatalGapWaivers {
+                star_missing: waive_star_missing,
+                unmapped_scoring: waive_unmapped_scoring,
+                format_placeholder: waive_format_placeholder,
+                length_overrun: waive_length_overrun,
+                max_overrun_pct,
+            },
+        )
         .map_err(ToolError::from)?;
 
     // ---- 契约 §8 out 组装
@@ -4134,6 +4131,11 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "chapters_written": outcome.report.chapters_written,
         "total_chars": outcome.report.total_chars,
         "toc_field_present": outcome.report.toc_field_present,
+        // #88 F-10 证据体检单（四态计数 + Expiring 明细——常驻导出响应）
+        "evidence_validity": evidence_validity,
+        // #88 修复 8b（F-14）抽取健康度（常驻——正则兜底/标记覆盖/REQ
+        // 计数；导出成功 ≠ 抽取充分，回执同步携带诚实面）
+        "extraction_health": extraction_health,
         // #317 暗标清理报告（dark 导出在场）：blockers 恒 0（复验不过则
         // 导出被拦）；manual_review 是人工确认清单（WARNING 面——不静默跳过）
         "dark_bid": outcome.report.dark_bid.as_ref().map(|r| serde_json::json!({
@@ -4425,29 +4427,21 @@ struct CoverageGateSummary {
     excluded_blocks: usize,
 }
 
-/// #244 建纲前覆盖闭环门：每个有抽取面的块必居三态之一。
+/// 覆盖闭环扫描（#244 建纲门与 #88 修复 8b 导出健康度的**单一真源**）：
+/// 每文件归入 face/marked/regex_fallback 三态 + C 态区间清单。
 ///
-/// - **A 已判定为要求**：requirement / review_table 标记（产 REQ / 结构化提取）；
-/// - **B 已排除**：noise / rule 标记（理由 `marks.reason`——要求 3 可追溯：
-///   块 ID / 文件 / 区间 / 判定来源都在标记集与解析产物里）；
-/// - **C 未判定**：压根没标记 → 本门阻断（E_COVERAGE_INCOMPLETE +
-///   带块内容摘要的清单——Agent 得知道是什么内容才能判，只给区间号等于没给）。
+/// 零副作用：只读 store + parsed，不落盘、不推版本。返回
+/// (汇总, gap 清单, C 态块总数)——门判（建纲拒）归调用方：
+/// - `build_outline`：C 态非零 → E_COVERAGE_INCOMPLETE（半途而废拒）；
+/// - `export_bid_document`（#88 F-14）：只消费汇总（抽取健康度常驻
+///   导出回执——regex_fallback_files/excluded_blocks 等计数进响应），
+///   不拒（建纲门已把过关；导出面是诚实告知，不是二道门）。
 ///
-/// **门只拦「半途而废」**：文件标记集非空且存在 C 态块才拦；零标记文件
-/// 走正则兜底（#219 前的既有合法路径）——否则 real_corpus_e2e（纯正则
-/// 全链）等既有流程被新门卡死（验收 6：新门不能卡死正常流程）。
-///
-/// **按文件粒度裁决**：「Agent 标了主件、忘了补遗件」时，补遗件零标记
-/// → 正则兜底放行（兜底是既有语义），本门只承诺「开始标的必须标完」。
-///
-/// 零副作用：只读 store + parsed，不落盘、不推版本。
-fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
-    const TOOL: &str = "build_outline";
-    // 每区间展示的块内容摘要条数（够定位 + 不吃爆错误消息）。
-    const SAMPLES_PER_GAP: usize = 3;
-    // 错误消息里 gap 条数上限（超出汇总——全量用 get_coverage_report 查）。
-    const MAX_GAPS_IN_ERROR: usize = 20;
-
+/// 每区间展示的块内容摘要条数（够定位 + 不吃爆错误消息）/ gap 条数上限
+/// （超出汇总——全量用 get_coverage_report 查）：门判与扫描共用同源常量。
+const SAMPLES_PER_GAP: usize = 3;
+const MAX_GAPS_IN_ERROR: usize = 20;
+fn coverage_scan(svc: &BidService) -> (CoverageGateSummary, Vec<String>, usize) {
     let kind_map: std::collections::HashMap<&str, &str> = svc
         .store()
         .files()
@@ -4473,7 +4467,7 @@ fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
         let total = parsed.blocks.len();
         let marks = svc.store().block_marks_of(&f.id);
         if marks.is_empty() {
-            // 零标记：正则兜底路径（GT 红线保护）——不是本门的对象。
+            // 零标记：正则兜底路径（GT 红线保护）——不是门的对象。
             summary.regex_fallback_files += 1;
             continue;
         }
@@ -4517,21 +4511,38 @@ fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
             gaps.push(gap);
         }
     }
+    (summary, gaps, unjudged_total)
+}
 
+/// #244 建纲前覆盖闭环门：每个有抽取面的块必居三态之一（
+/// [`coverage_scan`] 的门判包装——C 态非零拒）。
+///
+/// - **A 已判定为要求**：requirement / review_table 标记（产 REQ / 结构化提取）；
+/// - **B 已排除**：noise / rule 标记（理由 `marks.reason`——要求 3 可追溯：
+///   块 ID / 文件 / 区间 / 判定来源都在标记集与解析产物里）；
+/// - **C 未判定**：压根没标记 → 本门阻断（E_COVERAGE_INCOMPLETE +
+///   带块内容摘要的清单——Agent 得知道是什么内容才能判，只给区间号等于没给）。
+///
+/// **门只拦「半途而废」**：文件标记集非空且存在 C 态块才拦；零标记文件
+/// 走正则兜底（#219 前的既有合法路径）——否则 real_corpus_e2e（纯正则
+/// 全链）等既有流程被新门卡死（验收 6：新门不能卡死正常流程）。
+///
+/// **按文件粒度裁决**：「Agent 标了主件、忘了补遗件」时，补遗件零标记
+/// → 正则兜底放行（兜底是既有语义），本门只承诺「开始标的必须标完」。
+fn coverage_gate(svc: &BidService) -> Result<CoverageGateSummary, ToolError> {
+    let (summary, mut gaps, unjudged_total) = coverage_scan(svc);
     if unjudged_total > 0 {
         let extra = report_gap_overflow(gaps.len(), MAX_GAPS_IN_ERROR);
         return Err(ToolError::ECoverageIncomplete {
             unjudged_blocks: unjudged_total,
             gaps: {
-                let mut g = gaps;
                 if let Some(e) = extra {
-                    g.push(e);
+                    gaps.push(e);
                 }
-                g
+                gaps
             },
         });
     }
-    let _ = TOOL; // 错误面自带工具语境（E_COVERAGE_INCOMPLETE 仅建纲门产生）
     Ok(summary)
 }
 
@@ -6213,7 +6224,7 @@ fn dirty_section_json(svc: &BidService, section_id: &str) -> Value {
 
 #[cfg(test)]
 mod chapter_no_tests {
-    use super::chapter_no_of;
+    use bid_tools::scoring_wire::chapter_no_of;
 
     /// #170 方案 A：章号归一的形态面（中文/阿拉伯/带空白/非章序数）。
     #[test]

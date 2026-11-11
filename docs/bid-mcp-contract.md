@@ -26,6 +26,8 @@
 in : { name, tender_notice_ref?, bid_deadline, mode(明标|暗标), external_key }
 out: { project_id, status: "DRAFT" }
 幂等: external_key 相同 → 返回已有 project_id（E_PARTIAL 不适用，静默幂等）
+落库: bid_deadline 自 #88 F-03 起随创建存档（此前仅校验）——导出时效
+      兜底裁决的基准日；legacy 快照无此字段 → 兜底退回告警面
 日期: bid_deadline 严格 YYYY-MM-DD 且须为真实存在的日历日（#47 R15 平台区分⑧
       收编单一真源 bid_domain::dates::parse_ymd——#375 A-16 月长收紧对 MCP 直调面
       同享：2026-02-30 / 2026-04-31 等幻日、前缀时间形态均 E_UNPROCESSABLE；
@@ -422,12 +424,34 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        （#189 导出围栏纵深：工具层形状校验之外，服务层 resolve_write 按受信根
        组件级判定 + 逐段 symlink 检查——字符串前缀陷阱与 symlink 逃逸在
        两层任一被拦），
-       bid_open_date?(#322/R-05：开标日时效裁决——ISO 日期 YYYY-MM-DD。提供则
-       在导出前按开标日对全部证据做单向翻转（Active/Expiring→Expired，
-       只降不升；翻转后矩阵同步重算 R-04，矩阵门读到的是翻转后状态；
-       翻转非空进 warnings 审计面）。未提供但存在带 valid_until 的证据 →
-       响亮告警「时效未裁决」，不硬拒（契约兼容）；非法日期/非字符串 →
-       E_UNPROCESSABLE 响亮拒),
+       bid_open_date?(#322/R-05 + #88 F-03 硬化：开标日时效裁决——ISO 日期
+       YYYY-MM-DD。**三级裁决**：① 提供 → 按开标日对全部证据单向翻转
+       （Active/Expiring→Expired 只降不升；翻转后矩阵同步重算 R-04，
+       矩阵门读到的是翻转后状态；翻转非空进 warnings 审计面）；② 未提供
+       而项目截止日在库（create 落档 bid_deadline）→ **按截止日兜底裁决**
+       （#88 S-3 洞收口：过期证据不再以 Active 通关；兜底口径响亮告知，
+       开标≠截止场景显式传本参数覆盖）；③ 未提供且截止日缺档（legacy
+       快照）→ 响亮告警「时效未裁决」按登记态导出（契约兼容面）。
+       非法日期/非字符串 → E_UNPROCESSABLE 响亮拒),
+       waive_star_missing?(#88 F-01：★漏标豁免理由——非空字符串生效。
+       star_missing>0 时门 1e 子面 b 拒导出；人工确认漏标可接受（样板句
+       误判/表格装配假阳性等）才传，理由进 warnings 审计面。空串/缺省
+       = 不豁免（fail-closed 不放水）；非字符串 → 响亮拒),
+       waive_unmapped_scoring?(#88 F-07：评分项未映射豁免理由——非空字符串
+       生效。unmapped_scoring_items 非空时门 1h 拒导出；人工确认未映射
+       可接受（无评分项语料误抽等）才传，理由进 warnings 审计面。
+       空串/缺省 = 不豁免；非字符串 → 响亮拒),
+       waive_format_placeholder?(#88 F-06 硬化面（agent-q7vx #105）：三件套
+       数据缺位豁免理由——非空字符串生效。门 1l 拒导出时，无法定授权
+       委托（法定代表人亲签）/确认带【待填】导出等人工场景才传；理由进
+       warnings 审计面。空串/缺省 = 不豁免；非字符串 → 响亮拒),
+       waive_length_overrun?(#88 F-09（#105）：超篇幅豁免理由——非空字符串
+       生效。门 1m 拒导出时，评标办法不设页数限制等人工场景才传；理由进
+       warnings 审计面。空串/缺省 = 不豁免；非字符串 → 响亮拒),
+       max_overrun_pct?(#88 F-09（#105）：超篇幅阈值（%——判据 chars×100 >
+       target×(100+pct)，整数算术严格大于）。正整数 1..=10000；缺省 50
+       （审计建议值）；实质停用传 10000。页数硬约束项目收紧/无页数约束
+       项目放宽——阈值是调用方裁决面；非正整数/超值域 → 响亮拒),
        profile:{dark_bid? , template?}, options:{tracked_changes?, watermark?}, project_version }
 嵌入: #68 阶段 3——章正文支持 md 块语法（无语法内容与旧版字节级同输出）：
      - 表格：连续 | 行（首行表头 + |---| 分隔行 + 数据行）→ docx 表格
@@ -439,7 +463,14 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
          ——标书缺资质证书图是废标级事故）
        · 版面适配：宽超内容区 6 英寸等比缩放（A4 安全面）
      - 标题行：# / ## … → 剥号加粗段（不再字面输出井号）
-out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blockers:0, waived:[]},
+out: { artifact:{url, sha256, size}, content_version_snapshot,
+       evidence_validity:{ #88 F-10 证据体检单（常驻——四态计数 + Expiring 明细）
+         active, expiring, expired, superseded, expiring_detail:[{ev_id, title, valid_until}] },
+       extraction_health:{ #88 F-14（#105）：抽取健康度（常驻——导出成功 ≠
+         抽取充分，回执同步携带诚实面；coverage_scan 单一真源，与建纲门
+         同源扫描）face_files, marked_files, regex_fallback_files,
+         excluded_blocks, requirements },
+       precheck:{blockers:0, waived:[]},
        （waived 恒空——预留字段，无通用豁免通道；#508）
        tables_written, table_kinds:[...], forms_written, form_titles:[...],
        agent_waivers:[{ gate, actor, actor_type, method, human_confirmed, at, reason }](#277),
@@ -475,8 +506,11 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
 七件: 附件一投标函/二法定代表人身份证明书/三授权委托书/四投标保证金退还
       申请/五资格声明/六无重大违法记录声明/七廉洁承诺书（BidderProfile
       真源；缺字段标【待填】；标题 Heading2 样式段——防关键词假阳性）。
-幂等: (project_id, content_version, format, profile, output_path, decision_fp) 相同
-     → 返回缓存 artifact（#117：报价决策指纹入键——换报价重导是新导出）
+幂等: (project_id, content_version, format, profile, output_path, decision_fp,
+     waive_star_missing, waive_unmapped_scoring, waive_format_placeholder,
+     waive_length_overrun, max_overrun_pct) 相同 → 返回缓存 artifact
+     （#117：报价决策指纹入键——换报价重导是新导出；#88：豁免与否是不同
+     的导出裁决，不吃旧键跳门；#105：新豁免/阈值同理入键）
 门禁: 三门 Approved + 全 RT DONE 之外，#180 起另校验**审核内容绑定**：
      pre_export_confirm 最后一条 Approved 的 reviewed_content_digest
      （章节树摘要——结构定位 + 叶正文）≠ 当前 → E_UNPROCESSABLE
@@ -486,7 +520,7 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
      自身/导出推进一律 bump——必误报）：过门后导入无关件、状态推进、
      不改正文重复导出均不受影响；#180 前旧快照的空摘要记录跳过判定
      （宽容载入，旧数据的洞保留——重新过门即补上绑定）。
-     **四前置门全量清单（#245 补齐 1d）**：
+     **十前置门全量清单（#245 补齐 1d；#88 增 1e~1j）**：
      · 1a 矩阵门：blocking 行清零（必选未响应**或 PENDING_EVIDENCE 待补**
        ——占位绑定不清阻塞。#241 裁定（2026-11-05）：正文有实质响应
        （归属章节 content 非空）且无有效证据无占位 → RESPONDED 不阻断
@@ -506,6 +540,67 @@ out: { artifact:{url, sha256, size}, content_version_snapshot, precheck:{blocker
        Responded 等普通状态覆写即使由 Human 发起也不豁免），篇幅不足
        没有——只能补写）。解决通道：①导入真实材料重新登记（换版升级，
        绑定自动迁移）；②合法人工豁免。
+     · 1e ★实质性条款响应门（#88 审计 F-01——★不参与 blocking 派生的
+       Lead 裁决后，导出面收口）：★不响应 = 废标级。两子面均独立复算、
+       不消费记审面：
+       子面 a（E_STAR_UNRESPONDED）：矩阵行 substantive=true 且状态非
+       RESPONDED、亦非三要件豁免（Partial 仅证据无章节 = 响应未进正文
+       也拒；PENDING_EVIDENCE 占位也拒）。豁免通道 = 既有矩阵覆写三
+       要件（无参数豁免）；
+       子面 b（E_STAR_MISSING）：parsed 文件 star_missing>0（★真值块
+       无对应 REQ = 漏抽取，与 get_star_coverage 同源同口径）→ 拒；
+       豁免 = waive_star_missing 非空理由（理由进 warnings 审计面）。
+     · 1f 暗标联动门（#88 审计 F-02——mode 声明强制 + 未声明响亮提示）：
+       mode=暗标 而导出未启用暗标（profile.dark_bid≠true 或 bidder_name
+       空）→ E_DARK_BID_REQUIRED 拒（自相矛盾 fail-closed——darkbid.rs
+       防线是 opt-in 的，不开等于没有）；mode=明标 而 REQ 文本含暗标
+       要求词面（正向短语非否定形命中；数据面含补遗条款文本）→
+       W_DARK_BID_UNDECLARED 告警不拦（声明缺位提示，升级面 Lead 裁决）。
+     · 1g 补遗 DIRTY 门（#88 审计 F-08——两分级）：有 pending 改写指令的
+       DIRTY 章节（E_SECTION_DIRTY）→ 拒——正文确证 stale（S-4：按补遗
+       后口径评审负偏离）；解决通道 = rewrite_section_partial 逐指令改写
+       或 dismiss_rewrite_directive 人工裁定（处置完自动清脏——无参数
+       豁免，处置面即豁免）；证据换版失效信号（W_EVIDENCE_DIRTY，无
+       指令——#456 打脏）→ 告警不拦，重做通道 reopen_section。
+     · 1h 评分项未映射门（#88 审计 F-07）：unmapped_scoring_items 非空
+       （装配走 scoring_wire::build_scorer 单一真源——与 score_document
+       的 unmapped 面恒同口径；明细截断 10 项）→ 拒——评委无从给分 =
+       按缺项计零；解决通道 = upsert_scoring_mapping 显式映射，或
+       waive_unmapped_scoring 非空理由显式豁免（理由进 warnings）。
+     · 1i 全局一致性冲突门（#88 审计 F-05——#423 四类冲突 Blocker 进导出
+       门，此前只读不拦）：金额/工期/术语/承诺跨面冲突（run_review_from_
+       store 单一真源——与 check_bid_quality 恒同口径）→ 拒；**无豁免
+       通道**——冲突是客观不一致，修复 = 改稿对齐（1c 同款纪律）。
+     · 1j 决策对账门（#88 审计 F-05 决策面——decision 按设计不入库，
+       导出时点是唯一对账时机）：profile.duration_days vs 参数账工期行
+       （param_name 含「工期」）、profile.bid_amount vs 参数账报价/总价行
+       （万/亿归一到元）——确定性可比且数值不等 → 拒（报价表 500 万 vs
+       正文 480 万 = 澄清失败级事故）；决策缺省（None = 未定落【待填】）
+       不比不拦；**无豁免通道**——数值只能改齐。
+     · 1k 格式件核对清单（#88 审计 F-06——**可见面**，告警不拦）：格式
+       要求类 REQ 指名的件（《X》书名号 ∪ 件名词表）不在导出七件标准面
+       （StandardForm）内 → warnings 逐件告警（形式评审缺件 = 实务最高频
+       废标原因；硬化待件名抽取产品化后 Lead 裁决）。
+     · 1j-2 决策对账门·正文面（#88 F-05 决策面的注入扩展——agent-q7vx
+       #105）：决策值（投标总报价/工期）临时注入 run_review 比对面
+       （合成 DECISION 行，不落库），**章正文 vs 决策值**同维度不同值 →
+       拒（AMOUNT_DIMS 增「投标总报价」前提词）；只取 DECISION 相关
+       findings（非决策冲突归 1i，不双报）；**无豁免通道**——数值只能改齐。
+     · 1l 三件套数据缺位门（#88 F-06 硬化面（#105）——审计修复优先序
+       第 1 位）：投标函/法定代表人身份证明/授权委托书的**数据字段**
+       缺位（字段级确定性检查，与构造器入参同源——设计性空位【签字/
+       日期/年龄】等人工现场填写位不误拦；与 1k 可见面互补：1k 查「件
+       在不在」、1l 查「件的数据字段填没填」）→ 拒；解决通道 = 补
+       bidder-profile.json / 导出 profile 决策字段（project_no 显式
+       决策面 > REQ 参数账 model 键兜底），或 waive_format_placeholder
+       非空理由显式豁免（理由进 warnings）。
+     · 1m 超篇幅可配置门（#88 F-09（#105））：单叶正文字数超配额
+       max_overrun_pct%（缺省 50；整数算术严格大于——恰等阈值放行）→
+       E_CHARS_OVER_LIMIT 拒（#47 规模轮实测带外率 70.8%/最大 +58.8%的
+       系统性超带在页数受限/暗标场景扣分或截断）；解决通道 = 压缩正文 /
+       调大 max_overrun_pct / waive_length_overrun 显式豁免；带内仍走
+       W_CHARS_OFF_TARGET MINOR（双层信号不冲突）；零配额叶不判（与
+       规则 4 同口径）。
 状态: → READY_TO_EXPORT → EXPORTED
 ```
 
