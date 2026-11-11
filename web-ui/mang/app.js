@@ -1755,10 +1755,15 @@
         const checked = Object.prototype.hasOwnProperty.call(w.sel, f.rel);
         // kind 默认值：勾选过的用勾选值，否则按文件名启发式预选（用户可改）
         const kindDef = checked ? w.sel[f.rel] : guessBidFileKind(f.name);
+        // R21（#47）：深层文件显示 rel 消歧——列表只显基名时，
+        // 「sub/图纸/A.dwg」与「成图/A.dwg」两行不可区分（title 提示
+        // 要悬停才见）。根下文件 rel === name 零变化；深层件显
+        // rel（fs.tree 的 rel 一律 / 分隔——R14 单一口径）。
+        const shown = f.rel && f.rel !== f.name ? f.rel : f.name;
         rows +=
           '<label class="bid-wiz-file" data-on="' + String(checked) + '">'
           + '<input type="checkbox" data-rel="' + esc(f.rel) + '"' + (checked ? " checked" : "") + ">"
-          + '<span class="bid-wiz-file-name" title="' + esc(f.rel) + '">' + esc(f.name) + "</span>"
+          + '<span class="bid-wiz-file-name" title="' + esc(f.rel) + '">' + esc(shown) + "</span>"
           + '<span class="bid-wiz-file-meta">' + fmtBytes(f.size || 0) + "</span>"
           + '<select data-kind-for="' + esc(f.rel) + '">'
           + BID_FILE_KINDS.map((k) => '<option value="' + k + '"' + (kindDef === k ? " selected" : "") + ">" + k + "</option>").join("")

@@ -670,6 +670,12 @@ check(
   }
 }
 check(
+  "R21 UI：深层文件显示 rel 消歧（同名不同目录可区分）",
+  /const shown = f\.rel && f\.rel !== f\.name \? f\.rel : f\.name;/.test(app) &&
+    /' \+ esc\(shown\) \+ "<\/span>"/.test(app),
+  "深层文件退回只显基名——sub/图纸/A 与 成图/A 两行不可区分（勾错件无从察觉）"
+);
+check(
   "#19 UI：upload_ref 用工作区相对路径 + filename 显式回显",
   /upload_ref: rel, filename: f\.name, kind: sel\[rel\]/.test(app),
   "导入参数形状漂移（壳侧围栏锚定依赖 rel 形态）"
