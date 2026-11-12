@@ -4270,7 +4270,6 @@ mod tests {
     /// 字符 → path_too_long 分账（Linux 能落但项目库拷 Windows 创建即
     /// 失败）；import_files 记录的 rel 估算超限 → 请求级 bad_args。
     /// 深嵌套工作区用真目录驱动（不是 mock 长度）。
-    #[test]
     /// R26（#47）：目录拖入递归——嵌套结构落位 / 符号链接不跟 /
     /// 深度与预算触顶亮截断旗（诚实面：看不见 ≠ 没有）。
     #[test]
