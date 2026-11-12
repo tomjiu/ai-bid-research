@@ -1,0 +1,234 @@
+{
+ "seed": 20261112,
+ "n_picks": 3,
+ "picks": [
+  {
+   "domain": "telecom",
+   "name": "A-telecom-huaian-主文件.docx",
+   "sha256": "95b62593bced"
+  },
+  {
+   "domain": "real-samples",
+   "name": "中传028真实采购链.json",
+   "sha256": "b90567ad39a5"
+  },
+  {
+   "domain": "telecom",
+   "name": "B-telecom-huaian-报价文件.xlsx",
+   "sha256": "bfcf13bfe04c"
+  }
+ ],
+ "rust_status": {
+  "ok": true,
+  "exit": 0
+ },
+ "rust_metrics_present": true,
+ "isolation_audit": {
+  "all_pass": true,
+  "exports": [
+   {
+    "run": "A-95b62593bced",
+    "size": 262424,
+    "url": "/home/z/my-project/repo/artifacts/closeout-real-20261112/A-95b62593bced/out/投标文件-A-95b62593bced.docx"
+   }
+  ],
+  "file_sets": [
+   {
+    "files": [
+     "A-telecom-huaian-主文件.docx",
+     "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "EV-01-营业执照.pdf",
+     "EV-03-类似业绩合同-智慧园区弱电工程.pdf"
+    ],
+    "run": "A-95b62593bced"
+   },
+   {
+    "files": [
+     "B-telecom-huaian-报价文件.xlsx"
+    ],
+    "run": "C-bfcf13bfe04c"
+   }
+  ],
+  "pid_uniqueness_scope": "workspace-local（store 局部序列——跨工作区可同号，设计语义非缺陷）",
+  "projects": [
+   {
+    "external_key": "closeout-A-95b62593bced",
+    "pid": "PRJ-0001",
+    "run": "A-95b62593bced"
+   },
+   {
+    "external_key": "closeout-C-bfcf13bfe04c",
+    "pid": "PRJ-0001",
+    "run": "C-bfcf13bfe04c"
+   }
+  ]
+ },
+ "chain_b": {
+  "material": "real-samples/中传028真实采购链.json",
+  "engine": {
+   "m17_exit_ok": true,
+   "report_exists": true
+  },
+  "independent_rederivation": [
+   {
+    "check": "预算金额=1,080,000（json 链事实 ↔ 招标公告原文·万元形）",
+    "pass": true,
+    "detail": "原文匹配「预算金额￥108.000000万元」"
+   },
+   {
+    "check": "中标金额=1,050,000（json ↔ 中标公告原文·万元形）",
+    "pass": true,
+    "detail": "原文匹配「中标（成交）金额：105.0000000（万元）」"
+   },
+   {
+    "check": "评审得分=89.36（json ↔ 中标公告原文）",
+    "pass": true,
+    "detail": "原文匹配「89.36分」"
+   },
+   {
+    "check": "开标时间 08-03→08-13（更正公告双值在文 + 招标公告原值互证）",
+    "pass": true,
+    "detail": "旧值在文（更正+招标）=True 新值在文（更正）=True"
+   },
+   {
+    "check": "实施节点1 修正 07-31→08-30",
+    "pass": true,
+    "detail": "更正公告双值在文"
+   },
+   {
+    "check": "实施节点2 修正 08-30→09-10",
+    "pass": true,
+    "detail": "更正公告新值在文"
+   },
+   {
+    "check": "范围声明「其他内容均无修改」在文",
+    "pass": true,
+    "detail": "更正公告原文"
+   },
+   {
+    "check": "中标金额 ≤ 预算（采购纪律）",
+    "pass": true,
+    "detail": "1,050,000 ≤ 1,080,000"
+   }
+  ],
+  "all_pass": true
+ },
+ "cards": [
+  {
+   "run_id": "A-95b62593bced",
+   "name": "A-telecom-huaian-主文件",
+   "phases": {
+    "parse_vs_baseline": {
+     "baseline": {
+      "pages": 28,
+      "tables": 21,
+      "blocks": 1364
+     },
+     "actual": {
+      "pages": 0,
+      "tables": 21,
+      "chunks": 1272
+     },
+     "note": "blocks(Python) vs chunks(Rust) 口径不同——量级对照非相等断言"
+    },
+    "extract": {
+     "added": 371,
+     "by_category": {
+      "format": 7,
+      "other": 175,
+      "qualification": 36,
+      "scoring": 31,
+      "veto": 122
+     },
+     "total": 371
+    },
+    "outline": {
+     "blocking_pre_bind": 160,
+     "rows": 373,
+     "sections": 54
+    },
+    "evidence": {
+     "blocking_after": 0,
+     "bound_reqs": 160,
+     "registered": 3,
+     "scoring_mapped": 31
+    },
+    "star_gate": {
+     "detail": [
+      {
+       "block_idx": 77,
+       "file": "A-telecom-huaian-主文件.docx",
+       "page": null,
+       "text": "第四章 ★商务规范书"
+      },
+      {
+       "block_idx": 78,
+       "file": "A-telecom-huaian-主文件.docx",
+       "page": null,
+       "text": "★第五章 技术规范书"
+      }
+     ],
+     "gaps_found": 2,
+     "remediated": 2
+    },
+    "addendum_gate": {
+     "action": "confirm_no_addendum",
+     "encountered": true,
+     "gate_approved": true
+    },
+    "draft": {
+     "leaves": 47,
+     "total_words": 55794
+    },
+    "validate_ok": true,
+    "export": {
+     "size": 262424,
+     "chapters_written": 47,
+     "sha256": "0f31ed770f44f6cb9b3583b14fea58c906be3d7b44be7e71f0e825312b816b24"
+    },
+    "restart_recovered": true,
+    "timing_ms": {
+     "create_ms": 0,
+     "draft_ms": 2442,
+     "evidence_ms": 4,
+     "export_ms": 103,
+     "extract_ms": 228,
+     "import_ms": 803,
+     "outline_ms": 37,
+     "validate_ms": 127
+    }
+   },
+   "verdict": "全链 ①-⑧ 通过（含解包深检 + 重启恢复）"
+  },
+  {
+   "run_id": "C-bfcf13bfe04c",
+   "name": "B-telecom-huaian-报价文件",
+   "phases": {
+    "parse_vs_baseline": {
+     "baseline": {
+      "pages": 2,
+      "tables": 2,
+      "blocks": 21
+     },
+     "actual": {
+      "pages": 2,
+      "tables": 2,
+      "chunks": 21
+     },
+     "note": "blocks(Python) vs chunks(Rust) 口径不同——量级对照非相等断言"
+    },
+    "extract": {
+     "added": 0,
+     "by_category": {},
+     "total": 0
+    },
+    "outline": {
+     "diagnostic": "EUnprocessable { reason: \"空章节树（REQ 为空时无从推导——先 extract_requirements）\" }",
+     "outcome": "rejected"
+    }
+   },
+   "verdict": "辅件面按预期止步于建纲门（0 条款面 → 清晰诊断拒绝——门诚实性 ✓）"
+  }
+ ],
+ "all_pass": true
+}

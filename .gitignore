@@ -21,6 +21,9 @@ artifacts/title-impact/experiment.json
 # llm-usage.json 是运行时累计态（按项目工作区再生）。
 .mang/llm.json
 .mang/llm-usage.json
+# 工作区宿主签名密钥（receipt 签发面）——任何工作区的 key 都不入库（凭据纪律；
+# 2026-11-12 收官真测工件首遇：artifacts 工作区副本须排除）
+**/.mang/approval.key
 
 # 绿色版打包产物（scripts/package-mang-app.ps1 的输出目录）
 dist-pkg/

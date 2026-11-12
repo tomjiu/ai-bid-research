@@ -1,0 +1,265 @@
+{
+  "schema_version": 2,
+  "fingerprints": [
+    {
+      "section_id": "SEC-0007",
+      "attempt": 1,
+      "content_sha256": "fef9a348c6ed314a63ed66483a87baff91ca1c5198deedcce50e01725e87ff93"
+    },
+    {
+      "section_id": "SEC-0008",
+      "attempt": 1,
+      "content_sha256": "593619d821f852abf1671438f1d89349f6107804ae52e5d38b2b7d317911e745"
+    },
+    {
+      "section_id": "SEC-0009",
+      "attempt": 1,
+      "content_sha256": "72dfa37b8053b12f702a950a504342de033d3646483b55aaaca4b9006a9af176"
+    },
+    {
+      "section_id": "SEC-0010",
+      "attempt": 1,
+      "content_sha256": "6ee89eb9aaec3a5f8cd15bf7f5cc7115f969a48b7f3bbcddc9702ef55da53e7e"
+    },
+    {
+      "section_id": "SEC-0011",
+      "attempt": 1,
+      "content_sha256": "cab997a0cd82ab84c1698c6bc0b8ec81210ca096e767dc37da0e590360b9e14d"
+    },
+    {
+      "section_id": "SEC-0012",
+      "attempt": 1,
+      "content_sha256": "7b6a25aef839248cfc5144c668cb9048a0f0ef410883920738e8e2fe0db5848e"
+    },
+    {
+      "section_id": "SEC-0013",
+      "attempt": 1,
+      "content_sha256": "340ed348ca658c630d6fc43af5820bde0b64189b990fb631a8868d27718b1f4e"
+    },
+    {
+      "section_id": "SEC-0014",
+      "attempt": 1,
+      "content_sha256": "864f1a436c360705059f5339c1e56d6456d614a4dd430fa44d2f37bd09c868eb"
+    },
+    {
+      "section_id": "SEC-0015",
+      "attempt": 1,
+      "content_sha256": "38b3abf11ce64172525a9a806de4c0aca5acb42fe836da9f0ff34f465d3bdb82"
+    },
+    {
+      "section_id": "SEC-0016",
+      "attempt": 1,
+      "content_sha256": "6817c08c86af6e837842240267430cc581be9b058e168552f53e459521a4be97"
+    },
+    {
+      "section_id": "SEC-0017",
+      "attempt": 1,
+      "content_sha256": "1c913e0774fdc6b696bfa83ab01fc3713b244400eff1b2c6b52a29180bb3c380"
+    },
+    {
+      "section_id": "SEC-0018",
+      "attempt": 1,
+      "content_sha256": "c6680dd10bde3654fb6a3cba977e33f0d9f538c254dc342f1e82cc6051aaa50c"
+    },
+    {
+      "section_id": "SEC-0019",
+      "attempt": 1,
+      "content_sha256": "03dd2e31e7ad6063774e588d7ada94ab7b307cf3d9365ec4beac6d984499e119"
+    },
+    {
+      "section_id": "SEC-0020",
+      "attempt": 1,
+      "content_sha256": "71477cb8ad2c5b7b24b85438ae5f80a348bb867a38f2441cbe19731fb47cf8ef"
+    },
+    {
+      "section_id": "SEC-0021",
+      "attempt": 1,
+      "content_sha256": "aa0533d84a2335802a090a9979e1ec90f7b7c99488c0d370d8daa1c9ce56fde1"
+    },
+    {
+      "section_id": "SEC-0022",
+      "attempt": 1,
+      "content_sha256": "1247480a9b38e617b8fa3e60c12e2a71c8e74cec80e02bf21577aae60bf1b7f7"
+    },
+    {
+      "section_id": "SEC-0023",
+      "attempt": 1,
+      "content_sha256": "280464b321026b3bf5cf9dd08c64d39a8ffef0a6850f6b2d1e51b5c0b317089e"
+    },
+    {
+      "section_id": "SEC-0024",
+      "attempt": 1,
+      "content_sha256": "f98ae79641a314e47e72a5007d4c4a6617bc223a41e3732804e3789f6ec24158"
+    },
+    {
+      "section_id": "SEC-0025",
+      "attempt": 1,
+      "content_sha256": "4182b9b9ff8a2b70ef855a06e9eb2aa850bc81a3475f4ddce16444f015f72d60"
+    },
+    {
+      "section_id": "SEC-0026",
+      "attempt": 1,
+      "content_sha256": "0a27f82318189daeab3e0b632dac3e2f5d37e174942c4dff2b535277e090f33f"
+    },
+    {
+      "section_id": "SEC-0027",
+      "attempt": 1,
+      "content_sha256": "37852f097466b6c9aa4d67e0b3018161d3819a18e4d897ba1ad471fcbd4d9910"
+    },
+    {
+      "section_id": "SEC-0029",
+      "attempt": 1,
+      "content_sha256": "e8e8a734bf7af54bcc3224315d11c81fa6148ad8974b65c7a68ee4e957fcd6b6"
+    },
+    {
+      "section_id": "SEC-0030",
+      "attempt": 1,
+      "content_sha256": "f72e9657d9c6c623fea198ffb1469d359848a282561caeda8fbc487c50dcdb76"
+    },
+    {
+      "section_id": "SEC-0031",
+      "attempt": 1,
+      "content_sha256": "c127c99b69779451e8f311736057d402d62f9b26bb0805f98117f6ed23a7ace2"
+    },
+    {
+      "section_id": "SEC-0032",
+      "attempt": 1,
+      "content_sha256": "bc7fc990ca7d7c593992d8fe80cd284081b70c3af8b979781e86950554cbb1fc"
+    },
+    {
+      "section_id": "SEC-0033",
+      "attempt": 1,
+      "content_sha256": "1e367de00ee5f5b44ed8b8633a31d83f93bae05718028e316f8cfaa3c73bcfcc"
+    },
+    {
+      "section_id": "SEC-0034",
+      "attempt": 1,
+      "content_sha256": "7ae2e47ea4b4e9187096f4b3784c44422b333fb5df8c6f5095a6a2256200d3a3"
+    },
+    {
+      "section_id": "SEC-0035",
+      "attempt": 1,
+      "content_sha256": "bba21be882830e25f0bab22cb94ce5cc0d846d90aeb3c54cf143c0480dd66c74"
+    },
+    {
+      "section_id": "SEC-0036",
+      "attempt": 1,
+      "content_sha256": "489017069fab9f922abc4654d15f10699014d079055d3df2a5f06f9a316cd2dd"
+    },
+    {
+      "section_id": "SEC-0037",
+      "attempt": 1,
+      "content_sha256": "268bc12be236d05643865f915631de1636aff5fb0529b02d3c0560eb18ffd88c"
+    },
+    {
+      "section_id": "SEC-0039",
+      "attempt": 1,
+      "content_sha256": "f0bc1bce0c5a350812787a8d6c2495fe566c72d7ce30dc3b9da3abba51b5056f"
+    },
+    {
+      "section_id": "SEC-0041",
+      "attempt": 1,
+      "content_sha256": "26499f86a4776378376777eb4eb02e3150acbf2b772d3465e88f2d5832b94e90"
+    },
+    {
+      "section_id": "SEC-0042",
+      "attempt": 1,
+      "content_sha256": "388d5a35facf2eeb004428dbceaa8853543d016dffd5a9ec29972c545f1a9390"
+    },
+    {
+      "section_id": "SEC-0043",
+      "attempt": 1,
+      "content_sha256": "c15e8dc872dd76abbd2ca687621cd6429753ae762e790a566a4da99da6c29a49"
+    },
+    {
+      "section_id": "SEC-0044",
+      "attempt": 1,
+      "content_sha256": "7b64c0131c05e2e76c79bfa6b9fbedc7abffde1363115c1262c07aa4cda198e1"
+    },
+    {
+      "section_id": "SEC-0045",
+      "attempt": 1,
+      "content_sha256": "44500360e9f52b7e595eff95c06929b3e6f7ee45e961c4d6e9514e125c620d82"
+    },
+    {
+      "section_id": "SEC-0046",
+      "attempt": 1,
+      "content_sha256": "e82dca52339e2ec41976a761a9023538b4a1c193dae93592db657519415f86ad"
+    },
+    {
+      "section_id": "SEC-0047",
+      "attempt": 1,
+      "content_sha256": "c62d2e42acefd12820f6384ae400ccef2f18a2cf250ad87fbd090b19e3bd2c44"
+    },
+    {
+      "section_id": "SEC-0048",
+      "attempt": 1,
+      "content_sha256": "fccaca43d3550dc67355ffb732cf8bab22b838414a7bb5d72b142e1adc1f4dcf"
+    },
+    {
+      "section_id": "SEC-0049",
+      "attempt": 1,
+      "content_sha256": "cb211c7ad56dff9f9fd88da71371c44eb149c83f8873fa5cfba2f0f5f5044969"
+    },
+    {
+      "section_id": "SEC-0050",
+      "attempt": 1,
+      "content_sha256": "da2d377c6e7ab5f344f5be3f8615e32c3e9577b3bf79541d39f88d67c32b9906"
+    },
+    {
+      "section_id": "SEC-0051",
+      "attempt": 1,
+      "content_sha256": "714df4021f09a38fbe2ee022d3a459ea004508f4b8860609c643c1b14985bcf7"
+    },
+    {
+      "section_id": "SEC-0052",
+      "attempt": 1,
+      "content_sha256": "7a45fdcf9fe7dce8187c6531cc7f064c2a15ab734a515887fbe7bda70b135680"
+    },
+    {
+      "section_id": "SEC-0053",
+      "attempt": 1,
+      "content_sha256": "a7484d808b834189893b5cd69d3197ee0e08670f40f68826cb48cde5b068b33f"
+    },
+    {
+      "section_id": "SEC-0055",
+      "attempt": 1,
+      "content_sha256": "1d513383eb0a5a88bb35354b08e78a82cad0b3a793f12e19273aa905c6d6ded9"
+    },
+    {
+      "section_id": "SEC-0057",
+      "attempt": 1,
+      "content_sha256": "b8a48800ea48e47622db371ef8a243c54a6b7d5c54f39992b75082adb8f3a248"
+    },
+    {
+      "section_id": "SEC-0059",
+      "attempt": 1,
+      "content_sha256": "64c5a3a3b9ea7854d2ce601ee9e9b0657febfffd7ab4f8a1a5e652137f78be3f"
+    }
+  ],
+  "inputs_digest": "115cdee8497cf93fde108709b604fe2e12cf9e659fc274e4d2ca3e02d8b6ac81",
+  "exported_at": 1794465513,
+  "report": {
+    "chapters_written": 47,
+    "total_chars": 55794,
+    "duration_ms": 32,
+    "output_sha256": "0f31ed770f44f6cb9b3583b14fea58c906be3d7b44be7e71f0e825312b816b24",
+    "toc_field_present": true,
+    "tables_written": 2,
+    "dark_bid": null,
+    "table_kinds": [
+      "项目概况表",
+      "业绩一览表"
+    ],
+    "forms_written": 7,
+    "form_titles": [
+      "附件一、投标函",
+      "附件二、法定代表人身份证明书",
+      "附件三、授权委托书",
+      "附件四、投标保证金退还申请",
+      "附件五、资格声明",
+      "附件六、无重大违法记录声明",
+      "附件七、廉洁承诺书"
+    ]
+  }
+}

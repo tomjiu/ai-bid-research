@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "domain": {
+    "schema_version": 1,
+    "project": {
+      "id": "PRJ-0001",
+      "name": "B-telecom-huaian-报价文件",
+      "code": "",
+      "mode": "明标",
+      "status": "REQUIREMENTS_EXTRACTED",
+      "content_version": 3,
+      "external_key": "closeout-C-bfcf13bfe04c",
+      "bid_deadline": "2026-12-31"
+    },
+    "files": [
+      {
+        "id": "TF-0002",
+        "name": "B-telecom-huaian-报价文件.xlsx",
+        "kind": "附件",
+        "sha256": "bfcf13bfe04c6268258f04a312281e66e4601ab48fa75b7f12add64f8dbaacb4",
+        "pages": 2,
+        "tables": 2,
+        "chunks": 21,
+        "ocr_blocks": 0,
+        "parse_status": "ok",
+        "parse_summary": "engine-xlsx @ f4328ebf4f936e1321a2254382d59f9ab9f94b7b｜2 工作表，21 有效行，57 非空单元格"
+      }
+    ],
+    "requirements": [],
+    "evidences": [],
+    "evidence_bindings": [],
+    "sections": [],
+    "assignments": [],
+    "matrix": [],
+    "matrix_overrides": {},
+    "params": [],
+    "findings": [],
+    "reviews": [],
+    "revision_tasks": [],
+    "gate_passes": [],
+    "addendum_waivers": [],
+    "file_roles": [],
+    "block_marks": {},
+    "submitted_requirements": {},
+    "scoring_mappings": [],
+    "state_recoveries": [],
+    "segments": [],
+    "addendum_changes": [],
+    "rewrite_directives": [],
+    "packages": [],
+    "selected_package": null,
+    "idempotency": {},
+    "id_seq": 2
+  },
+  "parsed_ref": "parsed-ef79b528.json"
+}

@@ -1,0 +1,40 @@
+{
+  "all_pass": true,
+  "exports": [
+    {
+      "run": "A-95b62593bced",
+      "size": 262424,
+      "url": "/home/z/my-project/repo/artifacts/closeout-real-20261112/A-95b62593bced/out/投标文件-A-95b62593bced.docx"
+    }
+  ],
+  "file_sets": [
+    {
+      "files": [
+        "A-telecom-huaian-主文件.docx",
+        "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+        "EV-01-营业执照.pdf",
+        "EV-03-类似业绩合同-智慧园区弱电工程.pdf"
+      ],
+      "run": "A-95b62593bced"
+    },
+    {
+      "files": [
+        "B-telecom-huaian-报价文件.xlsx"
+      ],
+      "run": "C-bfcf13bfe04c"
+    }
+  ],
+  "pid_uniqueness_scope": "workspace-local（store 局部序列——跨工作区可同号，设计语义非缺陷）",
+  "projects": [
+    {
+      "external_key": "closeout-A-95b62593bced",
+      "pid": "PRJ-0001",
+      "run": "A-95b62593bced"
+    },
+    {
+      "external_key": "closeout-C-bfcf13bfe04c",
+      "pid": "PRJ-0001",
+      "run": "C-bfcf13bfe04c"
+    }
+  ]
+}

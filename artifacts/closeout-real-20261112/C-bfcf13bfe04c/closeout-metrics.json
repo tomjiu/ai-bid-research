@@ -1,0 +1,39 @@
+{
+  "extract_counts": {
+    "added": 0,
+    "by_category": {},
+    "total": 0
+  },
+  "files": [
+    {
+      "chunks": 21,
+      "kind": "附件",
+      "name": "B-telecom-huaian-报价文件.xlsx",
+      "ocr_blocks": 0,
+      "pages": 2,
+      "parse_status": "Ok",
+      "sha256": "bfcf13bfe04c6268258f04a312281e66e4601ab48fa75b7f12add64f8dbaacb4",
+      "tables": 2
+    }
+  ],
+  "full_chain": false,
+  "import_totals": {
+    "chunks": 21,
+    "files": 1,
+    "parse_failed": 0,
+    "partial": 0
+  },
+  "name": "B-telecom-huaian-报价文件",
+  "outline_probe": {
+    "diagnostic": "EUnprocessable { reason: \"空章节树（REQ 为空时无从推导——先 extract_requirements）\" }",
+    "outcome": "rejected"
+  },
+  "project_id": "PRJ-0001",
+  "run_id": "C-bfcf13bfe04c",
+  "stopped_at": "aux_import_face",
+  "t_create_ms": 0,
+  "t_extract_ms": 1,
+  "t_import_ms": 11,
+  "t_total_ms": 14,
+  "ws": "/home/z/my-project/repo/artifacts/closeout-real-20261112/C-bfcf13bfe04c"
+}

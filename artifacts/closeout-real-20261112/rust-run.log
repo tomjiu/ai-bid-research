@@ -1,0 +1,16 @@
+
+running 1 test
+
+== real_closeout · 真跑 [A-95b62593bced] A-telecom-huaian-主文件（4 件导入）==
+
+== real_closeout · 真跑 [C-bfcf13bfe04c] B-telecom-huaian-报价文件（1 件导入）==
+
+== real_closeout 完成：2 件真跑 + 隔离审计全过 ==
+test real_closeout_spec_runs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.04s
+
+
+--- stderr ---
+    Finished `test` profile [unoptimized] target(s) in 0.13s
+     Running tests/real_closeout.rs (target/debug/deps/real_closeout-30644235a8c48625)

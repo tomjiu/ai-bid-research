@@ -1,0 +1,50 @@
+{
+ "material": "real-samples/中传028真实采购链.json",
+ "engine": {
+  "m17_exit_ok": true,
+  "report_exists": true
+ },
+ "independent_rederivation": [
+  {
+   "check": "预算金额=1,080,000（json 链事实 ↔ 招标公告原文·万元形）",
+   "pass": true,
+   "detail": "原文匹配「预算金额￥108.000000万元」"
+  },
+  {
+   "check": "中标金额=1,050,000（json ↔ 中标公告原文·万元形）",
+   "pass": true,
+   "detail": "原文匹配「中标（成交）金额：105.0000000（万元）」"
+  },
+  {
+   "check": "评审得分=89.36（json ↔ 中标公告原文）",
+   "pass": true,
+   "detail": "原文匹配「89.36分」"
+  },
+  {
+   "check": "开标时间 08-03→08-13（更正公告双值在文 + 招标公告原值互证）",
+   "pass": true,
+   "detail": "旧值在文（更正+招标）=True 新值在文（更正）=True"
+  },
+  {
+   "check": "实施节点1 修正 07-31→08-30",
+   "pass": true,
+   "detail": "更正公告双值在文"
+  },
+  {
+   "check": "实施节点2 修正 08-30→09-10",
+   "pass": true,
+   "detail": "更正公告新值在文"
+  },
+  {
+   "check": "范围声明「其他内容均无修改」在文",
+   "pass": true,
+   "detail": "更正公告原文"
+  },
+  {
+   "check": "中标金额 ≤ 预算（采购纪律）",
+   "pass": true,
+   "detail": "1,050,000 ≤ 1,080,000"
+  }
+ ],
+ "all_pass": true
+}

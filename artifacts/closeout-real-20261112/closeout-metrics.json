@@ -1,0 +1,812 @@
+{
+  "base_dir": "/home/z/my-project/repo/artifacts/closeout-real-20261112",
+  "generated_at": "2026-11-12T06:31:25+00:00",
+  "runs": [
+    {
+      "addendum_gate": {
+        "action": "confirm_no_addendum",
+        "encountered": true,
+        "gate_approved": true
+      },
+      "deep_check": {
+        "first_leaf_title_in_doc": true,
+        "styles_east_asia": true,
+        "toc": true
+      },
+      "draft": {
+        "leaf_stats": [
+          {
+            "citations": 9,
+            "sid": "SEC-0007",
+            "words": 1360
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0008",
+            "words": 1344
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0009",
+            "words": 1212
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0010",
+            "words": 1357
+          },
+          {
+            "citations": 5,
+            "sid": "SEC-0011",
+            "words": 733
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0012",
+            "words": 1343
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0013",
+            "words": 1357
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0014",
+            "words": 1387
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0015",
+            "words": 1561
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0016",
+            "words": 1550
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0017",
+            "words": 1381
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0018",
+            "words": 1367
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0019",
+            "words": 1440
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0020",
+            "words": 1411
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0021",
+            "words": 1452
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0022",
+            "words": 1220
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0023",
+            "words": 1199
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0024",
+            "words": 1463
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0025",
+            "words": 1453
+          },
+          {
+            "citations": 9,
+            "sid": "SEC-0026",
+            "words": 1438
+          },
+          {
+            "citations": 3,
+            "sid": "SEC-0027",
+            "words": 728
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0029",
+            "words": 1110
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0030",
+            "words": 1110
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0031",
+            "words": 1137
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0032",
+            "words": 1112
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0033",
+            "words": 1111
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0034",
+            "words": 1105
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0035",
+            "words": 1130
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0036",
+            "words": 1195
+          },
+          {
+            "citations": 2,
+            "sid": "SEC-0037",
+            "words": 509
+          },
+          {
+            "citations": 1,
+            "sid": "SEC-0039",
+            "words": 508
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0041",
+            "words": 1225
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0042",
+            "words": 1251
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0043",
+            "words": 1324
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0044",
+            "words": 1233
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0045",
+            "words": 1326
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0046",
+            "words": 1212
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0047",
+            "words": 1208
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0048",
+            "words": 1253
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0049",
+            "words": 1190
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0050",
+            "words": 1173
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0051",
+            "words": 1251
+          },
+          {
+            "citations": 8,
+            "sid": "SEC-0052",
+            "words": 1266
+          },
+          {
+            "citations": 7,
+            "sid": "SEC-0053",
+            "words": 1030
+          },
+          {
+            "citations": 2,
+            "sid": "SEC-0055",
+            "words": 506
+          },
+          {
+            "citations": 3,
+            "sid": "SEC-0057",
+            "words": 599
+          },
+          {
+            "citations": 7,
+            "sid": "SEC-0059",
+            "words": 964
+          }
+        ],
+        "leaves": 47,
+        "total_words": 55794
+      },
+      "evidence": {
+        "blocking_after": 0,
+        "bound_reqs": 160,
+        "registered": 3,
+        "scoring_mapped": 31
+      },
+      "export": {
+        "chapters_written": 47,
+        "coarse_fingerprint": "len:262424",
+        "size": 262424,
+        "url": "/home/z/my-project/repo/artifacts/closeout-real-20261112/A-95b62593bced/out/投标文件-A-95b62593bced.docx"
+      },
+      "extract_counts": {
+        "added": 371,
+        "by_category": {
+          "format": 7,
+          "other": 175,
+          "qualification": 36,
+          "scoring": 31,
+          "veto": 122
+        },
+        "total": 371
+      },
+      "files": [
+        {
+          "chunks": 1272,
+          "kind": "招标文件",
+          "name": "A-telecom-huaian-主文件.docx",
+          "ocr_blocks": 0,
+          "pages": 0,
+          "parse_status": "Ok",
+          "sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd",
+          "tables": 21
+        },
+        {
+          "chunks": 7,
+          "kind": "附件",
+          "name": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+          "ocr_blocks": 0,
+          "pages": 1,
+          "parse_status": "Ok",
+          "sha256": "60a2e9ce86ccab9bb8ad89be98bcfd8e802ee8d9ff6e20ce7ea4f2e23964c7b6",
+          "tables": 0
+        },
+        {
+          "chunks": 8,
+          "kind": "附件",
+          "name": "EV-01-营业执照.pdf",
+          "ocr_blocks": 0,
+          "pages": 1,
+          "parse_status": "Ok",
+          "sha256": "b1b4811b9c1b96e1bff95a49dcba07434cd391d7939e82b7453d18142b80258c",
+          "tables": 0
+        },
+        {
+          "chunks": 6,
+          "kind": "附件",
+          "name": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+          "ocr_blocks": 0,
+          "pages": 1,
+          "parse_status": "Ok",
+          "sha256": "cd8accd98cc7ad32a0ae229ffe6212a764a2018e32fc6c2667fed9b164d2cfd0",
+          "tables": 0
+        }
+      ],
+      "full_chain": true,
+      "import_totals": {
+        "chunks": 1293,
+        "files": 4,
+        "parse_failed": 0,
+        "partial": 0
+      },
+      "name": "A-telecom-huaian-主文件",
+      "outline": {
+        "blocking_pre_bind": 160,
+        "rows": 373,
+        "sections": 54
+      },
+      "project_id": "PRJ-0001",
+      "restart_recovered": true,
+      "run_id": "A-95b62593bced",
+      "star_gate": {
+        "detail": [
+          {
+            "block_idx": 77,
+            "file": "A-telecom-huaian-主文件.docx",
+            "page": null,
+            "text": "第四章 ★商务规范书"
+          },
+          {
+            "block_idx": 78,
+            "file": "A-telecom-huaian-主文件.docx",
+            "page": null,
+            "text": "★第五章 技术规范书"
+          }
+        ],
+        "gaps_found": 2,
+        "remediated": 2
+      },
+      "t_create_ms": 0,
+      "t_draft_ms": 2442,
+      "t_evidence_ms": 4,
+      "t_export_ms": 103,
+      "t_extract_ms": 228,
+      "t_import_ms": 803,
+      "t_outline_ms": 37,
+      "t_total_ms": 4001,
+      "t_validate_ms": 127,
+      "validate": {
+        "categories": {
+          "compliance": {
+            "findings": [
+              {
+                "kind": "DETERMINISTIC",
+                "message": "招标文件存在格式候选条款但未提取到字号/字体/行距/边距参数——导出将按工程基线（仿宋_GB2312/12pt/1.5 倍行距）执行，请人工确认形式评审要求",
+                "requirement_id": null,
+                "rule_code": "W_FORMAT_BASELINE",
+                "section_id": null,
+                "severity": "MINOR"
+              }
+            ],
+            "status": "failed"
+          },
+          "evidence": {
+            "status": "passed"
+          },
+          "semantic": {
+            "reason": "no model configured",
+            "status": "not_performed"
+          },
+          "structural": {
+            "findings": [
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「资格证明材料响应（第1组 8条）」字数 1360 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0007",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「资格证明材料响应（第2组 8条）」字数 1344 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0008",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「资格证明材料响应（第4组 8条）」字数 1357 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0010",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「资格证明材料响应（第5组 4条）」字数 733 超出配额 541（+20% 带外：上限 649）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0011",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第1组 8条）」字数 1343 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0012",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第2组 8条）」字数 1357 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0013",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第3组 8条）」字数 1387 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0014",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第4组 8条）」字数 1561 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0015",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（条款 表-61-表-70）」字数 1550 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0016",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第6组 8条）」字数 1381 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0017",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第7组 8条）」字数 1367 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0018",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第8组 8条）」字数 1440 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0019",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（条款 表-11-表-21）」字数 1411 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0020",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（条款 表-24-3.1.1）」字数 1452 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0021",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第13组 8条）」字数 1463 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0024",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第14组 8条）」字数 1453 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0025",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第15组 8条）」字数 1438 超出配额 1102（+20% 带外：上限 1322）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0026",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「否决情形响应（第16组 4条）」字数 728 超出配额 541（+20% 带外：上限 649）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0027",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「第七章 其他（条款 3.2.2-3.3.5）」字数 1324 超出配额 1103（+20% 带外：上限 1324）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0043",
+                "severity": "MINOR"
+              },
+              {
+                "kind": "DETERMINISTIC",
+                "message": "章节「第七章 其他（条款 3.6-3.7.2）」字数 1326 超出配额 1103（+20% 带外：上限 1324）",
+                "requirement_id": null,
+                "rule_code": "W_CHARS_OFF_TARGET",
+                "section_id": "SEC-0045",
+                "severity": "MINOR"
+              }
+            ],
+            "status": "failed"
+          }
+        },
+        "counts": {
+          "blocker": 0,
+          "deterministic": 21,
+          "major": 0,
+          "minor": 21,
+          "model": 0
+        },
+        "errors": [],
+        "findings": [
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「资格证明材料响应（第1组 8条）」字数 1360 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0007",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「资格证明材料响应（第2组 8条）」字数 1344 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0008",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「资格证明材料响应（第4组 8条）」字数 1357 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0010",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「资格证明材料响应（第5组 4条）」字数 733 超出配额 541（+20% 带外：上限 649）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0011",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第1组 8条）」字数 1343 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0012",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第2组 8条）」字数 1357 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0013",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第3组 8条）」字数 1387 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0014",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第4组 8条）」字数 1561 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0015",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（条款 表-61-表-70）」字数 1550 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0016",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第6组 8条）」字数 1381 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0017",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第7组 8条）」字数 1367 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0018",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第8组 8条）」字数 1440 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0019",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（条款 表-11-表-21）」字数 1411 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0020",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（条款 表-24-3.1.1）」字数 1452 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0021",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第13组 8条）」字数 1463 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0024",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第14组 8条）」字数 1453 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0025",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第15组 8条）」字数 1438 超出配额 1102（+20% 带外：上限 1322）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0026",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「否决情形响应（第16组 4条）」字数 728 超出配额 541（+20% 带外：上限 649）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0027",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「第七章 其他（条款 3.2.2-3.3.5）」字数 1324 超出配额 1103（+20% 带外：上限 1324）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0043",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "章节「第七章 其他（条款 3.6-3.7.2）」字数 1326 超出配额 1103（+20% 带外：上限 1324）",
+            "requirement_id": null,
+            "rule_code": "W_CHARS_OFF_TARGET",
+            "section_id": "SEC-0045",
+            "severity": "MINOR"
+          },
+          {
+            "kind": "DETERMINISTIC",
+            "message": "招标文件存在格式候选条款但未提取到字号/字体/行距/边距参数——导出将按工程基线（仿宋_GB2312/12pt/1.5 倍行距）执行，请人工确认形式评审要求",
+            "requirement_id": null,
+            "rule_code": "W_FORMAT_BASELINE",
+            "section_id": null,
+            "severity": "MINOR"
+          }
+        ],
+        "ok": true,
+        "project_status": "VALIDATING",
+        "project_version": 425,
+        "request_id": "req-000053",
+        "sections_checked": 47,
+        "submission_readiness": {
+          "blockers": 0,
+          "evidence_missing": [],
+          "evidence_missing_count": 0,
+          "not_built": false,
+          "ready": true,
+          "unresponded": [],
+          "unresponded_count": 0
+        },
+        "warnings": [
+          "章节「资格证明材料响应（第1组 8条）」字数 1360 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「资格证明材料响应（第2组 8条）」字数 1344 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「资格证明材料响应（第4组 8条）」字数 1357 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「资格证明材料响应（第5组 4条）」字数 733 超出配额 541（+20% 带外：上限 649）",
+          "章节「否决情形响应（第1组 8条）」字数 1343 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第2组 8条）」字数 1357 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第3组 8条）」字数 1387 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第4组 8条）」字数 1561 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（条款 表-61-表-70）」字数 1550 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第6组 8条）」字数 1381 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第7组 8条）」字数 1367 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第8组 8条）」字数 1440 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（条款 表-11-表-21）」字数 1411 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（条款 表-24-3.1.1）」字数 1452 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第13组 8条）」字数 1463 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第14组 8条）」字数 1453 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第15组 8条）」字数 1438 超出配额 1102（+20% 带外：上限 1322）",
+          "章节「否决情形响应（第16组 4条）」字数 728 超出配额 541（+20% 带外：上限 649）",
+          "章节「第七章 其他（条款 3.2.2-3.3.5）」字数 1324 超出配额 1103（+20% 带外：上限 1324）",
+          "章节「第七章 其他（条款 3.6-3.7.2）」字数 1326 超出配额 1103（+20% 带外：上限 1324）",
+          "招标文件存在格式候选条款但未提取到字号/字体/行距/边距参数——导出将按工程基线（仿宋_GB2312/12pt/1.5 倍行距）执行，请人工确认形式评审要求"
+        ]
+      },
+      "ws": "/home/z/my-project/repo/artifacts/closeout-real-20261112/A-95b62593bced"
+    },
+    {
+      "extract_counts": {
+        "added": 0,
+        "by_category": {},
+        "total": 0
+      },
+      "files": [
+        {
+          "chunks": 21,
+          "kind": "附件",
+          "name": "B-telecom-huaian-报价文件.xlsx",
+          "ocr_blocks": 0,
+          "pages": 2,
+          "parse_status": "Ok",
+          "sha256": "bfcf13bfe04c6268258f04a312281e66e4601ab48fa75b7f12add64f8dbaacb4",
+          "tables": 2
+        }
+      ],
+      "full_chain": false,
+      "import_totals": {
+        "chunks": 21,
+        "files": 1,
+        "parse_failed": 0,
+        "partial": 0
+      },
+      "name": "B-telecom-huaian-报价文件",
+      "outline_probe": {
+        "diagnostic": "EUnprocessable { reason: \"空章节树（REQ 为空时无从推导——先 extract_requirements）\" }",
+        "outcome": "rejected"
+      },
+      "project_id": "PRJ-0001",
+      "run_id": "C-bfcf13bfe04c",
+      "stopped_at": "aux_import_face",
+      "t_create_ms": 0,
+      "t_extract_ms": 1,
+      "t_import_ms": 11,
+      "t_total_ms": 14,
+      "ws": "/home/z/my-project/repo/artifacts/closeout-real-20261112/C-bfcf13bfe04c"
+    }
+  ],
+  "seed": 20261112
+}
