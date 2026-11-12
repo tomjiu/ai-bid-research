@@ -453,6 +453,10 @@ in : { project_id, format:"docx"|"pdf", output_path(必填——产物路径，�
        （审计建议值）；实质停用传 10000。页数硬约束项目收紧/无页数约束
        项目放宽——阈值是调用方裁决面；非正整数/超值域 → 响亮拒),
        profile:{dark_bid? , bidder_name? , template?}（#88 F-02 残余收口：
+       dark_bid=true 而 bidder_name 缺失/空白 → E_UNPROCESSABLE 响亮拒
+       ——无名可脱 = 暗标不可达：九类泄露面（正文/docProps/修订/批注/
+       EXIF/输出路径）无防线不出库；补名重导，或不传 dark_bid 显式走
+       明标。参数前置校验——在幂等键之前（非法参数不进键不吃旧缓存））,
        options:{tracked_changes?, watermark?}, project_version }
 嵌入: #68 阶段 3——章正文支持 md 块语法（无语法内容与旧版字节级同输出）：
      - 表格：连续 | 行（首行表头 + |---| 分隔行 + 数据行）→ docx 表格
