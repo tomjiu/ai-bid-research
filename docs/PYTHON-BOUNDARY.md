@@ -138,3 +138,14 @@ __pycache__/       # 字节码缓存
 - #563 Issue——边界任务（本文件即其交付物）
 - #457 PR——ai-bid 三层架构（bid-domain / bid-tools / bid-mcp）
 - `AGENTS.md` 0.0.10——引擎能力 ≠ 产品可用（模块存在 ≠ 职责清晰）
+
+## 6. SEMUL 引用口径（TA-2 / FG-06 残余收口——审计 #135）
+
+**规则：凡结论来自 Python 语义仿真（`v2_impact.py` / `ooxml_util.py` / `v1_*.py` 等自认
+`SEMUL ≠ ENGINE_RUN` 的脚本），文档/报告/issue 引用时必须带 `(SEMUL)` 标注。**
+
+- 仿真件验证的是**语义设计的自洽性**，不构成对 Rust 产品面行为的验证；
+- Rust 产品面结论只能引用 cargo 测试（如 `four_contracts.rs` / `changediff_chain.rs`）
+  或真跑产物；
+- 历史文档中以「V1/V2/V3 全绿」表述仿真结果的段落，阅读时按本节口径重新解释
+  （audit/false-green-register.md FG-06 登记的假绿族不再新增）。

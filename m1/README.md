@@ -73,3 +73,15 @@ python3 scripts/grade.py --run runs/TC-01               # 判分（M1 维度见 
 | G4_citation | M3 | 章节起草 + 引用回填（V1-b：导出后定位器回查） |
 | G6_rules | M4 | 8 类确定性规则（defect-drafts 样本） |
 | TC-09/V2 | — | 补遗影响面级联（DIRTY 传播 / 有效期重检 / CONFLICT-01 终裁） |
+
+## 退役条件（审计 INV-04——#135 成文）
+
+m1 是首轮原型（并行会话产出），bidcore 为演进版。当前保留原因：run_tests T10-T13
+回归线仍以 m1 为被测系统（原型回归价值 > 每轮构建成本）。**退役条件**（满足其一可提退役单）：
+
+1. bidcore 侧出现等价的四场景判分/解析覆盖/确定性回归面（TC-01/02/07/11 + V1-a + 双跑字节一致
+   在 bidcore 测试面全量在位），且连续 5 轮 T10-T13 零差异；
+2. 或 corpus-A 判分基线永久冻结（研究线收档），m1 不再被任何 T 序列消费。
+
+退役动作：删 m1/ + run_tests T10-T13 改 SKIP（说明指向归档 commit），m1 的契约测试
+（state.rs 守卫/幂等）确认已在 bid-domain 有等价面。

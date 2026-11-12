@@ -97,6 +97,7 @@ BidSection ──(content_ref 单向引用)──> DOC-block（文档内核命�
 5. **诚实状态**：所有"未确认/缺证据"以显式枚举表达（pending/MISSING/待澄清），禁止用空值或 0 默认替代——防"看起来完成了"。
 6. **审核门四道**（T-7 + #131 增补）：`matrix_approval` / `outline_approval` / `pre_export_confirm` 三道导出门序链（export_allowed 逐门校验）+ `addendum_waiver`（#131：L3「无补遗阻塞」的人工确认出口——单件招标文件起草前置闸；与三道主门正交，无门序前置，不入导出门序）。Approved 是里程碑事实（同门重放幂等），Rejected 是过程记录。
 7. **起草 readiness 六阻塞**（#110 + L3）：无关联 REQ / 缺资质 / 业绩不足 / 技术参数无佐证 / 否决项未响应 / 无补遗（MissingAddendum）→ 拒生成 E_UNPROCESSABLE（人话理由）。指令与缺失回报进 `draft_note` 账面（#128），正文零标记。
+9. **导出原子性真源与 ExportGate 登记债**（审计 INV-02 口径）：产品导出原子性/幂等/中断一致性的**真源 = `bid-tools/src/export.rs` 的 manifest v2 + tmp+rename**；`bid-domain/src/export_gate.rs`（两阶段 EXPORTING 中间态）**不在生产路径**（NOT_WIRED——全仓仅测试引用），SC-01「进度面显式 EXPORTING」承诺在产品路径不存在。接线属后续单，在此之前读者不得把 export_gate 当作在产防线。
 8. **评标规则不进正文**（#121/#126）：否决项/资格条件不抄规则原文，合并进「资格与响应」章节组写响应话术（矩阵有章节→不报 BLOCKER）；评分项完全不进正文（自评表面）。
 
 ## 5. 多轮改标对比（#320）

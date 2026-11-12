@@ -395,3 +395,34 @@ sha256 与六表/七件对账数字给用户。）
 - 引擎侧回归：`bidcore` 全链测试 `tests/mcp_scaffold_tools.rs`（外部 Agent
   纯 MCP 驱动闭环 + 错误路径）与 `tests/draft_generator_switch.rs`
   （external 四态语义）。
+
+## 8. 部署安全边界（信任前提——审计 #135 成文）
+
+> 本节是 receipt 防线的**前置条件声明**（2026-11-12 全仓审计 AUD2-SEC-1/SEC-2 收口）。
+
+### 8.1 信任根与进程隔离（SEC-2 / C-10）
+
+`record_review_gate` / `set_matrix_override` / `bid.gate_pass` 等人工授权面的信任根是
+**approval.key 文件**（HMAC-SHA256 对称密钥，principal.rs 验签——scope 进 MAC、24h 时效、
+常量时间比对、v2 含 sections_digest 内容绑定）。
+
+**前置条件：宿主与 Agent 进程必须隔离**（不同 uid，或等价的文件访问隔离）。
+
+同机同 uid 部署形态下（如 stdio 子进程模式），Agent 框架进程具备直接
+`open(approval.key)` 的能力——密钥可读即等于可签发任意 actor 的人工授权
+（HMAC 对称性决定验证方与签发方持有同一密钥）。这是**部署边界**而非代码缺陷：
+单机单用户沙箱（本仓默认形态）可接受；多用户主机 / 共享 runner 必须：
+
+- approval.key 与 llm.json 仅运行用户可读（`chmod 0600`）；
+- Agent 子进程以独立低权 uid 运行，密钥目录不可达；
+- 跨机部署时走密钥托管（未来项），不要把 key 挂进 Agent 可读的 env/fs。
+
+### 8.2 敏感文件权限（SEC-1）
+
+| 文件 | 内容 | 建议 |
+|---|---|---|
+| `.mang/llm.json` | API key 明文（env 覆盖：BID_LLM_API_KEY） | `0600`；生产建议只用 env |
+| `.mang/approval.key` | 人工授权 HMAC 密钥（32B） | `0600`；见 8.1 隔离要求 |
+
+引擎侧纪律（代码已实现）：api_key 绝不写日志、绝不进工具响应（llm.rs 头注契约）；
+本节是**落盘面**的部署侧补齐。
