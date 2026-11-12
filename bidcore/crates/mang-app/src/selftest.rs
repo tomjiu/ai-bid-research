@@ -168,6 +168,11 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
     println!("temp    = {}", display(&std::env::temp_dir()));
 
     let root = scratch_dir();
+    // #89 批 2：业绩库隔离——selftest 进程级 BID_PERF_LIB 指向 scratch。
+    // 否则 resolve_library_path 落 ~/.mang/performance-library.json（用户
+    // 真实库），selftest 的登记条目会污染用户数据。本进程首个 BidService
+    // 创建前设置即可（ensure_locked 惰性建服务，逐次读 env）。
+    std::env::set_var("BID_PERF_LIB", root.join("perf-lib.json"));
     let ws = match Workspace::new(&root) {
         Ok(w) => w,
         Err(e) => {
@@ -830,6 +835,251 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
             format!("section_id={:?}", bps["section"]["section_id"]),
         );
     }
+
+    // ---- #89 批 2：业绩库面（bid.performance——#315 四工具的壳聚合）
+    // 壳面与工具面的路由差异（见 bid.rs 文档注释）：库操作无项目路由但
+    // 壳恒在已打开项目上下文（ensure_locked 要 db.json）；库隔离走进程级
+    // BID_PERF_LIB（run() 入口已设）。真件全链（材料匹配→证据登记→绑定→
+    // 写入→幂等）在 bid-mcp perf_tools_tool.rs write_section_full_flow——
+    // 本面聚焦壳聚合/参数早拒/拒绝码透传。
+    // 复用 price 批刚写入正文的叶（quality 批 prepare_outline_and_matrix 已
+    // 重建大纲——章节 ID 动态取，不硬编码）
+    let drafted_sid = {
+        let svc0 = bid_tools::service::BidService::open(&root).unwrap();
+        svc0
+            .store()
+            .sections()
+            .iter()
+            .find(|n| n.parent_id.is_some() && n.content.is_some())
+            .map(|n| n.id.clone())
+            .expect("price 批应已写入一叶正文")
+    };
+    // ① list：新库首读（BID_PERF_LIB 指向 scratch 新路径→ load 缺文件=空库）
+    // owner_name=null（未登记库主）/ persisted=true（路径已钉）——真读工具面
+    let resp = call(&ctx, json!({"id":"t-bid-pf0","cmd":"bid.performance"}));
+    let bpf0 = result(&resp);
+    r.check(
+        "bid.performance(库清单读面)",
+        resp["ok"] == json!(true)
+            && bpf0["action"] == json!("list")
+            && bpf0["library"]["entries"].as_array().map(|a| a.is_empty()).unwrap_or(false)
+            && bpf0["library"]["library_persisted"] == json!(true)
+            && bpf0["library"]["owner_name"].is_null(),
+        format!("entries={:?}", bpf0["library"]["entries"].as_array().map(|a| a.len())),
+    );
+    // ② register：一条登记（owner_name + entries）→ added_count=1 + 落盘
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf1","cmd":"bid.performance","action":"register",
+        "owner_name":"自测科技有限公司",
+        "entries":[{
+            "name":"智慧园区弱电工程合同","client":"示例产业园运营有限公司",
+            "amount_wan":640.0,"completed_on":"2025-05-20",
+            "categories":["弱电工程"],
+            "materials":["材料/EV-03-类似业绩合同.pdf"],
+            "key_points":["一次验收通过"],
+        }],
+    }));
+    let bpf1 = result(&resp);
+    let perf_id = bpf1["register"]["added"][0].as_str().unwrap_or("").to_string();
+    r.check(
+        "bid.performance(登记一条)",
+        resp["ok"] == json!(true)
+            && bpf1["register"]["added_count"] == json!(1)
+            && bpf1["register"]["total_entries"] == json!(1)
+            && !perf_id.is_empty()
+            && bpf1["register"]["library_persisted"] == json!(true),
+        format!("added={:?} id={perf_id:?}", bpf1["register"]["added_count"]),
+    );
+    // ③ 幂等重放：同语义四元组 → deduplicated 回显既有 id（不重复登记）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf2","cmd":"bid.performance","action":"register",
+        "entries":[{
+            "name":"智慧园区弱电工程合同","client":"示例产业园运营有限公司",
+            "amount_wan":640.0,"completed_on":"2025-05-20",
+        }],
+    }));
+    let bpf2 = result(&resp);
+    r.check(
+        "bid.performance(幂等重放)",
+        resp["ok"] == json!(true)
+            && bpf2["register"]["added_count"] == json!(0)
+            && bpf2["register"]["deduplicated"].as_array().map(|a| a.len() == 1).unwrap_or(false)
+            && bpf2["register"]["total_entries"] == json!(1),
+        format!("dedup={:?}", bpf2["register"]["deduplicated"]),
+    );
+    // ④ list 过滤：keyword 命中 1 条 / 不命中 0 条（值域裁决在工具面）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf3","cmd":"bid.performance",
+        "filters":{"keyword":"弱电"},
+    }));
+    let bpf3 = result(&resp);
+    r.check(
+        "bid.performance(过滤命中)",
+        resp["ok"] == json!(true)
+            && bpf3["library"]["returned"] == json!(1)
+            && bpf3["library"]["entries"][0]["perf_id"].is_string(),
+        format!("returned={:?}", bpf3["library"]["returned"]),
+    );
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf4","cmd":"bid.performance",
+        "filters":{"keyword":"不存在的关键词"},
+    }));
+    let bpf4 = result(&resp);
+    r.check(
+        "bid.performance(过滤不命中)",
+        resp["ok"] == json!(true) && bpf4["library"]["returned"] == json!(0),
+        format!("returned={:?}", bpf4["library"]["returned"]),
+    );
+    // ⑤ recommend：只读匹配推荐（项目语料 + 弃权因子；本种子无业绩章 →
+    // suggested_section=null + next 引导，诚实面不伪造建议位）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf5","cmd":"bid.performance","action":"recommend","budget_wan":700.0,
+    }));
+    let bpf5 = result(&resp);
+    r.check(
+        "bid.performance(匹配推荐)",
+        resp["ok"] == json!(true)
+            && bpf5["recommend"]["recommendations"].is_array()
+            && bpf5["recommend"]["library_total"] == json!(1)
+            && bpf5["recommend"]["signals"].is_object()
+            && bpf5["recommend"]["suggested_section"].is_null()
+            && bpf5["recommend"]["next"].is_string(),
+        format!("lib={:?} signals 有场", bpf5["recommend"]["library_total"]),
+    );
+    // ⑥ write：缺 section_id → 壳侧早拒（不进工具面）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf6","cmd":"bid.performance","action":"write",
+        "perf_ids":["PERF-0001"],
+    }));
+    r.check(
+        "bid.performance(write缺参早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // ⑦ write 到真实叶（price 批已写入正文的叶）→ readiness 门拦（本种子
+    // 无导入件/无证据——工具面 E_UNPROCESSABLE 透传为 bad_args，文案带
+    // 指引；零副作用）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pf7","cmd":"bid.performance","action":"write",
+        "section_id":drafted_sid,"perf_ids":[perf_id],
+    }));
+    r.check(
+        "bid.performance(readiness门拦)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args"
+            && resp["message"].as_str().unwrap_or("").contains(&format!("章节 {drafted_sid}")),
+        format!("{}", resp["message"].as_str().unwrap_or("")),
+    );
+
+    // ---- #89 批 2：分段改写面（bid.segment——#254 段账本的壳聚合）
+    // 真链覆盖：域层 append_section_segment 直种一段（绕开 readiness 闸
+    // ——与 price 批 set_section_content 同款真源面策略），壳侧 list/rewrite
+    // 走真工具面。readiness 门在工具面单测（segments/readiness 系）。
+    // ① list 缺 section_id → 壳侧早拒
+    let resp = call(&ctx, json!({"id":"t-bid-sg0","cmd":"bid.segment"}));
+    r.check(
+        "bid.segment(缺参早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // ② 幽灵章节 → not_found 透传
+    let resp = call(&ctx, json!({
+        "id":"t-bid-sg1","cmd":"bid.segment","action":"list","section_id":"SEC-GHOST",
+    }));
+    r.check(
+        "bid.segment(幽灵章节拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // ③ 种段 + list 真数据（段清单 + 合稿统计）。域层种子面：目标叶已有
+    // 正文（price 批 set_section_content）→ 首次入账本时既有正文自动入册
+    // 为第 1 段（idem=seed:existing-content），本批种段为第 2 段——清单 2 条
+    {
+        let mut svc = bid_tools::service::BidService::open(&root).unwrap();
+        let _seg = svc
+            .store_mut()
+            .append_section_segment(
+                &drafted_sid,
+                "分段改写自测段：本章对招标要求逐条响应，工艺成熟可靠。".to_string(),
+                "selftest-seg-1",
+            )
+            .expect("域层种段应成功（无 readiness 闸）");
+        svc.checkpoint().unwrap();
+    }
+    let resp = call(&ctx, json!({
+        "id":"t-bid-sg2","cmd":"bid.segment","action":"list","section_id":drafted_sid,
+    }));
+    let bsg2 = result(&resp);
+    let segs_arr = bsg2["segments"]["segments"].as_array().cloned().unwrap_or_default();
+    let mine = segs_arr
+        .iter()
+        .find(|s| s["idem_key"].as_str() == Some("selftest-seg-1"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    r.check(
+        "bid.segment(段账本读面)",
+        resp["ok"] == json!(true)
+            && bsg2["action"] == json!("list")
+            && segs_arr.len() == 2
+            && mine["version"] == json!(1)
+            && mine["chars"].is_number()
+            && bsg2["segments"]["assembled_chars"].is_number()
+            && bsg2["segments"]["target_chars"].is_number(),
+        format!(
+            "segs={} assembled={:?}",
+            segs_arr.len(),
+            bsg2["segments"]["assembled_chars"]
+        ),
+    );
+    // ④ rewrite 缺参早拒（segment_id / content 两面）
+    let resp = call(&ctx, json!({"id":"t-bid-sg3","cmd":"bid.segment","action":"rewrite","content":"新内容"}));
+    r.check(
+        "bid.segment(rewrite缺段号早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    let resp = call(&ctx, json!({"id":"t-bid-sg4","cmd":"bid.segment","action":"rewrite","segment_id":"SEG-0001"}));
+    r.check(
+        "bid.segment(rewrite缺内容早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // ⑤ rewrite 真段：改内容 → changed + version 递增 + 合稿统计回显
+    let seg_id = mine["id"].as_str().unwrap_or("").to_string();
+    let resp = call(&ctx, json!({
+        "id":"t-bid-sg5","cmd":"bid.segment","action":"rewrite",
+        "segment_id":seg_id,
+        "content":"分段改写自测段（修订后）：响应升级，新增运维承诺与人员配置。",
+    }));
+    let bsg5 = result(&resp);
+    r.check(
+        "bid.segment(局部改写)",
+        resp["ok"] == json!(true)
+            && bsg5["action"] == json!("rewrite")
+            && bsg5["rewrite"]["changed"] == json!(true)
+            && bsg5["rewrite"]["segment"]["version"].as_u64().unwrap_or(0) >= 2
+            && bsg5["rewrite"]["assembled_chars"].is_number(),
+        format!("ver={:?} changed={:?}", bsg5["rewrite"]["segment"]["version"], bsg5["rewrite"]["changed"]),
+    );
+    // ⑥ 幽灵段 → not_found 透传
+    let resp = call(&ctx, json!({
+        "id":"t-bid-sg6","cmd":"bid.segment","action":"rewrite",
+        "segment_id":"SEG-GHOST","content":"内容",
+    }));
+    r.check(
+        "bid.segment(幽灵段拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // ⑦ 段级 CAS 过期 → conflict 码（#89 批 2 新映射——重读后重试，非故障）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-sg7","cmd":"bid.segment","action":"rewrite",
+        "segment_id":seg_id,"content":"过期版本的改写内容","expected_version":999,
+    }));
+    r.check(
+        "bid.segment(CAS过期conflict)",
+        resp["ok"] == json!(false) && err_code(&resp) == "conflict",
+        format!("{}", err_code(&resp)),
+    );
 
     // ---- #603 批 A：治理面（bid.gates / bid.gate_pass）
     // 读面：五门台账 + 空账本警告位（此时三门全未过）

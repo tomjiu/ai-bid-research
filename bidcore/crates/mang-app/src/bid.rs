@@ -70,7 +70,10 @@ fn map_tool_err(e: bid_mcp::ToolError) -> IpcError {
         bid_mcp::ToolError::ENotFound { what } => IpcError::not_found(what),
         bid_mcp::ToolError::EState { what } => IpcError::state(what),
         bid_mcp::ToolError::EUnprocessable { what } => IpcError::bad_args(what),
-        bid_mcp::ToolError::EState { what } => IpcError::new("state", what),
+        // #89 批 2：CAS 冲突独立成码（rewrite_section_segment 的
+        // expected_version 过期 / project_version 过期）——旧面落 io 码，
+        // UI 无法与真故障区分；conflict 语义是「重读后重试」的引导，不是故障。
+        bid_mcp::ToolError::EConflict { what } => IpcError::new("conflict", what),
         other => IpcError::io(format!("工具面应答失败：{other}")),
     }
 }
@@ -632,6 +635,185 @@ pub fn price(
         bid_mcp::ToolCall {
             tool: tool.to_string(),
             args: tool_args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    let mut out = Map::new();
+    out.insert("present".to_string(), json!(true));
+    out.insert("workspace".to_string(), json!(ws.root_display()));
+    out.insert("project".to_string(), project);
+    out.insert("action".to_string(), json!(action));
+    out.insert(out_key.to_string(), tool_out);
+    Ok(Value::Object(out))
+}
+
+// ---------------------------------------------------------------- #89 批 2：业绩库面 + 分段改写面
+
+/// `bid.performance` —— 业绩材料库（#89 批 2；#315 工具面的壳聚合）。
+///
+/// 四动作面（`action`，缺省 `list`）：
+/// - `list`：`list_performance` 库清单只读——filters（category/keyword/
+///   min_amount_wan/max_amount_wan/since）+ limit 原样透传（值域与非法值
+///   拒绝在工具面单一真源）。
+/// - `register`：`register_performance` 批量登记（entries 1..=200 条 +
+///   owner_name 库主登记；语义四元组幂等——重放回显既有 id）。参数原样
+///   透传，一条非法整批拒（零副作用）。
+/// - `recommend`：`recommend_performance` 只读匹配推荐——budget_wan/
+///   base_date/client_type/focus/top_k 透传（全可选：缺的因子弃权重归一），
+///   project_id 恒壳侧覆写。语料 = 项目名 + REQ 陈述 + 评分项原文。
+/// - `write`：`write_performance_section` 一键写入业绩章节——section_id
+///   必填（壳侧早拒，不进工具面），perf_ids/bid_open_date/project_version
+///   透传。证据自动登记绑定 + 单段写入（幂等键 `perf-section:<section_id>`）；
+///   readiness 门（可用业绩证据 < 3）拦写入并把材料指引带全（诚实面）。
+///
+/// 壳面与工具面的路由差异（诚实登记）：工具面 register/list 无项目路由
+/// （库是跨项目资产，建项目前就能维护——STATE_FREE）；壳面恒在已打开
+/// 项目的工作区上下文里（`ensure_locked` 要求 db.json，与其他 bid.* 同
+/// 轨），但**库本身仍是跨项目资产**（BID_PERF_LIB → 用户级库位，与项目
+/// db.json 无关——换项目不换库）。
+///
+/// 拒绝面：`bad_args`（action/入参/值域/空调用）/ `not_found`（无 db.json）/
+/// `state`（recommend 需 REQUIREMENTS_EXTRACTED+，write 需 MATRIX_READY+）。
+pub fn performance(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let action = a.str("action")?.unwrap_or("list");
+    const ACTIONS: &str = "list（库清单）| register（批量登记）| recommend（匹配推荐）| write（一键写入业绩章节）";
+    if !matches!(action, "list" | "register" | "recommend" | "write") {
+        return Err(IpcError::bad_args(format!(
+            "action 只接受 {ACTIONS}，实际：{action}"
+        )));
+    }
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    // 参数透传白名单（值域/结构裁决全在工具面 #315 单一真源，壳不重复）
+    let passthrough: &[&str] = match action {
+        "list" => &["filters", "limit"],
+        "register" => &["entries", "owner_name"],
+        "recommend" => &["budget_wan", "base_date", "client_type", "focus", "top_k"],
+        _ => &["perf_ids", "bid_open_date", "project_version"],
+    };
+    let mut req = Map::new();
+    for k in passthrough {
+        if let Some(v) = a.map.get(*k) {
+            if !v.is_null() {
+                req.insert((*k).to_string(), v.clone());
+            }
+        }
+    }
+    let (tool, out_key) = match action {
+        "list" => ("list_performance", "library"),
+        "register" => ("register_performance", "register"),
+        "recommend" => ("recommend_performance", "recommend"),
+        _ => {
+            // write：section_id 必填——壳侧早拒（不进工具面，同 price/section 轨）
+            let section_id = a.req_str("section_id")?;
+            req.insert("section_id".to_string(), json!(section_id));
+            ("write_performance_section", "write")
+        }
+    };
+    // 库操作（list/register）无项目路由；recommend/write 有——恒壳侧覆写
+    //（与 evidence 系同轨：不接受调用方伪造路由）
+    if action == "recommend" || action == "write" {
+        req.insert("project_id".to_string(), json!(project_id));
+    }
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: tool.to_string(),
+            args: Value::Object(req),
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    // 动态键（out_key）走 Map::insert——json! 宏对象键只认字面量（price 同款）
+    let mut out = Map::new();
+    out.insert("present".to_string(), json!(true));
+    out.insert("workspace".to_string(), json!(ws.root_display()));
+    out.insert("project".to_string(), project);
+    out.insert("action".to_string(), json!(action));
+    out.insert(out_key.to_string(), tool_out);
+    Ok(Value::Object(out))
+}
+
+/// `bid.segment` —— 分段改写（#89 批 2；#254 段账本工具面的壳聚合）。
+///
+/// 两动作面（`action`，缺省 `list`）：
+/// - `list`：`list_section_segments` 段账本发现面（只读）——section_id
+///   必填（壳侧早拒），段清单 + 合稿统计（assembled/target/remaining/
+///   over_target——续写前「已写到哪」的对账）。
+/// - `rewrite`：`rewrite_section_segment` 局部修订——segment_id +
+///   content 必填（壳侧早拒），expected_version（段级 CAS，可选）+
+///   project_version（项目级 CAS，可选）透传。改指定段不动兄弟段；
+///   同内容重写账面零变动。
+///
+/// 与整稿起草（draft_response_section / bid.workbench 章节详情）的分界：
+/// 那是「从无到有写整章」，本命令是「已起草章节的局部迭代」——长章节
+/// 续写改写的主工作面（#254）。
+///
+/// 拒绝面：`bad_args`（action/缺参/空白 content）/ `not_found`（无 db.json/
+/// 幽灵章节/幽灵段）/ `conflict`（CAS 过期——重读后重试，不是故障）/
+/// `state`（需 MATRIX_READY+）。
+pub fn segment(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let action = a.str("action")?.unwrap_or("list");
+    if action != "list" && action != "rewrite" {
+        return Err(IpcError::bad_args(format!(
+            "action 只接受 list（段账本）或 rewrite（局部改写），实际：{action}"
+        )));
+    }
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let mut req = Map::new();
+    req.insert("project_id".to_string(), json!(project_id));
+    let (tool, out_key) = match action {
+        "list" => {
+            let section_id = a.req_str("section_id")?;
+            req.insert("section_id".to_string(), json!(section_id));
+            if let Some(v) = a.map.get("project_version") {
+                if !v.is_null() {
+                    req.insert("project_version".to_string(), v.clone());
+                }
+            }
+            ("list_section_segments", "segments")
+        }
+        _ => {
+            let segment_id = a.req_str("segment_id")?;
+            let content = a.req_str("content")?;
+            if content.trim().is_empty() {
+                return Err(IpcError::bad_args(
+                    "content 不能为空白（空段无提交意义——工具面同款裁决，壳侧早拒）",
+                ));
+            }
+            req.insert("segment_id".to_string(), json!(segment_id));
+            req.insert("content".to_string(), json!(content));
+            for k in ["expected_version", "project_version"] {
+                if let Some(v) = a.map.get(k) {
+                    if !v.is_null() {
+                        req.insert(k.to_string(), v.clone());
+                    }
+                }
+            }
+            ("rewrite_section_segment", "rewrite")
+        }
+    };
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: tool.to_string(),
+            args: Value::Object(req),
         },
     );
     let tool_out = match reply {

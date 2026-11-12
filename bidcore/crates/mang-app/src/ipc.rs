@@ -492,6 +492,15 @@ impl Ctx {
             //    章节细查——纯壳聚合，裁决全在工具面 B1/B2）──────────────
             "bid.price" => crate::bid::price(&ws, &self.bid, &a),
 
+            // ── #89 批 2：业绩材料库面（#315 四工具的壳聚合——list 库
+            //    清单 / register 批量登记 / recommend 匹配推荐 / write
+            //    一键写入业绩章节；库为跨项目资产 BID_PERF_LIB）─────────
+            "bid.performance" => crate::bid::performance(&ws, &self.bid, &a),
+
+            // ── #89 批 2：分段改写面（#254 段账本——list 段清单 + 合稿
+            //    统计 / rewrite 局部修订（段级 CAS）；整稿起草的迭代面）──
+            "bid.segment" => crate::bid::segment(&ws, &self.bid, &a),
+
             // ── #603 批 A：治理面（bid.rs——gates 为 DomainStore 直读台账；
             //    gate_pass 为写面首发：宿主签发 receipt（#182）后经
             //    bid_mcp 真实工具面 record_review_gate 落账）──────────
