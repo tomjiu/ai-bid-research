@@ -280,7 +280,7 @@ check(
 );
 check(
   "工具面 E_STATE 透传壳侧 state 码（批 C/D 契约 §3.3）",
-  /ToolError::EState \{ what \} => IpcError::new\("state", what\)/.test(bidRs),
+  /ToolError::EState \{ what \} => IpcError::state\(what\)/.test(bidRs),
   "早态项目错误码被吞成 io"
 );
 check(
@@ -1805,6 +1805,75 @@ for (const sel of [".bid-price-form", ".bid-price-f-wide", ".bid-price-result", 
     "评分推演面板样式被删"
   );
 }
+
+// ---- #89 批 2：业绩库面板 + 分段改写面板（bid.performance / bid.segment）
+check(
+  "批2 壳聚合：bid.performance 注册 + 四动作分派（list/register/recommend/write）",
+  app.includes('"bid.performance"') && app.includes('case "bid.performance"')
+    && app.includes('ipc("bid.performance", args)') && app.includes('ipc("bid.performance", payload, 15e3)')
+    && ipcRs.includes('"bid.performance" => crate::bid::performance'),
+  "业绩库聚合命令或四动作接线断链"
+);
+check(
+  "批2 壳聚合：bid.segment 注册 + 两动作分派（list/rewrite）",
+  app.includes('"bid.segment"') && app.includes('case "bid.segment"')
+    && app.includes('ipc("bid.segment", { action: "list", section_id: sid })')
+    && app.includes('ipc("bid.segment", args)')
+    && ipcRs.includes('"bid.segment" => crate::bid::segment'),
+  "分段改写聚合命令或两动作接线断链"
+);
+check(
+  "批2 面板：业绩章节 + 分段改写页签与渲染函数",
+  app.includes('data-bid-panel="performance"') && app.includes("renderBidPerformancePanel")
+    && app.includes('data-bid-panel="segment"') && app.includes("renderBidSegmentPanel"),
+  "两页签/渲染函数缺失"
+);
+check(
+  "批2 业绩库四卡：清单/登记/推荐/写入的 IPC 动作面",
+  app.includes("loadBidPerformanceList") && app.includes('action: "register"')
+    && app.includes('action: "recommend"') && app.includes('action: "write"'),
+  "四动作面在面板里不全"
+);
+check(
+  "批2 分段改写：段账本 + 整段替换语义 + 段级 CAS 可选带",
+  app.includes('data-sg-content') && app.includes("expected_version")
+    && app.includes("整段替换"),
+  "段账本/改写面/CAS 接线缺失"
+);
+check(
+  "批2 selftest：业绩库七检查 + 分段七检查在场",
+  selftestRs.includes("bid.performance(库清单读面)") && selftestRs.includes("bid.performance(登记一条)")
+    && selftestRs.includes("bid.performance(幂等重放)") && selftestRs.includes("bid.performance(过滤命中)")
+    && selftestRs.includes("bid.performance(匹配推荐)") && selftestRs.includes("bid.performance(write缺参早拒)")
+    && selftestRs.includes("bid.performance(readiness门拦)")
+    && selftestRs.includes("bid.segment(缺参早拒)") && selftestRs.includes("bid.segment(幽灵章节拒)")
+    && selftestRs.includes("bid.segment(段账本读面)") && selftestRs.includes("bid.segment(rewrite缺段号早拒)")
+    && selftestRs.includes("bid.segment(rewrite缺内容早拒)") && selftestRs.includes("bid.segment(局部改写)")
+    && selftestRs.includes("bid.segment(幽灵段拒)") && selftestRs.includes("bid.segment(CAS过期conflict)"),
+  "集成自检项缺失"
+);
+check(
+  "批2 契约：bid.performance + bid.segment 登记（含 conflict 码进 §3.3 表）",
+  contract.includes("### bid.performance") && contract.includes("list_performance 工具输出原样")
+    && contract.includes("### bid.segment") && contract.includes("list_section_segments 工具输出原样")
+    && contract.includes("| `conflict` |"),
+  "改代码没同步契约"
+);
+check(
+  "批2 conflict 码：map_tool_err E_CONFLICT 独立映射（不落 io）",
+  bidRs.includes('EConflict { what } => IpcError::new("conflict", what)'),
+  "CAS 冲突映射断链（回退为 io 码）"
+);
+check(
+  "批2 selftest 隔离：BID_PERF_LIB 指向 scratch（不污染用户库）",
+  selftestRs.includes('set_var("BID_PERF_LIB"'),
+  "selftest 业绩库隔离缺失——会写用户真实库"
+);
+check(
+  "批2 样式：styles.css 提供 .bid-seg-edit（整段替换编辑框）",
+  css.includes(".bid-seg-edit"),
+  "分段改写编辑框样式被删"
+);
 
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

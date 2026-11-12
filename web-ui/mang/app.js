@@ -792,6 +792,106 @@
                 },
               });
             }
+            case "bid.performance": {
+              // #89 批 2 演示桥：与真实 bid.performance 响应同形（library /
+              // register / recommend / write 四动作——库为跨项目资产）
+              if (m.action === "register") {
+                return respond(m.id, {
+                  present: true,
+                  project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                  action: "register",
+                  register: {
+                    added: ["PERF-0002"], added_count: 1,
+                    deduplicated: [], total_entries: 2,
+                    owner_name: "示例科技有限公司",
+                    library_persisted: true,
+                    next: "recommend_performance(project_id=…) 匹配挑选 → write_performance_section 一键写入",
+                  },
+                });
+              }
+              if (m.action === "recommend") {
+                return respond(m.id, {
+                  present: true,
+                  project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                  action: "recommend",
+                  recommend: {
+                    project_id: "PRJ-DEMO-0001",
+                    recommendations: [
+                      { perf_id: "PERF-0001", name: "智慧园区弱电工程合同", score: 0.86, factors: [], reasons: ["类别命中：弱电工程", "金额区间接近"] },
+                      { perf_id: "PERF-0002", name: "数据中心机房工程合同", score: 0.62, factors: [], reasons: ["类别部分命中：机房工程"] },
+                    ],
+                    library_total: 2,
+                    signals: { base_date: "2026-11-12", base_date_source: "system_today", budget_wan: m.budget_wan || null, client_type: m.client_type || null, focus: m.focus || null },
+                    suggested_section: "SEC-0004",
+                    next: "write_performance_section(section_id=建议章节, perf_ids=选中条目) 一键写入（证据自动登记绑定）",
+                  },
+                });
+              }
+              if (m.action === "write") {
+                return respond(m.id, {
+                  present: true,
+                  project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                  action: "write",
+                  write: {
+                    project_id: "PRJ-DEMO-0001",
+                    section_id: m.section_id || "SEC-0004",
+                    segment_id: "SEG-0003",
+                    changed: true, deduplicated: false, segment_chars: 486,
+                    evidence_registered: [
+                      { perf_id: "PERF-0001", ev_id: "EV-0007", source_file: "材料/EV-03-类似业绩合同-智慧园区弱电工程.pdf", deduplicated: false },
+                    ],
+                    materials_pending: [{ perf_id: "PERF-0002", materials: ["材料/EV-04-类似业绩合同-数据中心机房工程.pdf"], reason: "材料未匹配到已导入文件（按文件名比对）" }],
+                    bindings: [{ ev_id: "EV-0007", req_ids: ["REQ-0012"] }],
+                    warnings: ["材料缺口 1 条（PERF-0002）——正文已写入但证据未登记，导入材料后重跑（幂等，自动补登记）"],
+                  },
+                });
+              }
+              return respond(m.id, {
+                present: true,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                action: "list",
+                library: {
+                  entries: [
+                    { perf_id: "PERF-0001", name: "智慧园区弱电工程合同", client: "示例产业园运营有限公司", amount_wan: 640, completed_on: "2025-05-20", categories: ["弱电工程"], materials_count: 1, key_points: ["一次验收通过"], client_type: "government" },
+                    { perf_id: "PERF-0002", name: "数据中心机房工程合同", client: "某数据服务有限公司", amount_wan: 380, completed_on: "2024-11-08", categories: ["机房工程"], materials_count: 1, key_points: [], client_type: "private" },
+                  ],
+                  returned: 2,
+                  owner_name: "示例科技有限公司",
+                  library_persisted: true,
+                },
+              });
+            }
+            case "bid.segment": {
+              // #89 批 2 演示桥：与真实 bid.segment 响应同形（segments 段账本 /
+              // rewrite 局部修订——#254 段账本面）
+              if (m.action === "rewrite") {
+                return respond(m.id, {
+                  present: true,
+                  project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                  action: "rewrite",
+                  rewrite: {
+                    section_id: "SEC-0002",
+                    segment: { id: m.segment_id || "SEG-0001", seq: 1, version: 2, chars: 128 },
+                    changed: true, deduplicated: false,
+                    assembled_chars: 128, target_chars: 400, remaining_chars: 272, over_target: false,
+                    segment_count: 2, citations: [], unanchored_claims: 0, warnings: [],
+                  },
+                });
+              }
+              return respond(m.id, {
+                present: true,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                action: "list",
+                segments: {
+                  section_id: m.section_id || "SEC-0002",
+                  segments: [
+                    { id: "SEG-0001", seq: 1, version: 1, chars: 96, idem_key: "seed:existing-content", updated_at: 1793200000, preview: "本章对招标文件技术规范逐项应答，参数达标，工艺成熟可靠。" },
+                    { id: "SEG-0002", seq: 2, version: 1, chars: 64, idem_key: "seg:agent-round-1", updated_at: 1793200600, preview: "运维承诺：提供 7×24 小时响应，2 小时到场。" },
+                  ],
+                  assembled_chars: 160, target_chars: 400, remaining_chars: 240, over_target: false,
+                },
+              });
+            }
             case "bid.gates":
               // #603 批 A：演示桥回可变台账（gate_pass 会真改——追认后消项）
               return respond(m.id, demoGates);
@@ -1122,6 +1222,24 @@
       sectionSel: "",
       trial: { busy: false, error: "", data: null },
       section: { busy: false, error: "", data: null },
+    },
+    // #89 批 2：业绩库面（bid.performance 四动作——list 库清单缓存 +
+    // register/recommend/write 表单态；库为跨项目资产，重开项目不丢）
+    bidPerf: {
+      list: { status: "idle", data: null, error: "", code: "", keyword: "" },
+      reg: {
+        busy: false, error: "", info: null,
+        form: { ownerName: "", name: "", client: "", amountWan: "", completedOn: "", categories: "", materials: "", keyPoints: "" },
+      },
+      rec: { busy: false, error: "", data: null, budgetWan: "", baseDate: "", clientType: "", focus: "", picks: [] },
+      write: { busy: false, error: "", data: null, sectionSel: "", perfIds: "", openDate: "" },
+    },
+    // #89 批 2：分段改写面（bid.segment——list 段账本 + rewrite 局部修订；
+    // 段内容是整段替换语义，textarea 不预填旧文——预览展示当前段）
+    bidSegment: {
+      sectionSel: "",
+      list: { busy: false, error: "", data: null },
+      rw: { segSel: "", content: "", busy: false, error: "", info: null },
     },
     // #47 R25：证据台账读面（list_evidence / search_evidence——缺口-4 读半边）
     bidEvidence: { status: "idle", data: null, error: "", code: "", kindFilter: "", statusFilter: "" },
@@ -1764,6 +1882,8 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="export">校验与导出</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="packages">分包</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="evidence">证据台账</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="performance">业绩章节</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="segment">分段改写</button>'
       + "</nav>"
       + '<div class="bid-panel" id="bid-panel"></div>'
       + "</section></div>";
@@ -1926,6 +2046,12 @@
       if (activePanel === "packages") renderBidPackagesPanel(host);
       // #47 R25：证据台账不依赖章节树（读面——list 过滤 + search 检索）
       if (activePanel === "evidence") renderBidEvidencePanel(host);
+      // #89 批 2：业绩库面不依赖章节树（库清单/登记/推荐均无状态门；
+      // write 面板内部自处理叶列表与 readiness 拒绝反馈）
+      if (activePanel === "performance") renderBidPerformancePanel(host);
+      // #89 批 2：分段改写不依赖章节树（段账本面板内部自处理叶列表；
+      // 幽灵段/空章节面由工具面拒绝反馈）
+      if (activePanel === "segment") renderBidSegmentPanel(host);
       return;
     }
     const byId = {};
@@ -1992,6 +2118,16 @@
     // #47 R25：证据台账（读面——同 packages：不依赖章节树）
     if (activePanel === "evidence") {
       renderBidEvidencePanel(host);
+      return;
+    }
+    // #89 批 2：业绩库面（库清单/登记/推荐/写入——不依赖选中节点）
+    if (activePanel === "performance") {
+      renderBidPerformancePanel(host);
+      return;
+    }
+    // #89 批 2：分段改写（段账本 + 局部修订——不依赖选中节点）
+    if (activePanel === "segment") {
+      renderBidSegmentPanel(host);
       return;
     }
     if (activePanel === "matrix") {
@@ -3772,6 +3908,376 @@
       }).catch((e) => {
         state.bidPrice.section.busy = false;
         state.bidPrice.section.error = (e && (e.message || e.code)) || "bid.price 章节细查失败";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+  }
+  /** #89 批 2：业绩章节面板（工作台 performance 页签）——库清单 / 登记 /
+   *  匹配推荐 / 一键写入四卡。库是跨项目资产（BID_PERF_LIB——换项目不丢）；
+   *  write 的 readiness 拒绝（可用业绩证据 < 3 / 材料未导入）就地反馈带指引
+   *  （bad_args 文案），不弹故障横幅。 */
+  function renderBidPerformancePanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const pf = state.bidPerf;
+    const nodes = bidOutlineNodes();
+    const leaves = nodes.filter((n) => n.is_leaf);
+    if (pf.list.status === "idle") ui.loadBidPerformanceList();
+    // ---- 卡 1：业绩库清单（list_performance——keyword 过滤透传）
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">业绩库（list_performance · #89 批 2）</div>'
+      + '<div class="bid-card-sub">跨项目资产（换项目不丢）——登记 → 推荐 → 一键写入业绩章节；库主：' + esc((pf.list.data && pf.list.data.library && pf.list.data.library.owner_name) || "未登记") + (pf.list.data && pf.list.data.library && pf.list.data.library.library_persisted ? " · 已落盘" : "") + "</div>"
+      + '<div class="bid-price-form">'
+      + '<label class="bid-price-f bid-price-f-wide">关键词（名称/客户） <input data-pf-kw type="text" value="' + esc(pf.list.keyword) + '" placeholder="如 弱电 / 产业园"></label>'
+      + '<div class="bid-price-f"><button class="btn btn-sm" data-pf-list-go>' + (pf.list.status === "loading" ? "读取中…" : "查询") + "</button></div>"
+      + "</div>";
+    if (pf.list.status === "error" && pf.list.code === "not_found") {
+      html += '<div class="bid-card-sub">当前工作区没有标书项目——新建项目后这里可用（库本身是跨项目的，建项前也可经 MCP register_performance 维护）。</div>';
+    } else if (pf.list.status === "error") {
+      html += '<div class="bid-wiz-error">' + esc(pf.list.error || "读取失败") + "</div>";
+    } else if (pf.list.status === "ready" && pf.list.data && pf.list.data.library) {
+      const lib = pf.list.data.library;
+      const rows = Array.isArray(lib.entries) ? lib.entries : [];
+      if (!rows.length) {
+        html += '<div class="bid-card-sub">库为空——在下方「登记业绩」录入第一条，或经 MCP register_performance 批量导入。</div>';
+      } else {
+        html += '<table class="bid-table"><thead><tr><th>编号</th><th>项目名称</th><th>客户</th><th>金额(万)</th><th>竣工日期</th><th>类别</th></tr></thead><tbody>';
+        for (const e of rows.slice(0, 50)) {
+          html += "<tr><td>" + esc(e.perf_id || "—") + "</td><td>" + esc(e.name || "—") + "</td><td>" + esc(e.client || "—") + "</td><td>" + (e.amount_wan != null ? esc(e.amount_wan) : "—") + "</td><td>" + esc(e.completed_on || "—") + "</td><td>" + esc((e.categories || []).join("/") || "—") + "</td></tr>";
+        }
+        html += "</tbody></table>";
+        html += '<div class="bid-card-sub">共 ' + fmtChars(lib.returned != null ? lib.returned : rows.length) + " 条" + (rows.length >= 50 ? "（面板展示前 50——更多用关键词过滤）" : "") + "</div>";
+      }
+    }
+    html += "</div>";
+    // ---- 卡 2：登记业绩（register_performance——语义四元组幂等）
+    const f = pf.reg.form;
+    html += '<div class="bid-card"><div class="bid-card-title">登记业绩（register_performance）</div>'
+      + '<div class="bid-card-sub">语义四元组（名称+客户+金额+竣工日期）幂等——重复登记回显既有编号不重复入账；材料路径与导入件文件名一致时写入环节自动登记证据</div>'
+      + '<div class="bid-price-form">'
+      + '<label class="bid-price-f">项目名称 <input data-pf-name type="text" value="' + esc(f.name) + '" placeholder="如 智慧园区弱电工程合同"></label>'
+      + '<label class="bid-price-f">客户 <input data-pf-client type="text" value="' + esc(f.client) + '" placeholder="如 示例产业园运营有限公司"></label>'
+      + '<label class="bid-price-f">金额(万元) <input data-pf-amount type="number" step="0.01" min="0" value="' + esc(f.amountWan) + '" placeholder="如 640"></label>'
+      + '<label class="bid-price-f">竣工日期 <input data-pf-date type="text" value="' + esc(f.completedOn) + '" placeholder="YYYY-MM-DD"></label>'
+      + '<label class="bid-price-f">库主（主体名） <input data-pf-owner type="text" value="' + esc(f.ownerName) + '" placeholder="首次登记时填（证据主体名）"></label>'
+      + '<label class="bid-price-f bid-price-f-wide">类别（逗号分隔） <input data-pf-cats type="text" value="' + esc(f.categories) + '" placeholder="如 弱电工程, 安防监控"></label>'
+      + '<label class="bid-price-f bid-price-f-wide">材料路径（逗号分隔，与导入件文件名一致） <input data-pf-mats type="text" value="' + esc(f.materials) + '" placeholder="如 材料/EV-03-类似业绩合同.pdf"></label>'
+      + '<label class="bid-price-f bid-price-f-wide">亮点（逗号分隔，写入正文用） <input data-pf-kps type="text" value="' + esc(f.keyPoints) + '" placeholder="如 一次验收通过, 含2年运维"></label>'
+      + '<div class="bid-price-f bid-price-f-wide"><button class="btn btn-primary btn-sm" data-pf-reg-go>' + (pf.reg.busy ? "登记中…" : "登记") + "</button>"
+      + ' <span class="bid-card-sub">值域裁决在工具面（#315）——面板不代答</span></div>'
+      + "</div>";
+    if (pf.reg.error) html += '<div class="bid-wiz-error">' + esc(pf.reg.error) + "</div>";
+    if (pf.reg.info) {
+      const rg = pf.reg.info;
+      html += '<div class="bid-wiz-info">新增 ' + fmtChars(rg.added_count || 0) + " 条"
+        + (Array.isArray(rg.deduplicated) && rg.deduplicated.length ? "，幂等命中 " + fmtChars(rg.deduplicated.length) + " 条" : "")
+        + "，库内共 " + fmtChars(rg.total_entries || 0) + " 条" + (rg.added && rg.added.length ? "（新编号：" + rg.added.map((x) => esc(x)).join("、") + "）" : "") + "</div>";
+    }
+    html += "</div>";
+    // ---- 卡 3：匹配推荐（recommend_performance——四因子弃权归一）
+    html += '<div class="bid-card"><div class="bid-card-title">匹配推荐（recommend_performance）</div>'
+      + '<div class="bid-card-sub">按本项目语料（项目名 + 条款陈述 + 评分项原文）给库里业绩打分排序；因子全可选——缺的弃权归一，不编造</div>'
+      + '<div class="bid-price-form">'
+      + '<label class="bid-price-f">预算(万元) <input data-pf-budget type="number" step="0.01" min="0" value="' + esc(pf.rec.budgetWan) + '" placeholder="可选"></label>'
+      + '<label class="bid-price-f">基准日 <input data-pf-basedate type="text" value="' + esc(pf.rec.baseDate) + '" placeholder="YYYY-MM-DD（缺省今日）"></label>'
+      + '<label class="bid-price-f">采购人类型 <select data-pf-ctype>'
+      + [["", "弃权（缺省）"], ["government", "政府/事业单位"], ["soe", "国有企业"], ["private", "民营企业"], ["other", "其他"]].map((c) => '<option value="' + c[0] + '"' + (pf.rec.clientType === c[0] ? " selected" : "") + ">" + c[1] + "</option>").join("")
+      + "</select></label>"
+      + '<label class="bid-price-f bid-price-f-wide">侧重关键词 <input data-pf-focus type="text" value="' + esc(pf.rec.focus) + '" placeholder="可选，如 机房 / 运维"></label>'
+      + '<div class="bid-price-f bid-price-f-wide"><button class="btn btn-primary btn-sm" data-pf-rec-go>' + (pf.rec.busy ? "推荐中…" : "推荐") + "</button></div>"
+      + "</div>";
+    if (pf.rec.error) html += '<div class="bid-wiz-error">' + esc(pf.rec.error) + "</div>";
+    if (pf.rec.data) {
+      const rc = pf.rec.data;
+      const recs = Array.isArray(rc.recommendations) ? rc.recommendations : [];
+      if (recs.length) {
+        html += '<table class="bid-table"><thead><tr><th>编号</th><th>项目名称</th><th>得分</th><th>理由</th><th></th></tr></thead><tbody>';
+        for (const m of recs) {
+          html += "<tr><td>" + esc(m.perf_id || "—") + "</td><td>" + esc(m.name || "—") + "</td><td>" + (m.score != null ? fmtScore(m.score) : "—") + "</td><td>" + esc((m.reasons || []).join("；")) + "</td>"
+            + '<td><button class="btn btn-sm" data-pf-pick="' + esc(m.perf_id) + '">选用</button></td></tr>';
+        }
+        html += "</tbody></table>";
+      } else {
+        html += '<div class="bid-card-sub">库内无可推荐条目——先登记业绩。</div>';
+      }
+      if (rc.suggested_section) html += '<div class="bid-wiz-info">建议写入章节：' + esc(rc.suggested_section) + "（大纲中标题含「业绩/类似项目」的叶）</div>";
+      else if (rc.next) html += '<div class="bid-card-sub">' + esc(rc.next) + "</div>";
+    }
+    html += "</div>";
+    // ---- 卡 4：一键写入（write_performance_section——证据自动登记绑定）
+    html += '<div class="bid-card"><div class="bid-card-title">一键写入业绩章节（write_performance_section）</div>'
+      + '<div class="bid-card-sub">选章节 + 选业绩（可从推荐「选用」带入）→ 业绩表 + 逐条描述段写入；材料已导入的自动登记证据并绑定业绩类条款；readiness 门（可用业绩证据 ≥ 3）会拦并带材料指引</div>';
+    if (!leaves.length) {
+      html += '<div class="bid-card-sub">大纲尚无叶章节——先建纲（建纲流在左侧树区），再回来写入。</div>';
+    } else {
+      html += '<div class="bid-price-form">'
+        + '<label class="bid-price-f">目标章节 <select data-pf-sec>'
+        + leaves.map((n) => '<option value="' + esc(n.id) + '"' + (pf.write.sectionSel === n.id ? " selected" : "") + ">" + esc(n.title || n.id) + "</option>").join("")
+        + "</select></label>"
+        + '<label class="bid-price-f bid-price-f-wide">业绩编号（逗号分隔） <input data-pf-perfs type="text" value="' + esc(pf.write.perfIds) + '" placeholder="如 PERF-0001, PERF-0002"></label>'
+        + '<label class="bid-price-f">开标日 <input data-pf-open type="text" value="' + esc(pf.write.openDate) + '" placeholder="YYYY-MM-DD（证据有效期裁决，缺省今日）"></label>'
+        + '<div class="bid-price-f"><button class="btn btn-primary btn-sm" data-pf-write-go>' + (pf.write.busy ? "写入中…" : "写入") + "</button></div>"
+        + "</div>";
+      if (pf.write.error) html += '<div class="bid-wiz-error">' + esc(pf.write.error) + "</div>";
+      if (pf.write.data) {
+        const w = pf.write.data;
+        html += '<div class="bid-price-result">';
+        html += '<div class="bid-price-cell"><div class="bid-price-k">写入章节</div><div class="bid-price-v">' + esc(w.section_id || "—") + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">段号</div><div class="bid-price-v">' + esc(w.segment_id || "—") + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">本次变更</div><div class="bid-price-v">' + (w.changed ? "写入" : "幂等 no-op") + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">证据登记</div><div class="bid-price-v">' + fmtChars((w.evidence_registered || []).length) + " 条</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">材料缺口</div><div class="bid-price-v">' + fmtChars((w.materials_pending || []).length) + " 条</div></div>";
+        html += "</div>";
+        if (Array.isArray(w.materials_pending) && w.materials_pending.length) {
+          html += '<div class="bid-wiz-info">材料缺口（导入后重跑自动补登记，幂等）：<br>' + w.materials_pending.map((p) => esc(p.perf_id) + "：" + esc((p.materials || []).join("、")) + "（" + esc(p.reason || "") + "）").join("<br>") + "</div>";
+        }
+        if (Array.isArray(w.warnings) && w.warnings.length) html += '<div class="bid-wiz-info">' + w.warnings.map((x) => esc(x)).join("<br>") + "</div>";
+      }
+    }
+    html += "</div></div>";
+    panel.innerHTML = html;
+    // ---- 事件绑定
+    const listGo = panel.querySelector("[data-pf-list-go]");
+    if (listGo) listGo.addEventListener("click", () => {
+      const kw = panel.querySelector("[data-pf-kw]");
+      state.bidPerf.list.keyword = kw ? kw.value.trim() : "";
+      ui.loadBidPerformanceList(true);
+    });
+    const regGo = panel.querySelector("[data-pf-reg-go]");
+    if (regGo) regGo.addEventListener("click", () => {
+      const v = (n) => { const el = panel.querySelector("[data-pf-" + n + "]"); return el ? String(el.value || "").trim() : ""; };
+      const form = state.bidPerf.reg.form;
+      form.ownerName = v("owner"); form.name = v("name"); form.client = v("client");
+      form.amountWan = v("amount"); form.completedOn = v("date");
+      form.categories = v("cats"); form.materials = v("mats"); form.keyPoints = v("kps");
+      if (!form.name || !form.client || !form.amountWan || !form.completedOn) {
+        state.bidPerf.reg.error = "名称 / 客户 / 金额(万) / 竣工日期 四项必填（工具面同款必填集）";
+        state.bidPerf.reg.info = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      const entry = { name: form.name, client: form.client, amount_wan: Number(form.amountWan), completed_on: form.completedOn };
+      const splitList = (s) => s.split(/[,，;；]+/).map((x) => x.trim()).filter(Boolean);
+      if (form.categories) entry.categories = splitList(form.categories);
+      if (form.materials) entry.materials = splitList(form.materials);
+      if (form.keyPoints) entry.key_points = splitList(form.keyPoints);
+      const args = { action: "register", entries: [entry] };
+      if (form.ownerName) args.owner_name = form.ownerName;
+      state.bidPerf.reg.busy = true; state.bidPerf.reg.error = ""; state.bidPerf.reg.info = null;
+      renderBidWorkbenchIfOpen();
+      ipc("bid.performance", args).then((d) => {
+        state.bidPerf.reg.busy = false;
+        state.bidPerf.reg.info = (d && d.register) || null;
+        ui.loadBidPerformanceList(true);
+      }).catch((e) => {
+        state.bidPerf.reg.busy = false;
+        state.bidPerf.reg.error = (e && (e.message || e.code)) || "bid.performance 登记失败";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    const recGo = panel.querySelector("[data-pf-rec-go]");
+    if (recGo) recGo.addEventListener("click", () => {
+      const v = (n) => { const el = panel.querySelector("[data-pf-" + n + "]"); return el ? String(el.value || "").trim() : ""; };
+      const rc = state.bidPerf.rec;
+      rc.budgetWan = v("budget"); rc.baseDate = v("basedate"); rc.clientType = v("ctype"); rc.focus = v("focus");
+      const args = { action: "recommend" };
+      if (rc.budgetWan) args.budget_wan = Number(rc.budgetWan);
+      if (rc.baseDate) args.base_date = rc.baseDate;
+      if (rc.clientType) args.client_type = rc.clientType;
+      if (rc.focus) args.focus = rc.focus;
+      rc.busy = true; rc.error = ""; rc.data = null;
+      renderBidWorkbenchIfOpen();
+      ipc("bid.performance", args).then((d) => {
+        rc.busy = false; rc.data = (d && d.recommend) || null;
+        if (rc.data && rc.data.suggested_section && !state.bidPerf.write.sectionSel) {
+          state.bidPerf.write.sectionSel = rc.data.suggested_section;
+        }
+        renderBidWorkbenchIfOpen();
+      }).catch((e) => {
+        rc.busy = false;
+        rc.error = (e && (e.message || e.code)) || "bid.performance 推荐失败";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    panel.querySelectorAll("[data-pf-pick]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pid = btn.dataset.pfPick;
+        const cur = state.bidPerf.write.perfIds.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
+        if (pid && !cur.includes(pid)) cur.push(pid);
+        state.bidPerf.write.perfIds = cur.join(", ");
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    const writeGo = panel.querySelector("[data-pf-write-go]");
+    if (writeGo) writeGo.addEventListener("click", () => {
+      const secSel = panel.querySelector("[data-pf-sec]");
+      const perfsEl = panel.querySelector("[data-pf-perfs]");
+      const openEl = panel.querySelector("[data-pf-open]");
+      const w = state.bidPerf.write;
+      w.sectionSel = secSel ? secSel.value : "";
+      w.perfIds = perfsEl ? perfsEl.value.trim() : "";
+      w.openDate = openEl ? openEl.value.trim() : "";
+      const ids = w.perfIds.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
+      if (!w.sectionSel || !ids.length) {
+        w.error = "目标章节与至少一个业绩编号必填";
+        w.data = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      const args = { action: "write", section_id: w.sectionSel, perf_ids: ids };
+      if (w.openDate) args.bid_open_date = w.openDate;
+      w.busy = true; w.error = ""; w.data = null;
+      renderBidWorkbenchIfOpen();
+      ipc("bid.performance", args).then((d) => {
+        w.busy = false; w.data = (d && d.write) || null;
+        renderBidWorkbenchIfOpen();
+      }).catch((e) => {
+        w.busy = false;
+        w.error = (e && (e.message || e.code)) || "bid.performance 写入失败";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+  }
+  /** #89 批 2：分段改写面板（工作台 segment 页签）——段账本（list_section_
+   *  segments：续写前「已写到哪」对账）+ 局部修订（rewrite_section_segment：
+   *  整段替换语义，段级 CAS）。rewrite 是整段替换不是差量编辑——textarea
+   *  不预填旧文（当前段以预览展示），expected_version 可选带上防并发。 */
+  function renderBidSegmentPanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const sg = state.bidSegment;
+    const nodes = bidOutlineNodes();
+    const leaves = nodes.filter((n) => n.is_leaf);
+    // ---- 卡 1：段账本（list——段清单 + 合稿统计）
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">段账本（list_section_segments · #89 批 2）</div>'
+      + '<div class="bid-card-sub">章节的分段写入账——续写/改写前「已写到哪」的对账；合稿统计 = 各段拼接后的字数 vs 目标配额</div>';
+    if (!leaves.length) {
+      html += '<div class="bid-card-sub">大纲尚无叶章节——先建纲并起草（或经 Agent MCP draft_response_section / append_section_segment），再回来细查段账本。</div>';
+    } else {
+      html += '<div class="bid-price-form">'
+        + '<label class="bid-price-f bid-price-f-wide">章节 <select data-sg-sec>'
+        + leaves.map((n) => '<option value="' + esc(n.id) + '"' + (sg.sectionSel === n.id ? " selected" : "") + ">" + esc(n.title || n.id) + "（" + fmtChars(n.actual_chars) + " 字）</option>").join("")
+        + "</select></label>"
+        + '<div class="bid-price-f"><button class="btn btn-primary btn-sm" data-sg-list-go>' + (sg.list.busy ? "读取中…" : "查段账本") + "</button></div>"
+        + "</div>";
+      if (sg.list.error) html += '<div class="bid-wiz-error">' + esc(sg.list.error) + "</div>";
+      if (sg.list.data) {
+        const d = sg.list.data;
+        const segs = Array.isArray(d.segments) ? d.segments : [];
+        html += '<div class="bid-price-result">';
+        html += '<div class="bid-price-cell"><div class="bid-price-k">已写段数</div><div class="bid-price-v">' + fmtChars(segs.length) + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">合稿字数</div><div class="bid-price-v">' + fmtChars(d.assembled_chars) + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">目标配额</div><div class="bid-price-v">' + fmtChars(d.target_chars) + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">剩余字数</div><div class="bid-price-v">' + (d.over_target ? "已超配" : fmtChars(d.remaining_chars)) + "</div></div>";
+        html += "</div>";
+        if (segs.length) {
+          html += '<table class="bid-table"><thead><tr><th>段号</th><th>序</th><th>版本</th><th>字数</th><th>内容预览</th><th></th></tr></thead><tbody>';
+          for (const s of segs) {
+            html += "<tr><td>" + esc(s.id || "—") + "</td><td>" + fmtChars(s.seq) + "</td><td>v" + fmtChars(s.version) + "</td><td>" + fmtChars(s.chars) + "</td><td>" + esc(s.preview || "") + "</td>"
+              + '<td><button class="btn btn-sm" data-sg-edit="' + esc(s.id) + '">改这段</button></td></tr>';
+          }
+          html += "</tbody></table>";
+        } else {
+          html += '<div class="bid-card-sub">该章节尚无段账本（整稿写入或未起草）——分段写入经 Agent MCP append_section_segment，或先在章节详情起草。</div>';
+        }
+      }
+    }
+    html += "</div>";
+    // ---- 卡 2：局部改写（rewrite——整段替换 + 段级 CAS）
+    html += '<div class="bid-card"><div class="bid-card-title">局部改写（rewrite_section_segment）</div>'
+      + '<div class="bid-card-sub">改指定段、不动兄弟段（整段替换语义）；「版本对齐」勾上则带 expected_version 防并发覆写（过期 → conflict，重读后重试）</div>';
+    const segsForEdit = (sg.list.data && Array.isArray(sg.list.data.segments)) ? sg.list.data.segments : [];
+    if (!segsForEdit.length) {
+      html += '<div class="bid-card-sub">先查段账本选定章节——有段之后这里改写。</div>';
+    } else {
+      html += '<div class="bid-price-form">'
+        + '<label class="bid-price-f">目标段 <select data-sg-seg>'
+        + segsForEdit.map((s) => '<option value="' + esc(s.id) + '"' + (sg.rw.segSel === s.id ? " selected" : "") + ">" + esc(s.id) + "（第" + fmtChars(s.seq) + "段 v" + fmtChars(s.version) + "·" + fmtChars(s.chars) + "字）</option>").join("")
+        + "</select></label>"
+        + '<label class="bid-price-f">版本对齐 <input type="checkbox" data-sg-cas style="min-width:auto"></label>'
+        + '<div class="bid-price-f bid-price-f-wide"><button class="btn btn-primary btn-sm" data-sg-rw-go>' + (sg.rw.busy ? "改写中…" : "提交改写") + "</button></div>"
+        + "</div>"
+        + '<div class="bid-seg-edit"><textarea data-sg-content rows="6" placeholder="改写后的整段内容（替换该段全部正文）……">' + esc(sg.rw.content) + "</textarea></div>";
+      if (sg.rw.error) html += '<div class="bid-wiz-error">' + esc(sg.rw.error) + "</div>";
+      if (sg.rw.info) {
+        const w = sg.rw.info;
+        html += '<div class="bid-price-result">';
+        html += '<div class="bid-price-cell"><div class="bid-price-k">本次变更</div><div class="bid-price-v">' + (w.changed ? "已改写" : "同内容 no-op") + "</div></div>";
+        if (w.segment) html += '<div class="bid-price-cell"><div class="bid-price-k">段版本</div><div class="bid-price-v">v' + fmtChars(w.segment.version) + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">合稿字数</div><div class="bid-price-v">' + fmtChars(w.assembled_chars) + "</div></div>";
+        html += '<div class="bid-price-cell"><div class="bid-price-k">剩余字数</div><div class="bid-price-v">' + (w.over_target ? "已超配" : fmtChars(w.remaining_chars)) + "</div></div>";
+        html += "</div>";
+        if (Array.isArray(w.warnings) && w.warnings.length) html += '<div class="bid-wiz-info">' + w.warnings.map((x) => esc(x)).join("<br>") + "</div>";
+      }
+    }
+    html += "</div></div>";
+    panel.innerHTML = html;
+    // ---- 事件绑定
+    const listGo = panel.querySelector("[data-sg-list-go]");
+    if (listGo) listGo.addEventListener("click", () => {
+      const secSel = panel.querySelector("[data-sg-sec]");
+      const sid = secSel ? secSel.value : "";
+      if (!sid) return;
+      state.bidSegment.sectionSel = sid;
+      state.bidSegment.list.busy = true; state.bidSegment.list.error = ""; state.bidSegment.list.data = null;
+      state.bidSegment.rw.info = null; state.bidSegment.rw.error = "";
+      renderBidWorkbenchIfOpen();
+      ipc("bid.segment", { action: "list", section_id: sid }).then((d) => {
+        state.bidSegment.list.busy = false;
+        state.bidSegment.list.data = (d && d.segments) || null;
+        // 选段下拉重置到第一段（段账本刚换章节）
+        const segs = (state.bidSegment.list.data && state.bidSegment.list.data.segments) || [];
+        state.bidSegment.rw.segSel = segs.length ? segs[0].id : "";
+        renderBidWorkbenchIfOpen();
+      }).catch((e) => {
+        state.bidSegment.list.busy = false;
+        state.bidSegment.list.error = (e && (e.message || e.code)) || "bid.segment 段账本读取失败";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    panel.querySelectorAll("[data-sg-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.bidSegment.rw.segSel = btn.dataset.sgEdit;
+        state.bidSegment.rw.content = "";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    const rwGo = panel.querySelector("[data-sg-rw-go]");
+    if (rwGo) rwGo.addEventListener("click", () => {
+      const segSel = panel.querySelector("[data-sg-seg]");
+      const contentEl = panel.querySelector("[data-sg-content]");
+      const casEl = panel.querySelector("[data-sg-cas]");
+      const rw = state.bidSegment.rw;
+      rw.segSel = segSel ? segSel.value : "";
+      rw.content = contentEl ? contentEl.value : "";
+      if (!rw.segSel || !rw.content.trim()) {
+        rw.error = "目标段与改写内容必填（空白段无提交意义）";
+        rw.info = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      const segObj = ((state.bidSegment.list.data && state.bidSegment.list.data.segments) || []).find((s) => s.id === rw.segSel);
+      const args = { action: "rewrite", segment_id: rw.segSel, content: rw.content };
+      if (casEl && casEl.checked && segObj && segObj.version != null) args.expected_version = segObj.version;
+      rw.busy = true; rw.error = ""; rw.info = null;
+      renderBidWorkbenchIfOpen();
+      ipc("bid.segment", args).then((d) => {
+        rw.busy = false; rw.info = (d && d.rewrite) || null;
+        // 段账本重读（版本/合稿统计要新鲜——conflict 重试也靠它）
+        const sid = state.bidSegment.sectionSel;
+        if (sid) {
+          ipc("bid.segment", { action: "list", section_id: sid }).then((d2) => {
+            state.bidSegment.list.data = (d2 && d2.segments) || null;
+            renderBidWorkbenchIfOpen();
+          }).catch(() => {});
+        }
+        renderBidWorkbenchIfOpen();
+      }).catch((e) => {
+        rw.busy = false;
+        rw.error = (e && (e.message || e.code)) || "bid.segment 改写失败";
         renderBidWorkbenchIfOpen();
       });
     });
@@ -6676,6 +7182,36 @@
         state.bidPackages.data = null;
         state.bidPackages.status = "error";
         state.bidPackages.error = err && (err.message || err.code) || "bid.packages 读取失败";
+      }
+      renderBidWorkbenchIfOpen();
+    },
+    /** #89 批 2：业绩库清单读面（bid.performance action=list——keyword 过滤
+     * 透传；not_found 走引导卡；库为跨项目资产，重开项目不重拉也行但保持
+     *  简单：每次进面板 idle 时拉一次） */
+    async loadBidPerformanceList(force) {
+      if (!state.bridge) return;
+      if (state.bidPerf.list.status === "loading" && !force) return;
+      state.bidPerf.list.status = "loading";
+      state.bidPerf.list.error = "";
+      state.bidPerf.list.code = "";
+      renderBidWorkbenchIfOpen();
+      try {
+        const payload = {};
+        if (state.bidPerf.list.keyword) payload.filters = { keyword: state.bidPerf.list.keyword };
+        const r = await ipc("bid.performance", payload, 15e3);
+        if (r && r.present) {
+          state.bidPerf.list.data = r;
+          state.bidPerf.list.status = "ready";
+        } else {
+          state.bidPerf.list.data = null;
+          state.bidPerf.list.status = "error";
+          state.bidPerf.list.error = "当前工作区无业绩库数据";
+        }
+      } catch (err) {
+        state.bidPerf.list.data = null;
+        state.bidPerf.list.status = "error";
+        state.bidPerf.list.code = (err && err.code) || "";
+        state.bidPerf.list.error = (err && (err.message || err.code)) || "bid.performance 读取失败";
       }
       renderBidWorkbenchIfOpen();
     },

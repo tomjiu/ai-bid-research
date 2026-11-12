@@ -4753,3 +4753,8 @@ html[data-chrome="native"][data-maximized="1"] #app {
 .bid-price-cell { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--line, #d0d4dc); border-radius: 8px; background: var(--bg-alt, #f6f7fa); }
 .bid-price-k { font-size: 12px; color: var(--fg-dim, #666); }
 .bid-price-v { font-size: 18px; font-weight: 600; }
+
+/* #89 批 2：分段改写面板（bid.segment——整段替换编辑框；表单/结果格复用
+   .bid-price-* 系） */
+.bid-seg-edit { margin: 8px 0 4px; }
+.bid-seg-edit textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line, #d0d4dc); border-radius: 8px; background: var(--bg, #fff); font: inherit; line-height: 1.6; resize: vertical; min-height: 96px; }

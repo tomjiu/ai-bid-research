@@ -102,6 +102,7 @@ try{window.__ipcResolve&&window.__ipcResolve("r1", {"id":"r1","ok":true,"result"
 | `unknown_cmd` | 没有这个命令 | `nope.cmd` |
 | `not_found` | 路径不存在 | 文件被删/改名 |
 | `state` | bid 项目未到该命令的状态窗（工具面 E_STATE 透传） | 矩阵未建时 `bid.quality` / `bid.score` |
+| `conflict` | 乐观并发 CAS 过期（工具面 E_CONFLICT 透传——#89 批 2 起；此前落 `io` 码）——重读后重试，不是故障 | `bid.segment` rewrite 的 `expected_version` / `project_version` 落后 |
 | `denied` | 存在但越权（写工作区非 `.mang/`、拒绝访问） | `fs.writeBytes` 写正文 |
 | `outside_workspace` | 解析后不在工作区内（`../` 穿越、盘符外绝对路径） | 安全拦截 |
 | `too_large` | 超过该命令的体积上限 | 50MB 的 pdf 用 `fs.read` |
@@ -506,6 +507,77 @@ mappings【#224 双向追溯】、unmapped_scoring_items、notes、sections_scor
 ```
 拒绝面：`bad_args`（action/入参/值域——E_UNPROCESSABLE 透射）/
 `not_found`（无 db.json / 幽灵章节）。
+
+### bid.performance —— 业绩材料库（list / register / recommend / write；#89 批 2）
+四动作面（`action`，缺省 `list`）——#315 四工具的壳聚合：
+- **`list`**：`bid_mcp::dispatch_with(list_performance)` 库清单只读——
+  `filters`（category/keyword/min_amount_wan/max_amount_wan/since）+ `limit`
+  **原样透传**（值域与非法值拒绝在工具面单一真源）。
+- **`register`**：`bid_mcp::dispatch_with(register_performance)` 批量登记——
+  `entries`（1..=200 条对象数组）+ `owner_name`（库主/证据主体名）透传；
+  语义四元组（名称+客户+金额+竣工日期）幂等，重放回显既有 id；一条非法
+  整批拒（零副作用）。
+- **`recommend`**：`bid_mcp::dispatch_with(recommend_performance)` 只读匹配
+  推荐——`budget_wan`/`base_date`/`client_type`/`focus`/`top_k` 透传（全
+  可选：缺的因子弃权重归一），`project_id` 恒壳侧覆写；语料 = 项目名 +
+  REQ 陈述 + 评分项原文，响应带 `suggested_section`（大纲含业绩/类似项目
+  标题的叶；无则 null + `next` 引导）。
+- **`write`**：`bid_mcp::dispatch_with(write_performance_section)` 一键写入
+  业绩章节——`section_id` **必填**（壳侧早拒 `bad_args`），`perf_ids` /
+  `bid_open_date` / `project_version` 透传。证据自动登记绑定（材料文件名
+  命中已导入件）+ 业绩表/描述段单段写入（幂等键 `perf-section:<sid>`）；
+  readiness 门（可用业绩证据 < 3）拦写入并把材料指引带全（诚实面）。
+
+**壳面与工具面的路由差异（诚实登记）**：工具面 register/list 无项目路由
+（库是跨项目资产，建项目前可维护）；壳面恒在已打开项目的工作区上下文
+（`ensure_locked` 要求 db.json——与其他 bid.* 同轨），但**库本身跨项目**
+（BID_PERF_LIB → 用户级库位 `~/.mang/performance-library.json`，与项目
+db.json 无关——换项目不换库）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "action": "list",
+    "library": { …list_performance 工具输出原样（entries[] / returned /
+                owner_name / library_persisted）… } }
+→ { "action": "register", "register": { …added / added_count / deduplicated /
+    total_entries / library_persisted / next… } }
+→ { "action": "recommend", "recommend": { …recommendations[]（perf_id/score/
+    factors/reasons）/ library_total / signals / suggested_section / next… } }
+→ { "action": "write", "write": { …section_id / segment_id / changed /
+    evidence_registered[] / materials_pending[] / bindings[] / warnings… } }
+```
+拒绝面：`bad_args`（action/入参/值域/空调用——E_UNPROCESSABLE 透射）/
+`not_found`（无 db.json）/ `state`（recommend 需 REQUIREMENTS_EXTRACTED+，
+write 需 MATRIX_READY+——E_STATE 透射）。
+
+### bid.segment —— 分段改写（list 段账本 / rewrite 局部修订；#89 批 2）
+两动作面（`action`，缺省 `list`）——#254 段账本工具面的壳聚合：
+- **`list`**：`bid_mcp::dispatch_with(list_section_segments)` 段账本发现面
+  （只读）——`section_id` **必填**（壳侧早拒 `bad_args`），`project_version`
+  可选透传。段清单（id/seq/version/chars/idem_key/preview）+ 合稿统计
+  （assembled/target/remaining/over_target——续写前「已写到哪」的对账）。
+- **`rewrite`**：`bid_mcp::dispatch_with(rewrite_section_segment)` 局部修订
+  ——`segment_id` + `content` **必填**（壳侧早拒；空白 content 同拒），
+  `expected_version`（段级 CAS，可选）+ `project_version`（项目级 CAS，
+  可选）透传。改指定段不动兄弟段（**整段替换语义**）；同内容重写账面
+  零变动（`changed=false`）。
+
+与整稿起草（draft_response_section / 章节详情）的分界：那是「从无到有写
+整章」，本命令是「已起草章节的局部迭代」——长章节续写改写的主工作面。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "action": "list",
+    "segments": { …list_section_segments 工具输出原样（section_id /
+                 segments[] / assembled_chars / target_chars /
+                 remaining_chars / over_target）… } }
+→ { "action": "rewrite", "rewrite": { …section_id / segment{id,seq,version,
+    chars} / changed / deduplicated / assembled_chars / citations /
+    unanchored_claims / warnings… } }
+```
+拒绝面：`bad_args`（action/缺参/空白 content）/ `not_found`（无 db.json /
+幽灵章节/幽灵段）/ **`conflict`**（CAS 过期——expected_version 或
+project_version 落后；重读后重试，不是故障）/ `state`（需 MATRIX_READY+）。
 
 ### bid.gates —— 审核门台账（只读；#603 批 A——治理面）
 DomainStore 直读（`bid.outline` 先例——MCP 工具面无此整面视图，单一真源
