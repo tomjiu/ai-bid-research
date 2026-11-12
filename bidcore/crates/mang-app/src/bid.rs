@@ -37,7 +37,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 use crate::ipc::{self, Args, IpcError};
 use crate::paths::{self, Workspace};
@@ -568,6 +568,83 @@ pub fn score(
         "project": meta.1,
         "score": tool_out,
     }))
+}
+
+// ---------------------------------------------------------------- #89 R30：评分推演面
+
+/// `bid.price` —— 评分推演（score_price 试算/反推 + score_section 章节细查）。
+///
+/// 两动作面（`action`，缺省 `trial`）：
+/// - `trial`：`score_price` 纯计算器——method/coefficient/max_score/budget/
+///   deviation/bid_price/others 原样透传（值域与裁决全在 B1 解析/validate 层，
+///   壳不重复）。试算（「这么报得几分」）+ 反推（「最优报多少」）可同场；
+///   纯推荐无竞争报价 → B1 响亮拒（半答案不如没答案）。
+/// - `section`：`score_section` 章节响应诊断——section_id 必填（壳侧早拒，
+///   不进工具面），project_version（CAS）可选透传；未起草叶 / 结构节点 /
+///   幽灵章节由工具面拒（not_found / unprocessable）。
+///
+/// 与 `bid.score`（score_document 整卷诊断）的分界：那是「当前成稿整体多
+/// 好」的体检，本命令是「报价怎么定 / 单章怎么改」的推演——决策发生在
+/// 起草前后都成立（trial 无状态门）。
+///
+/// 拒绝面：`bad_args`（入参/值域）/ `not_found`（无 db.json / 幽灵章节）。
+pub fn price(
+    ws: &Workspace,
+    cache: &Mutex<Option<CachedService>>,
+    a: &Args,
+) -> Result<Value, IpcError> {
+    let action = a.str("action")?.unwrap_or("trial");
+    if action != "trial" && action != "section" {
+        return Err(IpcError::bad_args(format!(
+            "action 只接受 trial（价格试算）或 section（章节细查），实际：{action}"
+        )));
+    }
+    let mut guard = lock(cache);
+    let svc = ensure_locked(&mut guard, ws)?;
+    let (project_id, project) = project_meta(svc)?;
+    let (tool, tool_args, out_key) = match action {
+        "trial" => {
+            // 计算器参数透传（present 才传——缺省值由 B1 层定义，壳不代答）
+            let mut args = Map::new();
+            for k in [
+                "method", "coefficient", "max_score", "budget",
+                "deviation", "bid_price", "others",
+            ] {
+                if let Some(v) = a.get(k) {
+                    args.insert(k.to_string(), v.clone());
+                }
+            }
+            ("score_price", Value::Object(args), "price")
+        }
+        _ => {
+            let section_id = a.req_str("section_id")?;
+            let mut args = Map::new();
+            args.insert("section_id".to_string(), json!(section_id));
+            args.insert("project_id".to_string(), json!(project_id));
+            if let Some(v) = a.get("project_version") {
+                args.insert("project_version".to_string(), v.clone());
+            }
+            ("score_section", Value::Object(args), "section")
+        }
+    };
+    let reply = bid_mcp::dispatch_with(
+        svc,
+        bid_mcp::ToolCall {
+            tool: tool.to_string(),
+            args: tool_args,
+        },
+    );
+    let tool_out = match reply {
+        bid_mcp::ToolReply::Ok(out) => out.result,
+        bid_mcp::ToolReply::Err { error, .. } => return Err(map_tool_err(error)),
+    };
+    let mut out = Map::new();
+    out.insert("present".to_string(), json!(true));
+    out.insert("workspace".to_string(), json!(ws.root_display()));
+    out.insert("project".to_string(), project);
+    out.insert("action".to_string(), json!(action));
+    out.insert(out_key.to_string(), tool_out);
+    Ok(Value::Object(out))
 }
 
 // ---------------------------------------------------------------- #603 批 A：治理面（人工决策驾驶舱）

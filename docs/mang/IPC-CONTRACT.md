@@ -482,6 +482,31 @@ mappings【#224 双向追溯】、unmapped_scoring_items、notes、sections_scor
 ```
 拒绝面与 `bid.quality` 同：`not_found` / `state`。
 
+### bid.price —— 评分推演（score_price 试算/反推 + score_section 章节细查；#89 R30）
+两动作面（`action`，缺省 `trial`）：
+- **`trial`**：`bid_mcp::dispatch_with(score_price)` 纯计算器——method /
+  coefficient / max_score / budget / deviation / bid_price / others **原样透传**
+  （值域与裁决全在 B1 解析/validate 层，壳不重复）。试算（「这么报得几分」）
+  + 反推（「最优报多少」）可同场；纯推荐无竞争报价 → B1 响亮拒（不给半答案）。
+- **`section`**：`bid_mcp::dispatch_with(score_section)` 章节响应诊断——
+  `section_id` 必填（壳侧早拒 `bad_args`，不进工具面），`project_version`
+  （CAS）可选透传；未起草叶 / 结构节点 / 幽灵章节由工具面拒。
+与 `bid.score` 的分界：那是整卷体检（score_document），本命令是报价决策 +
+单章推演（决策发生在起草前后都成立——trial 无状态门）。
+```jsonc
+→ { "present": true, "workspace": "D:\\项目A",
+    "project": { "id": "PRJ-0001", "name": "智慧园区弱电工程", "status": "DRAFTING" },
+    "action": "trial",
+    "price": { …score_price 工具输出原样（score / max_score / optimal_price /
+             expected_score_at_optimal / detail.benchmark_price / analysis /
+             warnings）… } }
+→ { "action": "section", "section": { …score_section 工具输出原样
+    （diagnostic_only=true / tier / score / target / hits /
+     unmapped_scoring_items【#224 文档级缺口单章也可见】）… } }
+```
+拒绝面：`bad_args`（action/入参/值域——E_UNPROCESSABLE 透射）/
+`not_found`（无 db.json / 幽灵章节）。
+
 ### bid.gates —— 审核门台账（只读；#603 批 A——治理面）
 DomainStore 直读（`bid.outline` 先例——MCP 工具面无此整面视图，单一真源
 `gate_approved` / `latest_gate_pass` / `agent_gate_passes` /

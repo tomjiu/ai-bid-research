@@ -488,6 +488,10 @@ impl Ctx {
 
             "bid.score" => crate::bid::score(&ws, &self.bid, &a),
 
+            // ── #89 R30：评分推演面（score_price 试算/反推 + score_section
+            //    章节细查——纯壳聚合，裁决全在工具面 B1/B2）──────────────
+            "bid.price" => crate::bid::price(&ws, &self.bid, &a),
+
             // ── #603 批 A：治理面（bid.rs——gates 为 DomainStore 直读台账；
             //    gate_pass 为写面首发：宿主签发 receipt（#182）后经
             //    bid_mcp 真实工具面 record_review_gate 落账）──────────

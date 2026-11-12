@@ -757,6 +757,41 @@
               return respond(m.id, DEMO_BID.quality);
             case "bid.score":
               return respond(m.id, DEMO_BID.score);
+            case "bid.price": {
+              // #89 R30 演示桥：与真实 bid.price 响应同形（trial 试算+反推 /
+              // section 章节细查——表单面在面板内，此处给可展示结果）
+              if (m.action === "section") {
+                return respond(m.id, {
+                  present: true,
+                  project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                  action: "section",
+                  section: {
+                    section_id: m.section_id || "SEC-0002",
+                    diagnostic_only: true,
+                    tier: "B",
+                    score: 22,
+                    target: 30,
+                    hits: [{ req_id: "REQ-0001", reason: "关键词覆盖：并发能力/响应时间" }],
+                    unmapped_scoring_items: [],
+                  },
+                });
+              }
+              return respond(m.id, {
+                present: true,
+                project: { id: "PRJ-DEMO-0001", name: "演示水厂项目", status: "DRAFTING" },
+                action: "trial",
+                price: {
+                  method: "AveragePrice",
+                  score: 28.5,
+                  max_score: 30,
+                  optimal_price: 880.49,
+                  expected_score_at_optimal: 30,
+                  detail: { benchmark_price: 902.5 },
+                  analysis: "平均价法：评标基准价 = 有效报价（含己方）算术平均 × 0.95；最优报价 880.49 预期满分。",
+                  warnings: [],
+                },
+              });
+            }
             case "bid.gates":
               // #603 批 A：演示桥回可变台账（gate_pass 会真改——追认后消项）
               return respond(m.id, demoGates);
@@ -1080,6 +1115,14 @@
     },
     // #20 分包视图（bid.packages 只读拉取缓存——工作台「分包」页签用）
     bidPackages: { status: "idle", data: null, error: "" },
+    // #89 R30：评分推演面（bid.price——trial 试算/反推 + section 章节细查；
+    // 纯计算器语义：不预拉取，表单态本地维持）
+    bidPrice: {
+      form: { method: "average", coefficient: "0.95", maxScore: "30", budget: "", bidPrice: "", others: "" },
+      sectionSel: "",
+      trial: { busy: false, error: "", data: null },
+      section: { busy: false, error: "", data: null },
+    },
     // #47 R25：证据台账读面（list_evidence / search_evidence——缺口-4 读半边）
     bidEvidence: { status: "idle", data: null, error: "", code: "", kindFilter: "", statusFilter: "" },
     bidEvidenceSearch: { status: "idle", data: null, error: "", code: "", query: "", mode: "hybrid" },
@@ -1715,6 +1758,7 @@
       + '<button class="bid-tab" role="tab" data-bid-panel="detail">章节详情</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="matrix">合规矩阵</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="quality">自评</button>'
+      + '<button class="bid-tab" role="tab" data-bid-panel="price">评分推演</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="gates">审核门</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="coverage">覆盖报告</button>'
       + '<button class="bid-tab" role="tab" data-bid-panel="export">校验与导出</button>'
@@ -1872,6 +1916,8 @@
       const retryBtnR25 = treeEl.querySelector('[data-bid-act="wizard-retry-failed"]');
       if (retryBtnR25) retryBtnR25.addEventListener("click", () => ui.enterBidWizardReentry("retry-failed"));
       if (activePanel === "quality") renderBidQualityPanel(host);
+      // #89 R30：评分推演不依赖章节树（trial 无状态门；section 面板内部自处理叶列表）
+      if (activePanel === "price") renderBidPricePanel(host);
       // #603 批 A：门台账不依赖章节树（任何阶段可看/可过合法门）
       if (activePanel === "gates") renderBidGatesPanel(host);
       // #18：出口面板不依赖章节树——早期态给 E_STATE 引导卡（先建纲）
@@ -3310,6 +3356,10 @@
       renderBidGatesPanel(host);
       return;
     }
+    if (bidPanelOf() === "price") {
+      renderBidPricePanel(host);
+      return;
+    }
     if (bidPanelOf() === "coverage") {
       renderBidCoveragePanel(host, panel);
       return;
@@ -3596,6 +3646,134 @@
       }
       state.bidEvidenceReg.error = "";
       ui.registerBidEvidence(p);
+    });
+  }
+  /** #89 R30：评分推演面板（工作台 price 页签）——score_price 试算/反推
+   *  （纯计算器，无状态门）+ score_section 章节细查（已起草叶）。推演面
+   *  与「自评」页签（score_document 整卷体检）互补：这里回答「报价怎么
+   *  定 / 单章怎么改」。错误就地反馈（bad_args/not_found/state——E_STATE
+   *  时章节下拉无已起草叶，面板给引导而非故障）。 */
+  function renderBidPricePanel(host) {
+    const panel = host.querySelector("#bid-panel");
+    if (!panel) return;
+    const bp = state.bidPrice;
+    const nodes = bidOutlineNodes();
+    const leaves = nodes.filter((n) => n.is_leaf && n.has_content);
+    const allLeaves = nodes.filter((n) => n.is_leaf);
+    // ---- 卡 1：价格试算（score_price——method 三糖 + 数参原样透传）
+    let html =
+      '<div class="bid-gt">'
+      + '<div class="bid-card"><div class="bid-card-title">价格试算（score_price · #89 R30）</div>'
+      + '<div class="bid-card-sub">报价得几分 + 最优该报多少（同场回答）——评标基准价法 / 系数 / 满分按招标文件评标办法填；「竞争报价」留空时反推不可用（B1 响亮拒，不给半答案）</div>'
+      + '<div class="bid-price-form">'
+      + '<label class="bid-price-f">计分方法 <select data-pr-method>'
+      + [["average", "平均价法（缺省）"], ["lowest", "最低价法"], ["benchmark", "基准价法（需控制价）"]].map((m) => '<option value="' + m[0] + '"' + (bp.form.method === m[0] ? " selected" : "") + ">" + m[1] + "</option>").join("")
+      + "</select></label>"
+      + '<label class="bid-price-f">下浮系数 <input data-pr-coef type="number" step="0.01" min="0.5" max="1.5" value="' + esc(bp.form.coefficient) + '" placeholder="0.95"></label>'
+      + '<label class="bid-price-f">价格满分 <input data-pr-max type="number" step="1" min="1" value="' + esc(bp.form.maxScore) + '" placeholder="30"></label>'
+      + '<label class="bid-price-f">控制价 <input data-pr-budget type="number" step="0.01" min="0" value="' + esc(bp.form.budget) + '" placeholder="基准价法必填"></label>'
+      + '<label class="bid-price-f">我方报价 <input data-pr-bid type="number" step="0.01" min="0" value="' + esc(bp.form.bidPrice) + '" placeholder="试算用"></label>'
+      + '<label class="bid-price-f bid-price-f-wide">竞争报价（逗号分隔） <input data-pr-others type="text" value="' + esc(bp.form.others) + '" placeholder="如 1000, 900（反推与均价法基准需要）"></label>'
+      + '<div class="bid-price-f bid-price-f-wide"><button class="btn btn-primary btn-sm" data-pr-go>' + (bp.trial.busy ? "试算中…" : "试算 / 反推") + "</button>"
+      + ' <span class="bid-card-sub">判据与值域裁决全在工具面（B1）——面板不代答</span></div>'
+      + "</div>";
+    if (bp.trial.error) html += '<div class="bid-wiz-error">' + esc(bp.trial.error) + "</div>";
+    if (bp.trial.data) {
+      const p = bp.trial.data;
+      const det = p.detail || {};
+      html += '<div class="bid-price-result">';
+      if (p.score != null) html += '<div class="bid-price-cell"><div class="bid-price-k">试算得分</div><div class="bid-price-v">' + fmtScore(p.score) + (p.max_score != null ? " / " + fmtScore(p.max_score) : "") + "</div></div>";
+      if (p.optimal_price != null) html += '<div class="bid-price-cell"><div class="bid-price-k">最优报价</div><div class="bid-price-v">' + fmtChars(p.optimal_price) + "</div></div>";
+      if (p.expected_score_at_optimal != null) html += '<div class="bid-price-cell"><div class="bid-price-k">最优得分</div><div class="bid-price-v">' + fmtScore(p.expected_score_at_optimal) + "</div></div>";
+      if (det.benchmark_price != null) html += '<div class="bid-price-cell"><div class="bid-price-k">评标基准价</div><div class="bid-price-v">' + fmtChars(det.benchmark_price) + "</div></div>";
+      html += "</div>";
+      if (p.analysis) html += '<div class="bid-card-sub">' + esc(p.analysis) + "</div>";
+      if (Array.isArray(p.warnings) && p.warnings.length) html += '<div class="bid-wiz-info">' + p.warnings.map((w) => esc(w)).join("<br>") + "</div>";
+    }
+    html += "</div>";
+    // ---- 卡 2：章节细查（score_section——已起草叶的下拉 + 诊断）
+    html += '<div class="bid-card"><div class="bid-card-title">章节细查（score_section）</div>'
+      + '<div class="bid-card-sub">单章响应质量诊断（规则启发式 rule_heuristic——非评标模拟，#186 语义降级口径与「自评」一致）</div>';
+    if (!allLeaves.length) {
+      html += '<div class="bid-card-sub">大纲尚无章节——先建纲（建纲流在左侧树区），起草后可对叶章节细查。</div>';
+    } else if (!leaves.length) {
+      html += '<div class="bid-card-sub">尚无已起草章节——先起草（或经 Agent MCP draft_response_section），再回来细查。</div>';
+    } else {
+      html += '<div class="bid-price-form">'
+        + '<label class="bid-price-f bid-price-f-wide">章节 <select data-pr-sec>'
+        + leaves.map((n) => '<option value="' + esc(n.id) + '"' + (bp.sectionSel === n.id ? " selected" : "") + ">" + esc(n.title || n.id) + "（" + fmtChars(n.actual_chars) + " 字）</option>").join("")
+        + "</select></label>"
+        + '<div class="bid-price-f bid-price-f-wide"><button class="btn btn-primary btn-sm" data-pr-sec-go>' + (bp.section.busy ? "细查中…" : "细查") + "</button></div>"
+        + "</div>";
+      if (bp.section.error) html += '<div class="bid-wiz-error">' + esc(bp.section.error) + "</div>";
+      if (bp.section.data) {
+        const s = bp.section.data;
+        html += '<div class="bid-price-result">';
+        if (s.tier != null) html += '<div class="bid-price-cell"><div class="bid-price-k">档位</div><div class="bid-price-v">' + esc(s.tier) + "</div></div>";
+        if (s.score != null) html += '<div class="bid-price-cell"><div class="bid-price-k">得分</div><div class="bid-price-v">' + fmtScore(s.score) + (s.target != null ? " / " + fmtScore(s.target) : "") + "</div></div>";
+        html += "</div>";
+        if (Array.isArray(s.hits)) {
+          html += '<table class="bid-table"><thead><tr><th>命中</th><th>线索</th></tr></thead><tbody>';
+          for (const h of s.hits.slice(0, 12)) html += "<tr><td>" + esc(h.req_id || h.id || "—") + "</td><td>" + esc(h.reason || h.label || "—") + "</td></tr>";
+          html += "</tbody></table>";
+        }
+        if (Array.isArray(s.unmapped_scoring_items) && s.unmapped_scoring_items.length) {
+          html += '<div class="bid-wiz-info">文档级未映射评分项 ' + s.unmapped_scoring_items.length + " 条（#224——细查时全局缺口也可见）</div>";
+        }
+      }
+    }
+    html += "</div></div>";
+    panel.innerHTML = html;
+    // ---- 事件绑定（试算提交）
+    const go = panel.querySelector("[data-pr-go]");
+    if (go) go.addEventListener("click", () => {
+      const v = (n) => { const el = panel.querySelector("[data-pr-" + n + "]"); return el ? String(el.value || "").trim() : ""; };
+      const f = state.bidPrice.form;
+      f.method = v("method"); f.coefficient = v("coef"); f.maxScore = v("max");
+      f.budget = v("budget"); f.bidPrice = v("bid"); f.others = v("others");
+      const args = { method: f.method };
+      if (f.coefficient) args.coefficient = Number(f.coefficient);
+      if (f.maxScore) args.max_score = Number(f.maxScore);
+      if (f.budget) args.budget = Number(f.budget);
+      if (f.bidPrice) args.bid_price = Number(f.bidPrice);
+      if (f.others) {
+        const arr = f.others.split(/[,，\s]+/).filter(Boolean).map(Number).filter((n) => !Number.isNaN(n));
+        if (arr.length) args.others = arr;
+      }
+      if (f.method === "benchmark" && !f.budget) {
+        state.bidPrice.trial.error = "基准价法需要控制价（budget）——B1 validate 会拒，面板提前说清";
+        state.bidPrice.trial.data = null;
+        renderBidWorkbenchIfOpen();
+        return;
+      }
+      state.bidPrice.trial.busy = true; state.bidPrice.trial.error = ""; state.bidPrice.trial.data = null;
+      renderBidWorkbenchIfOpen();
+      ipc("bid.price", args).then((d) => {
+        state.bidPrice.trial.busy = false; state.bidPrice.trial.data = (d && d.price) || null;
+        renderBidWorkbenchIfOpen();
+      }).catch((e) => {
+        state.bidPrice.trial.busy = false;
+        state.bidPrice.trial.error = (e && (e.message || e.code)) || "bid.price 试算失败";
+        renderBidWorkbenchIfOpen();
+      });
+    });
+    // ---- 章节细查提交
+    const secGo = panel.querySelector("[data-pr-sec-go]");
+    if (secGo) secGo.addEventListener("click", () => {
+      const sel = panel.querySelector("[data-pr-sec]");
+      const sid = sel ? sel.value : "";
+      if (!sid) return;
+      state.bidPrice.sectionSel = sid;
+      state.bidPrice.section.busy = true; state.bidPrice.section.error = ""; state.bidPrice.section.data = null;
+      renderBidWorkbenchIfOpen();
+      ipc("bid.price", { action: "section", section_id: sid }).then((d) => {
+        state.bidPrice.section.busy = false; state.bidPrice.section.data = (d && d.section) || null;
+        renderBidWorkbenchIfOpen();
+      }).catch((e) => {
+        state.bidPrice.section.busy = false;
+        state.bidPrice.section.error = (e && (e.message || e.code)) || "bid.price 章节细查失败";
+        renderBidWorkbenchIfOpen();
+      });
     });
   }
   /** 合规矩阵面板主体（工作台右面板的 matrix 页签） */

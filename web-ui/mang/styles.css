@@ -4742,3 +4742,14 @@ html[data-chrome="native"][data-maximized="1"] #app {
 .bid-ev-reg select, .bid-ev-reg input { padding: 4px 8px; border: 1px solid var(--line, #d0d4dc); border-radius: 6px; background: var(--bg, #fff); font: inherit; }
 .bid-ev-reg input[type="text"] { flex: 0 1 160px; }
 .bid-ev-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-dim, #666); }
+
+/* #89 R30：评分推演面板（bid.price——试算表单 + 结果格） */
+.bid-price-form { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; align-items: flex-end; }
+.bid-price-f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-dim, #666); }
+.bid-price-f select, .bid-price-f input { padding: 4px 8px; border: 1px solid var(--line, #d0d4dc); border-radius: 6px; background: var(--bg, #fff); font: inherit; min-width: 96px; }
+.bid-price-f-wide { flex: 1 1 240px; }
+.bid-price-f-wide input[type="text"] { width: 100%; }
+.bid-price-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.bid-price-cell { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--line, #d0d4dc); border-radius: 8px; background: var(--bg-alt, #f6f7fa); }
+.bid-price-k { font-size: 12px; color: var(--fg-dim, #666); }
+.bid-price-v { font-size: 18px; font-weight: 600; }

@@ -1771,5 +1771,40 @@ check(
   "补标按钮排版类被删"
 );
 
+// ---- #89 R30：评分推演面板（bid.price——trial 试算/反推 + section 章节细查）
+check(
+  "R30 壳聚合：bid.price 注册 + 双动作分派（trial/section）",
+  app.includes('"bid.price"') && app.includes('case "bid.price"')
+    && app.includes('ipc("bid.price", args)') && app.includes('ipc("bid.price", { action: "section"'),
+  "聚合命令或双动作接线断链"
+);
+check(
+  "R30 面板：页签 + 渲染函数 + 已起草叶过滤（is_leaf && has_content）",
+  app.includes('data-bid-panel="price"') && app.includes("renderBidPricePanel")
+    && app.includes("n.is_leaf && n.has_content"),
+  "评分推演页签/面板/叶过滤缺失"
+);
+check(
+  "R30 selftest：七检查在场（纯推荐拒/试算反推/基准价法/非法方法/缺参早拒/幽灵拒/章节细查）",
+  selftestRs.includes("bid.price(纯推荐无竞争拒)") && selftestRs.includes("bid.price(试算+反推)")
+    && selftestRs.includes("bid.price(基准价法)") && selftestRs.includes("bid.price(非法方法拒)")
+    && selftestRs.includes("bid.price(section缺参早拒)") && selftestRs.includes("bid.price(幽灵章节拒)")
+    && selftestRs.includes("bid.price(章节细查)"),
+  "集成自检项缺失"
+);
+check(
+  "R30 契约：bid.price 登记（两动作面 + 与 bid.score 分界）",
+  contract.includes("### bid.price") && contract.includes("score_price 工具输出原样")
+    && contract.includes("score_section 工具输出原样"),
+  "改代码没同步契约"
+);
+for (const sel of [".bid-price-form", ".bid-price-f-wide", ".bid-price-result", ".bid-price-cell"]) {
+  check(
+    `R30 样式：styles.css 提供 ${sel}`,
+    css.includes(sel),
+    "评分推演面板样式被删"
+  );
+}
+
 console.log(`\n== ${pass} passed, ${fail} failed ==`);
 process.exit(fail === 0 ? 0 : 1);

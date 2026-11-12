@@ -733,6 +733,104 @@ pub fn run(ui_dir: Option<&std::path::Path>) -> i32 {
         ),
     );
 
+    // ---- #89 R30：评分推演面（bid.price——score_price 试算/反推 + score_section 章节细查）
+    // 试算面是纯计算器（无状态门——报价决策发生在起草之前也成立）；
+    // 章节细查走 route_guard + 已起草叶前置。工具面零重实现：B1/B2
+    // (#100) 的裁决全在工具层，壳只做聚合 + 参数透传。
+    // ① 纯推荐模式无竞争报价 → B1 响亮拒（最优价无界——不能静默给半答案；
+    //    E_UNPROCESSABLE 透传为壳侧 bad_args 码）
+    let resp = call(&ctx, json!({"id":"t-bid-pr0","cmd":"bid.price"}));
+    r.check(
+        "bid.price(纯推荐无竞争拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // ② 试算 + 反推同场（bid_price + others → score/detail + optimal + analysis）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pr1","cmd":"bid.price",
+        "method":"average", "coefficient":0.95, "max_score":30,
+        "bid_price":950.0, "others":[1000.0, 900.0],
+    }));
+    let bpr = result(&resp);
+    r.check(
+        "bid.price(试算+反推)",
+        resp["ok"] == json!(true)
+            && bpr["present"] == json!(true)
+            && bpr["action"] == json!("trial")
+            && bpr["price"]["score"].is_number()
+            && bpr["price"]["optimal_price"].is_number()
+            && bpr["price"]["expected_score_at_optimal"].is_number()
+            && bpr["price"]["analysis"].is_string(),
+        format!(
+            "score={:?} optimal={:?}",
+            bpr["price"]["score"], bpr["price"]["optimal_price"]
+        ),
+    );
+    // ③ 基准价法（budget 必需——B1 validate 裁决单义性）
+    let resp = call(&ctx, json!({
+        "id":"t-bid-pr2","cmd":"bid.price",
+        "method":"benchmark", "coefficient":0.9, "budget":1200.0, "max_score":40,
+        "bid_price":1080.0, "others":[1100.0],
+    }));
+    let bpr2 = result(&resp);
+    r.check(
+        "bid.price(基准价法)",
+        resp["ok"] == json!(true) && bpr2["price"]["score"].is_number(),
+        format!("score={:?}", bpr2["price"]["score"]),
+    );
+    // ④ 非法方法串 → 工具面 E_UNPROCESSABLE 透传（值域裁决在 B1 解析层，
+    //    壳侧映射 bad_args）
+    let resp = call(&ctx, json!({"id":"t-bid-pr3","cmd":"bid.price","method":"满脑门定价"}));
+    r.check(
+        "bid.price(非法方法拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // ⑤ 章节细查缺 section_id → 壳侧入参早拒（不进工具面）
+    let resp = call(&ctx, json!({"id":"t-bid-pr4","cmd":"bid.price","action":"section"}));
+    r.check(
+        "bid.price(section缺参早拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "bad_args",
+        format!("{}", err_code(&resp)),
+    );
+    // ⑥ 幽灵章节 → not_found 透传
+    let resp = call(&ctx, json!({"id":"t-bid-pr5","cmd":"bid.price","action":"section","section_id":"SEC-GHOST"}));
+    r.check(
+        "bid.price(幽灵章节拒)",
+        resp["ok"] == json!(false) && err_code(&resp) == "not_found",
+        format!("{}", err_code(&resp)),
+    );
+    // ⑦ 真实叶（服务层 set_section_content 直写——complete_revision 同款
+    //    真源面，绕开 draft readiness 闸使本测聚焦壳聚合）→ diagnostic_only
+    //    + 章节回执
+    {
+        let mut svc = bid_tools::service::BidService::open(&root).unwrap();
+        let sid = svc
+            .store()
+            .sections()
+            .iter()
+            .find(|n| n.parent_id.is_some() && n.content.is_none())
+            .map(|n| n.id.clone())
+            .expect("selftest 大纲应有未起草叶");
+        let _ = svc
+            .store_mut()
+            .set_section_content(&sid, "评分推演自测正文：本章对招标要求逐条响应，参数达标，工艺成熟，人员配置齐全。".to_string())
+            .unwrap();
+        svc.checkpoint().unwrap();
+        let resp = call(&ctx, json!({
+            "id":"t-bid-pr6","cmd":"bid.price","action":"section","section_id":sid,
+        }));
+        let bps = result(&resp);
+        r.check(
+            "bid.price(章节细查)",
+            resp["ok"] == json!(true)
+                && bps["action"] == json!("section")
+                && bps["section"]["diagnostic_only"] == json!(true)
+                && bps["section"]["section_id"].is_string(),
+            format!("section_id={:?}", bps["section"]["section_id"]),
+        );
+    }
+
     // ---- #603 批 A：治理面（bid.gates / bid.gate_pass）
     // 读面：五门台账 + 空账本警告位（此时三门全未过）
     let resp = call(&ctx, json!({"id":"t-bid-g0","cmd":"bid.gates"}));
