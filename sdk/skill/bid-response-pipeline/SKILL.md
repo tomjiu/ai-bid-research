@@ -107,7 +107,7 @@ bid-mcp --init --client claude --ws /path/to/workspace   # 或 cursor / continue
 | P2 抽条款 | Agent 标记优先抽取+冲突确认 | `get_document_chunks` → `submit_block_marks` → `extract_requirements` | merge.coverage_complete=true（或该文件从未标记、uncovered 块由正则兜底且用户知情）；missing_sequence 为空（缺号必须解释）；conflicts 逐条向用户确认口径 | 标记整集替换；重跑 extract 重算合并（Agent 优先）；**标记过的文件必须标满——P3 建纲门拦半途而废（E_COVERAGE_INCOMPLETE，#244）** |
 | P3 矩阵 | 定标+选包+建纲+矩阵+资格判断 | `recommend_length_profile` → （多包时 `list_packages` + 用户选包）→ `build_outline` → `get_compliance_matrix` | 篇幅档已按「配额定标」流程确定（用户确认或免确认例外）并复述；**多包件（extract 响应 packages.detected≥2）必须先问用户投哪个包**（「投全部」= 每包各建一个项目——单项目单大纲，不混包；共用条款自动进纲，见 p3-matrix.md「多标段/多包」）；build_outline 返回 MATRIX_READY；资格/否决行 policy 全填；资格三态结论（eligible/conditional/not_eligible）向用户报告；**not_eligible → 停止流程，只产审查报告** | 矩阵只读（get_compliance_matrix），随时重查 |
 | P4 证据 | 登记+绑定证据、补缺清单 | `register_evidence` / `bind_evidence` / `list_evidence` / `search_evidence`*；**业绩类**：业绩材料库四工具 `register_performance` / `list_performance` / `recommend_performance` / `write_performance_section`（#315 跨项目资产面——历史业绩先入库、REQ 后推荐、业绩章一键写，EV- 纪律同面不豁免，详见 p4-evidence.md「业绩材料库」节） | 每条必选项≥1 条**有效**证据（Active/Expiring 且**非占位**——PLACEHOLDER 不清阻塞，#245 引擎派生面已落地；占位只进 pending_evidence_ids 追踪面）；**有效证据的质量双条件**：带 locator 登记过服务端核验（CONTENT_MATCHES 档——无 locator 的 FILE_EXISTS 档虽计有效但不完整，补料优先补 locator）**且非招标文件本体**（拿招标文件自证条款=自证不是证据，C-23 攻击面）；EXPIRED 禁绑；缺失项形成补料清单交用户；bind 后 matrix.blocking=0（blocking 只证明「绑了有效证据」，材料真伪与效力仍需人工审校确认——P7） | 缺料→等待用户补充后仅补跑受影响行 |
-| P5 起草 | 逐章节起草（**正文由你写**） | `draft_response_section` / `save_version` | unanchored_claims=0；citations 全部来自已绑定 EV；**每完成一个章节，调用 save_version 存版本**（message 写明章节与完成内容） | per-SEC 重试，不影响其他章节 |
+| P5 起草 | 逐章节起草（**正文由你写**） | `draft_response_section` / `save_version` | unanchored_claims=0；citations 全部来自已绑定 EV；**正文含与已确认决策一致的显式承诺句**（工期/报价/有效期——gate 1j 比对物，见「决策承诺句」纪律）；**每完成一个章节，调用 save_version 存版本**（message 写明章节与完成内容） | per-SEC 重试，不影响其他章节 |
 | P6 校验 | 双层校验（**全稿完成后才 scope=all**） | `validate_bid_document` | 全部叶起草完成才 scope=all（缺章 → `E_DRAFT_INCOMPLETE` 零副作用拒，按 missing 清单回 P5 补）；起草期用 scope=sections 章节级检查；deterministic findings 清零（每类 BLOCKER 走真实出口：矩阵覆写/换证/补写——无通用豁免通道，出口表见 p6-validation.md）；失败留在 DRAFTING 可修订重试；`ok=true` ≠ 可提交——**提交就绪**看响应内 `submission_readiness.ready`（#241：正文已响应但证据缺口的必选条款不拦导出、拦正式提交，按 `evidence_missing` 清单补件或人工豁免） | 按 scope 重跑 |
 | P7 审校 | 模型审校→修订任务闭环 | `validate_bid_document` +（后端）RevisionTask | 每个 MAJOR finding 有 RT 且 DONE | 只重跑 DIRTY 章节 |
 | P8 导出 | 预检+导出 | `export_bid_document` | precheck.blockers=0；artifact sha256 复述；**暗标项目**：响应 `dark_bid.manual_review` 清单须逐条向用户复述（联系方式/EXIF/路径等人工确认项——不静默跳过），复验 BLOCKER 归零由引擎保证（不过则导出被拒并附处置清单） | 同参幂等 |
@@ -149,6 +149,18 @@ RevisionTask 归属时用）。对账工具的详细用法见 references/p2-extr
 > 校验失败（ok=false）项目留在 DRAFTING，可修订可重试；**仅校验通过**
 > 才推进 VALIDATING。若项目已滞留在 VALIDATING 且缺章（历史异常态），用
 > `recover_validating_state`（reason 必填）回 DRAFTING 续跑。
+
+> **决策承诺句（#154 · #113 F6 实测教训）**：投标决策值（工期/投标报价/
+> 投标有效期）若只在 P8 导出 profile 出现，正文无承诺句 → gate 1j/1j-2
+> **空比对通过**（无比对物不拦——对账门形同虚设）。纪律三条：
+> ① **决策前置**：P5 起草前向用户确认工期/报价/有效期三项决策（P8
+> profile 的同源字段——后变更须回改承诺句，门 1i/1j 会拦）；
+> ② **指令注入**：起草指令（`draft_response_section` 的 instructions）
+> 逐项写明决策值并要求正文含数值一致的显式承诺句——真实生成器
+> system 面有对应硬纪律（#154 规则 6），但决策值必须经指令进素材面；
+> ③ **external 同受控**：外部稿（generator=external / 分段 append）
+> 同样必须含承诺句——写进对应章节（总体方案/报价说明/服务承诺类
+> 章节）而不是只在投标函（投标函是引擎生成的格式件，不进章节对账）。
 
 > **补遗分级门（#184 · #379 拆门后）**：任一补遗/澄清件不处 READY
 > （FAILED=解析失败 / OCR_PENDING=扫描件零文本）→
