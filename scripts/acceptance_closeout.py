@@ -69,9 +69,45 @@ def sha256_of(path: Path) -> str:
 
 # ---------------------------------------------------------------- 基础事实
 
+def run_subprocess(args, *, cwd=None, timeout=None) -> subprocess.CompletedProcess:
+    """subprocess 统一出口（#143）：显式 utf-8 + errors=replace。
+
+    根因：text=True 不带 encoding 时按系统 locale 解码（Windows 中文 =
+    GBK）——子进程输出含非 GBK 字节（如 closeout Rust 面的 UTF-8 中文
+    路径名）即 UnicodeDecodeError 崩主流程，「单命令可重跑」验收判据在
+    目标平台失效。本出口：
+      - encoding/errors 显式——双平台行为一致（utf-8 为仓内命令行事实
+        编码；errors=replace 保证任何字节流可解码——完整性以字节语义为
+        准的场合不走本出口）；
+      - 超时不抛——CompletedProcess 伪返回（returncode=124——GNU timeout
+        惯例；stdout/stderr 带异常名与 partial 输出），裁定面照常走
+        FAIL 分支，不静默；
+      - stdout/stderr 恒为 str（None 防卫在消费面——本出口兜底 ""）。
+    """
+    try:
+        proc = subprocess.run(
+            args, cwd=cwd, timeout=timeout,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+    except subprocess.TimeoutExpired as e:
+        partial_out = e.stdout if isinstance(e.stdout, str) else (e.stdout or b"").decode("utf-8", "replace")
+        partial_err = e.stderr if isinstance(e.stderr, str) else (e.stderr or b"").decode("utf-8", "replace")
+        return subprocess.CompletedProcess(
+            args=args, returncode=124,
+            stdout=f"[TimeoutExpired after {timeout}s] {partial_out}",
+            stderr=f"[TimeoutExpired after {timeout}s] {partial_err}",
+        )
+    return subprocess.CompletedProcess(
+        args=proc.args, returncode=proc.returncode,
+        stdout=proc.stdout if proc.stdout is not None else "",
+        stderr=proc.stderr if proc.stderr is not None else "",
+    )
+
+
 def repo_head() -> dict:
     def git(*args):
-        p = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True)
+        p = run_subprocess(["git", *args], cwd=REPO)
         return p.stdout.strip() if p.returncode == 0 else ""
     return {
         "head": git("rev-parse", "HEAD"),
@@ -91,7 +127,7 @@ def host_facts() -> dict:
 
 
 def _cargo_version() -> str:
-    p = subprocess.run(["cargo", "--version"], capture_output=True, text=True)
+    p = run_subprocess(["cargo", "--version"])
     return p.stdout.strip() or "absent"
 
 
@@ -114,10 +150,10 @@ def panel_baseline(run: bool, log) -> dict:
     cmd = [sys.executable, "scripts/closeout_real_test.py", "--all"]
     entry["command"] = cmd
     t0 = time.monotonic()
-    proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, timeout=7200)
+    proc = run_subprocess(cmd, cwd=REPO, timeout=7200)
     entry["duration_s"] = round(time.monotonic() - t0, 1)
     entry["exit_code"] = proc.returncode
-    log(redact(proc.stdout[-4000:]))
+    log(redact((proc.stdout or "")[-4000:]))
     report = REPO / "artifacts/closeout-real-20261112/closeout-report.json"
     all_pass = None
     if report.exists():
