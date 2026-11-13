@@ -4058,6 +4058,30 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
             })
         }
     };
+    // ---- AUD2-CHN-01/#130 门 1n：评分叶生成器豁免（显式理由——非空才
+    //      生效；进幂等键：豁免与否是不同的导出裁决）
+    let waive_scoring_leaf_generator: Option<String> =
+        match args.get("waive_scoring_leaf_generator") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(s)) => {
+                if s.trim().is_empty() {
+                    return Err(ToolError::EUnprocessable {
+                        what: format!(
+                            "{TOOL}: waive_scoring_leaf_generator 须为非空理由（空串 = 不豁免——fail-closed 不放水；mock 链收官测试/外部手稿经人工确认等场景请给出具体理由）"
+                        ),
+                    });
+                }
+                Some(s.clone())
+            }
+            Some(other) => {
+                return Err(ToolError::EUnprocessable {
+                    what: format!(
+                        "{TOOL}: waive_scoring_leaf_generator 须为字符串（豁免理由），实际类型：{}",
+                        json_type_name(other)
+                    ),
+                })
+            }
+        };
     // ---- #88 修复 8b（F-14）：抽取健康度常驻（coverage_scan 单一真源
     //      ——face/marked/regex_fallback/excluded + REQ 总数；零标记文件
     //      走正则兜底 → 响亮告知核对通道）
@@ -4076,7 +4100,7 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         ));
     }
     let ikey = format!(
-        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}:{}:{}:{}:{}:{}",
+        "export:{project_id}:{}:{format}:{}:{}:{output_path}:{decision_fp}:{}:{}:{}:{}:{}:{}",
         svc.store().content_version(),
         dark_bid,
         anonymize.unwrap_or(""),
@@ -4084,6 +4108,7 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         waive_unmapped_scoring.as_deref().unwrap_or(""),
         waive_format_placeholder.as_deref().unwrap_or(""),
         waive_length_overrun.as_deref().unwrap_or(""),
+        waive_scoring_leaf_generator.as_deref().unwrap_or(""),
         max_overrun_pct,
     );
     if let Some(first) = svc.store().idempotent_hit(&ikey).cloned() {
@@ -4120,6 +4145,7 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
                 unmapped_scoring: waive_unmapped_scoring,
                 format_placeholder: waive_format_placeholder,
                 length_overrun: waive_length_overrun,
+                scoring_leaf_generator: waive_scoring_leaf_generator,
                 max_overrun_pct,
             },
         )
@@ -4138,6 +4164,16 @@ fn export_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "chapters_written": outcome.report.chapters_written,
         "total_chars": outcome.report.total_chars,
         "toc_field_present": outcome.report.toc_field_present,
+        // AUD2-CHN-01/#130 门 1n 伴生面：生成器汇总常驻（mock 稿不可
+        // 冒充——real/mock/external/unknown 计数 + 评分叶分拆）
+        "generator_summary": {
+            "real": outcome.report.generator_summary.real,
+            "mock": outcome.report.generator_summary.mock,
+            "external": outcome.report.generator_summary.external,
+            "unknown": outcome.report.generator_summary.unknown,
+            "scoring_leaves_total": outcome.report.generator_summary.scoring_leaves_total,
+            "scoring_leaves_non_real": outcome.report.generator_summary.scoring_leaves_non_real,
+        },
         // #88 F-10 证据体检单（四态计数 + Expiring 明细——常驻导出响应）
         "evidence_validity": evidence_validity,
         // #88 修复 8b（F-14）抽取健康度（常驻——正则兜底/标记覆盖/REQ

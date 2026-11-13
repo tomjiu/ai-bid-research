@@ -248,10 +248,11 @@ fn e2e_tender_in_docx_out() {
         .record_review(Gate::PreExportConfirm, &bid_domain::TrustedPrincipal::human("e2e-lead"), Decision::Approved, vec![], None)
         .unwrap();
 
-    // ⑧ 导出（MCP §8——成品 docx）
+    // ⑧ 导出（MCP §8——成品 docx；#130 门 1n：mock 链工程验收显式豁免）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-技术标.docx",
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();

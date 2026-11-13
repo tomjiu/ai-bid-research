@@ -82,6 +82,16 @@ pub struct ChapterRecord {
     /// 旧记录缺字段 → serde default 容错（零迁移）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draft_note: Option<String>,
+    /// 本内容版本的生成器留痕（AUD2-CHN-01/#130 门 1n 数据源）：
+    /// real / mock / external（[`super::draft::SectionGenerator::kind`]）。
+    ///
+    /// - draft 路径落盘时由生成器种类写入（单一真源）；
+    /// - segment 增补/改写路径传 `None` → **保留既有留痕**（增补不改变
+    ///   内容的生成来源——mock 起草后 agent 补写仍是 mock 起点）；
+    /// - 旧记录（#130 前）无此字段 → `None`（未知）——门 1n 按
+    ///   非 real 处理（fail-visible：重起草刷新留痕或显式豁免）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generator: Option<String>,
 }
 
 /// 组装工作区错误（typed——调用方按变体分支，不解析 message；写法与中文
@@ -298,7 +308,7 @@ impl ChapterAssembler {
         content: &str,
         citations: Vec<String>,
     ) -> Result<ChapterRecord, AssemblerError> {
-        self.commit_section_with_note(section_id, content, citations, None)
+        self.commit_section_with_note(section_id, content, citations, None, None)
     }
 
     /// [`Self::commit_section`] 的带备注版（#127 P0-2）——draft_note 是
@@ -307,23 +317,38 @@ impl ChapterAssembler {
     /// 幂等面口径：content + citations 全等 → attempt 不推进；但 draft_note
     /// 是**账面不是内容**——同内容重提交而指令变了，note 照更（新指令是
     /// 新账面，不值得为它另开一个内容版本）。
+    ///
+    /// `generator`（AUD2-CHN-01/#130）：本内容版本的生成器留痕。
+    /// `Some` → 写入/覆盖（draft 路径——最新起草者即来源）；`None` →
+    /// 保留既有记录留痕（segment 增补不改内容来源；新记录则留 None =
+    /// 未知——导出门 1n 按 non-real 处理）。
     pub fn commit_section_with_note(
         &mut self,
         section_id: &str,
         content: &str,
         citations: Vec<String>,
         draft_note: Option<String>,
+        generator: Option<String>,
     ) -> Result<ChapterRecord, AssemblerError> {
         // 幂等面：全等重放 → 既有记录直返（零副作用——不碰文件）。
         // draft_note 差异不升版——仅当有新 note 时补写（note 面更新，
-        // content/attempt/citations 面原样）。
+        // content/attempt/citations 面原样）；generator 同理（Some 且异于
+        // 既有值时补写——同内容重起草换生成器是合法场景：mock 稿用 real
+        // 重写后内容未变的学籍罕见面，留痕以最新为准）。
         if let Some(existing) = self.records.get(section_id) {
             if existing.content == content && existing.citations == citations {
-                if existing.draft_note == draft_note {
+                if existing.draft_note == draft_note
+                    && (generator.is_none() || existing.generator == generator)
+                {
                     return Ok(existing.clone());
                 }
                 let mut updated = existing.clone();
-                updated.draft_note = draft_note;
+                if draft_note.is_some() {
+                    updated.draft_note = draft_note;
+                }
+                if let Some(g) = generator {
+                    updated.generator = Some(g);
+                }
                 self.write_atomic(&updated)?;
                 self.records.insert(section_id.to_string(), updated.clone());
                 return Ok(updated);
@@ -342,6 +367,12 @@ impl ChapterAssembler {
             citations,
             updated_at: now_secs(),
             draft_note,
+            // None → 继承既有留痕（segment 增补不改来源）；新记录 None = 未知
+            generator: generator.or_else(|| {
+                self.records
+                    .get(section_id)
+                    .and_then(|prev| prev.generator.clone())
+            }),
         };
         self.write_atomic(&rec)?;
         self.records.insert(rec.section_id.clone(), rec.clone());

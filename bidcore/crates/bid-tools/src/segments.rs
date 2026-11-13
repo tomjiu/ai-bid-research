@@ -276,7 +276,9 @@ impl BidService {
                 .assemble_section_segments(section_id)
                 .unwrap_or_default();
             let citations = scan_citations(&merged);
-            asm.commit_section_with_note(section_id, &merged, citations, None)
+            asm.commit_section_with_note(section_id, &merged, citations, None,
+                // #130：segment 增补不改变内容的生成来源——None 保留既有留痕
+                None)
                 .map_err(|e| ToolError::EUnprocessable {
                     reason: format!("章节工作区提交失败: {e}"),
                 })?;

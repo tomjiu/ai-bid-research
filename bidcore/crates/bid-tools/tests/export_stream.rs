@@ -581,6 +581,8 @@ fn report_manifest_serde_roundtrip() {
         table_kinds: vec!["技术参数偏离表".into()],
         forms_written: 0,
         form_titles: vec![],
+        // AUD2-CHN-01/#130：生成器汇总（serde 往返面）
+        generator_summary: Default::default(),
     };
     let json = serde_json::to_string(&report).unwrap();
     let back: ExportReport = serde_json::from_str(&json).unwrap();

@@ -603,6 +603,7 @@ fn readback_docx_structure_matches_outline() {
         &mut fx.svc,
         "export_bid_document",
         json!({
+            "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
             "project_id": fx.pid, "format": "docx",
             "output_path": "out/回读-投标文件.docx",
             "profile": export_profile(),
@@ -722,6 +723,7 @@ fn readback_docx_no_residual_placeholders_and_cjk_fidelity() {
         &mut fx.svc,
         "export_bid_document",
         json!({
+            "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
             "project_id": fx.pid, "format": "docx",
             "output_path": "out/回读-扫描.docx",
             "profile": export_profile(),
@@ -797,6 +799,7 @@ fn readback_docx_dark_bid_scrubbed_and_structure_intact() {
         &mut fx.svc,
         "export_bid_document",
         json!({
+            "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
             "project_id": fx.pid, "format": "docx",
             "output_path": "out/回读-暗标.docx",
             "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司",
@@ -890,6 +893,7 @@ fn readback_pdf_text_layer_and_chinese_readable() {
         &mut fx.svc,
         "export_bid_document",
         json!({
+            "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
             "project_id": fx.pid, "format": "pdf",
             "output_path": "out/回读-投标文件.pdf",
             "profile": export_profile(),
@@ -1284,6 +1288,7 @@ fn readback_xlsx_channel_currently_refused_honestly() {
         "export_bid_document",
         json!({
         "profile": b4_profile(),
+            "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
             "project_id": fx.pid, "format": "xlsx",
             "output_path": "out/回读.xlsx",
         }),

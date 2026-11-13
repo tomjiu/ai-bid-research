@@ -328,6 +328,7 @@ fn writing_acceptance_full_flow_docx_out() {
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-写作验收.docx",
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();
@@ -474,6 +475,7 @@ fn writing_acceptance_short_draft_blocked_from_export() {
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-短稿.docx",
     }));
     assert_eq!(err_code(&reply), "E_STATE", "未过导出确认门: {reply:?}");
@@ -486,6 +488,7 @@ fn writing_acceptance_short_draft_blocked_from_export() {
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-短稿.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "RT 未关单必须拒导出: {reply:?}");
@@ -525,6 +528,7 @@ fn writing_acceptance_short_draft_blocked_from_export() {
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-修复后.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "修复闭环后导出成功");
@@ -594,6 +598,7 @@ fn writing_acceptance_export_independent_of_review_approval() {
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-直接批准.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "篇幅不足即使直接批准也拒: {reply:?}");
@@ -623,6 +628,7 @@ fn writing_acceptance_export_independent_of_review_approval() {
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-直接批准-修复.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "修复重审后导出成功");
@@ -647,6 +653,7 @@ fn writing_acceptance_export_independent_of_review_approval() {
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-空叶.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "空叶即使直接批准也拒: {reply:?}");

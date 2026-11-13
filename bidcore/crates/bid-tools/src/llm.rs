@@ -415,6 +415,9 @@ impl SectionGenerator for RealGenerator {
             self.cfg.timeout_secs,
         ))
     }
+    fn kind(&self) -> &'static str {
+        "real"
+    }
 }
 
 // ---------------------------------------------------------------- prompt 组装

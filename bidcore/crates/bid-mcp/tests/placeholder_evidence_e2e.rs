@@ -417,6 +417,7 @@ fn placeholder_accident_blocked_then_upgraded_exports() {
         "export_bid_document",
         json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "max_overrun_pct": 10000, "project_id": &pid, "format": "docx", "output_path": "out/投标文件-占位升级后.docx" }),
     ));
     assert_eq!(r["project_status"], "EXPORTED", "修复闭环导出成功: {r:?}");
@@ -548,6 +549,7 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
         "export_bid_document",
         json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "max_overrun_pct": 10000, "project_id": &pid, "format": "docx", "output_path": "out/投标文件-1d门.docx" }),
     );
     let err = err_text(&reply);
@@ -584,6 +586,7 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
         "export_bid_document",
         json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "max_overrun_pct": 10000, "project_id": &pid, "format": "docx", "output_path": "out/投标文件-1d门-responded覆写.docx" }),
     );
     let err_resp = err_text(&reply_resp);
@@ -613,6 +616,7 @@ fn placeholder_gate_1d_fires_even_when_matrix_and_reviews_pass() {
         "export_bid_document",
         json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "max_overrun_pct": 10000, "project_id": &pid, "format": "docx", "output_path": "out/投标文件-1d豁免后.docx" }),
     ));
     assert_eq!(r["project_status"], "EXPORTED", "人工豁免后导出放行（占位不堵死人工裁决）: {r:?}");

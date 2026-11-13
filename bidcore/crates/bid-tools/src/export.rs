@@ -791,6 +791,27 @@ pub struct ExportReport {
     /// 逐格式件标题（任务 2 面）。
     #[serde(default)]
     pub form_titles: Vec<String>,
+    /// 生成器汇总（AUD2-CHN-01/#130 门 1n 伴生面——导出时点按章节留痕
+    /// 现算，常驻报告；旧报告反序列化 → 零值默认，不炸读入）。
+    #[serde(default)]
+    pub generator_summary: GeneratorSummary,
+}
+
+/// 生成器汇总（AUD2-CHN-01/#130）：导出时点对全部已写叶的生成器留痕
+/// （ChapterRecord.generator）计面。
+///
+/// - real / mock / external / unknown：四类已写叶计数（unknown = 旧记录
+///   未留痕或非 draft/segment 写入路径——门 1n 按 non-real 处理）；
+/// - scoring_leaves_total：评分叶已写数；scoring_leaves_non_real：其中
+///   非 real 数（门 1n 拦截面；导出响应与报告常驻，mock 稿不可冒充）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratorSummary {
+    pub real: usize,
+    pub mock: usize,
+    pub external: usize,
+    pub unknown: usize,
+    pub scoring_leaves_total: usize,
+    pub scoring_leaves_non_real: usize,
 }
 
 /// 源章指纹（幂等对账的最小充分量：同章同版本同内容 → 三元组全等）。
@@ -1375,6 +1396,20 @@ impl<'a> DocumentExporter<'a> {
 
         // ⑨ 产物指纹 + 幂等清单落盘（导出后产物不可变——sha 是纯读）。
         let output_sha256 = sha256_file(out_path)?;
+        // AUD2-CHN-01/#130：生成器四类计数（导出器层——全部叶必有记录，
+        // 门④已拒 MissingRecord；评分叶分拆面在服务层（需 store）补齐）。
+        let mut generator_summary = GeneratorSummary::default();
+        for node in &ordered {
+            if !is_leaf(node, &children) {
+                continue;
+            }
+            match asm.record(&node.id).and_then(|r| r.generator.as_deref()) {
+                Some("real") => generator_summary.real += 1,
+                Some("mock") => generator_summary.mock += 1,
+                Some("external") => generator_summary.external += 1,
+                _ => generator_summary.unknown += 1,
+            }
+        }
         let report = ExportReport {
             chapters_written,
             total_chars,
@@ -1386,6 +1421,7 @@ impl<'a> DocumentExporter<'a> {
             table_kinds,
             forms_written,
             form_titles,
+            generator_summary,
         };
         let manifest = ExportManifest {
             schema_version: MANIFEST_SCHEMA_VERSION,

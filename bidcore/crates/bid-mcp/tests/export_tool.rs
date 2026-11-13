@@ -216,6 +216,7 @@ fn export_full_chain_and_contract_shape() {
     let (mut svc, pid, _dir) = svc_drafted("shape", true);
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     // 契约 §8 out
@@ -249,12 +250,14 @@ fn export_idempotent_replay() {
     let (mut svc, pid, _dir) = svc_drafted("idem", false);
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     // 第二次：状态推进后的 content_version 与首键不同——走 manifest no-op
     // （结果全等；产物零重写）
     let b = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(a["artifact"]["sha256"], b["artifact"]["sha256"], "产物 sha 全等（manifest no-op）");
@@ -262,6 +265,7 @@ fn export_idempotent_replay() {
     // 第三次：EXPORTED 稳定态（content_version 不再变）——幂等键命中
     let c = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(c["deduplicated"], json!(true), "稳定态重放 → deduplicated");
@@ -275,6 +279,7 @@ fn export_pdf_channel_or_env_honest() {
     let (mut svc, pid, _) = svc_drafted("pdf", false);
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "pdf", "output_path": "out/标书.pdf",
     }));
     match &reply {
@@ -297,6 +302,7 @@ fn export_rejects_path_escape() {
     for bad in ["../outside.docx", "/abs/path.docx"] {
         let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+            "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
             "project_id": pid, "format": "docx", "output_path": bad,
         }));
         assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "路径逃逸必须拒: {bad}");
@@ -308,11 +314,13 @@ fn export_rejects_wrong_project_and_version_conflict() {
     let (mut svc, pid, _) = svc_drafted("route", false);
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": "PRJ-9999", "format": "docx", "output_path": "o.docx",
     }));
     assert_eq!(err_code(&reply), "E_NOTFOUND");
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "o.docx", "project_version": 1,
     }));
     assert_eq!(err_code(&reply), "E_CONFLICT");
@@ -389,6 +397,7 @@ fn export_blocked_by_unresponded_mandatory_rows() {
     // NotResponded → 导出必须拒且逐行列出（闸门语义由该行承载）。
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE");
@@ -424,6 +433,7 @@ fn export_blocked_by_unresponded_mandatory_rows() {
     pass_pre_export_confirm(&mut svc); // #180：正文最后一次写入后记审
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "覆写响应 + 三门过审后导出放行");
@@ -438,6 +448,7 @@ fn export_requires_persisted_workspace() {
     })))["project_id"].as_str().unwrap().to_string();
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "o.docx",
     }));
     let code = err_code(&reply);
@@ -471,6 +482,7 @@ fn export_dark_bid_anonymizes_company_name() {
     pass_pre_export_confirm(&mut svc);
 
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/暗标.docx",
         "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET" },
     })));
@@ -554,6 +566,7 @@ fn export_handwritten_spec_overrides_derivation() {
     }).to_string()).unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/s.docx",
     })));
     assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("format-spec.json 装载")));
@@ -571,6 +584,7 @@ fn export_rejects_corrupt_spec_file() {
     std::fs::write(mang.join("format-spec.json"), "{ not valid json").unwrap();
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE", "坏 spec 必须拒（fail-closed，不静默降级）");
@@ -581,6 +595,7 @@ fn export_baseline_fallback_when_no_format_clauses() {
     let (mut svc, pid, _) = svc_drafted("baseline", false); // 无格式条款
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/b.docx",
     })));
     assert!(
@@ -602,6 +617,7 @@ fn export_watermark_false_does_not_warn() {
     let (mut svc, pid, _) = svc_drafted("wm-false", false);
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书-a.docx",
         "options": { "watermark": false },
     })));
@@ -614,6 +630,7 @@ fn export_watermark_false_does_not_warn() {
     let (mut svc2, pid2, _) = svc_drafted("wm-true", false);
     let r2 = ok_result(call(&mut svc2, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid2, "format": "docx", "output_path": "out/标书-b.docx",
         "options": { "watermark": true },
     })));
@@ -730,6 +747,7 @@ fn export_with_bid_open_date_flips_expired_and_blocks() {
     let (mut svc, pid, _dir) = svc_drafted_validity("flip-block");
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
         "bid_open_date": "2027-07-01",
     }));
@@ -746,6 +764,7 @@ fn export_with_bid_open_date_flips_expired_and_blocks() {
     // 新版证据（register renewal）才是正路，这是 apply_validity 的单向语义）
     let reply2 = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
         "bid_open_date": "2026-12-31",
     }));
@@ -758,6 +777,7 @@ fn export_with_bid_open_date_no_flip_succeeds() {
     let (mut svc, pid, _dir) = svc_drafted_validity("no-flip-ok");
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
         "bid_open_date": "2026-12-31",
     })));
@@ -782,6 +802,7 @@ fn export_without_open_date_deadline_fallback_flips_and_blocks() {
     let (mut svc, pid, _dir) = svc_drafted_validity("no-date-fallback");
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     }));
     let msg = err_text(&reply);
@@ -803,6 +824,7 @@ fn export_without_open_date_deadline_fallback_no_flip_exports() {
     // 截止日变更不改章节正文——#180 摘要不受影响；直接导出
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "兜底零翻转 → 导出成功");
@@ -836,6 +858,7 @@ fn export_legacy_snapshot_without_deadline_warns_only() {
     *svc.store_mut() = bid_domain::DomainStore::restore(snap).unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/标书.docx",
     })));
     assert_eq!(r["project_status"], "EXPORTED", "legacy 缺档 → 告警不硬拒");
@@ -852,6 +875,7 @@ fn export_bid_open_date_input_validation() {
     let (mut svc, pid, _dir) = svc_drafted_validity("bad-date");
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
         "bid_open_date": "2026/12/31",
     }));
@@ -860,6 +884,7 @@ fn export_bid_open_date_input_validation() {
 
     let reply2 = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/x.docx",
         "bid_open_date": 20261231,
     }));
@@ -902,6 +927,7 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
 
     // 第一次：暗标 = 甲公司（正文脱敏：甲公司 → 投标人）
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": out_docx,
         "profile": {"dark_bid": true, "bidder_name": "甲公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET"},
     })));
@@ -914,6 +940,7 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
 
     // 第二次：换投标人名（同章节/同路径/同格式）——C-07 修复后必须重建
     let b = ok_result(call(&mut svc, "export_bid_document", json!({
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": out_docx,
         "profile": {"dark_bid": true, "bidder_name": "乙公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET"},
     })));
@@ -938,6 +965,7 @@ fn export_dark_bid_rename_rebuilds_not_stale_cache() {
 
     // 第三次：同名（乙公司）重放——修复后的键/指纹语义不破坏既有幂等
     let c = ok_result(call(&mut svc, "export_bid_document", json!({
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": out_docx,
         "profile": {"dark_bid": true, "bidder_name": "乙公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-ET"},
     })));

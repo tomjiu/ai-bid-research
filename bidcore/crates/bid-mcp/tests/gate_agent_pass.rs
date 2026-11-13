@@ -459,6 +459,7 @@ fn agent_pass_e2e_exports_with_banner() {
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-agent声明.docx",
     })));
     assert_eq!(r["human_review_complete"], false, "全门 agent 声明 → 未完成人工复核");
@@ -544,6 +545,7 @@ fn human_ratification_before_export_clears_banner_two_ledger_records() {
     let r2 = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/投标文件-追认后.docx",
     })));
     assert_eq!(r2["human_review_complete"], true, "追认后人工复核完成");
