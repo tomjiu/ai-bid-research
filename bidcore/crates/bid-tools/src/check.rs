@@ -161,6 +161,11 @@ const SCHEDULE_DIMS: [&str; 4] = ["工期", "交付周期", "实施周期", "服
 /// 语义等价归并涉及猜测，不猜：口径留给 T-7 词表扩展）。
 const WINDOW_PATTERNS: [&str; 3] = ["7x24", "5x8", "全天候"];
 
+/// 上限语词表（#150 F2）：条款上限复述形态——前邻命中即非本方承诺值
+/// （真实成稿 SEC-0044「最高不得超过80万元」的 800000 误取面）。显式清单
+/// 口径同 PLACEHOLDER_MARKERS：宁缺毋滥，词表扩展归后续批次。
+const UPPER_LIMIT_WORDS: [&str; 6] = ["不得超过", "不超过", "不得高于", "不高于", "不得超出", "不超出"];
+
 /// 内部特征集合形态：(类型, 键, 归一化值, 位置) 四元组——BTreeSet 去重 +
 /// 全序（extract_features 输出天然有序确定）。
 type FeatSet = BTreeSet<(FeatureType, String, String, String)>;
@@ -302,6 +307,45 @@ fn prev_char_nonspace(scan: &[char], before: usize) -> Option<char> {
     None
 }
 
+/// 引用编号守卫（#150 F1）：数字串是 REQ-xxxx / EV-xxxx 引用形态的编号段
+/// ——数字前（跳空白）紧邻 `-`，且 `-` 前紧邻 ASCII 字母词元 = REQ/EV
+/// （[REQ-0106]/[EV-0032] 括号形态与 REQ-0107 无括号形态均覆盖）。引用
+/// 编号不是承诺值——真实成稿 SEC-0015 的 0106 抢先顶掉 ￥46000 的实测面。
+fn is_reference_id(scan: &[char], digit_start: usize) -> bool {
+    let mut i = digit_start;
+    while i > 0 && scan[i - 1].is_whitespace() {
+        i -= 1;
+    }
+    if i == 0 || scan[i - 1] != '-' {
+        return false;
+    }
+    i -= 1; // 越过 `-`，向前收紧邻字母词元（≤4——REQ/EV 长度上界）
+    let mut word: Vec<char> = Vec::with_capacity(4);
+    while i > 0 && word.len() < 4 && scan[i - 1].is_ascii_alphabetic() {
+        word.push(scan[i - 1]);
+        i -= 1;
+    }
+    let w: String = word.iter().rev().collect::<String>().to_ascii_uppercase();
+    w == "REQ" || w == "EV"
+}
+
+/// 上限语守卫（#150 F2）：数字前（跳空白）回看 ≤6 个非空白字符，若以上
+/// 限语词收尾 → 该数字是法规/条款上限的复述，非本方承诺值——跳过找句内
+/// 下一个合规数字。
+fn has_upper_limit_prefix(scan: &[char], digit_start: usize) -> bool {
+    let mut run: Vec<char> = Vec::with_capacity(6);
+    let mut i = digit_start;
+    while i > 0 && run.len() < 6 {
+        i -= 1;
+        if scan[i].is_whitespace() {
+            continue;
+        }
+        run.push(scan[i]);
+    }
+    let s: String = run.iter().rev().collect();
+    UPPER_LIMIT_WORDS.iter().any(|w| s.ends_with(w))
+}
+
 /// 数字记号解析：`[0-9]+（,[0-9]+)*（.[0-9]{1,8})?`——返回（剥逗号数字串,
 /// 结束下标）。小数截 8 位（金额/工期面足够；超长小数视为噪声面跳过不解析）。
 fn parse_number(scan: &[char], start: usize, end: usize) -> Option<(String, usize)> {
@@ -360,8 +404,9 @@ fn scale_to_int(num: &str, mult: u128) -> Option<i64> {
 /// 金额抽取：维度词 → 句内窗口首个合规数字 → 归一化到元整数字符串。
 /// 口径：万 ×10000、剥逗号、全角数字/逗号先归半角；「万/元/圆」是单位锚，
 /// 裸数字（无锚）需整数部分 ≥2 位（防「附件2.3」「详见第3章」类误报）；
-/// 数字后紧跟 % 视为比率面跳过；紧邻「月/年/第」的数字视为日期/序数跳过。
-/// 每处维度词只取首个合规数字（后续数字属别的语义面）。
+/// 数字后紧跟 % 视为比率面跳过；紧邻「月/年/第」的数字视为日期/序数跳过；
+/// REQ-/EV- 引用编号段（#150 F1）与上限语前邻数字（#150 F2——法规上限
+/// 复述非承诺值）跳过。每处维度词只取首个合规数字（后续数字属别的语义面）。
 fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
     for dim in AMOUNT_DIMS {
         let dim_cs: Vec<char> = dim.chars().collect();
@@ -380,6 +425,16 @@ fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
                 };
                 // 日期/序数守卫：数字前紧邻「月/年/第」→ 非金额面
                 if matches!(prev_char_nonspace(scan, k), Some('月') | Some('年') | Some('第')) {
+                    k = next;
+                    continue;
+                }
+                // 引用编号守卫（#150 F1）：REQ-/EV- 引用形态的编号段非金额面
+                if is_reference_id(scan, k) {
+                    k = next;
+                    continue;
+                }
+                // 上限语守卫（#150 F2）：前邻上限语 = 条款上限复述，非承诺值
+                if has_upper_limit_prefix(scan, k) {
                     k = next;
                     continue;
                 }
