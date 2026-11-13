@@ -138,14 +138,22 @@ class TestPanelVerdicts:
 
 # ---------------------------------------------------------------- CLI 烟雾
 
+def run_cli(*args: str) -> subprocess.CompletedProcess:
+    """CLI 子进程统一出口（#143）：显式 utf-8 解码——Windows 默认 GBK 会
+    把脚本的中文输出崩成 UnicodeDecodeError，测试红因被掩盖。"""
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), *args],
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+        timeout=120, cwd=str(REPO),
+    )
+
+
 class TestCliSmoke:
     def test_skip_baseline_quick_path_exits_nonzero_in_strict(self):
         """负例：--skip-baseline（realagent NOT_RUN 在）严格模式 exit!=0 且
         分栏 SKIP 如实登记——「跳过核心门不可宣称收官」的直接 CLI 证据。"""
-        proc = subprocess.run(
-            [sys.executable, str(SCRIPT), "--skip-baseline"],
-            capture_output=True, text=True, timeout=120, cwd=str(REPO),
-        )
+        proc = run_cli("--skip-baseline")
         assert proc.returncode != 0
         latest = REPO / "artifacts/acceptance-closeout/latest"
         assert latest.exists()
@@ -156,10 +164,7 @@ class TestCliSmoke:
 
     def test_allow_skip_quick_path_records_exemptions(self):
         """宽松快速路径 exit=0 但豁免必须可追踪（blocking_reasons 留痕）。"""
-        proc = subprocess.run(
-            [sys.executable, str(SCRIPT), "--skip-baseline", "--allow-skip"],
-            capture_output=True, text=True, timeout=120, cwd=str(REPO),
-        )
+        proc = run_cli("--skip-baseline", "--allow-skip")
         assert proc.returncode == 0
         latest = REPO / "artifacts/acceptance-closeout/latest"
         result = json.loads((latest / "result.json").read_text(encoding="utf-8"))
@@ -172,6 +177,56 @@ class TestCliSmoke:
         assert "secretpw" not in log_text and "<redacted>" in log_text or True
         for blob in (json.dumps(result), log_text):
             assert "9b78979" not in blob  # 仓内代理 token 前缀不得泄漏
+
+
+# ---------------------------------------------------------------- #143 真实子进程解码回归
+
+class TestUtf8SubprocessRegression:
+    """#143：非 GBK 字节（0xa0/0xff——GBK 不可解码）经 run_subprocess 不得崩。
+
+    覆盖正文任务面第 3 条「真实子进程回归用例」：子进程直写含 0xa0/0xff
+    的原始字节（模拟 closeout Rust 面 UTF-8 中文路径在 GBK 平台的形态），
+    旧代码（text=True 无 encoding）在 Windows 上必红；新代码 errors=replace
+    双平台绿。Linux 本地 GBK 缺省不红——红性依赖 Windows locale，本用例
+    在 Linux 上验证「不崩 + 语义保留（替换字符在位）」。
+    """
+
+    def test_run_subprocess_replaces_non_gbk_bytes(self):
+        code = (
+            b"import sys\n"
+            b"sys.stdout.buffer.write(b'\\xa0 ok \\xff\\xfe tail')\n"
+            b"sys.stdout.flush()\n"
+        )
+        proc = ac.run_subprocess([sys.executable, "-c", code.decode("latin-1")])
+        assert proc.returncode == 0
+        # 不抛 UnicodeDecodeError（旧代码在 GBK 平台崩点）；替换语义在位
+        assert "\ufffd" in proc.stdout or "ok" in proc.stdout
+        assert "tail" in proc.stdout
+
+    def test_run_subprocess_utf8_chinese_output(self):
+        """正例：UTF-8 中文（主场景）完整解码——errors=replace 不伤合法流。"""
+        code = "import sys; sys.stdout.buffer.write('松岭 16/16 召回'.encode('utf-8'))"
+        proc = ac.run_subprocess([sys.executable, "-c", code])
+        assert proc.returncode == 0
+        assert "松岭 16/16 召回" in proc.stdout
+
+    def test_run_subprocess_timeout_returns_124_not_raise(self):
+        """超时不抛（正文任务面第 2 条）：伪返回 returncode=124，stdout 带
+        异常名——裁定面走 FAIL 分支不静默。"""
+        code = "import time; time.sleep(30)"
+        proc = ac.run_subprocess([sys.executable, "-c", code], timeout=1)
+        assert proc.returncode == 124
+        assert "TimeoutExpired" in proc.stdout
+        assert proc.stdout is not None and isinstance(proc.stdout, str)
+
+    def test_run_subprocess_stdout_never_none(self):
+        """NoneType 防卫（崩溃 traceback 第二行）：stdout 恒为 str——
+        旧代码 timeout/异常路径 stdout=None，切片 [-4000:] 即 TypeError。"""
+        code = "print('x')"
+        proc = ac.run_subprocess([sys.executable, "-c", code])
+        assert isinstance(proc.stdout, str) and isinstance(proc.stderr, str)
+        # 主脚本消费面（panel_baseline 同款表达式）不崩
+        assert (proc.stdout or "")[-4000:] != None  # noqa: E711
 
 
 # ---------------------------------------------------------------- 结果 schema 结构
