@@ -189,7 +189,7 @@ fn recommend_length_profile_tool_contract() {
     );
     let _ = std::fs::remove_dir_all(ws);
 
-    // 响应形态：四档 alternatives + reasons + signals 原始值
+    // 响应形态：五档 alternatives + reasons + signals 原始值（#133 补紧凑档）
     let out = ok_result(call(
         &mut svc,
         "recommend_length_profile",
@@ -202,9 +202,9 @@ fn recommend_length_profile_tool_contract() {
         assert!(out.get(key).is_some(), "响应缺 {key}: {out:?}");
     }
     let alts = out["alternatives"].as_array().unwrap();
-    assert_eq!(alts.len(), 4, "alternatives 必须全四档（用户能做选择）: {alts:?}");
+    assert_eq!(alts.len(), 5, "alternatives 必须全五档（用户能做选择）: {alts:?}");
     let alt_profiles: Vec<&str> = alts.iter().filter_map(|a| a["profile"].as_str()).collect();
-    for expect in ["practical", "standard", "conservative", "maximum"] {
+    for expect in ["compact", "practical", "standard", "conservative", "maximum"] {
         assert!(alt_profiles.contains(&expect), "alternatives 缺 {expect}: {alt_profiles:?}");
     }
     for a in alts {
@@ -215,7 +215,7 @@ fn recommend_length_profile_tool_contract() {
         "理由必须非空（逐信号一行）: {out:?}"
     );
     let signals = &out["signals"];
-    for key in ["scoring_detail_count", "star_count", "budget_yuan", "tender_type", "explicit_limit_chars"] {
+    for key in ["scoring_detail_count", "star_count", "budget_yuan", "tender_pages", "tender_type", "explicit_limit_chars"] {
         assert!(signals.get(key).is_some(), "signals 缺 {key}: {signals:?}");
     }
     // synth A 件（小型合成件）：细则数信号弱 → 置信度如实
@@ -224,10 +224,10 @@ fn recommend_length_profile_tool_contract() {
         ["high", "medium", "low"].contains(&conf),
         "置信度枚举: {conf}"
     );
-    // 推荐档有效性：recommended ∈ 四档 且 target_chars 匹配该档（synth 无明写篇幅）
+    // 推荐档有效性：recommended ∈ 五档 且 target_chars 匹配该档（synth 无明写篇幅）
     let rec = out["recommended_profile"].as_str().unwrap();
     assert!(
-        ["practical", "standard", "conservative", "maximum"].contains(&rec),
+        ["compact", "practical", "standard", "conservative", "maximum"].contains(&rec),
         "推荐档枚举: {rec}"
     );
     if out["from_tender_spec"].is_null() {
@@ -319,24 +319,29 @@ fn real_corpus_recommendation_sanity() {
             })
             .unwrap_or_else(|| id.to_string())
     };
+    // #133 规模因子后期望集（预算走 params ∪ 锚文兜底两面）：
+    // - hq-dev（151.9 万预算/89 页/28 细则/29★）：基档 Conservative，
+    //   预算 < 200 万 + 页数 ≤ 100 且预算 < 500 万 → 两档下调 → practical；
+    // - wenming（30 万/63 页/8★）：同型两档下调 → compact/practical；
+    // - nm-health（batch2 缺件 SKIP）：同口径。
     let cases: &[(&str, &str, PathBuf, &[&str])] = &[
         (
             "hq-dev-procure-230001",
             "real-tender-batch1",
             root.join("real-tender-batch1/hq-dev-procure-230001"),
-            &["conservative", "maximum"],
+            &["practical"],
         ),
         (
             "wenming-longjiang-230001",
             "real-tender-batch1",
             root.join("real-tender-batch1/wenming-longjiang-230001"),
-            &["standard", "conservative"],
+            &["compact", "practical"],
         ),
         (
             "nm-health-terminal",
             "real-tender-batch2",
             root.join("real-tender-batch2/nm-health-terminal"),
-            &["practical"],
+            &["compact", "practical"],
         ),
     ];
     for (id, batch, dir, allowed) in cases {
@@ -406,4 +411,92 @@ fn real_corpus_recommendation_sanity() {
         );
         let _ = std::fs::remove_dir_all(&ws);
     }
+}
+
+// ---------------------------------------------------------------- #133 A2：松岭真件门（环境门）
+
+/// 层1 互斥锁（与 songling_scoring_outline 同因：4G/2核沙箱 PDF 解析内存约束）。
+fn engine_lock() -> &'static std::sync::Mutex<()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+}
+
+/// #133 A2 验收（issue 原文）：松岭重跑推荐档位 ≠ 1.2M（规模因子生效）；
+/// 紧凑档可选（alternatives 含 compact）。
+///
+/// 审计 AUD2-HIS-A2 实锤面：松岭 65 页/预算 119.6 万/20 评分细则 →
+/// 旧算法推保险型 1.2M 字（≈1422 页）——小项目现实篇幅落在阶梯之外。
+/// 新算法：预算 < 200 万 + 页数 ≤ 100 且预算 < 500 万 → 两档规模下调
+/// → 实用型 400k（≈474 页，中型服务现实篇幅带 200-500 页顶端）。
+#[test]
+fn songling_133_scale_factors_recommend_gate() {
+    use bid_parse::env_preflight::{skip_if_env_missing, skip_if_fixture_missing, POPPLER_TEXT_TOOLS};
+    if skip_if_env_missing("songling_133_scale_recommend", POPPLER_TEXT_TOOLS) {
+        return; // SKIP（环境缺 poppler——如实跳过，不伪造）
+    }
+    let _guard = engine_lock().lock().unwrap();
+    let pdf = fixtures_root().join("songling-232762/tender/光纤租赁费招标文件.pdf");
+    if skip_if_fixture_missing("songling_133_scale_recommend", &[&pdf]) {
+        return;
+    }
+
+    // 全链：导入 → 抽取（推荐信号来自 REQ 面——无需建纲）
+    let ws = tmp_ws("songling-133");
+    let mut svc = BidService::open(&ws)
+        .expect("打开工作区")
+        .with_fs_root(fixtures_root());
+    ok_result(call(
+        &mut svc,
+        "create_bid_project",
+        json!({
+            "name": "松岭规模因子推荐", "bid_deadline": "2026-11-30",
+            "mode": "明标", "external_key": "sl-133-scale",
+        }),
+    ));
+    let import = ok_result(call(
+        &mut svc,
+        "import_tender_files",
+        json!({
+            "project_id": "PRJ-0001",
+            "files": [{ "upload_ref": pdf.display().to_string(),
+                        "filename": "光纤租赁费招标文件.pdf", "kind": "招标文件" }],
+        }),
+    ));
+    assert_eq!(import["totals"]["parse_failed"], json!(0), "松岭件应解析成功: {import:?}");
+    ok_result(call(
+        &mut svc,
+        "extract_requirements",
+        json!({ "project_id": "PRJ-0001" }),
+    ));
+
+    let out = ok_result(call(
+        &mut svc,
+        "recommend_length_profile",
+        json!({ "project_id": "PRJ-0001" }),
+    ));
+    let _ = std::fs::remove_dir_all(&ws);
+
+    // 门 1（issue 验收原文）：推荐档位 ≠ 1.2M——规模因子生效
+    let rec = out["recommended_profile"].as_str().unwrap();
+    assert_ne!(
+        rec, "conservative",
+        "#133 A2：松岭（119.6 万/65 页）不再推保险型 1.2M: {out:?}"
+    );
+    // 门 2：实用型（400k ≈ 474 页——降 2 档：Conservative → Standard → Practical）
+    assert_eq!(rec, "practical", "松岭面 → 实用型: {out:?}");
+    assert_eq!(out["target_chars"], json!(400_000));
+    // 门 3：理由明示规模因子（命中行 + 下调结算行）
+    let joined = out["reasons"].as_array().unwrap()
+        .iter().filter_map(|s| s.as_str()).collect::<Vec<_>>().join("\n");
+    assert!(joined.contains("规模下调一档"), "规模因子命中行缺失: {joined}");
+    assert!(joined.contains("规模因子命中"), "下调结算行缺失: {joined}");
+    // 门 4：信号回显——页数/预算真值在场（65 页/119.58 万；预算走锚文
+    // 兜底面：para 预算行无 params.amount_wan——bid_parse::budget_yuan_wan）
+    let pages = out["signals"]["tender_pages"].as_u64().unwrap();
+    assert!((60..=65).contains(&pages), "松岭页数信号 ≈ 65: {pages}");
+    let budget = out["signals"]["budget_yuan"].as_u64().unwrap();
+    assert_eq!(budget, 1_195_800, "松岭预算信号 119.58 万（锚文兜底面）: {budget}");
+    // 门 5（issue 验收原文）：紧凑档可选——alternatives 全五档含 compact
+    let alts = out["alternatives"].as_array().unwrap();
+    assert!(alts.iter().any(|a| a["profile"] == json!("compact")), "紧凑档可选: {alts:?}");
 }

@@ -150,15 +150,20 @@ pub const DEFAULT_TARGET_TOTAL_CHARS: u32 = 1_200_000;
 /// [`LengthProfile::approx_pages`] 与 validate 的页数口径共用。
 pub const CHARS_PER_PAGE: u32 = 844;
 
-/// 篇幅档位（#287——用户/Agent 按招标文件选择，四档 + 默认）。
+/// 篇幅档位（#287——用户/Agent 按招标文件选择；#133 A2 补紧凑档 → 五档 + 默认）。
 ///
 /// 用户裁定：默认 Conservative（1,200,000 字 ≈ 1422 页）；上限档
 /// Maximum（2,500,000 字 ≈ 2963 页，接近胶装/评标时间现实约束——
 /// 一本胶装标书 ≈ 500 页，2000 页要 4 册；3-7 天评 20-50 家看不了
-/// 2000+ 页/家）。
+/// 2000+ 页/家）。#133 A2（审计 AUD2-HIS-A2）：119.6 万预算/65 页项目
+/// 被推荐 1422 页脱离现实（小项目现实篇幅 10-20 万字落在阶梯之外）
+/// → 补**紧凑型**低档 150k ≈ 178 页，并让规模因子参与推荐（见
+/// [`recommend_length`] 信号 4）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LengthProfile {
+    /// 紧凑型（#133 A2）：小项目/小额采购——现实篇幅 10-20 万字。
+    Compact,
     /// 实用型：不注水，每页有信息。小型采购/表单类项目。
     Practical,
     /// 标准型：国内主流投标。中型服务/设备采购。
@@ -170,17 +175,20 @@ pub enum LengthProfile {
 }
 
 impl LengthProfile {
-    /// 全档位序（alternatives 呈现面）。
-    pub const ALL: [LengthProfile; 4] = [
+    /// 全档位序（alternatives 呈现面——升序，信号 1 的「≥ 明写值最小档」
+    /// 查找依赖此序）。
+    pub const ALL: [LengthProfile; 5] = [
+        LengthProfile::Compact,
         LengthProfile::Practical,
         LengthProfile::Standard,
         LengthProfile::Conservative,
         LengthProfile::Maximum,
     ];
 
-    /// 档位目标字数（#287 验收 1：400k / 800k / 1.2M / 2.5M）。
+    /// 档位目标字数（#287 验收 1：400k / 800k / 1.2M / 2.5M；#133 A2 补 150k 紧凑档）。
     pub fn target_total_chars(self) -> u32 {
         match self {
+            LengthProfile::Compact => 150_000,     // ≈  178 页（#133 A2 小项目现实篇幅）
             LengthProfile::Practical => 400_000,   // ≈  474 页
             LengthProfile::Standard => 800_000,    // ≈  948 页
             LengthProfile::Conservative => 1_200_000, // ≈ 1422 页 ← 默认
@@ -196,6 +204,7 @@ impl LengthProfile {
     /// 中文档名。
     pub fn label_zh(self) -> &'static str {
         match self {
+            LengthProfile::Compact => "紧凑型",
             LengthProfile::Practical => "实用型",
             LengthProfile::Standard => "标准型",
             LengthProfile::Conservative => "保险型",
@@ -206,6 +215,7 @@ impl LengthProfile {
     /// 适用场景（alternatives 的 when 提示）。
     pub fn when_zh(self) -> &'static str {
         match self {
+            LengthProfile::Compact => "小项目/小额采购（预算 < 200 万），现实篇幅 10-20 万字",
             LengthProfile::Practical => "小型采购、表单类、评分细则 < 10",
             LengthProfile::Standard => "中型服务、设备采购、评分细则 10-19",
             LengthProfile::Conservative => "大项目、竞争激烈、评分细则 20+（默认档）",
@@ -217,6 +227,7 @@ impl LengthProfile {
     /// 显式拒，不静默兜底——防拼写错档静默落到默认档）。
     pub fn from_key(key: &str) -> Option<Self> {
         match key {
+            "compact" => Some(LengthProfile::Compact),
             "practical" => Some(LengthProfile::Practical),
             "standard" => Some(LengthProfile::Standard),
             "conservative" => Some(LengthProfile::Conservative),
@@ -225,22 +236,24 @@ impl LengthProfile {
         }
     }
 
-    /// 档位序数（0-3）——上调一档的基元。
+    /// 档位序数（0-4）——上/下调一档的基元。
     fn ordinal(self) -> u8 {
         match self {
-            LengthProfile::Practical => 0,
-            LengthProfile::Standard => 1,
-            LengthProfile::Conservative => 2,
-            LengthProfile::Maximum => 3,
+            LengthProfile::Compact => 0,
+            LengthProfile::Practical => 1,
+            LengthProfile::Standard => 2,
+            LengthProfile::Conservative => 3,
+            LengthProfile::Maximum => 4,
         }
     }
 
     /// 按序数取档（饱和：越界取端点）。
     fn from_ordinal(n: u8) -> Self {
         match n {
-            0 => LengthProfile::Practical,
-            1 => LengthProfile::Standard,
-            2 => LengthProfile::Conservative,
+            0 => LengthProfile::Compact,
+            1 => LengthProfile::Practical,
+            2 => LengthProfile::Standard,
+            3 => LengthProfile::Conservative,
             _ => LengthProfile::Maximum,
         }
     }
@@ -248,6 +261,12 @@ impl LengthProfile {
     /// 上调一档（#287 修正项基元——饱和于 Maximum，验收 7 上限保护）。
     fn raise(self) -> Self {
         LengthProfile::from_ordinal(self.ordinal().saturating_add(1))
+    }
+
+    /// 下调一档（#133 A2 规模因子基元——饱和于 Compact：紧凑档是阶梯
+    /// 下限，不再往下）。
+    fn lower(self) -> Self {
+        LengthProfile::from_ordinal(self.ordinal().saturating_sub(1))
     }
 }
 
@@ -292,6 +311,26 @@ pub enum Confidence {
     Low,
 }
 
+// ------------------------------------------------ 规模因子阈值（#133 A2）
+
+/// 规模下调：小项目预算线（元）。
+///
+/// 依据（审计阶段3 松岭实锤）：119.6 万预算/65 页/20 细则项目被推荐
+/// 保险型 1.2M 字（1422 页）——小项目现实篇幅 10-20 万字落在阶梯之外。
+/// 预算 < 200 万 → 下调一档（小额采购——响应面天然小）。
+pub const SCALE_BUDGET_SMALL_YUAN: u64 = 2_000_000;
+
+/// 规模下调：薄招标文件页数线（页）——< 40 页 → 下调一档（薄文件响应面小）。
+pub const SCALE_PAGES_THIN: u32 = 40;
+
+/// 规模下调：中等页数上限（页）——与 [`SCALE_BUDGET_MID_YUAN`] 联合判定。
+pub const SCALE_PAGES_MID: u32 = 100;
+
+/// 规模下调：中等预算线（元）——页数 ≤ 100 且预算 < 500 万 → 下调一档
+/// （中小项目：响应篇幅与招标体量成正比，细则数信号不能无限托高）。
+pub const SCALE_BUDGET_MID_YUAN: u64 = 5_000_000;
+
+
 /// 篇幅档位建议（#287——纯函数产物，人可读理由随行）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LengthRecommendation {
@@ -308,17 +347,21 @@ pub struct LengthRecommendation {
 
 /// 篇幅档位推荐（#287 核心算法——纯函数，可测；Agent 可覆盖，决策权在用户）。
 ///
-/// 信号优先级（issue #287）：
+/// 信号优先级（issue #287 + #133 A2）
 /// 1. `explicit_limit`（招标文件明写篇幅）→ 直接用（覆盖一切推断）
 /// 2. 评分细则数（最可靠信号）：< 10 → Practical；10-19 → Standard；
 ///    20-39 → Conservative；≥ 40 → Maximum
 /// 3. 修正项（任一命中上调一档，饱和于 Maximum）：★条款 > 30（废标风险
 ///    高要写细）/ 预算 > 1000 万 / 工程类。（多标段无引擎面信号——由
 ///    Agent 显式选档，不参与本函数。）
+/// 4. **规模因子**（#133 A2，任一命中下调一档可叠加，饱和于 Compact；
+///    在上调之后结算——规模是现实封顶，压过复杂度信号）：预算 < 200 万 /
+///    页数 < 40 / 页数 ≤ 100 且预算 < 500 万。信号缺失（None）不参与判定。
 pub fn recommend_length(
     scoring_detail_count: usize,
     star_count: usize,
     budget_yuan: Option<u64>,
+    tender_pages: Option<u32>,
     tender_type: TenderType,
     explicit_limit: Option<u32>,
 ) -> LengthRecommendation {
@@ -418,6 +461,64 @@ pub fn recommend_length(
         raised
     };
 
+    // ---- 信号 4：规模因子（#133 A2——任一命中下调一档，可叠加，饱和于
+    // 紧凑档；在上调之后结算：规模是项目现实封顶，压过复杂度信号。信号
+    // 缺失 None 不参与判定——如实呈现，不臆造）
+    let mut scale_downs: Vec<&str> = Vec::new();
+    let budget_small = budget_yuan.is_some_and(|b| b < SCALE_BUDGET_SMALL_YUAN);
+    reasons.push(match budget_yuan {
+        Some(b) if budget_small => format!(
+            "预算 {} 万元（< {} 万 → 规模下调一档：小额采购响应面天然小）",
+            b / 10_000,
+            SCALE_BUDGET_SMALL_YUAN / 10_000
+        ),
+        Some(b) => format!("预算 {} 万元（未触发规模下调）", b / 10_000),
+        None => "预算未知（未参与规模判定）".to_string(),
+    });
+    if budget_small {
+        scale_downs.push("预算 < 200 万");
+    }
+    let pages_thin = tender_pages.is_some_and(|p| p < SCALE_PAGES_THIN);
+    let pages_mid_small = tender_pages.is_some_and(|p| p <= SCALE_PAGES_MID)
+        && budget_yuan.is_some_and(|b| b < SCALE_BUDGET_MID_YUAN);
+    reasons.push(match tender_pages {
+        Some(p) if pages_thin => format!(
+            "招标文件 {p} 页（< {SCALE_PAGES_THIN} 页 → 规模下调一档：薄文件响应面小）"
+        ),
+        Some(p) if pages_mid_small => format!(
+            "招标文件 {p} 页（≤ {SCALE_PAGES_MID} 页且预算 < {} 万 → 规模下调一档：中小项目）",
+            SCALE_BUDGET_MID_YUAN / 10_000
+        ),
+        Some(p) => format!("招标文件 {p} 页（未触发规模下调）"),
+        None => "招标页数未知（未参与规模判定）".to_string(),
+    });
+    if pages_thin {
+        scale_downs.push("页数 < 40");
+    } else if pages_mid_small {
+        scale_downs.push("页数 ≤ 100 且预算 < 500 万");
+    }
+    let profile = if scale_downs.is_empty() {
+        profile
+    } else {
+        let mut lowered = profile;
+        for _ in 0..scale_downs.len() {
+            lowered = lowered.lower();
+        }
+        reasons.push(format!(
+            "规模因子命中 {} 项（{}）→ {} 下调至 {}（档位须匹配项目现实规模——审计 AUD2-HIS-A2：119.6 万预算项目曾推 1422 页脱离现实）",
+            scale_downs.len(),
+            scale_downs.join("、"),
+            profile.label_zh(),
+            lowered.label_zh()
+        ));
+        if lowered == LengthProfile::Compact && profile != LengthProfile::Compact {
+            reasons.push(
+                "已到紧凑档（150,000 字 ≈ 178 页——阶梯下限）：小项目现实篇幅 10-20 万字；再低不足以覆盖评分细则展开".to_string(),
+            );
+        }
+        lowered
+    };
+
     LengthRecommendation {
         profile,
         reasons,
@@ -459,6 +560,55 @@ pub const ADMIN_CHARS_PER_REQ: u32 = 300;
 /// 权重体现，不在此轨重复计价。
 pub const BODY_CHARS_PER_REQ: u32 = 2_000;
 
+// ------------------------------------------------ 复杂度分带（#133 A3）
+
+/// 复杂度短带上限（字符）——锚文本 < 30 字 → 简单列举条款（系数 0.5）。
+///
+/// 依据（审计阶段3 松岭实测）：同叶锚文本 9~313 字不等同价（恒定单价）
+/// ——「简单要求过度扩写 + 复杂要求无法表达」同源。短摘录（如「提供
+/// 营业执照复印件」）响应形态是一句话确认 + 附件指引，半价已足。
+pub const COMPLEXITY_SHORT_BELOW: u32 = 30;
+
+/// 复杂度长带下限（字符）——锚文本 > 120 字 → 复杂技术/服务条款（系数 1.5）。
+///
+/// 长摘录意味着参数对照/多重要求/实施口径展开——需要更大篇幅才能说清。
+pub const COMPLEXITY_LONG_ABOVE: u32 = 120;
+
+/// 三带系数（×1000 定点）：短 0.5 / 中 1.0 / 长 1.5（issue #133 原文口径）。
+pub const COMPLEXITY_COEF_SHORT_X1000: u64 = 500;
+pub const COMPLEXITY_COEF_MID_X1000: u64 = 1_000;
+pub const COMPLEXITY_COEF_LONG_X1000: u64 = 1_500;
+
+/// REQ 锚文本复杂度（字符数）——最长锚摘录长度。
+///
+/// 多锚取最丰富面（同一条款的多锚是同一原文的不同定位，取 max 而非 Σ
+/// 防重复计价）；零锚 → 0（短带——无锚 REQ 是登记面最小体，与简单条款
+/// 同价合理）。
+pub fn anchor_complexity_chars(r: &Requirement) -> u32 {
+    r.anchors
+        .iter()
+        .map(|a| a.excerpt.chars().count() as u32)
+        .max()
+        .unwrap_or(0)
+}
+
+/// 复杂度分带单价（#133 A3）：`base` × 带系数（四舍五入到整字符）。
+///
+/// 三带：< 30 字 → 0.5× / 30-120 字 → 1.0× / > 120 字 → 1.5×。行政底价
+/// 300 → 150/300/450；实质底价 2000 → 1000/2000/3000（均整除，四舍五入
+/// 仅为一般性防御）。评分轨不在此计价（[`MIN_SCORING_LEAF_CHARS`] 底价
+/// + 分值权重让渡——#133 约束「评分轨不动」）。
+pub fn tiered_unit_price(base: u32, complexity_chars: u32) -> u64 {
+    let coef_x1000 = if complexity_chars < COMPLEXITY_SHORT_BELOW {
+        COMPLEXITY_COEF_SHORT_X1000
+    } else if complexity_chars > COMPLEXITY_LONG_ABOVE {
+        COMPLEXITY_COEF_LONG_X1000
+    } else {
+        COMPLEXITY_COEF_MID_X1000
+    };
+    (u64::from(base) * coef_x1000 + 500) / 1000
+}
+
 /// 评分细则叶的配额下限（#253 验收 4：单个评分细则条目配额 ≥ 10,000 字）。
 ///
 /// 评分细则是「需要展开的真题目」（整体服务方案/质量保证体系……）——
@@ -466,7 +616,23 @@ pub const BODY_CHARS_PER_REQ: u32 = 2_000;
 /// 无法展开论证；高于此值部分按分值权重分摊。
 pub const MIN_SCORING_LEAF_CHARS: u32 = 10_000;
 
-/// 退化面（底价和 > target）评分叶分值比例保底的 K 系数（×1000 定点，
+/// 平价口径底价向量（#133 A3 前[#253 时代]的旧语义——flat 单价 × 条数，
+/// 叶下限保护；测试与无锚信号面的兼容面）。分带口径见
+/// [`derive_outline_with_mappings`] 的供价段。
+#[cfg(test)]
+fn flat_base_prices(tracks: &[Track], counts: &[u64]) -> Vec<u64> {
+    tracks
+        .iter()
+        .zip(counts.iter())
+        .map(|(t, &c)| match t {
+            Track::Scoring => u64::from(MIN_SCORING_LEAF_CHARS),
+            Track::Admin => (u64::from(ADMIN_CHARS_PER_REQ) * c).max(u64::from(MIN_LEAF_CHARS)),
+            Track::Body => (u64::from(BODY_CHARS_PER_REQ) * c).max(u64::from(MIN_LEAF_CHARS)),
+        })
+        .collect()
+}
+
+/// 回退面（底价和 > target）评分叶分值比例保底的 K 系数（×1000 定点，
 /// AUD2-HIS-A1/#131）。
 ///
 /// 语义：退化面评分叶配额 = min(MIN_SCORING_LEAF_CHARS,
@@ -531,6 +697,13 @@ fn page_of(locator: &str) -> Option<u32> {
         i += 1;
     }
     None
+}
+
+/// 锚页号（工具层推荐信号 #133 A2 用）：`anchor.page` 优先（#285② 块级
+/// 定位面——PDF 解析链回填），缺失时回退 locator「第N页」解析（DOCX 面
+/// 锚可能无 page 字段但 locator 带页码）。两者皆无 → None。
+pub fn anchor_page_of(anchor: &crate::Anchor) -> Option<u32> {
+    anchor.page.or_else(|| page_of(&anchor.locator))
 }
 
 /// 块内原文页码区间（「原文第2-24页」——条款号不齐时的块标题兜底：
@@ -804,21 +977,17 @@ fn allocate_quotas(
     tracks: &[Track],
     weights: &[u64],
     counts: &[u64],
+    base_prices: &[u64],
     target: u32,
     total_pts_x1000: u64,
 ) -> Vec<u64> {
     let target = u64::from(target);
     let sum_counts: u64 = counts.iter().sum();
-    // 底价：评分轨 = 细则下限/叶；行政/实质轨 = 单价 × 条数（叶下限保护）
-    let mut quotas: Vec<u64> = tracks
-        .iter()
-        .zip(counts.iter())
-        .map(|(t, &c)| match t {
-            Track::Scoring => u64::from(MIN_SCORING_LEAF_CHARS),
-            Track::Admin => (u64::from(ADMIN_CHARS_PER_REQ) * c).max(u64::from(MIN_LEAF_CHARS)),
-            Track::Body => (u64::from(BODY_CHARS_PER_REQ) * c).max(u64::from(MIN_LEAF_CHARS)),
-        })
-        .collect();
+    // 底价（#133 A3 改由调用方供价——分层计价的供价面）：
+    //   评分轨 = 细则下限/叶；行政/实质轨 = 复杂度分带单价 × 条数
+    //   （[`flat_base_prices`] 平价口径 / [`derive_outline_with_mappings']
+    //   分带口径——叶下限 MIN_LEAF_CHARS 保护由供价方套用）。
+    let mut quotas: Vec<u64> = base_prices.to_vec();
     let base_sum: u64 = quotas.iter().sum();
     if base_sum <= target {
         // 剩余预算让渡：评分轨（按分值权重）→ 实质轨（按条数）→ 行政轨（按条数）
@@ -1229,13 +1398,31 @@ pub fn derive_outline_with_mappings(
     let mut tracks: Vec<Track> = Vec::with_capacity(n_leaf + n_scoring_entries);
     let mut weights: Vec<u64> = vec![0; n_leaf + n_scoring_entries];
     let mut counts: Vec<u64> = Vec::with_capacity(n_leaf + n_scoring_entries);
+    // #133 A3 供价面：REQ id → 锚复杂度 O(1) 查表（同一 REQ 多叶引用时
+    // 复用）；legacy 叶 = 平价/分带单价 × 条数（叶下限保护），评分条目 =
+    // 细则下限（评分轨不动）。
+    let complexity_by_id: std::collections::HashMap<&str, u32> = reqs
+        .iter()
+        .map(|r| (r.id.as_str(), anchor_complexity_chars(r)))
+        .collect();
+    let mut base_prices: Vec<u64> = Vec::with_capacity(n_leaf + n_scoring_entries);
     for l in &leaves {
-        tracks.push(if is_admin_group(&l.group) {
-            Track::Admin
-        } else {
-            Track::Body
-        });
+        let is_admin = is_admin_group(&l.group);
+        tracks.push(if is_admin { Track::Admin } else { Track::Body });
         counts.push(l.req_ids.len() as u64);
+        // 分带单价 × 条数（#133 A3：短/中/长锚 0.5/1.0/1.5×——简单列举
+        // 条款半价、复杂技术条款 1.5 倍；叶下限保护）；旧平价口径见
+        // flat_base_prices（分带前语义，测试兼容面）。
+        let unit = if is_admin { ADMIN_CHARS_PER_REQ } else { BODY_CHARS_PER_REQ };
+        let price: u64 = l
+            .req_ids
+            .iter()
+            .map(|rid| {
+                let complexity = complexity_by_id.get(rid.as_str()).copied().unwrap_or(0);
+                tiered_unit_price(unit, complexity)
+            })
+            .sum();
+        base_prices.push(price.max(u64::from(MIN_LEAF_CHARS)));
     }
     if let Some(build) = &scoring_build {
         for ch in &build.chapters {
@@ -1247,6 +1434,7 @@ pub fn derive_outline_with_mappings(
                 tracks.push(Track::Scoring);
                 weights[tracks.len() - 1] = (ch.score * 1000.0).round() as u64;
                 counts.push(1);
+                base_prices.push(u64::from(MIN_SCORING_LEAF_CHARS));
                 continue;
             }
             // 章分值均摊到细则（×1000 整数——两位小数分值无损）
@@ -1255,6 +1443,7 @@ pub fn derive_outline_with_mappings(
                 tracks.push(Track::Scoring);
                 weights[tracks.len() - 1] = w;
                 counts.push(1);
+                base_prices.push(u64::from(MIN_SCORING_LEAF_CHARS));
             }
         }
     }
@@ -1277,8 +1466,14 @@ pub fn derive_outline_with_mappings(
             ((chapters_pts + slots_pts) * 1000.0).round() as u64
         })
         .unwrap_or(0);
-    let mut quotas: Vec<u64> =
-        allocate_quotas(&tracks, &weights, &counts, effective_target as u32, total_pts_x1000);
+    let mut quotas: Vec<u64> = allocate_quotas(
+        &tracks,
+        &weights,
+        &counts,
+        &base_prices,
+        effective_target as u32,
+        total_pts_x1000,
+    );
     // 槽位固定配额（统一账尾——守恒：slots + effective_target == target）
     for _ in 0..n_slots {
         quotas.push(u64::from(crate::scoring_outline::SLOT_FIXED_CHARS));
@@ -1790,6 +1985,7 @@ mod tests {
     /// 验收 3：approx_pages 按 844 字符/页换算（向上取整）。
     #[test]
     fn length_profile_approx_pages() {
+        assert_eq!(LengthProfile::Compact.approx_pages(), 178);
         assert_eq!(LengthProfile::Practical.approx_pages(), 474);
         assert_eq!(LengthProfile::Standard.approx_pages(), 948);
         assert_eq!(LengthProfile::Conservative.approx_pages(), 1422);
@@ -1803,11 +1999,32 @@ mod tests {
         }
     }
 
+    /// #133 A2：紧凑档在位——阶梯升序 / 键往返 / 默认档不受影响。
+    #[test]
+    fn length_profile_133_compact_tier() {
+        // 阶梯升序（信号 1「≥ 明写值最小档」查找依赖此序）
+        let tiers: Vec<u32> = LengthProfile::ALL.iter().map(|p| p.target_total_chars()).collect();
+        let mut sorted = tiers.clone();
+        sorted.sort_unstable();
+        assert_eq!(tiers, sorted, "ALL 必须按目标字数升序");
+        // 键往返
+        assert_eq!(LengthProfile::from_key("compact"), Some(LengthProfile::Compact));
+        assert_eq!(
+            serde_json::to_value(LengthProfile::Compact).unwrap().as_str(),
+            Some("compact")
+        );
+        // 紧凑档量级：150k ≈ 178 页（小项目现实篇幅 10-20 万字）
+        assert_eq!(LengthProfile::Compact.target_total_chars(), 150_000);
+        // 默认档不变（#287 用户裁定）
+        assert_eq!(LengthProfile::default(), LengthProfile::Conservative);
+    }
+
     /// 验收 4：细则数判定规则（8→Practical / 15→Standard / 25→Conservative / 45→Maximum）。
     #[test]
     fn recommend_by_scoring_detail_count() {
+        // 规模信号全 None（旧口径保持——规模因子不参与的基线行为）
         let neutral = |n: usize| {
-            recommend_length(n, 0, None, TenderType::Goods, None)
+            recommend_length(n, 0, None, None, TenderType::Goods, None)
         };
         assert_eq!(neutral(8).profile, LengthProfile::Practical);
         assert_eq!(neutral(15).profile, LengthProfile::Standard);
@@ -1830,19 +2047,19 @@ mod tests {
     #[test]
     fn recommend_corrections_raise_one_tier() {
         // 细则 15（Standard）+ ★ 40 → Conservative
-        let r = recommend_length(15, 40, None, TenderType::Goods, None);
+        let r = recommend_length(15, 40, None, None, TenderType::Goods, None);
         assert_eq!(r.profile, LengthProfile::Conservative);
         assert!(r.reasons.iter().any(|s| s.contains("★条款 40 个")), "{r:?}");
         // 细则 25（Conservative）+ 工程类 → Maximum
-        let r = recommend_length(25, 0, None, TenderType::Engineering, None);
+        let r = recommend_length(25, 0, None, None, TenderType::Engineering, None);
         assert_eq!(r.profile, LengthProfile::Maximum);
         assert!(r.reasons.iter().any(|s| s.contains("工程")), "{r:?}");
         // 预算 > 1000 万 → 上调：细则 8（Practical）+ 预算 1200 万 → Standard
-        let r = recommend_length(8, 0, Some(12_000_000), TenderType::Goods, None);
+        let r = recommend_length(8, 0, Some(12_000_000), None, TenderType::Goods, None);
         assert_eq!(r.profile, LengthProfile::Standard);
         // 多修正项叠加也只升一档（任一命中 → 上调一档，不连跳）：
         // 细则 15（Standard）+ ★40 + 工程 → Conservative（非 Maximum）
-        let r = recommend_length(15, 40, None, TenderType::Engineering, None);
+        let r = recommend_length(15, 40, None, None, TenderType::Engineering, None);
         assert_eq!(r.profile, LengthProfile::Conservative, "修正只升一档，不连跳");
         assert!(r.reasons.iter().any(|s| s.contains("修正项命中 2 项")), "{r:?}");
     }
@@ -1851,37 +2068,103 @@ mod tests {
     #[test]
     fn recommend_explicit_limit_overrides() {
         // 细则 45（本应 Maximum）+ 明写 500,000 → 档位取 ≥ 明写值的最小档（Standard）
-        let r = recommend_length(45, 100, Some(99_000_000), TenderType::Engineering, Some(500_000));
+        // （页数/预算信号在场也不影响——明写篇幅覆盖一切推断，含规模因子）
+        let r = recommend_length(45, 100, Some(99_000_000), Some(65), TenderType::Engineering, Some(500_000));
         assert_eq!(r.profile, LengthProfile::Standard, "明写 50 万 → Standard 档");
         assert_eq!(r.from_tender_spec, Some(500_000));
         assert_eq!(r.confidence, Confidence::High);
         assert!(r.reasons.iter().any(|s| s.contains("明写篇幅")), "{r:?}");
         // 明写值恰等某档 → 该档
-        let r = recommend_length(0, 0, None, TenderType::Goods, Some(1_200_000));
+        let r = recommend_length(0, 0, None, None, TenderType::Goods, Some(1_200_000));
         assert_eq!(r.profile, LengthProfile::Conservative);
         // 明写值超极限档 → 按极限档 + 风险提示
-        let r = recommend_length(25, 0, None, TenderType::Goods, Some(3_000_000));
+        let r = recommend_length(25, 0, None, None, TenderType::Goods, Some(3_000_000));
         assert_eq!(r.profile, LengthProfile::Maximum);
         assert!(r.reasons.iter().any(|s| s.contains("超出极限档")), "{r:?}");
+        // 明写值落在紧凑档 → 紧凑档（#133 后阶梯更细：100k → Compact 而非 Practical）
+        let r = recommend_length(25, 0, None, None, TenderType::Goods, Some(100_000));
+        assert_eq!(r.profile, LengthProfile::Compact, "明写 10 万 → 紧凑档");
     }
 
     /// 验收 7：上限保护——Maximum 不再上调。
     #[test]
     fn recommend_maximum_cap() {
-        // 细则 45（Maximum 基档）+ 三修正项全中 → 仍 Maximum
-        let r = recommend_length(45, 99, Some(99_000_000), TenderType::Engineering, None);
+        // 细则 45（Maximum 基档）+ 三修正项全中 + 无规模信号 → 仍 Maximum
+        let r = recommend_length(45, 99, Some(99_000_000), None, TenderType::Engineering, None);
         assert_eq!(r.profile, LengthProfile::Maximum, "Maximum 上限保护");
     }
 
     /// 推荐理由完整性：命中与未命中信号都成行（用户可核对面）。
+    ///
+    /// #133 后语义：预算 120 万（< 200 万）触发规模下调——细则 25 的
+    /// Conservative 基档被压到 Practical（这正是审计 A2 的松岭同型面）。
     #[test]
     fn recommend_reasons_complete() {
-        let r = recommend_length(25, 13, Some(1_200_000), TenderType::Service, None);
-        assert_eq!(r.profile, LengthProfile::Conservative);
+        let r = recommend_length(25, 13, Some(1_200_000), Some(65), TenderType::Service, None);
+        assert_eq!(r.profile, LengthProfile::Practical, "120 万预算 + 65 页 → 实用型（松岭同型降 2 档）");
         let joined = r.reasons.join("\n");
-        for expect in ["评分细则 25 个", "★条款 13 个", "预算 120 万元", "采购类型：服务"] {
+        for expect in [
+            "评分细则 25 个", "★条款 13 个", "预算 120 万元", "采购类型：服务",
+            "招标文件 65 页", "规模因子命中 2 项",
+        ] {
             assert!(joined.contains(expect), "理由缺行 {expect}：{joined}");
         }
+    }
+
+    // ------------------------------------------------ #133 A2：规模因子
+
+    /// 松岭同型面（审计 AUD2-HIS-A2 实锤）：119.6 万预算/65 页/20 细则
+    /// → 旧算法推保险型 1.2M 字（1422 页）；新算法：预算 < 200 万 +
+    /// 页数 ≤ 100 且预算 < 500 万 → 两档下调 → 实用型 400k（≈474 页，
+    /// 中型服务现实篇幅带 200-500 页的顶端——不再脱离项目现实）。
+    #[test]
+    fn recommend_133_scale_factors_songling_face() {
+        let r = recommend_length(20, 0, Some(1_196_000), Some(65), TenderType::Service, None);
+        assert_ne!(r.profile, LengthProfile::Conservative, "规模因子生效：不再推 1.2M");
+        assert_eq!(r.profile, LengthProfile::Practical, "119.6 万/65 页 → 实用型（降 2 档）");
+        assert_eq!(r.profile.target_total_chars(), 400_000);
+        let joined = r.reasons.join("\n");
+        assert!(joined.contains("规模下调一档：小额采购"), "预算规模因子成行：{joined}");
+        assert!(joined.contains("规模下调一档：中小项目"), "页数规模因子成行：{joined}");
+        assert!(joined.contains("规模因子命中 2 项"), "下调结算行成行：{joined}");
+    }
+
+    /// 规模因子单触发面：薄文件（< 40 页）独立下调；大项目不受影响。
+    #[test]
+    fn recommend_133_scale_factors_single_and_large() {
+        // 薄文件：30 页 + 无预算信号 → Conservative 基档下调一档 → Standard
+        let r = recommend_length(25, 0, None, Some(30), TenderType::Goods, None);
+        assert_eq!(r.profile, LengthProfile::Standard);
+        // 大项目：5000 万 + 180 页 → 上调修正（预算 > 1000 万）Maximum，
+        // 规模因子零命中 → 维持 Maximum
+        let r = recommend_length(25, 0, Some(50_000_000), Some(180), TenderType::Engineering, None);
+        assert_eq!(r.profile, LengthProfile::Maximum, "大项目规模因子不误伤");
+        // 中大项目：800 万 + 120 页 → 页数 > 100 → 无规模下调
+        let r = recommend_length(15, 0, Some(8_000_000), Some(120), TenderType::Service, None);
+        assert_eq!(r.profile, LengthProfile::Standard, "120 页/800 万 → 基档不变");
+        // 信号缺失（None）：不参与判定——旧口径基线行为
+        let r = recommend_length(25, 0, None, None, TenderType::Goods, None);
+        assert_eq!(r.profile, LengthProfile::Conservative, "页数/预算未知 → 不臆造规模");
+    }
+
+    /// 规模因子与上调修正叠加：先上调后下调（规模是现实封顶，压过复杂度）。
+    #[test]
+    fn recommend_133_scale_after_raise() {
+        // 细则 25（Conservative）+ 工程类上调 → Maximum；预算 150 万 +
+        // 25 页 → 两档规模下调 → Standard
+        let r = recommend_length(25, 0, Some(1_500_000), Some(25), TenderType::Engineering, None);
+        assert_eq!(r.profile, LengthProfile::Standard);
+        let joined = r.reasons.join("\n");
+        assert!(joined.contains("上调至 极限型"), "上调先结算：{joined}");
+        assert!(joined.contains("规模因子命中 2 项"), "规模后结算：{joined}");
+    }
+
+    /// 饱和保护：已是紧凑档不再下调（阶梯下限）。
+    #[test]
+    fn recommend_133_compact_floor() {
+        // 细则 5（Practical）+ 预算 100 万 + 20 页 → 两档下调 → Compact 饱和
+        let r = recommend_length(5, 0, Some(1_000_000), Some(20), TenderType::Goods, None);
+        assert_eq!(r.profile, LengthProfile::Compact, "下调饱和于紧凑档");
     }
 
     /// 章节树基座：项目 + 文件 + N 条 REQ。
@@ -1980,19 +2263,21 @@ mod tests {
         let by_group = |kw: &str| -> Vec<&OutlineNode> {
             nodes.iter().filter(|n| n.parent_id.is_some() && n.title.contains(kw)).collect()
         };
-        // 行政轨：3 条 × 300 = 900（max(900, 500) = 900）——按条计价，零注水
+        // 行政轨：3 条短锚（摘录 5-6 字 → 短带 0.5×）→ 150×3 = 450 →
+        // 叶下限 500 托底（#133 A3 分带计价：简单资格条款半价——
+        // 「按条计价零注水」语义延续，单条 ≤ 500 验收口径不破）
         let admin_leaves = by_group("资格");
         assert_eq!(admin_leaves.len(), 1, "资格与响应 1 叶（3 条 ≤ 8/叶）");
         assert_eq!(admin_leaves[0].requirement_ids.len(), 3);
         assert_eq!(
             admin_leaves[0].target_chars,
-            ADMIN_CHARS_PER_REQ * 3,
-            "行政叶配额 = 300 × 条数（#253 验收：单条 ≤ 500）"
+            (tiered_unit_price(ADMIN_CHARS_PER_REQ, 5) * 3).max(u64::from(MIN_LEAF_CHARS)) as u32,
+            "行政叶配额 = 短带单价 150 × 3 = 450 → 叶下限 500 托底（#133 A3 分带）"
         );
-        // 实质轨：底价 5×2000 = 10,000 + 剩余 89,100（按条数让渡）
+        // 实质轨：短锚底价 5×1000 = 5,000 + 剩余（按条数让渡）
         let body_leaves = by_group("技术参数");
         assert_eq!(body_leaves.len(), 1);
-        assert_eq!(body_leaves[0].target_chars, 100_000 - 900, "剩余预算全部让渡给实质轨");
+        assert_eq!(body_leaves[0].target_chars, 100_000 - 500, "剩余预算全部让渡给实质轨");
         // 守恒：Σ根配额 == target（#253 验收 5：±5% 内——构造上恒等）
         let total: u64 = nodes.iter().filter(|n| n.parent_id.is_none())
             .map(|n| u64::from(n.target_chars)).sum();
@@ -2033,7 +2318,7 @@ mod tests {
             weights.push(0);
             counts.push(c);
         }
-        let quotas = allocate_quotas(&tracks, &weights, &counts, DEFAULT_TARGET_TOTAL_CHARS, 0);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), DEFAULT_TARGET_TOTAL_CHARS, 0);
         assert_eq!(quotas.len(), tracks.len());
         let total: u64 = quotas.iter().sum();
         // 验收 5：守恒 ±5%（构造上恒等）
@@ -2075,7 +2360,7 @@ mod tests {
             }
         }
         // 确定性：同输入双算全等
-        let again = allocate_quotas(&tracks, &weights, &counts, DEFAULT_TARGET_TOTAL_CHARS, 0);
+        let again = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), DEFAULT_TARGET_TOTAL_CHARS, 0);
         assert_eq!(quotas, again, "分层配额确定性（可重放前提）");
     }
 
@@ -2085,7 +2370,7 @@ mod tests {
         let tracks = [Track::Scoring, Track::Scoring, Track::Scoring, Track::Admin];
         let weights = [0u64, 0, 0, 0];
         let counts = [1u64, 1, 1, 4];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 100_000, 0);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), 100_000, 0);
         // 底价：3×10,000 + max(300×4, 500)=1,200 → 31,200；剩余 68,800 均摊 3 叶
         let per = quotas[0];
         assert!(per >= u64::from(MIN_SCORING_LEAF_CHARS), "零权重评分叶保底 ≥ 10,000: {per}");
@@ -2104,7 +2389,7 @@ mod tests {
         let tracks = [Track::Admin, Track::Body];
         let weights = [0u64, 0];
         let counts = [10u64, 6];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 12_000, 0);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), 12_000, 0);
         assert_eq!(quotas[0], 12_000 * 10 / 16, "回退：按 REQ 数均摊（历史行为）");
         assert_eq!(quotas[1], 12_000 * 6 / 16);
         assert_eq!(quotas.iter().sum::<u64>(), 12_000, "回退路径守恒");
@@ -2128,7 +2413,7 @@ mod tests {
         let tracks = [Track::Scoring, Track::Scoring, Track::Admin, Track::Admin];
         let weights = [25_000u64, 5_000, 0, 0];
         let counts = [1u64, 1, 4, 2];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 20_000, 30_000);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), 20_000, 30_000);
         assert_eq!(quotas[0], 10_000, "比例份额 16,666 > 下限 → 封顶 10k");
         assert_eq!(quotas[1], 3_333, "比例保底：20k × 5k/30k");
         assert_eq!(quotas[2] + quotas[3], 20_000 - 13_333, "非评分叶均摊剩余");
@@ -2146,7 +2431,7 @@ mod tests {
         let tracks = [Track::Scoring, Track::Scoring, Track::Admin, Track::Admin];
         let weights = [25_000u64, 5_000, 0, 0];
         let counts = [1u64, 1, 4, 2];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 20_000, 100_000);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), 20_000, 100_000);
         assert_eq!(quotas[0], 5_000, "分母含槽位分：20k × 25k/100k");
         assert_eq!(quotas[1], 1_000, "20k × 5k/100k");
         assert_eq!(quotas.iter().sum::<u64>(), 20_000, "守恒");
@@ -2161,7 +2446,7 @@ mod tests {
         let tracks = [Track::Scoring, Track::Scoring, Track::Admin];
         let weights = [0u64, 0, 0];
         let counts = [1u64, 1, 10];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 3_000, 0);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), 3_000, 0);
         // 底价 10k+10k+3k > 3k → 退化；total_w=0 → 旧行为
         assert_eq!(quotas[0], 500, "旧路径 MIN_LEAF_CHARS 下限（回退后修正环收尾）");
         assert_eq!(quotas[1], 500);
@@ -2176,10 +2461,136 @@ mod tests {
         let counts = [1u64, 1];
         // 底价 20k > 16k → 退化；分母 Σw=40k：min(10k, 16k×30k/40k=12k)=10k；
         // min(10k, 16k×10k/40k=4k)=4k → 剩余 2k 按权重 3:1 → 11.5k/4.5k
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 16_000, 40_000);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &flat_base_prices(&tracks, &counts), 16_000, 40_000);
         assert_eq!(quotas[0], 11_500, "10k 封顶 + 剩余按权重 3/4");
         assert_eq!(quotas[1], 4_500, "比例保底 + 剩余按权重 1/4");
         assert_eq!(quotas.iter().sum::<u64>(), 16_000, "守恒");
+    }
+
+    // ------------------------------------------------ #133 A3：复杂度分带单价
+
+    /// 三带单价分布正确（issue #133 验收：短/中/长 × 0.5/1.0/1.5）。
+    #[test]
+    fn quota_133_tiered_unit_price_bands() {
+        // 带边界：< 30 短 / 30-120 中 / > 120 长（含边界值本身归中带）
+        for (chars, coef) in [
+            (0u32, 0.5f64), (9, 0.5), (29, 0.5),
+            (30, 1.0), (60, 1.0), (120, 1.0),
+            (121, 1.5), (313, 1.5),
+        ] {
+            assert_eq!(
+                tiered_unit_price(ADMIN_CHARS_PER_REQ, chars),
+                (f64::from(ADMIN_CHARS_PER_REQ) * coef) as u64,
+                "行政底价 300 × {coef}（锚 {chars} 字）"
+            );
+            assert_eq!(
+                tiered_unit_price(BODY_CHARS_PER_REQ, chars),
+                (f64::from(BODY_CHARS_PER_REQ) * coef) as u64,
+                "实质底价 2000 × {coef}（锚 {chars} 字）"
+            );
+        }
+        // 具体量级（松岭实测锚谱 9~313 字的两端）：
+        assert_eq!(tiered_unit_price(ADMIN_CHARS_PER_REQ, 9), 150);
+        assert_eq!(tiered_unit_price(ADMIN_CHARS_PER_REQ, 60), 300);
+        assert_eq!(tiered_unit_price(ADMIN_CHARS_PER_REQ, 313), 450);
+        assert_eq!(tiered_unit_price(BODY_CHARS_PER_REQ, 9), 1_000);
+        assert_eq!(tiered_unit_price(BODY_CHARS_PER_REQ, 313), 3_000);
+    }
+
+    /// 复杂度取最长锚摘录（多锚取 max——同条款多锚不重复计价）；零锚 → 0。
+    #[test]
+    fn quota_133_anchor_complexity_max_excerpt() {
+        let mk = |excerpts: &[&str]| Requirement {
+            id: "REQ-T".into(),
+            category: "技术参数".into(),
+            clause_no: None,
+            anchors: excerpts
+                .iter()
+                .map(|e| crate::Anchor {
+                    file: "A".into(),
+                    kind: "para".into(),
+                    locator: "第1页".into(),
+                    excerpt: e.to_string(),
+                    block_idx: None,
+                    page: None,
+                    line: None,
+                })
+                .collect(),
+            params: std::collections::HashMap::new(),
+            source_file: "A".into(),
+        };
+        let short = "提供营业执照复印件"; // 9 字
+        let long: String = "参数".repeat(80); // 160 字
+        assert_eq!(anchor_complexity_chars(&mk(&[short, &long])), 160, "多锚取最长");
+        assert_eq!(anchor_complexity_chars(&mk(&[short])), 9);
+        assert_eq!(anchor_complexity_chars(&mk(&[])), 0, "零锚 → 0（短带）");
+    }
+
+    /// 分带供价 × 让渡路径：行政/实质叶按分带底价起步，剩余全归评分轨
+    /// （守恒不变量保持：Σ == target）。
+    ///
+    /// 构造：评分叶（w=30k）+ 行政叶 4 条短锚（150×4=600）+ 实质叶
+    /// 3 条长锚（3000×3=9000）；底价和 10k+600+9000=19,600 ≤ 100k
+    /// → 让渡：剩余 80,400 全进评分轨（唯一有权重面）。
+    /// 旧平价口径对照：行政 300×4=1200、实质 2000×3=6000——分带后
+    /// 简单行政叶 -600、复杂实质叶 +3000（「简单过度扩写 + 复杂无法
+    /// 表达」的双向修正）。
+    #[test]
+    fn quota_133_tiered_prices_in_allocation() {
+        let tracks = [Track::Scoring, Track::Admin, Track::Body];
+        let weights = [30_000u64, 0, 0];
+        let counts = [1u64, 4, 3];
+        let base_prices = [
+            u64::from(MIN_SCORING_LEAF_CHARS),
+            tiered_unit_price(ADMIN_CHARS_PER_REQ, 9) * 4,   // 600
+            tiered_unit_price(BODY_CHARS_PER_REQ, 313) * 3,  // 9000
+        ];
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &base_prices, 100_000, 30_000);
+        assert_eq!(quotas[1], 600, "行政短锚叶保分带底价（150×4）");
+        assert_eq!(quotas[2], 9_000, "实质长锚叶保分带底价（3000×3）");
+        assert!(quotas[0] >= u64::from(MIN_SCORING_LEAF_CHARS), "评分叶底价不降");
+        assert_eq!(quotas.iter().sum::<u64>(), 100_000, "守恒不变量保持（分带不破总量）");
+    }
+
+    /// 叶下限保护 + 混合带叶内求和：短长混叶 = Σ分带单价，仍受
+    /// [`MIN_LEAF_CHARS`] 叶下限托底（评分叶在场吸收剩余——行政叶保底价
+    /// 不被剩余让渡冲掉）。
+    #[test]
+    fn quota_133_leaf_floor_with_mixed_bands() {
+        let tracks = [Track::Scoring, Track::Admin];
+        let weights = [30_000u64, 0];
+        let counts = [1u64, 2];
+        // 混合带叶：1 短（150）+ 1 中（300）= 450 < 500 叶下限 → 托底 500
+        let admin_price =
+            tiered_unit_price(ADMIN_CHARS_PER_REQ, 9) + tiered_unit_price(ADMIN_CHARS_PER_REQ, 60);
+        assert_eq!(admin_price, 450);
+        let base_prices = [
+            u64::from(MIN_SCORING_LEAF_CHARS),
+            admin_price.max(u64::from(MIN_LEAF_CHARS)),
+        ];
+        let quotas = allocate_quotas(&tracks, &weights, &counts, &base_prices, 100_000, 30_000);
+        assert_eq!(quotas[1], 500, "叶下限托底（分带供价不破 500 下限）");
+        assert_eq!(quotas.iter().sum::<u64>(), 100_000, "守恒");
+    }
+
+    /// 评分轨不动（#133 约束）：退化面（#131 保底框架）不消费分带供价
+    /// ——评分叶分值比例保底 + 非评分均摊，与平价口径全等（#131 不回退）。
+    #[test]
+    fn quota_133_degraded_path_ignores_tiered_prices() {
+        let tracks = [Track::Scoring, Track::Scoring, Track::Admin, Track::Admin];
+        let weights = [25_000u64, 5_000, 0, 0];
+        let counts = [1u64, 1, 4, 2];
+        let target = 20_000u32;
+        // 平价 vs 分带（悬殊供价——退化面结果必须与供价无关）
+        let flat = flat_base_prices(&tracks, &counts);
+        let tiered = [10_000u64, 10_000, 450 * 4, 150 * 2]; // 行政全长锚高价
+        let q_flat = allocate_quotas(&tracks, &weights, &counts, &flat, target, 30_000);
+        let q_tiered = allocate_quotas(&tracks, &weights, &counts, &tiered, target, 30_000);
+        assert_eq!(q_flat, q_tiered, "退化面：分带供价不改变分配（评分轨不动/非评分均摊）");
+        // 且等于 #131 基线断言值（quota_131_degraded_scoring_proportional_floor 同构）
+        assert_eq!(q_tiered[0], 10_000);
+        assert_eq!(q_tiered[1], 3_333);
+        assert_eq!(q_tiered.iter().sum::<u64>(), 20_000, "退化面守恒");
     }
 
     /// 行政分类面（单一真源 is_admin_group——配额/门禁/基线测试三处共用）。

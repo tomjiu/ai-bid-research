@@ -35,8 +35,9 @@
   优先级从高到低：
   1. 显式传 `target_total_chars`（1,000..=5,000,000，数字直接覆盖档位
      ——仅用户点名要非常规字数时用）；
-  2. 显式传 `length_profile`（四档键 `practical` / `standard` /
-     `conservative` / `maximum`，拼错 E_UNPROCESSABLE 显式拒）；
+  2. 显式传 `length_profile`（五档键 `compact` / `practical` / `standard` /
+     `conservative` / `maximum`，拼错 E_UNPROCESSABLE 显式拒；#133 补
+     `compact` 紧凑档 150k——小项目现实篇幅）；
   3. 都不传 → 引擎默认档 `conservative`（1,200,000 字 ≈ 1422 页，
      用户裁定 2026-11-06，单一真源 `DEFAULT_TARGET_TOTAL_CHARS`）。
 
