@@ -4614,13 +4614,13 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
     let project_version = opt_cas_version(&args, TOOL)?;
     let target_total_chars = opt_u64(&args, "target_total_chars", TOOL)?;
     let max_reqs_per_leaf = opt_u64(&args, "max_reqs_per_leaf", TOOL)?;
-    // #287 篇幅档位：四档键显式校验（拼错档不得静默落默认档）
+    // #287 篇幅档位：五档键显式校验（拼错档不得静默落默认档；#133 补 compact）
     let length_profile = opt_str(&args, "length_profile", TOOL)?;
     if let Some(k) = &length_profile {
         if bid_domain::outline::LengthProfile::from_key(k).is_none() {
             return Err(ToolError::EUnprocessable {
                 what: format!(
-                    "{TOOL}: length_profile 非法：{k}（合法值：practical|standard|conservative|maximum——对应 400,000/800,000/1,200,000/2,500,000 字）"
+                    "{TOOL}: length_profile 非法：{k}（合法值：compact|practical|standard|conservative|maximum——对应 150,000/400,000/800,000/1,200,000/2,500,000 字）"
                 ),
             });
         }
@@ -5008,6 +5008,8 @@ fn scan_explicit_length_limit(text: &str) -> Option<u32> {
 /// - ★条款数：REQ `params.star == true` 计数（#276 标记面 ∪ #280 抽取面汇流；
 ///   #285 star_scan 字面真值口径在其 PR 合并后接入——两口径档位结论等价）
 /// - 预算：REQ `params.amount_wan` 最大值（万元 ×10⁴ → 元）
+/// - 招标页数（#133 A2）：锚页号最大值（`anchor.page` 优先，locator「第N页」
+///   回退）——规模因子信号之一
 /// - 采购类型：项目名 + 锚文关键词推断（工程/服务/货物）
 /// - 明写篇幅：锚文限值模式扫描（页 ×844 换算）
 fn recommend_length_profile(svc: &mut BidService, args: Value) -> ToolResult {
@@ -5044,7 +5046,27 @@ fn recommend_length_profile(svc: &mut BidService, args: Value) -> ToolResult {
                 .filter(|v| *v > 0.0)
                 .map(|v| v as u64)
         })
-        .fold(None::<u64>, |acc, v| Some(acc.map_or(v, |a| a.max(v))));
+        .fold(None::<u64>, |acc, v| Some(acc.map_or(v, |a| a.max(v))))
+        .or_else(|| {
+            // #133 A2 锚文兜底：para 面预算行不经过 fill_params（松岭预算
+            // REQ 走段落分支）——params.amount_wan 缺席时扫锚摘录的预算
+            // 上下文元计价形态（「预算⾦额： 1,195,800.00元」→ 万元；单一
+            // 真源 bid_parse::extract::budget_yuan_wan）。取全锚面最大值
+            // （与 params 面同口径：预算 = 最大可信金额）。
+            reqs.iter()
+                .flat_map(|r| r.anchors.iter())
+                .filter_map(|a| bid_parse::extract::budget_yuan_wan(&a.excerpt))
+                .map(|wan| (wan * 10_000.0) as u64)
+                .fold(None::<u64>, |acc, v| Some(acc.map_or(v, |a| a.max(v))))
+        });
+    // #133 A2 规模因子信号：招标页数 = 锚页号最大值（anchor.page 优先，
+    // locator「第N页」回退——域层单一真源 anchor_page_of）。多文件项目取
+    // 全局最大页号（主件+补遗的合计体量近似）。
+    let tender_pages: Option<u32> = reqs
+        .iter()
+        .flat_map(|r| r.anchors.iter())
+        .filter_map(bid_domain::outline::anchor_page_of)
+        .fold(None::<u32>, |acc, p| Some(acc.map_or(p, |a| a.max(p))));
     // 类型：项目名单一真源（锚文样板词污染实测见 infer_tender_type 文档）；
     // 明写篇幅：锚文限值模式扫描（样本面可以更宽——限值表述本身就是稀缺信号）
     let mut text_face = String::new();
@@ -5065,6 +5087,7 @@ fn recommend_length_profile(svc: &mut BidService, args: Value) -> ToolResult {
         scoring_detail_count,
         star_count,
         budget_yuan,
+        tender_pages,
         tender_type,
         explicit_limit,
     );
@@ -5101,6 +5124,7 @@ fn recommend_length_profile(svc: &mut BidService, args: Value) -> ToolResult {
             "scoring_detail_count": scoring_detail_count,
             "star_count": star_count,
             "budget_yuan": budget_yuan,
+            "tender_pages": tender_pages,
             "tender_type": serde_json::to_value(tender_type).unwrap(),
             "explicit_limit_chars": explicit_limit,
         },

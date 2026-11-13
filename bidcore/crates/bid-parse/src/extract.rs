@@ -21,6 +21,39 @@ fn model_regex() -> Regex {
     Regex::new(r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+").unwrap()
 }
 
+/// 预算上下文的元计价金额（#133 A2——预算信号馈给面，单一真源）。
+///
+/// 实测真件（松岭 232762 / hq-dev）：预算写作「4.预算⾦额： 1,195,800.00元」
+/// ——元计价 + 千分位逗号，既有「X万元」模式（re_amount）不命中 →
+/// recommend_length_profile 的预算规模因子在这类件上无信号。本模式
+/// 限定预算上下文（预算/控制价/最高限价 + ≤8 字窗口）锚定，避免误配
+/// 任意价格（如「代理服务费 20000元」「营业额 3000万元以上」）；命中值
+/// 换算万元（÷10⁴）与 amount_wan 单位一致。
+///
+/// 不在此面（如实登记）：表头形态「预算⾦额（元）」后随表格值（无
+/// 「元」尾缀）；「⼀百万元以上」类中文数字。
+///
+/// 消费面：① fill_params（编号条款/参数表/B1 行——params.amount_wan）；
+/// ② recommend_length_profile 工具层锚文兜底（para 面预算行无 params——
+/// 松岭预算 REQ 走段落分支，不经过 fill_params）。
+fn budget_yuan_regex() -> &'static Regex {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?:预算|控制价|最高限价)[^。，；、\n]{0,8}?(\d[\d,]*(?:\.\d+)?)\s*元").unwrap()
+    })
+}
+
+/// 预算上下文元计价 → 万元值（#133 A2）。无预算上下文的任意价格 → None。
+pub fn budget_yuan_wan(text: &str) -> Option<f64> {
+    budget_yuan_regex()
+        .captures(text)
+        .and_then(|m| {
+            let raw = m[1].replace(',', "");
+            raw.parse::<f64>().ok()
+        })
+        .map(|v| v / 10_000.0)
+}
+
 /// 中文大写日期（#487 单一真源——原两处手抄副本的字符类不含「十」、
 /// 量词上限不足，真实日历日期约 93% 静默不命中）。
 ///
@@ -1888,13 +1921,18 @@ fn anchor(f: &ParsedFile, b: &Block) -> Anchor {
     }
 }
 
-fn fill_params(text: &str, re_model: &Regex, re_amount: &Regex, re_date: &Regex,
-               re_date_cn: &Regex, params: &mut HashMap<String, serde_json::Value>) {
+fn fill_params(text: &str, re_model: &Regex, re_amount: &Regex,
+               re_date: &Regex, re_date_cn: &Regex,
+               params: &mut HashMap<String, serde_json::Value>) {
     if let Some(m) = re_model.find(text) {
         params.insert("model".into(), serde_json::Value::String(m.as_str().to_string()));
     }
     if let Some(m) = re_amount.captures(text) {
         let v: f64 = m[1].parse().unwrap_or(0.0);
+        params.insert("amount_wan".into(), serde_json::json!(v));
+    } else if let Some(v) = budget_yuan_wan(text) {
+        // #133 A2：预算上下文元计价（「预算⾦额： 1,195,800.00元」）
+        // → 万元——与万元模式同一单位口径；万元形态优先。
         params.insert("amount_wan".into(), serde_json::json!(v));
     }
     if let Some(m) = re_date.find(text) {

@@ -758,15 +758,15 @@ in : { project_id, length_profile?("practical"|"standard"|"conservative"|"maximu
        三者优先（#287）：target_total_chars 显式给 → 用它；length_profile
        显式给 → 档位字数；都不给 → 默认档 Conservative 1,200,000
        （单一真源 bid_domain::outline::DEFAULT_TARGET_TOTAL_CHARS；用户裁定
-       2026-11-06：120 万字 ≈ 1422 页，四档 400k/800k/1.2M/2.5M；拼错档位键
-       E_UNPROCESSABLE 显式拒）
+       2026-11-06：120 万字 ≈ 1422 页；#133 后五档 150k/400k/800k/1.2M/2.5M；
+       拼错档位键 E_UNPROCESSABLE 显式拒）
 out: { counts:{ sections, leaves, requirements(建纲范围口径——选包后 =
        选中包 REQ + 共用；未选 = 全集), total_requirements(全集计数),
        total_target_chars, matrix_rows, matrix_blocking },
        package:{ selected:{id,label,kind,number}|null, auto_selected,
        detected_packages, shared_requirements }（#316 选包回显——审计面：
        本项目投哪个包、是否自动选定、共用条款量），
-       length:{ profile("practical"…|"custom"), target_total_chars, approx_pages }
+       length:{ profile("compact"|"practical"…|"custom"), target_total_chars, approx_pages }
        （#287 生效档回显——审计面可核对），
        status: "MATRIX_READY", project_version }
 语义: 推导大纲树（确定性——REQ 类目分组 + 每叶上限）+ 矩阵首建（推进
@@ -1700,23 +1700,23 @@ out: { project_id,
       append_section_segment 后复跑本工具）；不做语义判档（#186 判档
       接入前的诚实口径）。
 
-## 28. recommend_length_profile（#287 篇幅档位推荐 · 只读）
+## 28. recommend_length_profile（#287 篇幅档位推荐 · 只读 + #133 规模因子）
 
 ```
 in : { project_id }
-out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
+out: { recommended_profile("compact"|"practical"|"standard"|"conservative"|"maximum"),
        profile_label, target_chars, approx_pages, confidence(high|medium|low),
        reasons:[…逐信号一行——命中与未命中都写，用户可核对],
        from_tender_spec: u32|null（招标文件明写篇幅——最高优先级信号）,
-       alternatives:[{profile,label,chars,pages,when}×4 全档位],
-       signals:{ scoring_detail_count, star_count, budget_yuan, tender_type,
-                 explicit_limit_chars },
+       alternatives:[{profile,label,chars,pages,when}×5 全档位],
+       signals:{ scoring_detail_count, star_count, budget_yuan, tender_pages,
+                 tender_type, explicit_limit_chars },
        next }
 窗口: REQUIREMENTS_EXTRACTED+ 含 Exported（只读——信号来自 REQ 面，建纲
       前后均可查；条款集空 → E_STATE 先 extract）。
 语义: P3 建纲**前**调——把建议 + 理由 + alternatives 呈现给用户确认后
       build_outline(length_profile=…)。**决策权在用户，Agent 只推荐**
-      （推荐可被覆盖——length_profile 四档任选或 target_total_chars 直给）。
+      （推荐可被覆盖——length_profile 五档任选或 target_total_chars 直给）。
 信号: ① 明写篇幅（锚文限值模式扫描——「不超过/最多/限制在…N 页/字」、
       「N 页/字 以内」；页 × 844 换算）→ 覆盖一切推断；
       ② 评分细则数（collect_scoring_rows 的 sub_items 总和——#252 预派生，
@@ -1724,10 +1724,16 @@ out: { recommended_profile("practical"|"standard"|"conservative"|"maximum"),
       ③ 修正项任一命中上调一档（饱和极限型）：★条款 > 30（params.star
       标记面——#285 star_scan 字面真值口径在其 PR 合并后接入，两口径
       档位结论等价）/ 预算 > 1000 万（amount_wan 最大值）/ 工程类
-      （项目名 + 锚文关键词推断）；多标段无引擎面信号——Agent 显式选档。
+      （项目名 + 锚文关键词推断）；多标段无引擎面信号——Agent 显式选档；
+      ④ 规模因子（#133 A2，审计 AUD2-HIS-A2：119.6 万预算项目被推
+      1422 页脱离现实）：任一命中下调一档（可叠加，饱和紧凑档；在上调
+      之后结算——规模是现实封顶）：预算 < 200 万 / 招标页数 < 40 /
+      页数 ≤ 100 且预算 < 500 万。页数 = 锚页号最大值（anchor.page 优先，
+      locator「第N页」回退）；信号缺失（None）不参与判定。
 置信度: 明写 → high；细则 ≥ 10 → high；1-9 → medium；0 → low
       （未识别评分表——按实用型兜底，用户务必确认）。
-四档: Practical 400,000≈474页 / Standard 800,000≈948页 /
+五档: Compact 150,000≈178页（#133 紧凑型——小项目现实篇幅 10-20 万字）/
+      Practical 400,000≈474页 / Standard 800,000≈948页 /
       Conservative 1,200,000≈1422页（默认——用户裁定 2026-11-06）/
       Maximum 2,500,000≈2963页（接近装订上限：一本胶装 ≈ 500 页，
       2000 页 4 册；3-7 天评 20-50 家——起草成本极高，是用户显式选择）。
