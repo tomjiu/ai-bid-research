@@ -252,6 +252,7 @@ fn scale_500k_chars_full_pipeline_under_redlines() {
     let t = Instant::now();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链规模验证——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/规模验证-50万字.docx",
     })));
     let export_ms = t.elapsed().as_millis();

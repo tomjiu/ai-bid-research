@@ -693,6 +693,7 @@ fn e2e_artifacts_synth_tender() {
                 "project_no": "ZFCG-2026-ART",
             },
             "max_overrun_pct": 10000,
+            "waive_scoring_leaf_generator": "mock 链产物对账——非正式投标（#130 门 1n）",
         }),
     ));
     let docx_url = export_docx["artifact"]["url"].as_str().unwrap().to_string();
@@ -961,6 +962,7 @@ fn e2e_artifacts_synth_tender() {
                     "project_no": "ZFCG-2026-ART",
                 },
                 "max_overrun_pct": 10000,
+                "waive_scoring_leaf_generator": "mock 链产物对账——非正式投标（#130 门 1n）",
             }),
         ));
         let u = e["artifact"]["url"].as_str().unwrap().to_string();

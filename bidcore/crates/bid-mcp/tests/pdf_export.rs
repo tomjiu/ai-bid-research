@@ -209,6 +209,7 @@ fn pdf_export_full_chain_with_chinese_and_footer() {
     let (mut svc, pid) = svc_export_ready("main", 24, 12_000);
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "pdf", "output_path": "out/投标文件.pdf",
     })));
     let url = r["artifact"]["url"].as_str().unwrap().to_string();
@@ -245,6 +246,7 @@ fn pdf_export_100pages_under_30s() {
     let t0 = std::time::Instant::now();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "pdf", "output_path": "out/百页.pdf",
     })));
     let elapsed = t0.elapsed().as_millis();
@@ -286,6 +288,7 @@ fn pdf_export_dark_bid_scrubbed() {
         .record_review(Gate::PreExportConfirm, &bid_domain::TrustedPrincipal::human("pdf-lead"), Decision::Approved, vec![], None)
         .unwrap();
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "pdf", "output_path": "out/暗标.pdf",
         "profile": { "dark_bid": true, "bidder_name": "某某建设工程有限公司", "bid_amount": 3500000.0, "duration_days": 180, "validity_days": 90, "legal_rep_gender": "男", "project_no": "ZFCG-2026-PDF" },
     })));
@@ -303,6 +306,7 @@ fn pdf_export_idempotent_same_artifact() {
     let (mut svc, pid) = svc_export_ready("idem", 12, 6_000);
     let a = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "pdf", "output_path": "out/i.pdf",
     })));
     let mtime_a = std::fs::metadata(
@@ -311,6 +315,7 @@ fn pdf_export_idempotent_same_artifact() {
     std::thread::sleep(std::time::Duration::from_millis(50));
     let b = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "pdf", "output_path": "out/i.pdf",
     })));
     // 幂等：staging docx 未变 → 不重转（产物 mtime 不变——soffice 的 PDF
@@ -333,12 +338,14 @@ fn pdf_rejects_bad_format_and_env_honored() {
     let (mut svc, pid) = svc_export_ready("reject", 8, 4_000);
     let reply = call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "xlsx", "output_path": "out/x.xlsx",
     }));
     assert_eq!(err_code(&reply), "E_UNPROCESSABLE");
     // docx 通道不受 pdf 环境影响（回归）
     let r = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": pid, "format": "docx", "output_path": "out/回归.docx",
     })));
     assert!(r["artifact"]["url"].as_str().unwrap().ends_with(".docx"));

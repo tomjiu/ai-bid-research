@@ -510,6 +510,7 @@ fn synth_tender_eval() {
     let export = ok_result(call(&mut svc, "export_bid_document", json!({
         "profile": b4_profile(),
         "max_overrun_pct": 10000,
+        "waive_scoring_leaf_generator": "mock 链工程验收——非正式投标（#130 门 1n）",
         "project_id": &pid, "format": "docx", "output_path": "out/synth-tender-投标文件-技术标.docx",
     })));
     let url = export["artifact"]["url"].as_str().unwrap().to_string();

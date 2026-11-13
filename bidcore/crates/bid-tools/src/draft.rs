@@ -98,8 +98,19 @@ pub struct GeneratedDraft {
 }
 
 /// 生成器 trait（真实 AI 面的注入位——mock 与未来 LLM 实现同接口）。
+///
+/// [`SectionGenerator::kind`]（AUD2-CHN-01/#130）：生成器种类单一真源
+/// （real/mock/external）——draft 落盘时写入 ChapterRecord.generator
+/// （章节留痕），导出门 1n 消费（评分叶非 real 拒导出）。
 pub trait SectionGenerator {
     fn generate(&mut self, input: &SectionDraftInput) -> Result<GeneratedDraft, String>;
+    /// 生成器种类（real/mock/external——导出门 1n 的留痕面）。
+    ///
+    /// 默认 "mock"：未声明种类的生成器按 mock 处置（门 1n 对评分叶
+    /// fail-closed 拒——未知来源不放水，宁拦勿漏）。
+    fn kind(&self) -> &'static str {
+        "mock"
+    }
 }
 
 // ---------------------------------------------------------------- 输入装配
@@ -256,6 +267,9 @@ impl SectionGenerator for MockGenerator {
     fn generate(&mut self, input: &SectionDraftInput) -> Result<GeneratedDraft, String> {
         Ok(GeneratedDraft { content: generate_mock(input) })
     }
+    fn kind(&self) -> &'static str {
+        "mock"
+    }
 }
 
 /// 外部手稿生成器（issue #100 任务 2——`generator=external` 的落地件）。
@@ -274,6 +288,9 @@ pub struct ExternalGenerator {
 impl SectionGenerator for ExternalGenerator {
     fn generate(&mut self, _input: &SectionDraftInput) -> Result<GeneratedDraft, String> {
         Ok(GeneratedDraft { content: self.content.clone() })
+    }
+    fn kind(&self) -> &'static str {
+        "external"
     }
 }
 
@@ -774,7 +791,9 @@ impl super::service::BidService {
                     reason: format!("章节工作区打开失败: {e}"),
                 })?;
             asm.commit_section_with_note(section_id, &content, input.requirements.iter()
-                .map(|r| r.id.clone()).collect(), draft_note.clone())
+                .map(|r| r.id.clone()).collect(), draft_note.clone(),
+                // AUD2-CHN-01/#130：生成器留痕（单一真源 = trait kind）
+                Some(generator.kind().to_string()))
                 .map_err(|e| ToolError::EUnprocessable {
                     reason: format!("章节工作区提交失败: {e}"),
                 })?;

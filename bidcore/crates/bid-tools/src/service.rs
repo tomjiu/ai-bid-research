@@ -1611,6 +1611,11 @@ impl BidService {
     ///    m. 超篇幅可配置门（#88 修复 8a/F-09——超带超阈值（默认 +50%，
     ///       `max_overrun_pct` 可配）→ 拒；`waive_length_overrun` 显式
     ///       理由豁免）；
+    ///    n. 生成器汇总门（AUD2-CHN-01/#130——评分叶 generator ≠ real
+    ///       → 拒（mock 模板稿不得冒充正式标书——字数门对 mock 天然失效
+    ///       的直接通道封堵）；`waive_scoring_leaf_generator` 显式非空
+    ///       理由豁免，理由进 warnings；非评分叶 mock/未知告警不拦（风险
+    ///       不对称）；汇总计数常驻导出响应与报告 generator_summary）；
     /// 2. format-spec 解析：`.mang/format-spec.json` 在场 → 读盘校验；
     ///    缺失 → `derive_from_requirements`（从格式条款提取；零命中 → 基线
     ///    + warning，Lead 铁律「不硬编码」的降级面）；
@@ -1929,6 +1934,97 @@ impl BidService {
             }
         }
 
+        // ---- 1n. 生成器汇总门（AUD2-CHN-01/#130——mock 稿不得冒充正式标书导出）
+        //
+        // 背景（审计阶段2真跑实锤）：generator=auto 且未配 api_key 时静默降
+        // mock，mock 生成器按构造填充到 target±20% → 门 1c 字数门天然通过
+        // → mock 模板稿可直达导出——正文注水/虚构的直接通道。
+        //
+        // 数据源：ChapterRecord.generator（draft 落盘留痕——trait kind 单一
+        // 真源；segment 增补保留既有留痕；旧记录无字段 = None/未知）。
+        // 判据：
+        // - 评分叶（is_scoring_leaf）generator ≠ real → 拒；
+        //   `waive_scoring_leaf_generator` 非空理由显式豁免，理由进
+        //   warnings（对齐 1h waive_unmapped_scoring 形态）；
+        // - 非评分叶 mock/未知 → 告警不拦（行政叶模板化程度高，风险不对称）；
+        // - 汇总计数（real/mock/external/unknown + 评分叶分拆）经
+        //   ExportReport.generator_summary 常驻导出响应与报告。
+        let mut scoring_gen_total = 0usize;
+        let mut scoring_gen_non_real = 0usize;
+        {
+            let leaf_gen: std::collections::HashMap<String, Option<String>> =
+                match self.workspace_dir() {
+                    Some(dir) => {
+                        let asm = super::assembly::ChapterAssembler::open(&dir).map_err(|e| {
+                            ToolError::EUnprocessable {
+                                reason: format!("章节工作区打开失败: {e}"),
+                            }
+                        })?;
+                        asm.committed_ids()
+                            .map(|id| {
+                                (
+                                    id.to_string(),
+                                    asm.record(id).and_then(|r| r.generator.clone()),
+                                )
+                            })
+                            .collect()
+                    }
+                    // 无工作区：内容面导出本就不可达（后续显式拒）；此处空表
+                    // → 全部按未留痕处理，门语义不因缺工作区而放水。
+                    None => std::collections::HashMap::new(),
+                };
+            let mut non_scoring_mock: Vec<String> = Vec::new();
+            let mut scoring_offenders: Vec<String> = Vec::new();
+            for node in self.store().sections().iter() {
+                // 只看已写实叶（未写叶由门 1c 拦，此处不重复判空章节）
+                if node.content.as_deref().unwrap_or("").is_empty() {
+                    continue;
+                }
+                let gen = leaf_gen.get(&node.id).cloned().flatten();
+                let gen_label = gen.as_deref().unwrap_or("未留痕（旧记录或非 draft 写入）");
+                if crate::validate::is_scoring_leaf(node, self.store()) {
+                    scoring_gen_total += 1;
+                    if gen.as_deref() != Some("real") {
+                        scoring_gen_non_real += 1;
+                        scoring_offenders.push(format!("{}({gen_label})", node.id));
+                    }
+                } else if gen.as_deref() == Some("mock") || gen.is_none() {
+                    non_scoring_mock.push(node.id.clone());
+                }
+            }
+            if !non_scoring_mock.is_empty() {
+                warnings.push(format!(
+                    "#130：非评分叶 mock/未知生成器 {} 章（{}）——行政叶模板化程度高，告警不拦（风险不对称）；正式稿建议 real 重起草",
+                    non_scoring_mock.len(),
+                    non_scoring_mock.join("、"),
+                ));
+            }
+            if scoring_gen_non_real > 0 {
+                let waived = waivers
+                    .scoring_leaf_generator
+                    .as_deref()
+                    .map(|r| !r.trim().is_empty())
+                    .unwrap_or(false);
+                if waived {
+                    warnings.push(format!(
+                        "#130 豁免：评分叶生成器非 real（{} / {} 叶）经显式豁免跳过（理由：{}）——审计面记录；正式投标前建议 real 重起草（配置 .mang/llm.json 或 BID_LLM_API_KEY 后逐叶重起草）",
+                        scoring_gen_non_real,
+                        scoring_gen_total,
+                        waivers.scoring_leaf_generator.as_deref().unwrap_or("").trim(),
+                    ));
+                } else {
+                    return Err(ToolError::EUnprocessable {
+                        reason: format!(
+                            "生成器门未过（门 1n）：{} / {} 个评分叶的生成器非 real（{}）——mock 模板稿/未留痕稿不得冒充正式标书导出（评分面是得分主体）；配置 .mang/llm.json 或 BID_LLM_API_KEY 后重起草，或 export 传 waive_scoring_leaf_generator（非空理由）显式豁免",
+                            scoring_gen_non_real,
+                            scoring_gen_total,
+                            scoring_offenders.join("、"),
+                        ),
+                    });
+                }
+            }
+        }
+
         // ---- 2. format-spec（读盘优先，derive 兜底）
         let spec = self.load_or_derive_format_spec(&mut warnings)?;
         let anonymize_effective = match anonymize {
@@ -2079,9 +2175,13 @@ impl BidService {
         } else {
             (output_path.to_path_buf(), output_path.to_path_buf())
         };
-        let report = exporter
+        let mut report = exporter
             .export_with(&dir, &docx_path, &opts)
             .map_err(crate::export::outcome_error)?;
+        // AUD2-CHN-01/#130：评分叶分拆补齐——导出器层只算四类计数
+        // （is_scoring_leaf 需 store，留在服务层）；门 1n 的实测值常驻报告。
+        report.generator_summary.scoring_leaves_total = scoring_gen_total;
+        report.generator_summary.scoring_leaves_non_real = scoring_gen_non_real;
 
         // ---- 3b. PDF 转换（soffice --headless——阶段 7 通道）
         let report = if format == "pdf" {
@@ -2273,6 +2373,10 @@ pub struct FatalGapWaivers {
     /// 超篇幅面（E_CHARS_OVER_LIMIT，#88 门 1j/F-09）人工确认豁免——
     /// 非空理由生效（评标办法不设页数限制等场景）。
     pub length_overrun: Option<String>,
+    /// 评分叶生成器面（E_SCORING_LEAF_GENERATOR，AUD2-CHN-01/#130 门 1n）
+    /// 人工确认豁免——非空理由生效（mock 链收官测试/外部手稿经人工确认
+    /// 等场景；正式投标前应重起草为 real 或 external 有审校背书）。
+    pub scoring_leaf_generator: Option<String>,
     /// 超篇幅阈值（%——门 1j 判据 `chars×100 > target×(100+pct)`，
     /// 审计建议默认 50；调用方可配 1..=10000）。
     pub max_overrun_pct: u32,
@@ -2285,6 +2389,7 @@ impl Default for FatalGapWaivers {
             unmapped_scoring: None,
             format_placeholder: None,
             length_overrun: None,
+            scoring_leaf_generator: None,
             // 审计建议值（#88 F-09「超带超阈值（如 +50%）」）——超 50%
             // 的系统性超带在页数受限/暗标场景拦下，带内上沿不误伤
             max_overrun_pct: 50,
