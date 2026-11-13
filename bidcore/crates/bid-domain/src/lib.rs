@@ -47,6 +47,12 @@
 //! B1 扩展（issue #84 B1 / P0——价格分，从零到一）：
 //! - [`pricing`]：价格分引擎（基准价五方法 + 偏离扣分 + `score`/`optimal_price`
 //!   ——「报 X 万得几分 / 报多少分最高」的裁决面）。
+//!
+//! #320 多轮改标对比（AUD2-INV-01/#132 口径标注）：
+//! - [`changediff`] / [`impact`]：**域内分析件，非产品面**——零生产接线
+//!   （无 MCP 工具消费、无导出门引用）。保留原因：#320 验收链
+//!   （tests/changediff_chain.rs 含 real cuc-028 真实公告链）回归价值。
+//!   接线或删除的裁决留 Lead——本标注防「在库即在建」误读。
 
 pub mod assignment;
 pub mod budget;

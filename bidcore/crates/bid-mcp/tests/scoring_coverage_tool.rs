@@ -75,7 +75,7 @@ fn synthetic_project(tag: &str) -> (BidService, String) {
         .collect(),
         source_file: "A-招标文件.docx".into(),
     };
-    // 否决项一条（无分值——不计建议扣分但如实进报告）
+    // 否决项一条（B2 后不进 criteria——单列 hard_gates_excluded 计数）
     let veto = Requirement {
         id: "REQ-0002".into(),
         category: "否决项".into(),
@@ -117,8 +117,10 @@ fn synthetic_full_coverage_semantics() {
         "project_id": &pid,
     })));
     let summary = &r["summary"];
-    assert_eq!(summary["criteria_total"], json!(2), "评分项+否决项都进报告");
-    assert_eq!(summary["criteria_with_points"], json!(1), "否决项无枚举形态");
+    // AUD2-HIS-B2（#132）：否决项不进覆盖面——criteria 仅评分面 + 排除计数单列
+    assert_eq!(summary["criteria_total"], json!(1), "criteria 仅评分面（否决项已滤除）");
+    assert_eq!(summary["hard_gates_excluded"], json!(1), "否决项计数单列（可观测不静默）");
+    assert_eq!(summary["criteria_with_points"], json!(1), "评分细则拆出点");
     assert_eq!(summary["points_total"], json!(3), "issue 例三点全拆出");
     assert_eq!(summary["points_covered"], json!(2), "A/B 命中、C 漏");
     let ratio = summary["coverage_ratio"].as_f64().unwrap();
@@ -140,7 +142,11 @@ fn synthetic_full_coverage_semantics() {
     // notes：口径与局限明示（诚实面）
     let notes = r["notes"].as_array().unwrap();
     assert!(notes.iter().any(|n| n.as_str().unwrap().contains("字面")));
-    assert!(notes.iter().any(|n| n.as_str().unwrap().contains("未拆出点")));
+    // B2：排除面透出 notes（否决项计数与去向可追溯，不静默吞）
+    assert!(
+        notes.iter().any(|n| n.as_str().unwrap().contains("已排除 1 条否决项")),
+        "B2 排除面透出 notes：{notes:?}"
+    );
     // next 指引漏点处置
     assert!(r["next"].as_str().unwrap().contains("漏点"));
 }
@@ -199,11 +205,15 @@ fn songling_real_corpus_scoring_coverage_gate() {
     let summary = &r["summary"];
 
     // 结构门（真件实测值不锁死数——锁形态与恒等式）：
+    // AUD2-HIS-B2（#132）：criteria 仅评分面（旧行为混 45 条否决凑 61——
+    // 「≥20」靠否决污染达标是假绿；真值锚 = 8 带分值细则 + 无分值评分类）
     let criteria_total = summary["criteria_total"].as_u64().unwrap();
     let with_points = summary["criteria_with_points"].as_u64().unwrap();
     let points_total = summary["points_total"].as_u64().unwrap();
     let covered = summary["points_covered"].as_u64().unwrap();
-    assert!(criteria_total >= 20, "评分项 ≥ 20（真值锚见 #252 期望形态）：{criteria_total}");
+    let hard_excluded = summary["hard_gates_excluded"].as_u64().unwrap();
+    assert!(criteria_total >= 10, "评分面 criteria ≥ 10（松岭真跑 14：8 带分值 + 6 无分值）：{criteria_total}");
+    assert!(hard_excluded >= 40, "否决项单列计数 ≥ 40（松岭真跑 45）：{hard_excluded}");
     assert!(with_points >= 5, "真件细则至少 5 条拆出点（顿号枚举是常见形态）：{with_points}");
     assert!(points_total >= with_points, "恒等式：点数 ≥ 拆出点细则数");
     assert!(covered <= points_total, "恒等式：覆盖 ≤ 总点");

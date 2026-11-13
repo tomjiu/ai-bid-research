@@ -202,14 +202,14 @@
   "scoring_non_hard": 16
  },
  "scoring_outline_baseline": {
-  "note": "#252 评分驱动大纲断言面的固化基线（三态门：实测==基线 → FAIL 横幅锁定现状；更差 → 红灯；达成 → IMPROVED 要求更新+PR 说明）。预期形态锚 = expected/outline.expected.json（6 L1 + 20 L2 + 业绩/价格位）。实测环境：Linux poppler 通道，derive_and_set_outline 默认 spec（target 844,000）。2026-11-05 #252 第二步落地 + main 并入（#253 三轨分层计价与 #252 结构融合——统一账：legacy 叶 Admin/Body + 评分 L2 Scoring + 槽位固定）后全门刷新——唯一预期红 = coverage_key_params（抽取面 95%/360分钟 数值缺失传导，见 findings）。｜#287 刷新（2026-11-06）：默认目标 844,000 → 1,200,000（用户裁定：120 万字 ≈ 1422 页，四档 400k/800k/1.2M/2.5M，档位详见 outline.rs LengthProfile）——行政轨 300 字/条计价不变、绝对值不变（84,300），分母增大 → admin_share 0.095→0.070；评分轨底价 10,000/细则 + 剩余让渡随分值权重 → scoring_share 0.824→0.873（实测 1,047,700/1,200,000）。Linux poppler 通道实测。",
+  "note": "#252 评分驱动大纲断言面的固化基线（三态门：实测==基线 → FAIL 横幅锁定现状；更差 → 红灯；达成 → IMPROVED 要求更新+PR 说明）。预期形态锚 = expected/outline.expected.json（6 L1 + 20 L2 + 业绩/价格位）。实测环境：Linux poppler 通道，derive_and_set_outline 默认 spec（target 844,000）。2026-11-05 #252 第二步落地 + main 并入（#253 三轨分层计价与 #252 结构融合——统一账：legacy 叶 Admin/Body + 评分 L2 Scoring + 槽位固定）后全门刷新——唯一预期红 = coverage_key_params（抽取面 95%/360分钟 数值缺失传导，见 findings）。｜#287 刷新（2026-11-06）：默认目标 844,000 → 1,200,000（用户裁定：120 万字 ≈ 1422 页，四档 400k/800k/1.2M/2.5M，档位详见 outline.rs LengthProfile）——行政轨 300 字/条计价不变、绝对值不变（84,300），分母增大 → admin_share 0.095→0.070；评分轨底价 10,000/细则 + 剩余让渡随分值权重 → scoring_share 0.824→0.873（实测 1,047,700/1,200,000）。Linux poppler 通道实测。｜#132 刷新（2026-11-13）：AUD2-HIS-B1 评审程序条款排除面落地（REQ-0179/0180/0289 评分项→其他，评分总分 130→100 真值）——计价面微调：行政轨 84,300→84,900（+600 字，改判 REQ 进实质轨计价）→ quota_admin_share 0.070→0.071；评分轨 1,047,700→1,047,100 → share 0.873 不变（四舍五入）；admin_bound_reqs=272 绑定面零漂移（三键实测==新基线，Linux poppler 通道）",
   "measured_at": "2026-11-06（#287 篇幅档位化后复测：默认档 Conservative 1,200,000——原 2026-11-05 #253 三轨融合复测 844,000 口径作废）",
   "scoring_l1_chapters": 6,
   "scoring_l2_details": 20,
   "independent_slots": 2,
   "scoring_mapped_6": 6,
   "quota_scoring_share": 0.873,
-  "quota_admin_share": 0.07,
+  "quota_admin_share": 0.071,
   "quota_scoring_l2_floor": 20,
   "admin_bound_reqs": 272,
   "coverage_key_params_in_sections": 2,
@@ -222,7 +222,8 @@
    "双轨路由生效：上行带宽/30M/s/平滑升级→整体服务方案（3 条技术参数 REQ 多对多绑定）；15日历天→服务进度保障方案（2 条）；故障抢修→应急处理预案（1 条）；技术参数原组绑定保留（技术参数组 11 条不变）",
    "L1 文档序按第七章格式位次：资格与响应→报价文件（格式四）→行政组（五~十四面）→技术支撑→评分主体（十五）→业绩证明材料（十六）",
    "quota_scoring_share=0.873 / quota_admin_share=0.070 / quota_scoring_l2_floor=20（#287 刷新：默认档 1,200,000 下实测——评分细则 20 叶底价 200,000 + 分值权重让渡合计 1,047,700（0.873）；行政轨 300 字/条 × 281 条 = 84,300（0.070，绝对值与 844k 时代相同——按条计价天然封顶）；总量恒等 1,200,000 = Conservative 档目标，最小细则配额 ≥ 10,000 不变）",
-   "2026-11-06 #244 收尾复测（rebase main a8d26dd）：quota_scoring_share 0.873 / quota_admin_share 0.070 / quota_scoring_l2_floor 20 / coverage_key_params 2 / admin_bound_reqs 272 全部实测==基线（Linux poppler 通道，release 构建）。原 #292 记录的 0.820/0.100 为 844k 时代口径，已被 #287 档位化取代——本 PR 采用 main 基线，覆盖门零副作用经实测确认（songling 零标记走正则兜底，门放行，数值不漂移）"
+   "2026-11-06 #244 收尾复测（rebase main a8d26dd）：quota_scoring_share 0.873 / quota_admin_share 0.070 / quota_scoring_l2_floor 20 / coverage_key_params 2 / admin_bound_reqs 272 全部实测==基线（Linux poppler 通道，release 构建）。原 #292 记录的 0.820/0.100 为 844k 时代口径，已被 #287 档位化取代——本 PR 采用 main 基线，覆盖门零副作用经实测确认（songling 零标记走正则兜底，门放行，数值不漂移）",
+   "#132 B1 刷新（2026-11-13）：REQ-0180「评标委员会启动异常低价投标审查…30分钟」类评审程序条款改判其他（params._scoring_excluded 留痕）——评分总分虚增的 30 分退出分值基数（130→100），评分轨让渡微降 600 字、行政轨吸收 +600 字（admin_bound_reqs 272 不变——绑定面零漂移，纯计价面位移）。配额占比整体结构不变：0.873/0.071。根因与修法见 issue #132 / bid-parse scoring_exclusion.rs"
   ]
  },
  "license_note": "招标文件为依法必须公开的政府采购文件（法定公开媒介发布），评测用途引用——与 real-corpus/PROVENANCE.md 口径一致。"

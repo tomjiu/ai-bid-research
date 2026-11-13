@@ -1,5 +1,8 @@
 //! impact.rs —— 影响面引擎（bid-domain-model §2 DIRTY/content_version 语义的 Rust 实装）。
 //!
+//! 【口径（AUD2-INV-01/#132）】域内分析件，非产品面——零生产接线（无 MCP
+//! 工具消费、无导出门引用）；接线或删除的裁决留 Lead（见 lib.rs 头注）。
+//!
 //! V2 SEMUL（scripts/v2_impact.py）的设计语义在产品层的落点：
 //!   R-mod  条款修改 → 该 REQ 矩阵行 DIRTY + 绑定重检 + related 章节全 DIRTY
 //!   R-del  条款删除 → 绑定解除 + 矩阵行移除 + related 章节全 DIRTY
