@@ -1089,7 +1089,7 @@ pub fn unmapped_scoring_findings(store: &DomainStore) -> Vec<ValidationFinding> 
         section_id: None,
         requirement_id: None,
         message: format!(
-            "{} 个评分项未映射章节——评委无从给分 = 按缺项计零（#88 F-07）：{detail}；upsert_scoring_mapping 映射章节，或 export 传 waive_unmapped_scoring（非空理由）显式豁免",
+            "{} 个评分项未映射章节——评委无从给分 = 按缺项计零（#88 F-07）：{detail}；map_scoring_item（MCP 写面，#153）逐项映射章节，或 export 传 waive_unmapped_scoring（非空理由）显式豁免",
             unmapped.len(),
         ),
     }]

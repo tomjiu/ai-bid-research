@@ -28,7 +28,7 @@ fn tool_names_are_the_contract_twenty() {
     // get_coverage_report——全块覆盖：Agent 区间标记 + 引擎覆盖检查）= 24；
     // #226 增 1（set_matrix_override——否决项死锁的人工出口）= 25；
     // #243 增 1（recover_validating_state——历史异常态恢复出口）= 26
-assert_eq!(TOOL_NAMES.len(), 50, "工具面必须恰为 50 个（21 + #219 全块覆盖三工具 + #226 否决项死锁出口 + #243 恢复出口 + #254 分段三工具 + #279 行协议发现面 + #287 篇幅档位推荐 + #285① ★漏标检测 + #285② 块级双向索引三工具 + #319 补遗后增量重写两工具 + #321 RT 生命周期/分工/重开/参数应答七工具 + #315 业绩库四工具）");
+assert_eq!(TOOL_NAMES.len(), 51, "工具面必须恰为 51 个（21 + #219 全块覆盖三工具 + #226 否决项死锁出口 + #243 恢复出口 + #254 分段三工具 + #279 行协议发现面 + #287 篇幅档位推荐 + #285① ★漏标检测 + #285② 块级双向索引三工具 + #319 补遗后增量重写两工具 + #321 RT 生命周期/分工/重开/参数应答七工具 + #315 业绩库四工具）");
     for name in TOOL_NAMES {
         assert!(!name.is_empty());
     }
@@ -104,7 +104,7 @@ fn json_roundtrip_failure_is_typed() {
 fn tools_schema_lists_all_twenty() {
     let v = bid_mcp::tools_schema();
     let arr = v["tools"].as_array().unwrap();
-assert_eq!(arr.len(), 50, "tools/list 必须列出全部 50 个工具");
+assert_eq!(arr.len(), 51, "tools/list 必须列出全部 51 个工具");
     let implemented: Vec<&str> = arr
         .iter()
         .filter(|t| t["implemented"] == true)
@@ -159,6 +159,8 @@ assert_eq!(arr.len(), 50, "tools/list 必须列出全部 50 个工具");
             "get_annotation_overlay",
             // #318 评分细则逐条响应覆盖检查（只读实装）
             "check_scoring_coverage",
+            // #153（#113 F5）：评分项→章节显式映射写面
+            "map_scoring_item",
             // #226 层 1：否决项死锁的人工出口
             "set_matrix_override",
             // #243：历史异常态（VALIDATING+缺章）的受支持恢复出口
@@ -269,8 +271,8 @@ fn tool_names_partition_into_gated_and_ungated() {
 
     // ④ 数量对账：44 = 状态门并集 + 无门集（演进时同步改这里——与
     //    tool_names_are_the_contract 的计数断言同款纪律）。
-    assert_eq!(all.len(), 50);
-    assert_eq!(gated.len() + ungated.len(), 50, "门表并集 {} + 无门 {} 应 == 50", gated.len(), ungated.len());
+    assert_eq!(all.len(), 51);
+    assert_eq!(gated.len() + ungated.len(), 51, "门表并集 {} + 无门 {} 应 == 51", gated.len(), ungated.len());
 }
 
 /// ungated_tools 回显在位且与状态无关（#522 验收：任何状态下值一致）。

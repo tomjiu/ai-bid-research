@@ -557,7 +557,7 @@ fn unmapped_scoring_item_is_blocker() {
     let fs = bid_tools::validate::unmapped_scoring_findings(&s);
     assert_eq!(codes(&fs), vec!["E_SCORING_UNMAPPED"], "评分项未映射 → BLOCKER");
     assert!(fs[0].message.contains("REQ-0001"));
-    assert!(fs[0].message.contains("upsert_scoring_mapping"), "给出解决通道");
+    assert!(fs[0].message.contains("map_scoring_item"), "给出解决通道（#153：MCP 写面为主通道）");
 }
 
 #[test]

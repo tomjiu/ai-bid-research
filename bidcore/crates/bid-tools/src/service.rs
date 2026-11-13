@@ -1820,7 +1820,7 @@ impl BidService {
                 .unwrap_or(false);
             if waived {
                 warnings.push(format!(
-                    "#88 豁免：评分项未映射经显式豁免跳过（理由：{}）——审计面记录；upsert_scoring_mapping 映射通道仍开放",
+                    "#88 豁免：评分项未映射经显式豁免跳过（理由：{}）——审计面记录；map_scoring_item（MCP 写面，#153）映射通道仍开放",
                     waivers.unmapped_scoring.as_deref().unwrap_or("").trim(),
                 ));
             } else {
@@ -2331,6 +2331,33 @@ impl BidService {
         Ok(rec)
     }
 
+    /// #153（#113 F5）：评分项→章节显式映射（AgentSubmitted 落账）——
+    /// MCP `map_scoring_item` 的业务半边。
+    ///
+    /// 校验/幂等/聚合不变量/content_version 面全在域层
+    /// [`DomainStore::upsert_scoring_mapping`]（评分面类别 / 孤儿章节 /
+    /// 幽灵证据 / 份额合计 ≤ 1.0 fail-loud + SM-xxxx 签发）；本层只补
+    /// 持久化面（checkpoint——映射即落盘，跨重启可见）。
+    pub fn map_scoring_item(
+        &mut self,
+        scoring_req_id: String,
+        section_id: String,
+        weight_share: f64,
+        evidence_refs: Vec<String>,
+        source_anchor: bid_domain::Anchor,
+    ) -> Result<bid_domain::scoring::ScoringMapping, ToolError> {
+        let m = self.store_mut().upsert_scoring_mapping(
+            scoring_req_id,
+            section_id,
+            weight_share,
+            evidence_refs,
+            source_anchor,
+            bid_domain::scoring::MappingSource::AgentSubmitted,
+        )?;
+        self.auto_checkpoint()?;
+        Ok(m)
+    }
+
     /// format-spec 装载：`.mang/format-spec.json` 读盘 → validate；缺失 →
     /// 从格式条款 derive（零命中 → 基线 + warning）。
     fn load_or_derive_format_spec(
@@ -2390,7 +2417,8 @@ pub struct FatalGapWaivers {
     /// ★漏标面（E_STAR_MISSING）人工确认豁免——非空理由生效。
     pub star_missing: Option<String>,
     /// 评分项未映射面（E_SCORING_UNMAPPED）人工确认豁免——非空理由生效
-    ///（#88 门 1h：无评分项语料误抽确认等场景；映射通道 upsert_scoring_mapping 仍开放）。
+    ///（#88 门 1h：无评分项语料误抽确认等场景；映射通道 map_scoring_item（MCP
+    /// 写面，#153）/ upsert_scoring_mapping（域层）仍开放）。
     pub unmapped_scoring: Option<String>,
     /// 三件套数据缺位面（E_FORMAT_PLACEHOLDER，#88 门 1k/F-06）人工确认
     /// 豁免——非空理由生效（无法定授权委托、确认带【待填】导出等场景）。

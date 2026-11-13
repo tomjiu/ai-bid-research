@@ -287,6 +287,9 @@ impl ProjectStatus {
                 "score_document",
                 // #226：人工覆写条款响应（否决项死锁出口——矩阵已建才有可覆写对象）
                 "set_matrix_override",
+                // #153（#113 F5）：评分项→章节显式映射写面（大纲已建即可映射
+                //——门 1h 正门通道；与 set_matrix_override 同窗口哲学）
+                "map_scoring_item",
                 // #319：补遗后增量重写（变更登记+局部改写——起草后补遗到达的
                 // 主工作面，与分段写入同窗口）
                 "register_addendum_changes",
@@ -332,6 +335,9 @@ impl ProjectStatus {
                 "score_document",
                 // #226：起草期照样要能翻案（发现某条是规则说明 → 标不适用）
                 "set_matrix_override",
+                // #153（#113 F5）：评分项→章节显式映射写面（门 1h 正门通道
+                //——纯 MCP 驱动评分项不悬空，起草期建纲后即可逐项映射）
+                "map_scoring_item",
                 // #241 裁定：证据补件通道在起草期必须可用——validate/
                 // check_bid_quality 在本态输出 evidence_missing 清单，「见缺口
                 // →补件→就绪」的解决出口不能断在最后一步（与 #226
@@ -378,6 +384,9 @@ impl ProjectStatus {
                 "score_document",
                 // #226：导出前复核期同样可翻案（这里是 blocking 最后能解的地方）
                 "set_matrix_override",
+                // #153（#113 F5）：评分项映射——门 1h 的解处（同 #226 窗口
+                //理由：复核期发现漏映射，映射后重导即解，不须回退状态）
+                "map_scoring_item",
                 // #241 裁定：复核期补件（readiness 证据缺口的解决出口——与
                 // set_matrix_override 同窗口同理由：导出前是缺口的最后解处）
                 "register_evidence",
@@ -424,6 +433,9 @@ impl ProjectStatus {
                 "score_document",
                 // #226：导出前复核期同样可翻案（这里是 blocking 最后能解的地方）
                 "set_matrix_override",
+                // #153（#113 F5）：评分项映射——门 1h 的解处（同 #226 窗口
+                //理由：复核期发现漏映射，映射后重导即解，不须回退状态）
+                "map_scoring_item",
                 // #241 裁定：导出前复核期补件（readiness 证据缺口的最后解处
                 // ——与 set_matrix_override 同窗口同理由）
                 "register_evidence",
@@ -462,6 +474,8 @@ impl ProjectStatus {
                 "score_document",
                 // #226：已导出仍可改判（再导出走幂等重导）
                 "set_matrix_override",
+                // #153（#113 F5）：已导出后补映射——再导出即新评分面
+                "map_scoring_item",
                 // #319：已导出后补遗到达——登记变更+局部改写+重验，再导出即新稿
                 "register_addendum_changes",
                 "rewrite_section_partial",

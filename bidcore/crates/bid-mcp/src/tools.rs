@@ -87,6 +87,7 @@ pub(crate) fn invoke(name: &str, args: Value, svc: &mut BidService) -> ToolResul
         "get_annotation_overlay" => crate::bidi_tools::get_annotation_overlay(svc, args),
         // ---- #318 评分细则逐条响应覆盖检查（只读诊断——拆点/命中/漏点/建议扣分） ----
         "check_scoring_coverage" => crate::coverage_tools::check_scoring_coverage(svc, args),
+        "map_scoring_item" => map_scoring_item(svc, args),
         "score_section" => score_section(svc, args),
         "score_document" => score_document(svc, args),
         // ---- #145 任务 1：双通道证据检索（契约 §5——朴素实现，真向量库见 M2-b）----
@@ -4380,6 +4381,121 @@ fn validate_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
         "request_id": next_request_id(),
     });
     Ok(out)
+}
+
+// ---------------------------------------------------------------- #153 评分项→章节显式映射（门 1h 正门通道）
+
+/// `map_scoring_item` —— #153（#113 F5）：评分项 → 大纲章节显式映射的
+/// MCP 写面。
+///
+/// 背景：映射此前只有服务层 API（upsert_scoring_mapping，收官测试进程内
+/// 直调）——外部 Agent 纯 MCP 驱动评分项悬空 → 门 1h 必豁免 → 评分项
+/// 响应面系统性缺失（#113 真实验收 28/31 无正文覆盖的根）。
+///
+/// 壳层职责：参数校验（weight_share 数值 + anchor.excerpt 非空白）→
+/// 三件套（路由/状态门 DRAFTING+/乐观并发）→ 转发
+/// `BidService::map_scoring_item`（域层 upsert_scoring_mapping：
+/// 评分面类别/孤儿章节/幽灵证据/聚合不变量 ≤ 1.0 全套硬校验 +
+/// AGENT_SUBMITTED 落账 + SM-xxxx 签发 + content_version bump；服务层
+/// checkpoint）→ 响应组装（映射回显 + 覆盖面提示）。
+///
+/// 幂等键 (req_id, section_id)：重提 = 更新份额/锚/证据（同 id），不追加
+/// 账本行；全字段等值重提不制造假版本（域层面）。
+fn map_scoring_item(svc: &mut BidService, args: Value) -> ToolResult {
+    const TOOL: &str = "map_scoring_item";
+    let project_id = req_str(&args, "project_id", TOOL)?;
+    let req_id = req_str(&args, "req_id", TOOL)?;
+    let section_id = req_str(&args, "section_id", TOOL)?;
+    let weight_share = args
+        .get("weight_share")
+        .and_then(Value::as_f64)
+        .ok_or_else(|| ToolError::EUnprocessable {
+            what: format!(
+                "{TOOL}: weight_share 缺失或非数值（合法域 (0,1]——单章节映射恒 1.0，跨章节分摊合计 ≤ 1.0）"
+            ),
+        })?;
+    // anchor（映射依据锚——溯源面：分数 → 评分项 → 规则原文；excerpt
+    // 必填非空白：不可审计的映射不成映射）
+    let a = args.get("anchor").ok_or_else(|| ToolError::EUnprocessable {
+        what: format!(
+            "{TOOL}: anchor 缺失（映射依据锚——{{excerpt 必填, file?, kind?, locator?, page?, line?}}；建议引用评分细则行原文）"
+        ),
+    })?;
+    let excerpt = a
+        .get("excerpt")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ToolError::EUnprocessable {
+            what: format!("{TOOL}: anchor.excerpt 不得为空白（溯源面：不可审计的映射不成映射）"),
+        })?;
+    let source_anchor = bid_domain::Anchor {
+        // 诚实缺省：未引文件即明示 Agent 推导（不伪称文档锚）
+        file: a
+            .get("file")
+            .and_then(Value::as_str)
+            .unwrap_or("agent:map_scoring_item")
+            .to_string(),
+        kind: a
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("agent")
+            .to_string(),
+        locator: a
+            .get("locator")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        excerpt: excerpt.to_string(),
+        block_idx: a.get("block_idx").and_then(Value::as_u64).map(|v| v as usize),
+        page: a.get("page").and_then(Value::as_u64).map(|v| v as u32),
+        line: a.get("line").and_then(Value::as_u64).map(|v| v as u32),
+    };
+    let evidence_refs =
+        opt_str_array(&args, "evidence_refs", TOOL)?.unwrap_or_default();
+    let project_version = opt_cas_version(&args, TOOL)?;
+
+    route_guard(svc, &project_id, TOOL, project_version)?;
+
+    let m = svc
+        .map_scoring_item(
+            req_id.clone(),
+            section_id.clone(),
+            weight_share,
+            evidence_refs,
+            source_anchor,
+        )
+        .map_err(ToolError::from)?;
+
+    // 覆盖面提示（门 1h 数据源即时反馈——映射后还差几个评分项）
+    let unmapped_left = crate::coverage_hint::unmapped_scoring_count(svc.store());
+    Ok(json!({
+        "mapping": {
+            "id": m.id,
+            "req_id": m.scoring_req_id,
+            "section_id": m.section_id,
+            "weight_share": m.weight_share,
+            "created_from": serde_json::to_value(&m.created_from).unwrap_or(Value::Null),
+            "evidence_refs": m.evidence_refs,
+            "source_anchor": {
+                "file": m.source_anchor.file,
+                "kind": m.source_anchor.kind,
+                "locator": m.source_anchor.locator,
+                "excerpt": m.source_anchor.excerpt,
+                "page": m.source_anchor.page,
+                "line": m.source_anchor.line,
+            },
+        },
+        // #113 F5 验收回路：映射后未映射评分项计数（0 = 门 1h 零豁免放行）
+        "unmapped_scoring_items_left": unmapped_left,
+        "next": if unmapped_left == 0 {
+            "全部评分项已映射——check_scoring_coverage 复核覆盖面，门 1h 零豁免放行"
+        } else {
+            "仍有未映射评分项——继续 map_scoring_item 逐项映射（或 check_scoring_coverage 查漏点）"
+        },
+        "project_version": svc.store().content_version(),
+        "request_id": next_request_id(),
+    }))
 }
 
 // ---------------------------------------------------------------- #243/#152 校验状态安全与恢复

@@ -67,6 +67,8 @@ EXPECTED_TOOLS = {
     # #318 评分细则逐条响应覆盖检查（只读诊断）——TOOL_NAMES 44 后增量，
     # py 契约面未随工具面增长同步（CI 队列停摆未拦截，本批对齐 50）
     "check_scoring_coverage",
+    # #153（#113 F5）：评分项→章节显式映射写面（TOOL_NAMES 51 对齐）
+    "map_scoring_item",
     # #585 业绩库四工具 + #61 分包清单（TOOL_NAMES 50 对齐）
     "list_packages",
     "register_performance",
@@ -107,7 +109,7 @@ async def main() -> None:
             # ---- ② list_tools（全量工具面 + inputSchema 形态）----
             tools = (await session.list_tools()).tools
             names = {t.name for t in tools}
-            check(len(tools) == 50, f"list_tools: 工具数 = {len(tools)}（50）")
+            check(len(tools) == 51, f"list_tools: 工具数 = {len(tools)}（51）")
 
             check(names == EXPECTED_TOOLS, "list_tools: 与 TOOL_NAMES 单一真源一致")
             for t in tools:

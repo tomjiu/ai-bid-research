@@ -21,6 +21,7 @@
 //! `bid-mcp-stdio`）一字未动。
 
 pub mod coverage_tools;
+pub mod coverage_hint;
 pub mod bidi_tools;
 pub mod perf_tools;
 pub mod cursor;
@@ -74,7 +75,7 @@ use serde_json::Value;
 /// #315 增 4 个：业绩材料库四工具（register_performance / list_performance /
 /// recommend_performance / write_performance_section）= 50。
 
-pub const TOOL_NAMES: [&str; 50] = [
+pub const TOOL_NAMES: [&str; 51] = [
     "create_bid_project",
     "import_tender_files",
     "extract_requirements",
@@ -109,6 +110,10 @@ pub const TOOL_NAMES: [&str; 50] = [
     "get_annotation_overlay",
     // #318 评分细则逐条响应覆盖检查（只读诊断——拆点/命中/漏点/建议扣分）
     "check_scoring_coverage",
+    // #153（#113 F5）：评分项→章节显式映射 MCP 写面（AgentSubmitted
+    // 落账——包装域层 upsert_scoring_mapping；门 1h 的正门通道，
+    // 纯 MCP 驱动不再必豁免）
+    "map_scoring_item",
     // #226 层 1：否决项死锁的人工出口
     "set_matrix_override",
     // #243：历史异常态（VALIDATING+缺章）的受支持恢复出口

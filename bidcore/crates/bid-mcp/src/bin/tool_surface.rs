@@ -2,7 +2,7 @@
 //!
 //! ## 为什么需要这个工具
 //!
-//! 工具面有 5 处必须手工同步：
+//! 工具面有 7 处必须手工同步：
 //!
 //! ```text
 //! 1. bid-mcp/src/lib.rs            TOOL_NAMES 数组 + 长度常量
@@ -10,8 +10,10 @@
 //! 3. bid-mcp/src/tools.rs          dispatch 的 match 分支
 //! 4. bid-domain/tests/state_machine_matrix.rs
 //!                                  ALL_TOOLS + 10 状态位串
-//! 5. bid-mcp/tests/dispatch_contract.rs + mcp_sdk_e2e.py  硬编码数字
+//! 5. bid-mcp/tests/dispatch_contract.rs + mcp_sdk_e2e.py  硬编码数字/清单
 //! 6. bid-mcp/tests/draft_tool.rs     `arr.len()` 工具数断言（#505 起纳入 --write）
+//! 7. bid-mcp/tests/search_evidence_tool.rs `names.len()` 声明数断言
+//!    （#153 实测漏登面——该文件计数漂移不被本工具拦截，加工具即测试红）
 //! ```
 //!
 //! 2026-11-07 单日因「加工具只改了一部分面」导致 6 个 PR CI 红
@@ -45,11 +47,12 @@ fn main() {
     let dispatch_path = root.join("crates/bid-mcp/tests/dispatch_contract.rs");
     let e2e_path = root.join("crates/bid-mcp/tests/mcp_sdk_e2e.py");
     let draft_path = root.join("crates/bid-mcp/tests/draft_tool.rs");
+    let search_path = root.join("crates/bid-mcp/tests/search_evidence_tool.rs");
     let contract_path = root.join("../docs/bid-mcp-contract.md");
 
     let report = match mode {
-        "--check" => check(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &contract_path),
-        "--write" => write(&matrix_path, &dispatch_path, &e2e_path, &draft_path),
+        "--check" => check(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &search_path, &contract_path),
+        "--write" => write(&matrix_path, &dispatch_path, &e2e_path, &draft_path, &search_path),
         other => {
             eprintln!("未知参数 {other:?}（只接受 --check / --write）");
             std::process::exit(2);
@@ -90,6 +93,7 @@ fn check(
     dispatch: &Path,
     e2e: &Path,
     draft: &Path,
+    search: &Path,
     contract: &Path,
 ) -> Result<(), Diagnostic> {
     let mut details = Vec::new();
@@ -126,6 +130,14 @@ fn check(
         details.push(format!("{}: 工具面断言数字不同步", display(draft)));
     }
 
+    // ---- 4b. search_evidence_tool.rs 的声明数断言（#153 实测漏登面：
+    //      该文件计数漂移不被拦截，加工具即测试红）
+    let search_src = read(search)?;
+    let search_expected = render_search(&search_src, n)?;
+    if search_expected != search_src {
+        details.push(format!("{}: 声明数断言数字不同步", display(search)));
+    }
+
     // ---- 5. contract.md 章节编号卫生（#566：重复/乱序/跳号三防线）
     let contract_src = read(contract)?;
     details.extend(check_contract_numbering(&contract_src));
@@ -141,8 +153,15 @@ fn check(
 }
 
 /// #505：`draft` 面（draft_tool.rs）已接线 write()——check/write 全回路
-///（#494 登记的缺口由本变更收口）。
-fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(), Diagnostic> {
+///（#494 登记的缺口由本变更收口）。#153 增 `search` 面（search_evidence_tool.rs
+/// 声明数断言——实测漏登面，同款全回路）。
+fn write(
+    matrix: &Path,
+    dispatch: &Path,
+    e2e: &Path,
+    draft: &Path,
+    search: &Path,
+) -> Result<(), Diagnostic> {
     let n = bid_mcp::TOOL_NAMES.len();
 
     let matrix_src = read(matrix)?;
@@ -185,6 +204,18 @@ fn write(matrix: &Path, dispatch: &Path, e2e: &Path, draft: &Path) -> Result<(),
             details: vec![],
         })?;
         println!("[tool-surface] 重写 {}", display(draft));
+    }
+
+    // #153：search 面（search_evidence_tool.rs 的 names.len() 声明数断言）
+    // 同款接线——实测漏登面收口。
+    let search_src = read(search)?;
+    let search_new = render_search(&search_src, n)?;
+    if search_new != search_src {
+        fs::write(search, &search_new).map_err(|e| Diagnostic {
+            message: format!("写 {} 失败: {e}", display(search)),
+            details: vec![],
+        })?;
+        println!("[tool-surface] 重写 {}", display(search));
     }
 
     Ok(())
@@ -289,24 +320,62 @@ fn render_matrix(src: &str, n: usize) -> Result<String, Diagnostic> {
 
 /// 重写 dispatch_contract.rs 里 TOOL_NAMES.len() 的断言数字。
 fn render_dispatch(src: &str, n: usize) -> Result<String, Diagnostic> {
+    // 主断言必须在场（无主断言 = 文件形态漂移，报错不猜）
     let needle = "assert_eq!(TOOL_NAMES.len(),";
     let pos = src.find(needle).ok_or_else(|| Diagnostic {
         message: "找不到 TOOL_NAMES.len() 断言".into(),
         details: vec![],
     })?;
+    let _ = pos;
+    // #153 实测缺陷收口：重写面此前只有主断言一处——dispatch_contract 另有
+    // 3 处计数断言（arr.len() / all.len() / gated+ungated）与 3 处消息数字，
+    // 漏改即「--check 绿、测试红」（检查器说谎比没有检查器更糟）。各面
+    // 可能已与主断言**分叉**（主已 51 而三面仍 50 的实测态），故逐面独立
+    // 重编：锚点短语后首个整数词元一律改为 n——不以主断言旧值为锚。
+    let out = src.to_string();
+    let out = renumber_after(out, "assert_eq!(TOOL_NAMES.len(), ", n);
+    let out = renumber_after(out, "必须恰为 ", n);
+    let out = renumber_after(out, "assert_eq!(arr.len(), ", n);
+    let out = renumber_after(out, "必须列出全部 ", n);
+    let out = renumber_after(out, "assert_eq!(all.len(), ", n);
+    let out = renumber_after(out, "gated.len() + ungated.len(), ", n);
+    let out = renumber_after(out, "应 == ", n);
+    Ok(out)
+}
+
+/// needle 之后的首个整数词元重编为 n（无数字则原样返回——该面形态漂移
+/// 由 check 的「渲染 != 源」红暴露，不静默吞）。
+fn renumber_after(src: String, needle: &str, n: usize) -> String {
+    let Some(pos) = src.find(needle) else {
+        return src;
+    };
     let after = &src[pos + needle.len()..];
-    let comma = after.find(',').ok_or_else(|| Diagnostic {
-        message: "断言格式异常".into(),
-        details: vec![],
-    })?;
-    let old_num = after[..comma].trim();
-    if old_num == n.to_string() {
-        return Ok(src.to_string());
+    let num_end = after
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(after.len());
+    if num_end == 0 {
+        return src;
     }
     let mut out = String::with_capacity(src.len());
     out.push_str(&src[..pos + needle.len()]);
-    out.push_str(&format!(" {n},"));
-    out.push_str(&after[comma + 1..]);
+    out.push_str(&n.to_string());
+    out.push_str(&after[num_end..]);
+    out
+}
+
+/// 重写 search_evidence_tool.rs 里 `assert_eq!(names.len(), N, ...)` 的声明数
+/// 断言与消息数字（#153 实测漏登面——该文件计数漂移不被拦截，加工具即测试红）。
+fn render_search(src: &str, n: usize) -> Result<String, Diagnostic> {
+    let needle = "assert_eq!(names.len(),";
+    if !src.contains(needle) {
+        return Err(Diagnostic {
+            message: "找不到 search_evidence_tool 的声明数断言".into(),
+            details: vec![],
+        });
+    }
+    let out = src.to_string();
+    let out = renumber_after(out, "assert_eq!(names.len(), ", n);
+    let out = renumber_after(out, "声明数应为 ", n);
     Ok(out)
 }
 
@@ -539,6 +608,30 @@ mod tests {
             assert_eq!(bits.len(), n, "{st} 位串长度应为 {n}");
             assert!(bits.chars().all(|c| c == '0' || c == '1'));
         }
+    }
+
+    /// #153 实测缺陷回归：dispatch 面重写须覆盖**全部**计数位——主断言 +
+    /// arr.len() + all.len() + gated+ungated 三断言与两处消息数字。修复前
+    /// 只改主断言：--check 绿而 dispatch_contract 测试红（检查器说谎）。
+    #[test]
+    fn dispatch_render_rewrites_all_count_faces() {
+        let src = concat!(
+            "assert_eq!(TOOL_NAMES.len(), 50, \"工具面必须恰为 50 个（……）\");\n",
+            "assert_eq!(arr.len(), 50, \"tools/list 必须列出全部 50 个工具\");\n",
+            "assert_eq!(all.len(), 50);\n",
+            "assert_eq!(gated.len() + ungated.len(), 50, \"门表并集 {} + 无门 {} 应 == 50\");\n",
+        );
+        let out = render_dispatch(src, 51).unwrap();
+        assert!(out.contains("TOOL_NAMES.len(), 51,"), "主断言：{out}");
+        assert!(out.contains("恰为 51 个"), "主断言消息数字：{out}");
+        assert!(out.contains("arr.len(), 51,"), "tools/list 断言：{out}");
+        assert!(out.contains("全部 51 个工具"), "tools/list 消息数字：{out}");
+        assert!(out.contains("all.len(), 51)"), "门表并集断言：{out}");
+        assert!(out.contains("ungated.len(), 51,"), "gated+ungated 断言：{out}");
+        assert!(out.contains("应 == 51"), "gated+ungated 消息数字：{out}");
+        assert!(!out.contains("50"), "旧计数残留即红（检查器说谎面）：{out}");
+        // 幂等：已同步源再渲染不变
+        assert_eq!(render_dispatch(&out, 51).unwrap(), out, "已同步源须幂等");
     }
 
     // ---------------- 契约编号卫生（#566）----------------
