@@ -169,6 +169,30 @@ fn extract_dispatch(
             );
         }
     }
+    // AUD2-HIS-B1（#132）评审程序条款排除面（与 #52 同款可审计形态）：
+    // 评标程序动词族（启动…审查/否决/复核/按…处理 等程序句式）且无分值
+    // 授予语义的「评分项」→ 改判「其他」+ params["_scoring_excluded"]。
+    // - 不删 REQ——L1 抽取面不受影响（召回红线保持）；
+    // - 统一后置——覆盖全部分类路径（章节上下文/评分表专路/审查表/强词
+    //   传播/#52 评分公式改判），两侧（PDF/DOCX）单点接入零遗漏；
+    // - 真跑实锤（松岭 65 页）：REQ-0180「评标委员会启动异常低价投标
+    //   审查…不少于30分钟」被归评分项携带 score=30（分钟字样），致评分
+    //   总分虚增 100→130、门 1h 假拦（评审程序条款无响应章节可言）。
+    // - 判据单一真源：scoring_exclusion::procedural_exclusion_reason
+    //   （评审主体程序动作 ∧ 无分值授予语义——守护词保真细则）。
+    for r in reqs.iter_mut() {
+        if r.category != "评分项" {
+            continue;
+        }
+        let joined: String = r.anchors.iter().map(|a| a.excerpt.as_str()).collect();
+        if let Some(reason) = crate::scoring_exclusion::procedural_exclusion_reason(&joined) {
+            r.category = "其他".to_string();
+            r.params.insert(
+                "_scoring_excluded".to_string(),
+                serde_json::Value::String(reason.to_string()),
+            );
+        }
+    }
     reqs
 }
 
@@ -1804,11 +1828,17 @@ fn extract_b2_ocr(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize) 
 /// 评分细则行「N、报价：65 分」/ 表格行「…30 分」→ `params.score`。
 /// 纯确定性正则（零模型）；「满分 100 分」类总分层可能误配为单行分值——
 /// 领域层 scoring sanity（总分 >100 告警）兑底，不在本层猜测语义。
+///
+/// 「N分钟」不是分值（AUD2-HIS-B1/#132 根因：REQ-0180「不少于30分钟」
+/// 被读 30 分——评分总分虚增 100→130）。regex crate 无 look-ahead，
+/// 分钟排除代码级判定（同 veto_lexicon::re_score_value 纪律）。
 fn score_of(text: &str) -> Option<f64> {
     static RE_SCORE: OnceLock<Regex> = OnceLock::new();
     RE_SCORE
         .get_or_init(|| Regex::new(r"(\d+(?:\.\d+)?)\s*分").unwrap())
-        .captures(text)
+        .captures_iter(text)
+        // 分值匹配后跟「钟」→ 跳过（时间量词非分值），取首个真分值
+        .find(|c| !text[c.get(0).unwrap().end()..].starts_with('钟'))
         .and_then(|c| c[1].parse().ok())
 }
 

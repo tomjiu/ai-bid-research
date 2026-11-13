@@ -460,11 +460,18 @@ pub fn get_star_coverage(svc: &mut BidService, args: Value) -> ToolResult {
 /// ```text
 /// summary { criteria_total / criteria_with_points / criteria_unmapped /
 ///           points_total / points_covered / coverage_ratio /
-///           suggested_deduction }      总量与建议扣分（启发式）
+///           suggested_deduction / hard_gates_excluded }  总量与建议扣分（启发式）；
+///           hard_gates_excluded：被排除的否决项计数（AUD2-HIS-B2）
 /// criteria[] { criterion_id / criteria_excerpt / max_score /
 ///              mapped_sections / points[]{point, hit_section} }  逐细则
 /// notes[]    口径与局限（字面拆点/子串命中——语义等价表述不识别）
 /// ```
+///
+/// **AUD2-HIS-B2（#132）**：否决项（is_hard_gate）不属评分细则响应面
+/// ——混入会让 criteria_unmapped 虚高（松岭真跑实锄：61 criteria 中
+/// 45 条否决 → 「53 未映射」严重误导，真缺口 1 条评分项；门 1h 不受
+/// 影响——unmapped_items 已滤 hard gate）。工具面滤除 + 汇总单列
+/// `hard_gates_excluded` 计数（保持可观测，不静默吞）。
 ///
 /// **只报不补**（#285★漏标同款纪律）：不自动改稿——漏点面交给
 /// Agent/人决策（rewrite_section_segment / append_section_segment 补写）。
@@ -476,6 +483,11 @@ pub fn check_scoring_coverage(svc: &mut BidService, args: Value) -> ToolResult {
     let store = svc.store();
     let reqs = store.requirements().to_vec();
     let mut items = bid_domain::scoring::derive_scoring_items(&reqs);
+    // AUD2-HIS-B2（#132）：否决项不进覆盖检查面（滤除 + 计数单列）。
+    // 否决响应面由 readiness/门族检查（漏响应即废标是另一套闸门）；
+    // 混在本报告里只会虚高 unmapped 计数、误导补写方向。
+    let hard_gates_excluded = items.iter().filter(|i| i.is_hard_gate).count();
+    items.retain(|i| !i.is_hard_gate);
     // #224 多对多：并入持久化映射（AgentSubmitted/Manual/OutlineDerived——
     // 与 score 工具的 build_scorer 同口径：params.section 派生 + 账本并入，
     // 同 (req, section) 键重合跳过，防双重计入）。
@@ -512,6 +524,13 @@ pub fn check_scoring_coverage(svc: &mut BidService, args: Value) -> ToolResult {
     };
 
     let report = bid_domain::scoring_coverage::check_scoring_coverage(&items, section_text);
+    // B2：滤除面计入 notes（可观测——不静默吞否决项）
+    let mut notes = report.notes.clone();
+    if hard_gates_excluded > 0 {
+        notes.push(format!(
+            "已排除 {hard_gates_excluded} 条否决项（is_hard_gate）——否决响应面由 readiness/门族检查，不计入评分覆盖；详见 summary.hard_gates_excluded"
+        ));
+    }
 
     let criteria_json: Vec<Value> = report
         .criteria
@@ -546,9 +565,10 @@ pub fn check_scoring_coverage(svc: &mut BidService, args: Value) -> ToolResult {
             "points_covered": report.points_covered,
             "coverage_ratio": report.coverage_ratio,
             "suggested_deduction": report.suggested_deduction,
+            "hard_gates_excluded": hard_gates_excluded,
         },
         "criteria": criteria_json,
-        "notes": report.notes,
+        "notes": notes,
         "next": if report.points_total == 0 {
             "未拆出任何点（细则无枚举形态/未抽取评分表）——先 extract_requirements，细则原文进 score_rules 后再查"
         } else if report.points_covered == report.points_total {
