@@ -776,6 +776,43 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
         }).collect()
     };
 
+    // #145（圈号子项一致性）：子项头行（短行 + 尾冒号自成段）向后吸收
+    // 同列举簇紧邻内容行，直到「量化在场」或边界行（新子项/条款头/章头/
+    // 空行/表格）。返回 None = 无量化形态（零激活——保持既有行为）；
+    // Some((joined, body_end)) = 头+内容拼接文本与吸收末块位（锚块集 =
+    // 头行段 + i+1..=body_end 的行级块——逐行保真）。
+    let circled_head_absorb = |i: usize| -> Option<(String, usize)> {
+        let mut joined = para_text(i, para_end[i]);
+        // 吸收末块位（k 循环内必先赋值再使用；i 兜底为「无吸收」——
+        // 循环 0 次时 None 提前返回，body_end 不会被读到 i 值）
+        #[allow(unused_assignments)]
+        let mut body_end = i;
+        let mut k = i + 1;
+        while let Some(nb) = blocks.get(k) {
+            if !matches!(nb.kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                || page_noisy.contains(&k)
+            {
+                break;
+            }
+            let nt = nb.text.trim();
+            if nt.is_empty()
+                || is_skip_line(nt)
+                || re_clause.is_match(nt)
+                || re_chapter.is_match(&nfkc(nt))
+                || re_list_cn.is_match(nt) // 下一子项/新列举单元——边界
+            {
+                break;
+            }
+            joined.push_str(nt);
+            body_end = k;
+            if re_quantified.is_match(&joined) {
+                return Some((joined, body_end));
+            }
+            k += 1;
+        }
+        None
+    };
+
     // #144 审查表接管（PDF 线性化附表——形式评审表/初评表等）：
     // review_table 装配消费的行（含孤立序号行）扩展到整段后从主循环剔除
     // （防段落重组双抽）；结构化条目在主循环后统一 REQ 化（表名行不剔除——
@@ -1206,6 +1243,36 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             let mut params = HashMap::new();
             params.insert("statement".to_string(), serde_json::json!(para));
             push_req(reqs, seq, "技术参数", None, para_anchors(i, pend), params, &f.name);
+        } else if re_list_cn.is_match(t)
+            && t.chars().count() <= 40
+            && t.ends_with('：')
+            && !format_chapter
+            && !is_checklist_doc(&para)
+            && !procedure_hit(&para)
+            && !is_template_shape(&para)
+            && category_resolved(&chapter, &subsection, chapter_start) == "技术参数"
+            && circled_head_absorb(i).is_some()
+        {
+            // #145（圈号子项一致性——松岭 GR-004 块级根因收口）：子项头行
+            // 「（2）光缆线路故障历时计算：」（短行 + 尾冒号 = ends_sentence
+            // 自成段的标题形态）与量化内容**分行**——头行段无 re_quantified
+            // （#266-C 不进）、内容行无圈号头（兜底不 push）→ 整条丢弃；
+            // 同型（1）（5）量化同块行而开 REQ，行为不一致实锤（松岭 15/16
+            // 唯一 MISS；issue #145 块级证据 blocks 614-616）。
+            // 修法：头行吸收同列举簇紧邻内容行整体判量化（circled_head_absorb
+            // ——量化跨行在场即以头行块位开 REQ）。statement = 头+内容拼接；
+            // 锚 = 头行段锚 + 内容行锚（逐行保真——para_anchors 同纪律）。
+            // 零激活纪律：无量化形态（纯文字子项头）保持沉默——
+            // extract_circled_subitem.rs 负例锁定。
+            let Some((joined, body_end)) = circled_head_absorb(i) else {
+                unreachable!("分支条件已确认 Some")
+            };
+            let mut anchors = para_anchors(i, pend);
+            anchors.extend(para_anchors(i + 1, body_end));
+            let mut params = HashMap::new();
+            params.insert("statement".to_string(), serde_json::json!(joined));
+            push_req(reqs, seq, "技术参数", None, anchors, params, &f.name);
+            veto_ctx = false;
         } else {
             // 非列举普通行终止否决语境（防语境流污染）——**长散文才杀**。
             // #68 阶段 4（F4）：原无条件终止在两种真实形态上误杀语境
