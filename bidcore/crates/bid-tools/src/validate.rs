@@ -27,7 +27,13 @@
 //!      `outline_total_chars()`（选中档位硬指标——产品级硬比较无容差；
 //!      #287 起随篇幅档位动态：默认 Conservative 1,200,000 ≈ 1422 页）；
 //!   8. `W_FORMAT_BASELINE`（MINOR）：格式条款零命中按工程基线（Lead
-//!      「不准硬编码」的降级告知面）。
+//!      「不准硬编码」的降级告知面）；
+//!   9. `E_AMOUNT_CONFLICT` / `E_SCHEDULE_CONFLICT` / `E_TERM_CONFLICT` /
+//!      `E_COMMITMENT_CONFLICT`（BLOCKER，#151）：全局一致性冲突（S-5 四
+//!      类——与 export 门 1i 同一真源 [`crate::review_wire::run_review_from_
+//!      store`]：章正文 + 参数响应账；导出决策行是 P8 时点注入，不在此
+//!      面）。#113 F3 实测：同一冲突面 P6 零金额面放行 vs P8 硬拦 = 先过
+//!      门后撞门——现在 DRAFTING 期即拦，失败留原态（#243）改稿通道开放。
 //! - **第二层（模型复核，可选）**——[`ModelReviewer`] trait 注入（表述质量/
 //!   逻辑连贯/偏离合理化/疑似过度承诺）；默认 [`NoModel`] 占位
 //!   （counts.model = 0——无 API key 的 e2e 面，与 draft 的 MockGenerator
@@ -53,7 +59,8 @@
 //! 导出门不消费记审面、独立复算（fail-closed）。
 //!
 //! scope：`"all"` | 叶 section_id 清单（局部复审面——过滤只作用于**章节级**
-//! 规则 3/4/6/7；全局级规则 1/2/5/8 恒全量——资格与否决没有「局部」语义）。
+//! 规则 3/4/6/7；全局级规则 1/2/5/8/9 恒全量——资格与否决、跨章一致性没有
+//! 「局部」语义）。
 
 use std::collections::HashSet;
 
@@ -157,6 +164,20 @@ impl ModelReviewer for NoModel {
 }
 
 // ---------------------------------------------------------------- 主入口
+
+/// CheckKind（全局柱四类）→ validate 规则码（稳定契约字面量——调用方按码
+/// 分支不解析 message）。未来新增全局类落兜底码 E_GLOBAL_CONFLICT——语义
+/// 面仍正确（BLOCKER + 门 1i 同源），码面后续批次再细化。
+fn global_conflict_rule_code(kind: crate::check::CheckKind) -> &'static str {
+    use crate::check::CheckKind;
+    match kind {
+        CheckKind::AmountConflict => "E_AMOUNT_CONFLICT",
+        CheckKind::ScheduleConflict => "E_SCHEDULE_CONFLICT",
+        CheckKind::TermConflict => "E_TERM_CONFLICT",
+        CheckKind::CommitmentConflict => "E_COMMITMENT_CONFLICT",
+        _ => "E_GLOBAL_CONFLICT",
+    }
+}
 
 /// 全量/局部校验（确定性先行 + 模型复核）。
 ///
@@ -429,6 +450,28 @@ pub fn validate_document(
     //      scope 局部复审不缩小它的视野：全稿总量是产品级硬指标）
     if let Some(f) = total_chars_below_min(store) {
         structural_f.push(f);
+    }
+
+    // ---- 规则 9（#151）：全局一致性冲突（全局级——恒全量）。与 export 门 1i
+    //      同一真源（review_wire::run_review_from_store：章正文 + 参数响应
+    //      账；导出决策行是 P8 时点注入，不在此面）。四类全局冲突恒
+    //      BLOCKER（废标级——跨章口径不一致，与门 1i 恒同口径）：#113 F3
+    //      的「先过门后撞门」自此在 DRAFTING 期即拦——失败留原态（#243），
+    //      改稿通道（draft_response_section / set_matrix_override / 证据
+    //      补绑）保持开放。局部柱（占位符/悬空引用/格式偏差）有意不进本
+    //      面：P6 既有规则码（W_PLACEHOLDER/E_CITATION_GHOST/W_CHARS_*）
+    //      已覆盖同域信号，双报只制造信号冲突。
+    for f in crate::review_wire::run_review_from_store(store).findings {
+        if !f.kind.is_global() {
+            continue;
+        }
+        structural_f.push(ValidationFinding {
+            rule_code: global_conflict_rule_code(f.kind).into(),
+            severity: "BLOCKER",
+            section_id: Some(f.section_id.clone()),
+            requirement_id: None,
+            message: f.message.clone(),
+        });
     }
 
     // ---- #187 四桶归位（Passed / Failed；semantic 未配置 → NotPerformed）
