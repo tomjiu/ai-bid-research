@@ -310,6 +310,11 @@ fn layer0_expected_cross_consistency() {
 
 /// 引擎态初始化（与 #251 pdf_engine_svc 相同口径：单件 PDF → 抽取 → 建矩阵 → 建纲）。
 fn outline_engine_svc() -> BidService {
+    outline_engine_svc_with(OutlineSpec::default())
+}
+
+/// [`outline_engine_svc`] 的自定义档位版（#131 退化面验收用）。
+fn outline_engine_svc_with(spec: OutlineSpec) -> BidService {
     let pdf = songling().join("tender/光纤租赁费招标文件.pdf");
     if skip_if_fixture_missing("songling_252_layer1", &[&pdf]) {
         panic!("层1 需要 PDF 原件（层0 已校验在位——此处到达即仓库结构损坏）");
@@ -334,7 +339,7 @@ fn outline_engine_svc() -> BidService {
     svc.store_mut().build_matrix().expect("矩阵");
     let _ = svc
         .store_mut()
-        .derive_and_set_outline(OutlineSpec::default())
+        .derive_and_set_outline(spec)
         .expect("建纲");
     svc
 }
@@ -641,4 +646,85 @@ fn fullchain_export_toc_alignment() {
         return; // SKIP（响亮横幅——层2 素材待 lead 提供，不伪装通过）
     }
     todo!("素材到位后实现：导出目录与大纲 L1/L2 对齐断言 + 页数实测（issue #252 验收 11 + #251 层2）")
+}
+
+// ---------------------------------------------------------------- AUD2-HIS-A1（#131）退化面分值比例保底
+
+/// #131 验收：松岭 120k（小目标退化档）重跑——评分优先政权恢复。
+///
+/// 审计阶段3真跑基线（#119）：target=120,000 时 22 评分叶底价 220k > target
+/// → 旧回退按 REQ 数均摊 → 14 否决/资格响应叶 30,915 字 vs 8 评分映射叶
+/// 14,000 字（25 分服务方案仅 2,500 字 = 2.1% 篇幅/19.2% 分值）——优先级
+/// 与设计意图完全倒置。
+///
+/// 修复后（分值比例保底，K=1.0，分母=标书总分 100 分含槽位 15 分）：
+/// - 守恒恒等：总配额 == 120,000（构造性，不依赖修正环）；
+/// - 评分章节（L1）合计占比 ≥ 分值占比带封顶容差（0.80——L2 承载 85 分
+///   /100，10k 封顶损失 ≤5 个百分点；基线 14k/120k ≈ 0.12 → ≥6.7 倍提升）；
+/// - 倒置修复：评分合计 > 行政合计（基线 14,000 < 30,915 的反向）。
+#[test]
+fn quota_131_songling_120k_degraded_scoring_priority() {
+    if skip_if_env_missing("songling_131_degraded", POPPLER_TEXT_TOOLS) {
+        return; // SKIP
+    }
+    let _g = engine_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let svc = outline_engine_svc_with(OutlineSpec {
+        target_total_chars: 120_000,
+        max_reqs_per_leaf: 8,
+    });
+    let store = svc.store();
+    let sections = store.sections();
+    let chapters = expected_chapters();
+
+    // 守恒恒等（#131 构造性守恒——旧回退依赖修正环，新回退构造上恒等）
+    let total = store.outline_total_chars();
+    eprintln!("[songling-131] outline_total_chars = {total}");
+    assert_eq!(total, 120_000, "守恒恒等：总配额 == target（退化面构造性守恒）");
+
+    // 评分/行政 L1 合计（与 pdf_engine_outline_quota_distribution 同口径）
+    let l1: Vec<&bid_domain::outline::OutlineNode> =
+        sections.iter().filter(|s| s.level == 1).collect();
+    let is_scoring = |t: &str| chapters.iter().any(|(ct, _, _)| t.contains(ct.as_str()));
+    let is_admin = |t: &str| is_admin_group(t);
+    let scoring_chars: u64 = l1
+        .iter()
+        .filter(|s| is_scoring(&s.title))
+        .map(|s| u64::from(s.target_chars))
+        .sum();
+    let admin_chars: u64 = l1
+        .iter()
+        .filter(|s| is_admin(&s.title))
+        .map(|s| u64::from(s.target_chars))
+        .sum();
+    let scoring_share = scoring_chars as f64 / total as f64;
+    let admin_share = admin_chars as f64 / total as f64;
+    eprintln!(
+        "[songling-131] 退化面分布: scoring={scoring_chars}({scoring_share:.3}) admin={admin_chars}({admin_share:.3})"
+    );
+
+    // 门 1：评分合计占比 ≥ 0.80（分值占比 85/100 − 封顶容差；基线 ≈ 0.12）
+    assert!(
+        scoring_share >= 0.80,
+        "#131 评分合计占比 {scoring_share:.3} < 0.80（分值占比 85% − 10k 封顶容差）——退化面分值比例保底回归"
+    );
+    // 门 2：倒置修复（审计实锤：14,000 < 30,915 → 必须反向）
+    assert!(
+        scoring_chars > admin_chars,
+        "#131 评分合计 {scoring_chars} 应 > 行政合计 {admin_chars}（审计基线 14,000 < 30,915 的倒置修复）"
+    );
+    // 门 3：25 分服务方案章节 ≥ 按分值占比的期望带（25/100 × 120k × 0.8 容差）
+    let service = l1
+        .iter()
+        .find(|s| s.title.contains("服务方案"))
+        .expect("服务方案章节在位");
+    eprintln!(
+        "[songling-131] 服务方案（25 分）L1 = {} 字（含 L2 子和）",
+        service.target_chars
+    );
+    assert!(
+        u64::from(service.target_chars) >= 120_000 * 25 / 100 * 8 / 10,
+        "#131 服务方案章节 {} 字 < 按分值占比期望带（25% × 120k × 0.8 = {}）",
+        service.target_chars,
+        120_000 * 25 / 100 * 8 / 10
+    );
 }

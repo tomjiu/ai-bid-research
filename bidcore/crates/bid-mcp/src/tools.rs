@@ -4802,18 +4802,22 @@ fn build_outline(svc: &mut BidService, args: Value) -> ToolResult {
             * u64::from(bid_domain::outline::MIN_SCORING_LEAF_CHARS)
             + slot_leaf_count * u64::from(bid_domain::scoring_outline::SLOT_FIXED_CHARS);
         let min_seen = fallback_leaves.iter().map(|(_, t)| u64::from(*t)).min().unwrap_or(0);
+        // AUD2-HIS-A1（#131）：政权切换（base_sum > target）响亮告警——
+        // 退化面已按分值比例保底（旧按 REQ 数均摊的优先级倒置已修），
+        // 本告警说明保底后仍有评分叶 < 细则下限与 80% 线的联动压低。
         outline_warnings.push(format!(
-            "配额回退：target_total_chars={} 低于评分叶底价和（{} 个评分叶 × {} + {} 个表格位 × {} = {}，\
-             未含行政/实质轨），{} 个评分叶配额被按比例压低（最低 {min_seen}）——它们的 \
-             80% 线（E_CHARS_BELOW_MIN）随之同步压低。建议 target_total_chars ≥ {floor_sum}，\
-             或显式确认接受压低",
+            "配额退化（政权切换）：target_total_chars={} 低于评分叶底价和（{} 个评分叶 × {} + {} 个表格位 × {} = {}，\
+             未含行政/实质轨）——评分叶底价不可全额满足，已按分值比例保底（{} 叶受影响，保底后最低 {min_seen}；\
+             K={}），它们的 80% 线（E_CHARS_BELOW_MIN）随之同步压低；非评分叶在剩余预算内均摊。\
+             建议 target_total_chars ≥ {floor_sum}，或显式确认接受保底配额",
             spec.target_total_chars,
             scoring_leaf_count,
             bid_domain::outline::MIN_SCORING_LEAF_CHARS,
             slot_leaf_count,
             bid_domain::scoring_outline::SLOT_FIXED_CHARS,
             floor_sum,
-            fallback_leaves.len()
+            fallback_leaves.len(),
+            bid_domain::outline::DEGRADED_SCORING_K_X1000 as f64 / 1000.0
         ));
     }
 
