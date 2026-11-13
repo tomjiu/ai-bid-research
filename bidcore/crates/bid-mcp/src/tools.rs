@@ -4382,18 +4382,26 @@ fn validate_bid_document(svc: &mut BidService, args: Value) -> ToolResult {
     Ok(out)
 }
 
-// ---------------------------------------------------------------- #243 校验状态安全与恢复
+// ---------------------------------------------------------------- #243/#152 校验状态安全与恢复
 
-/// `recover_validating_state` —— 历史异常态（VALIDATING + 缺章）的受支持恢复。
+/// `recover_validating_state` —— 受支持的状态恢复（#243 缺章异常态 +
+/// #152 门 1i 冲突双基础）。
 ///
 /// 背景（#243）：旧版校验在草稿未完成/校验失败时仍无条件推进 VALIDATING，
 /// 且 VALIDATING 态禁起草 → 死锁，用户被迫杀进程手改 db.json。本工具取代
 /// 那条不受支持的路径。
 ///
+/// 背景（#152，#113 F4）：全叶 DRAFTED 的健康 VALIDATING，门 1i 冲突
+/// 在案时改稿面结构性锁死（draft E_STATE / reopen 只收 ACCEPTED / 段级
+/// 改写只及污点叶）——第二基础「门 1i 冲突在案」（run_review_from_store
+/// 全局柱，与门 1i 同源；锚 DECISION 的决策面冲突不在此面：调整导出
+/// 决策参数即解，不须恢复）补齐该出口。
+///
 /// 壳层职责：参数校验（reason 非空白）→ 三件套（路由/guard——仅
 /// VALIDATING 态放行/乐观并发）→ 转发 `BidService::recover_validating_state`
-///（域层三重约束：仅 VALIDATING / 仅缺章 / 理由非空白；审计账 + 版本 +1 +
-/// checkpoint）→ 响应组装（recovery 审计记录 + 新版本号）。
+///（服务层基础判定：缺章 → 域层 #243 基础；无缺章 → 门 1i 冲突基础；
+/// 三重约束同构：仅 VALIDATING / 依据事实非空 / 理由非空白；审计账 +
+/// 版本 +1 + checkpoint）→ 响应组装（recovery 审计记录 + 新版本号）。
 ///
 /// 重复请求/超时重试语义：恢复成功后项目在 DRAFTING，重试被 guard 拒
 ///（E_STATE——状态门，非死锁态；起草面照常可用）。并发：MCP 服务串行
@@ -4416,13 +4424,17 @@ fn recover_validating_state(svc: &mut BidService, args: Value) -> ToolResult {
     let out = json!({
         // 恢复后的项目状态（恒 DRAFTING——起草面解锁）
         "status": svc.store().project().map(|p| p.status.as_str()).unwrap_or("UNKNOWN"),
-        // 审计记录（何时/为何/从哪到哪/当时缺哪些章）
+        // 审计记录（何时/为何/从哪到哪/依据基础+冲突锚或缺章快照）
         "recovery": {
             "at": rec.at,
             "from": rec.from.as_str(),
             "to": rec.to.as_str(),
             "reason": rec.reason,
             "missing_sections": rec.missing_sections,
+            // #152：恢复依据（missing_leaves | gate1i_conflicts）与冲突锚
+            // 快照（gate1i_conflicts 基础下非空——审计面新增字段，纯加法）
+            "basis": rec.basis,
+            "conflict_sections": rec.conflict_sections,
         },
         // 契约 §0：响应统一携带 project_version（恢复推进了版本，后续调用
         // 必须用新值，否则 E_CONFLICT）

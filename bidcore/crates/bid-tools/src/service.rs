@@ -2292,15 +2292,40 @@ impl BidService {
         Ok(report)
     }
 
-    /// `recover_validating_state` 业务半边（#243）：历史异常态恢复。
+    /// `recover_validating_state` 业务半边（#243 + #152 双基础）。
     ///
-    /// 域层裁决（三重约束：仅 VALIDATING / 仅缺章 / 理由非空白）见
-    /// [`DomainStore::recover_validating_to_drafting`]；本层只补持久化面
-    /// （恢复后 checkpoint——用户不再需要手改 db.json 才能续跑）。
+    /// 恢复基础判定在本层先行（依据事实的computed面在 bid-tools——域层
+    /// 无法调用 run_review）：① 缺章（#243 历史异常态——incomplete_leaf_ids
+    /// 非空）走 [`DomainStore::recover_validating_to_drafting`]；② 门 1i
+    /// 冲突在案（#152——run_review_from_store 全局柱非空，锚 DECISION 的
+    /// 决策面冲突不入此面）走
+    /// [`DomainStore::recover_validating_to_drafting_for_conflicts`]。
+    /// 两者皆无 → 域层拒（健康 VALIDATING 不构成恢复条件——通道不是任意
+    /// 回退门）。域层三重约束同构：仅 VALIDATING / 依据事实非空 / 理由
+    /// 非空白；本层补持久化面（恢复后 checkpoint——用户不再需要手改
+    /// db.json 才能续跑）。
     pub fn recover_validating_state(
         &mut self,
         reason: &str,
     ) -> Result<bid_domain::StateRecoveryRecord, ToolError> {
+        if self.store().incomplete_leaf_ids().is_empty() {
+            // #152：无缺章 → 试门 1i 冲突基础（全局柱锚去重序化——审计面
+            // 确定性；空清单由域层响亮拒）
+            let conflict_sections: Vec<String> = {
+                let mut seen = std::collections::BTreeSet::new();
+                for f in crate::review_wire::run_review_from_store(self.store()).findings {
+                    if f.kind.is_global() {
+                        seen.insert(f.section_id);
+                    }
+                }
+                seen.into_iter().collect()
+            };
+            let rec = self
+                .store_mut()
+                .recover_validating_to_drafting_for_conflicts(reason, &conflict_sections)?;
+            self.auto_checkpoint()?;
+            return Ok(rec);
+        }
         let rec = self.store_mut().recover_validating_to_drafting(reason)?;
         self.auto_checkpoint()?;
         Ok(rec)
