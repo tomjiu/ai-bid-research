@@ -70,7 +70,7 @@ def sha256_of(path: Path) -> str:
 # ---------------------------------------------------------------- 基础事实
 
 def run_subprocess(args, *, cwd=None, timeout=None) -> subprocess.CompletedProcess:
-    """subprocess 统一出口（#143）：显式 utf-8 + errors=replace。
+    """subprocess 统一出口（#143）：显式 utf-8 + errors=replace + 启动失败伪返回。
 
     根因：text=True 不带 encoding 时按系统 locale 解码（Windows 中文 =
     GBK）——子进程输出含非 GBK 字节（如 closeout Rust 面的 UTF-8 中文
@@ -82,6 +82,9 @@ def run_subprocess(args, *, cwd=None, timeout=None) -> subprocess.CompletedProce
       - 超时不抛——CompletedProcess 伪返回（returncode=124——GNU timeout
         惯例；stdout/stderr 带异常名与 partial 输出），裁定面照常走
         FAIL 分支，不静默；
+      - 启动失败（FileNotFoundError 等可执行不在位）不抛——伪返回
+        returncode=127（shell 惯例「command not found」），stdout 空、
+        stderr 带异常名与缺的可执行名——「失败可诊断不崩」；
       - stdout/stderr 恒为 str（None 防卫在消费面——本出口兜底 ""）。
     """
     try:
@@ -97,6 +100,18 @@ def run_subprocess(args, *, cwd=None, timeout=None) -> subprocess.CompletedProce
             args=args, returncode=124,
             stdout=f"[TimeoutExpired after {timeout}s] {partial_out}",
             stderr=f"[TimeoutExpired after {timeout}s] {partial_err}",
+        )
+    except FileNotFoundError as e:
+        return subprocess.CompletedProcess(
+            args=args, returncode=127,
+            stdout="",
+            stderr=f"[FileNotFoundError] 可执行不在位：{e}",
+        )
+    except OSError as e:  # noqa: BLE001 —— 权限/ENOENT 等启动面失败同口径
+        return subprocess.CompletedProcess(
+            args=args, returncode=127,
+            stdout="",
+            stderr=f"[OSError] 启动失败：{e}",
         )
     return subprocess.CompletedProcess(
         args=proc.args, returncode=proc.returncode,
@@ -153,7 +168,13 @@ def panel_baseline(run: bool, log) -> dict:
     proc = run_subprocess(cmd, cwd=REPO, timeout=7200)
     entry["duration_s"] = round(time.monotonic() - t0, 1)
     entry["exit_code"] = proc.returncode
-    log(redact((proc.stdout or "")[-4000:]))
+    # stdout/stderr 双面落日志（#143 Lead 复验根因：旧面只记 stdout——
+    # 子进程仅在 stderr 报错时错误完全不可见，无法自我定位）。
+    # 尾部各 4000 字符（与旧 stdout 面同量级；完整流在 closeout 面自身的
+    # rust-run.log / run.log）。
+    log(redact("[baseline stdout 尾部] " + (proc.stdout or "")[-4000:]))
+    log(redact("[baseline stderr 尾部] " + (proc.stderr or "")[-4000:]))
+    entry["stderr_tail"] = redact((proc.stderr or "")[-2000:])
     report = REPO / "artifacts/closeout-real-20261112/closeout-report.json"
     all_pass = None
     if report.exists():

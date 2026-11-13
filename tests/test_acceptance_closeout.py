@@ -229,6 +229,112 @@ class TestUtf8SubprocessRegression:
         assert (proc.stdout or "")[-4000:] != None  # noqa: E711
 
 
+# ---------------------------------------------------------------- #143 内层（Lead 重开面）真实回归
+
+_inner_spec = importlib.util.spec_from_file_location(
+    "closeout_real_test", REPO / "scripts" / "closeout_real_test.py")
+crt = importlib.util.module_from_spec(_inner_spec)
+_inner_spec.loader.exec_module(crt)
+
+
+class TestInnerSubprocessRegression:
+    """#143 内层（Lead 2026-11-14 复验重开面）。
+
+    Lead 受控反例复现路径：真实 run_rust/run_chain_b 函数 + 把 cargo/
+    m17 子进程换成实际输出 0xa0 字节的 Python 子进程。旧代码（text=True
+    无 encoding）内层 reader 即 UnicodeDecodeError → run_rust 拼接
+    TypeError(NoneType)；新代码显式 utf-8/errors=replace 全链不崩、
+    失败可诊断（stderr 落日志）。
+    """
+
+    def _fake_cargo_env(self, monkeypatch, stdout_bytes: bytes):
+        """受控替换：cargo 探测通过 + 真实 run_rust 起的子进程 = 直写
+        非法 UTF8 字节的 Python（模拟 GBK 平台上的 Rust 面输出）。"""
+        fake_cargo = REPO / "artifacts/fake-cargo.py"
+        fake_cargo.parent.mkdir(parents=True, exist_ok=True)
+        fake_cargo.write_text(
+            "import sys\n"
+            f"sys.stdout.buffer.write({stdout_bytes!r})\n"
+            "sys.stdout.flush()\n",
+            encoding="utf-8",
+        )
+        fake_cargo.chmod(0o755)
+        monkeypatch.setenv("PATH", str(fake_cargo.parent), prepend=":")
+        # cargo 解析路径：让 shutil.which 找到假 cargo
+        import shutil
+        monkeypatch.setattr(shutil, "which", lambda name: str(fake_cargo) if name == "cargo" else None)
+        return fake_cargo
+
+    def test_run_rust_non_gbk_bytes_no_crash_stderr_logged(self, monkeypatch, tmp_path):
+        """内层受控反例（Lead 复现路径）：cargo 子进程输出含 0xa0/0xff——
+        旧 run_rust 内层 reader UnicodeDecodeError → stdout=None 拼接
+        TypeError；新面不崩、exit 非 0 照常、stderr 尾部落 json。"""
+        monkeypatch.setattr(crt, "SPEC_PATH", tmp_path / "closeout-spec.json")
+        monkeypatch.setattr(crt, "OUT", tmp_path)
+        (tmp_path / "closeout-spec.json").write_text("{}", encoding="utf-8")
+        self._fake_cargo_env(
+            monkeypatch, b"\xa0cargo test \xff\xfe running\n")
+        status = crt.run_rust()
+        assert isinstance(status, dict)
+        assert status["ok"] is False  # 假 cargo exit 1（写完就崩——非零）
+        # 日志文件真实落盘（旧代码在此前已 TypeError 崩）
+        log_text = (tmp_path / "rust-run.log").read_text(encoding="utf-8")
+        assert "--- stderr ---" in log_text
+        rust_json = json.loads((tmp_path / "rust-run.json").read_text(encoding="utf-8"))
+        assert rust_json["exit"] != 0
+
+    def test_run_rust_timeout_partial_no_nonetype(self, monkeypatch, tmp_path):
+        """内层超时伪返回（124）：partial 输出保留、拼接不 TypeError。"""
+        monkeypatch.setattr(crt, "SPEC_PATH", tmp_path / "closeout-spec.json")
+        monkeypatch.setattr(crt, "OUT", tmp_path)
+        (tmp_path / "closeout-spec.json").write_text("{}", encoding="utf-8")
+        fake_cargo = REPO / "artifacts/fake-cargo-sleep.py"
+        fake_cargo.parent.mkdir(parents=True, exist_ok=True)
+        fake_cargo.write_text(
+            "import sys, time\n"
+            "sys.stdout.buffer.write(b'\\xa0 partial output before hang')\n"
+            "sys.stdout.flush()\n"
+            "time.sleep(60)\n",
+            encoding="utf-8",
+        )
+        fake_cargo.chmod(0o755)
+        # 真实子进程超时路径（helper 出口语义）：partial 保留、不 None
+        proc = crt.run_subprocess([sys.executable, str(fake_cargo)], timeout=1)
+        assert proc.returncode == 124
+        assert "TimeoutExpired" in proc.stdout
+        assert "partial output" in proc.stdout  # partial 保留（不 None）
+
+    def test_run_rust_missing_cargo_pseudo_127(self, monkeypatch, tmp_path):
+        """启动失败（cargo 不在位）伪返回 127 不崩——stderr 带异常名可诊断。"""
+        proc = crt.run_subprocess(["cargo-definitely-not-on-path-xyz", "--version"])
+        assert proc.returncode == 127
+        assert "FileNotFoundError" in proc.stderr
+        assert isinstance(proc.stdout, str)
+
+    def test_panel_baseline_stderr_only_visible(self, monkeypatch, tmp_path):
+        """Lead 根因 ②：子进程仅在 stderr 报错（stdout 空）——旧面只记
+        stdout，错误完全不可见；新面 stderr 落日志 + entry 留痕。"""
+        logs: list[str] = []
+
+        class FakeProc:
+            returncode = 1
+            stdout = ""
+            stderr = "review-error-only-on-stderr"
+
+        monkeypatch.setattr(ac, "run_subprocess", lambda *a, **k: FakeProc())
+        monkeypatch.setattr(ac.shutil, "which", lambda name: "/fake/cargo")
+        old_home = ac.Path.home
+        monkeypatch.setattr(ac.Path, "home", staticmethod(lambda: Path("/fake")))
+        try:
+            entry = ac.panel_baseline(run=True, log=logs.append)
+        finally:
+            ac.Path.home = old_home
+        joined = "\n".join(logs)
+        assert "review-error-only-on-stderr" in joined  # stderr 现在可见
+        assert entry["verdict"] == "FAIL"
+        assert "review-error-only-on-stderr" in entry["stderr_tail"]
+
+
 # ---------------------------------------------------------------- 结果 schema 结构
 
 class TestSchemaShape:

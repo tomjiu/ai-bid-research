@@ -77,3 +77,12 @@ python3 scripts/acceptance_closeout.py
 `tests/test_acceptance_closeout.py`；产物落
 `artifacts/acceptance-closeout/<UTC时间戳>/`（result.json / REPORT.md / run.log——
 日志密钥形已脱敏）。
+
+子进程编码纪律（#143 内层收口）：两层脚本（acceptance_closeout.py 与
+closeout_real_test.py）的所有子进程统一走 `run_subprocess` 出口——显式
+`encoding="utf-8", errors="replace"`（不依赖系统 locale，Windows cp936 下
+子进程输出含非 GBK 字节不崩）；超时伪返回 `returncode=124`（partial 输出
+保留）、启动失败伪返回 127（stderr 带异常名可诊断）；`stdout`/`stderr`
+恒为 str（NoneType 切片崩溃链斩断）。baseline 分栏日志记录 stdout 与
+stderr 双面尾部（各 4000 字符），`result.json` 留 `stderr_tail`——子进程
+仅在 stderr 报错时错误可见。
