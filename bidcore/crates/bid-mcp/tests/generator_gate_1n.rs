@@ -194,8 +194,11 @@ fn svc_drafted(tag: &str, gen_kind: &str) -> (BidService, String, PathBuf) {
         mk_scoring_req(),
     ])
     .unwrap();
+    // #131 后退化面（base_sum > target）非评分叶均摊剩余——小档位会让
+    // 行政叶配额压到个位数触发 1m 超篇幅门；本夹具用 50k 正常档
+    // （3 评分 L2 底价 30k + 行政底价 0.6k < 50k），门 1n 语义不受档位影响。
     let _ = svc
-        .prepare_outline_and_matrix(OutlineSpec { target_total_chars: 1_500, max_reqs_per_leaf: 8 })
+        .prepare_outline_and_matrix(OutlineSpec { target_total_chars: 50_000, max_reqs_per_leaf: 8 })
         .unwrap();
     // 评分叶在位（#252 评分驱动建纲——REQ-0003 经 OutlineDerived 映射绑定响应叶）
     let scoring_leaf: Option<String> = svc

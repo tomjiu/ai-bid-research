@@ -466,6 +466,16 @@ pub const BODY_CHARS_PER_REQ: u32 = 2_000;
 /// 无法展开论证；高于此值部分按分值权重分摊。
 pub const MIN_SCORING_LEAF_CHARS: u32 = 10_000;
 
+/// 退化面（底价和 > target）评分叶分值比例保底的 K 系数（×1000 定点，
+/// AUD2-HIS-A1/#131）。
+///
+/// 语义：退化面评分叶配额 = min(MIN_SCORING_LEAF_CHARS,
+/// target × 该叶分值/总分值 × K)。K 取让**评分合计占比 ≥ 分值占比**的
+/// 系数——K=1.0（1000）为建议值，松岭 65 页 120k 档实测校准（验收测试
+/// `quota_131_*`）：10k 封顶损失后评分合计占比 ≈ 分值占比。调 K 是产品
+/// 决策（抬 K = 挤压非评分轨），改动须带松岭重跑数据。
+pub const DEGRADED_SCORING_K_X1000: u32 = 1_000;
+
 /// 行政组关键词（#253 第二段**单一真源**——配额分类、校验门分级
 /// （W_CHARS_BELOW_MIN）、#263 songling 基线测试共用的判定面）。
 ///
@@ -778,9 +788,25 @@ fn distribute_surplus(quotas: &mut [u64], idxs: &[usize], weights: &[u64], surpl
 ///    单价 × 条数（[`MIN_LEAF_CHARS`] 叶下限保护）；
 /// 2. **让渡**（底价可负担时）：剩余预算 → 评分轨（按分值权重）→
 ///    实质轨（按条数）→ 行政轨（按条数）—— [`distribute_surplus`] 恒分尽；
-/// 3. **回退**（底价和 > target 的小目标退化面）：历史「按 REQ 数最大
-///    余数法」整树均摊——守恒与下限语义不变（#199 回归锁继续有效）。
-fn allocate_quotas(tracks: &[Track], weights: &[u64], counts: &[u64], target: u32) -> Vec<u64> {
+/// 3. **回退**（底价和 > target 的小目标退化面，AUD2-HIS-A1/#131 重设计）：
+///    **分值比例保底**——评分叶配额 = min([`MIN_SCORING_LEAF_CHARS`],
+///    target × 该叶分值/总分值 × K)；剩余预算非评分叶**均摊**（守恒构造性
+///    恒等：Σ = target——回退面不再依赖事后修正环）。无评分权重（total_w=0）
+///    → 保留历史「按 REQ 数最大余数法」（无评分面即无优先级倒置问题）。
+///
+///    背景（松岭 65 页真跑实锤，审计阶段3）：22 评分叶底价 220k > target
+///    120k → 旧回退按 REQ 数均摊 → 14 否决/资格叶 30,915 字 vs 8 评分叶
+///    14,000 字（25 分服务方案仅 2,500 字 = 2.1% 篇幅/19.2% 分值）——评分
+///    优先政权在小目标档整体失效，方向与设计意图完全相反；连带
+///    E_CHARS_BELOW_MIN 随配额缩水失效。政权切换告警由建纲工具层
+///    （build_outline 的配额回退 warnings）承载。
+fn allocate_quotas(
+    tracks: &[Track],
+    weights: &[u64],
+    counts: &[u64],
+    target: u32,
+    total_pts_x1000: u64,
+) -> Vec<u64> {
     let target = u64::from(target);
     let sum_counts: u64 = counts.iter().sum();
     // 底价：评分轨 = 细则下限/叶；行政/实质轨 = 单价 × 条数（叶下限保护）
@@ -823,11 +849,65 @@ fn allocate_quotas(tracks: &[Track], weights: &[u64], counts: &[u64], target: u3
             };
         distribute_surplus(&mut quotas, &idxs, &w, surplus);
     } else {
-        // 底价和超过 target（小目标退化面）→ 回退历史「按 REQ 数最大余数法」
-        quotas = counts
+        // 底价和超过 target（小目标退化面）→ AUD2-HIS-A1（#131）分值比例保底
+        let total_w: u64 = tracks
             .iter()
-            .map(|&c| (target * c / sum_counts).max(u64::from(MIN_LEAF_CHARS)))
-            .collect();
+            .zip(weights.iter())
+            .filter(|(t, _)| **t == Track::Scoring)
+            .map(|(_, w)| *w)
+            .sum();
+        if total_w > 0 {
+            // 分母 = 标书总分（含槽位分——调用方从评分表行 REQ 汇总；槽位
+            // 是固定配额不进 weights，漏计会让 L2 份额虚高 → 非评分轨被
+            // 挤压过头）。总分不可知（无分值面）时回退 Σw（叶内比例仍成立）。
+            let denom = total_pts_x1000.max(total_w);
+            // 评分叶：min(细则下限, target × w/denom × K)——10k 封顶为非评分
+            // 轨留出剩余（无封顶时 Σ比例份额 = target×K×Σw/denom，K=1 即
+            // 吞尽预算）。K（DEGRADED_SCORING_K_X1000）：评分合计占比 ≥
+            // 分值占比的校准系数——松岭 120k 实测 K=1.0（见 quota_131 测试）。
+            let k = u64::from(DEGRADED_SCORING_K_X1000);
+            let mut floor_sum = 0u64;
+            for i in 0..tracks.len() {
+                if tracks[i] == Track::Scoring {
+                    quotas[i] = (target * weights[i] * k / denom / 1000)
+                        .min(u64::from(MIN_SCORING_LEAF_CHARS));
+                    floor_sum += quotas[i];
+                }
+            }
+            // 非评分叶均摊剩余（守恒构造性恒等；退化面无 500 下限——剩余
+            // 不足时如实挤压，政权切换告警在工具层提示抬 target）
+            let other_idxs: Vec<usize> = tracks
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| **t != Track::Scoring)
+                .map(|(i, _)| i)
+                .collect();
+            if !other_idxs.is_empty() {
+                let remaining = target - floor_sum;
+                let n = other_idxs.len() as u64;
+                let base = remaining / n;
+                let extra = (remaining % n) as usize;
+                for (k, &i) in other_idxs.iter().enumerate() {
+                    quotas[i] = base + u64::from(k < extra);
+                }
+            } else {
+                // 无非评分叶：剩余按分值权重回分评分叶（守恒）
+                let idxs: Vec<usize> = tracks
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| **t == Track::Scoring)
+                    .map(|(i, _)| i)
+                    .collect();
+                let w: Vec<u64> = idxs.iter().map(|&i| weights[i]).collect();
+                distribute_surplus(&mut quotas, &idxs, &w, target - floor_sum);
+            }
+        } else {
+            // 无评分权重 → 历史「按 REQ 数最大余数法」（#199 回归锁语义）
+            quotas = counts
+                .iter()
+                .map(|&c| (target * c / sum_counts).max(u64::from(MIN_LEAF_CHARS)))
+                .collect();
+        }
     }
     // 守恒修正（回退路径的下限抬高可能超额；新路径构造上恒等，此环为 no-op）：
     // 差额按 REQ 占比回补/扣减（简单二次均衡，保总和 ≈ target）
@@ -1178,8 +1258,27 @@ pub fn derive_outline_with_mappings(
             }
         }
     }
+    // AUD2-HIS-A1（#131）：退化面分母 = 标书总分（章分值 + 槽位分值——
+    // 槽位 REQ 的 params.score；总分不可知时 allocate_quotas 内回退 Σw）
+    let total_pts_x1000: u64 = scoring_build
+        .as_ref()
+        .map(|b| {
+            let chapters_pts: f64 = b.chapters.iter().map(|c| c.score).sum();
+            let slots_pts: f64 = b
+                .slots
+                .iter()
+                .filter_map(|s| {
+                    reqs.iter()
+                        .find(|r| r.id == s.req_id)
+                        .and_then(|r| r.params.get("score"))
+                        .and_then(|v| v.as_f64())
+                })
+                .sum();
+            ((chapters_pts + slots_pts) * 1000.0).round() as u64
+        })
+        .unwrap_or(0);
     let mut quotas: Vec<u64> =
-        allocate_quotas(&tracks, &weights, &counts, effective_target as u32);
+        allocate_quotas(&tracks, &weights, &counts, effective_target as u32, total_pts_x1000);
     // 槽位固定配额（统一账尾——守恒：slots + effective_target == target）
     for _ in 0..n_slots {
         quotas.push(u64::from(crate::scoring_outline::SLOT_FIXED_CHARS));
@@ -1934,7 +2033,7 @@ mod tests {
             weights.push(0);
             counts.push(c);
         }
-        let quotas = allocate_quotas(&tracks, &weights, &counts, DEFAULT_TARGET_TOTAL_CHARS);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, DEFAULT_TARGET_TOTAL_CHARS, 0);
         assert_eq!(quotas.len(), tracks.len());
         let total: u64 = quotas.iter().sum();
         // 验收 5：守恒 ±5%（构造上恒等）
@@ -1976,7 +2075,7 @@ mod tests {
             }
         }
         // 确定性：同输入双算全等
-        let again = allocate_quotas(&tracks, &weights, &counts, DEFAULT_TARGET_TOTAL_CHARS);
+        let again = allocate_quotas(&tracks, &weights, &counts, DEFAULT_TARGET_TOTAL_CHARS, 0);
         assert_eq!(quotas, again, "分层配额确定性（可重放前提）");
     }
 
@@ -1986,7 +2085,7 @@ mod tests {
         let tracks = [Track::Scoring, Track::Scoring, Track::Scoring, Track::Admin];
         let weights = [0u64, 0, 0, 0];
         let counts = [1u64, 1, 1, 4];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 100_000);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, 100_000, 0);
         // 底价：3×10,000 + max(300×4, 500)=1,200 → 31,200；剩余 68,800 均摊 3 叶
         let per = quotas[0];
         assert!(per >= u64::from(MIN_SCORING_LEAF_CHARS), "零权重评分叶保底 ≥ 10,000: {per}");
@@ -2005,10 +2104,82 @@ mod tests {
         let tracks = [Track::Admin, Track::Body];
         let weights = [0u64, 0];
         let counts = [10u64, 6];
-        let quotas = allocate_quotas(&tracks, &weights, &counts, 12_000);
+        let quotas = allocate_quotas(&tracks, &weights, &counts, 12_000, 0);
         assert_eq!(quotas[0], 12_000 * 10 / 16, "回退：按 REQ 数均摊（历史行为）");
         assert_eq!(quotas[1], 12_000 * 6 / 16);
         assert_eq!(quotas.iter().sum::<u64>(), 12_000, "回退路径守恒");
+    }
+
+    // ---------------------------------------------------------------- AUD2-HIS-A1（#131）退化面分值比例保底
+
+    /// 退化面（底价和 > target）：评分叶分值比例保底 + 非评分均摊 + 守恒恒等。
+    ///
+    /// 构造：2 评分叶（25 分/5 分，Σw=30k）+ 2 行政叶；底价 10k+10k+1.2k+0.6k
+    /// = 21.8k > 20k → 退化。分母 = 标书总分 30k（K=1.0）：
+    /// - 评分叶0：min(10k, 20k×25k/30k=16,666) = 10,000（比例份额超下限→封顶）
+    /// - 评分叶1：min(10k, 20k×5k/30k=3,333) = 3,333（比例保底）
+    /// - 剩余 6,667 → 2 行政叶均摊 3,333/3,334
+    /// - Σ = 20,000 恒等（构造性守恒，不依赖修正环）
+    /// 评分合计占比 13,333/20,000 = 66.7% vs 分值占比 30k/30k = 100%——
+    /// 10k 封顶损失如实呈现（抬 K 只能抬未封顶叶；封顶叶诉求抬 target，
+    /// 由工具层政权切换告警承载）。
+    #[test]
+    fn quota_131_degraded_scoring_proportional_floor() {
+        let tracks = [Track::Scoring, Track::Scoring, Track::Admin, Track::Admin];
+        let weights = [25_000u64, 5_000, 0, 0];
+        let counts = [1u64, 1, 4, 2];
+        let quotas = allocate_quotas(&tracks, &weights, &counts, 20_000, 30_000);
+        assert_eq!(quotas[0], 10_000, "比例份额 16,666 > 下限 → 封顶 10k");
+        assert_eq!(quotas[1], 3_333, "比例保底：20k × 5k/30k");
+        assert_eq!(quotas[2] + quotas[3], 20_000 - 13_333, "非评分叶均摊剩余");
+        assert_eq!((quotas[2] as i64 - quotas[3] as i64).abs(), 1, "均摊差 ≤ 1（余数分配）");
+        assert_eq!(quotas.iter().sum::<u64>(), 20_000, "守恒构造性恒等");
+    }
+
+    /// 分母 = 标书总分（含槽位分）——漏计槽位会让 L2 份额虚高。
+    ///
+    /// 同上构造但总分 100k（模拟松岭：L2 承载 85 分、槽位 15 分固定配额
+    /// 不进 weights）：评分叶0 = min(10k, 20k×25k/100k=5,000)=5,000——
+    /// 分母从 30k → 100k，份额 16,666 → 5,000，非评分剩余从 6,667 → 15,000。
+    #[test]
+    fn quota_131_denominator_is_tender_total_including_slots() {
+        let tracks = [Track::Scoring, Track::Scoring, Track::Admin, Track::Admin];
+        let weights = [25_000u64, 5_000, 0, 0];
+        let counts = [1u64, 1, 4, 2];
+        let quotas = allocate_quotas(&tracks, &weights, &counts, 20_000, 100_000);
+        assert_eq!(quotas[0], 5_000, "分母含槽位分：20k × 25k/100k");
+        assert_eq!(quotas[1], 1_000, "20k × 5k/100k");
+        assert_eq!(quotas.iter().sum::<u64>(), 20_000, "守恒");
+        // 非评分剩余 14,000 → 均摊 7,000/7,000
+        assert_eq!(quotas[2], 7_000);
+        assert_eq!(quotas[3], 7_000);
+    }
+
+    /// 退化面无评分权重 → 历史按 REQ 数最大余数法（#199 回归锁语义保持）。
+    #[test]
+    fn quota_131_degraded_no_scoring_weights_keeps_legacy() {
+        let tracks = [Track::Scoring, Track::Scoring, Track::Admin];
+        let weights = [0u64, 0, 0];
+        let counts = [1u64, 1, 10];
+        let quotas = allocate_quotas(&tracks, &weights, &counts, 3_000, 0);
+        // 底价 10k+10k+3k > 3k → 退化；total_w=0 → 旧行为
+        assert_eq!(quotas[0], 500, "旧路径 MIN_LEAF_CHARS 下限（回退后修正环收尾）");
+        assert_eq!(quotas[1], 500);
+        assert!(quotas.iter().sum::<u64>() <= 3_000 + 500, "修正环收尾（target 过小时的接受偏差面）");
+    }
+
+    /// 退化面全评分叶：剩余按分值权重回分（守恒 + 权重比例）。
+    #[test]
+    fn quota_131_degraded_all_scoring_surplus_by_weight() {
+        let tracks = [Track::Scoring, Track::Scoring];
+        let weights = [30_000u64, 10_000];
+        let counts = [1u64, 1];
+        // 底价 20k > 16k → 退化；分母 Σw=40k：min(10k, 16k×30k/40k=12k)=10k；
+        // min(10k, 16k×10k/40k=4k)=4k → 剩余 2k 按权重 3:1 → 11.5k/4.5k
+        let quotas = allocate_quotas(&tracks, &weights, &counts, 16_000, 40_000);
+        assert_eq!(quotas[0], 11_500, "10k 封顶 + 剩余按权重 3/4");
+        assert_eq!(quotas[1], 4_500, "比例保底 + 剩余按权重 1/4");
+        assert_eq!(quotas.iter().sum::<u64>(), 16_000, "守恒");
     }
 
     /// 行政分类面（单一真源 is_admin_group——配额/门禁/基线测试三处共用）。
