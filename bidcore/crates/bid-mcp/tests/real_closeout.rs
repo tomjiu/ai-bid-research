@@ -599,10 +599,15 @@ fn run_material(base: &Path, repo_root: &Path, run: &RunSpec) -> Value {
     // ⑧ 导出（成品 docx）
     let t = Instant::now();
     let out_name = format!("out/投标文件-{}.docx", run.id);
+    // 门 1n（#130 CHN-01，PR #139）适配：closeout 工程链的起草面是 mock 确定性
+    // 生成器（诚实边界：字数/引用面为门禁口径非内容质量口径——真 LLM 通路是
+    // #113/run_real_llm_path.sh 的独立边界）。门语义 = mock 评分叶不得**冒充**
+    // 正式标书导出——工程链测试显式豁免过门（豁免理由即审计面记录，非静默）。
     let r = ok_result(
         call(&mut svc, "export_bid_document", json!({
             "profile": run.profile.clone(),
             "max_overrun_pct": run.max_overrun_pct,
+            "waive_scoring_leaf_generator": "closeout 工程链真测：评分叶 mock 确定性起草（工程接线验收口径——真 LLM 面独立登记 #113，不在本面宣称）",
             "project_id": &pid, "format": "docx", "output_path": out_name,
         })),
         &run.id,
