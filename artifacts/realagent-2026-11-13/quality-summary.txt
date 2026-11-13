@@ -1,0 +1,3 @@
+summary: {"char_deviation_pct": 16.6, "char_target": 48000, "char_total": 55946, "drafted": 47, "dup_max_similarity": 0.0, "dup_pairs": 0, "failed": 0, "out_of_band": 20, "pending": 0, "total": 47, "unanchored_total": 377, "uncovered_req_total": 8}
+needs_human: ["SEC-0010", "SEC-0013", "SEC-0014", "SEC-0018", "SEC-0020", "SEC-0022", "SEC-0025", "SEC-0031", "SEC-0032", "SEC-0033", "SEC-0034", "SEC-0036", "SEC-0037", "SEC-0041", "SEC-0044", "SEC-0047", "SEC-00
+readiness: {"blockers": 0, "evidence_missing": [], "evidence_missing_count": 0, "not_built": false, "ready": true, "unresponded": [], "unresponded_count": 0}

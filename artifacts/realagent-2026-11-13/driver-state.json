@@ -1,0 +1,285 @@
+{
+ "project_id": "PRJ-0001",
+ "actor": "agent-zai",
+ "main_file": "A-telecom-huaian-主文件.docx",
+ "main_sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd",
+ "star_missing": {
+  "count": 2,
+  "detail": [
+   {
+    "block_idx": 77,
+    "page": null,
+    "text": "第四章 ★商务规范书"
+   },
+   {
+    "block_idx": 78,
+    "page": null,
+    "text": "★第五章 技术规范书"
+   }
+  ],
+  "handling": "零标记正则兜底 + 导出豁免（章标题装饰，设计内）"
+ },
+ "evidence": [
+  {
+   "ev_id": "EV-0060",
+   "kind": "qualification",
+   "title": "电子与智能化工程专业承包二级资质证书",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  },
+  {
+   "ev_id": "EV-0061",
+   "kind": "qualification",
+   "title": "营业执照",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  },
+  {
+   "ev_id": "EV-0062",
+   "kind": "performance",
+   "title": "类似业绩合同-智慧园区弱电工程",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  }
+ ],
+ "req_total": 371,
+ "draft": {
+  "stats": [
+   {
+    "sid": "SEC-0007",
+    "words": 1037,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0008",
+    "words": 1164,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0009",
+    "words": 945,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0010",
+    "words": 786,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0011",
+    "words": 607,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0012",
+    "words": 1239,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0013",
+    "words": 1543,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0014",
+    "words": 1463,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 1017,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0016",
+    "words": 1230,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0017",
+    "words": 1011,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 829,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0019",
+    "words": 970,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0020",
+    "words": 1508,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0021",
+    "words": 1271,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 824,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0023",
+    "words": 1231,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0024",
+    "words": 1036,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0025",
+    "words": 1666,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0026",
+    "words": 1146,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0027",
+    "words": 493,
+    "citations": 3
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 1060,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0030",
+    "words": 1058,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0031",
+    "words": 1481,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0032",
+    "words": 1709,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0033",
+    "words": 1155,
+    "citations": 0
+   },
+   {
+    "sid": "SEC-0034",
+    "words": 1806,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0035",
+    "words": 1151,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 1671,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0037",
+    "words": 317,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0039",
+    "words": 434,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1598,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 1198,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 1102,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0044",
+    "words": 2003,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0045",
+    "words": 1037,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0046",
+    "words": 889,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0047",
+    "words": 2219,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0048",
+    "words": 2259,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0049",
+    "words": 1303,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0050",
+    "words": 1700,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0051",
+    "words": 1322,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0052",
+    "words": 980,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0053",
+    "words": 1303,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0055",
+    "words": 766,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0057",
+    "words": 357,
+    "citations": 3
+   },
+   {
+    "sid": "SEC-0059",
+    "words": 1052,
+    "citations": 7
+   }
+  ]
+ }
+}
