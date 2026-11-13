@@ -176,6 +176,11 @@ python3 -m pytest
 # 研究管道（#601）——一条命令从公告源到分析报告：
 python main.py pipeline --source announcements/ --db data/bids.db --incremental --html
 # （离线可跑：--no-llm 或未配置 API key 时自动降级直通模式）
+
+# 收官验收（#115）——单命令四分栏（PASS/FAIL/SKIP/BLOCKED/NOT_RUN）：
+# baseline 工程链真跑 / songling67 金标准召回 / multifile 多件盘点 / realagent 真实 LLM 登记；
+# 严格模式默认：跳过核心门（如真实 LLM 未执行）不可宣称收官——整体 FAIL。
+python3 scripts/acceptance_closeout.py
 ```
 
 ### 环境门（重要）

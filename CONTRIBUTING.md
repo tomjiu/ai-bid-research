@@ -61,6 +61,19 @@ python3 scripts/run_tests.py
 # Python 研究工具链单元测试（src/ + tests/，45 用例——与上面 Rust 门禁链相互独立；
 # 非生产链路，边界见 #563（docs/PYTHON-BOUNDARY.md））
 python3 -m pytest
+
+# 收官验收（#115——独立入口，五态分栏：PASS/FAIL/SKIP/BLOCKED/NOT_RUN）
+# 严格模式默认：任一分栏 FAIL/BLOCKED/NOT_RUN → 整体 FAIL（exit 1）——
+# 跳过核心门不可宣称收官；--allow-skip 供非收官自查（豁免留痕可追踪）。
+python3 scripts/acceptance_closeout.py
 ```
 
 两侧对「环境缺件」的行为一致：**SKIP（显式登记）而非 FAIL**。
+
+收官验收的四分栏与对应挂靠：`baseline`（工程链真测重放——closeout_real_test.py
+--all 全链真跑）/ `songling67`（#112 松岭素材在位性 + 16 条金标准 needle 召回）/
+`multifile`（#114 多件素材齐套盘点）/ `realagent`（#113 真实 LLM 面登记——
+未执行即 NOT_RUN）。结果 schema 与正负例自测见
+`tests/test_acceptance_closeout.py`；产物落
+`artifacts/acceptance-closeout/<UTC时间戳>/`（result.json / REPORT.md / run.log——
+日志密钥形已脱敏）。
