@@ -455,3 +455,27 @@ fn real_api_smoke_if_key_present() {
     assert_eq!(usage["calls"].as_u64().unwrap(), 1);
     assert!(usage["total_tokens"].as_u64().unwrap() > 0);
 }
+
+// ---------------------------------------------------------------- #154 决策承诺句（#113 F6）
+
+/// #154（#113 F6）：起草指令带投标决策参数（工期/报价/有效期）时，
+/// system 面必含承诺句纪律（数值一致的显式承诺句）——gate 1j 的比对物
+/// 从此有数据路径。真实 LLM 行为验收走 #113 复跑（依赖 API key），
+/// 本测锁请求组装面（零网络）。
+#[test]
+fn decision_params_carry_commitment_discipline() {
+    let (ft, log) = FakeTransport::scripted(vec![Ok(envelope("# 施工组织设计\n\n正文。", 10, 10))]);
+    let mut inp = input();
+    inp.instructions = Some(
+        "投标决策（正文须含数值一致的显式承诺句）：工期 37 日历天；投标总报价 4800000 元；投标有效期 90 天。".into(),
+    );
+    let (r, reqs) = generate_logged(ft, log, None, &inp);
+    r.unwrap();
+    let sys = reqs[0]["messages"][0]["content"].as_str().unwrap();
+    assert!(sys.contains("投标决策参数"), "system 面须点名决策参数纪律：{sys}");
+    assert!(sys.contains("显式承诺句"), "system 面须要求承诺句形态：{sys}");
+    assert!(sys.contains("不得改写"), "数值保真纪律须在场：{sys}");
+    let user = reqs[0]["messages"][1]["content"].as_str().unwrap();
+    assert!(user.contains("工期 37 日历天"), "素材面须承载指令中的决策值：{user}");
+    assert!(user.contains("4800000"), "报价决策值须进素材面：{user}");
+}
