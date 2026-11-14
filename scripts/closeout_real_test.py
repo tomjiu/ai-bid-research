@@ -30,8 +30,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -43,6 +45,51 @@ OUT = REPO / "artifacts" / "closeout-real-20261112"
 SPEC_PATH = OUT / "closeout-spec.json"
 SEED = 20261112
 N_PICKS = 3
+
+
+def run_subprocess(args, *, cwd=None, env=None, timeout=None) -> subprocess.CompletedProcess:
+    """subprocess 统一出口（#143 内层——Lead 复验指名的同根因收口）。
+
+    旧面 text=True 无 encoding：Windows GBK locale 下子进程输出含非
+    GBK 字节即 reader 线程 UnicodeDecodeError；超时路径 stdout=None，
+    拼接 `proc.stdout + ...` 即 TypeError(NoneType)。与验收面
+    acceptance_closeout.run_subprocess 同语义：
+      - encoding=utf-8 + errors=replace 显式（不依赖系统 locale）；
+      - 超时伪返回 returncode=124（partial 输出保留在 stdout/stderr）；
+      - 启动失败（可执行不在位）伪返回 127（stderr 带异常名）；
+      - stdout/stderr 恒为 str（None 防卫兜底 ""）。
+    """
+    try:
+        proc = subprocess.run(
+            args, cwd=cwd, env=env, timeout=timeout,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+    except subprocess.TimeoutExpired as e:
+        partial_out = e.stdout if isinstance(e.stdout, str) else (e.stdout or b"").decode("utf-8", "replace")
+        partial_err = e.stderr if isinstance(e.stderr, str) else (e.stderr or b"").decode("utf-8", "replace")
+        return subprocess.CompletedProcess(
+            args=args, returncode=124,
+            stdout=f"[TimeoutExpired after {timeout}s] {partial_out}",
+            stderr=f"[TimeoutExpired after {timeout}s] {partial_err}",
+        )
+    except FileNotFoundError as e:
+        return subprocess.CompletedProcess(
+            args=args, returncode=127,
+            stdout="",
+            stderr=f"[FileNotFoundError] 可执行不在位：{e}",
+        )
+    except OSError as e:  # noqa: BLE001 —— 启动面失败同口径伪返回
+        return subprocess.CompletedProcess(
+            args=args, returncode=127,
+            stdout="",
+            stderr=f"[OSError] 启动失败：{e}",
+        )
+    return subprocess.CompletedProcess(
+        args=proc.args, returncode=proc.returncode,
+        stdout=proc.stdout if proc.stdout is not None else "",
+        stderr=proc.stderr if proc.stderr is not None else "",
+    )
 
 # 真件决策参数（探自原文——生成规格时嵌入；键=sha256 前 12 位）
 MATERIAL_OVERRIDES = {
@@ -160,11 +207,13 @@ def docx_text(p: Path) -> str:
 def run_chain_b() -> dict:
     """B 面：m17 引擎真跑 + 评测器独立事实再推导（不信任被测引擎）。"""
     # 1) 引擎面：m17_real_chain 全链（解析→变更→影响面→复验→GT 核对）
-    proc = subprocess.run(
+    proc = run_subprocess(
         [sys.executable, "scripts/m17_real_chain.py"],
-        cwd=REPO, capture_output=True, text=True, timeout=600,
+        cwd=REPO, timeout=600,
     )
     engine_ok = proc.returncode == 0
+    if proc.stderr:
+        (OUT / "chain-b-stderr.log").write_text(proc.stderr, encoding="utf-8")
     report_path = REPO / "real-corpus/gov-procurement/artifacts/real-chain-report.json"
     engine_report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else None
 
@@ -221,23 +270,49 @@ def run_chain_b() -> dict:
 
 # ---------------------------------------------------------------- A/C 面真跑
 
+def resolve_cargo() -> str:
+    """cargo 可执行解析（Lead 2026-11-14 #161 审核：固定调 \"cargo\" 让
+    PATH shim/受控夹具无法被选中——run_rust 必须真用 which）。
+
+    优先级：shutil.which(\"cargo\")（PATH 真搜索——受控测试把 shim
+    目录 prepend 进 PATH 即可被选中）→ ~/.cargo/bin/cargo 兜底 →
+    None（调用方 die 可诊断）。
+    """
+    got = shutil.which("cargo")
+    if got:
+        return got
+    home_cargo = Path.home() / ".cargo/bin/cargo"
+    return str(home_cargo) if home_cargo.exists() else ""
+
+
 def run_rust() -> dict:
     env_spec = SPEC_PATH.exists()
     if not env_spec:
         return {"ok": False, "error": "规格缺失——先 --emit-spec"}
+    cargo = resolve_cargo()
+    if not cargo:
+        return {"ok": False, "exit": 127,
+                "error": "cargo 不在位（shutil.which 与 ~/.cargo/bin 均未命中"
+                         "——rust-env.sh 可自愈）"}
     cmd = [
-        "cargo", "test", "-p", "bid-mcp", "--test", "real_closeout", "--", "--nocapture",
+        cargo, "test", "-p", "bid-mcp", "--test", "real_closeout", "--", "--nocapture",
     ]
+    cargo_dir = str(Path(cargo).resolve().parent)
     env = {
-        **dict(__import__("os").environ),
+        **dict(os.environ),
         "CLOSEOUT_SPEC": str(SPEC_PATH),
-        "PATH": f"{Path.home() / '.cargo/bin'}:{__import__('os').environ.get('PATH', '')}",
+        # os.pathsep 跨平台拼接（Lead 点名：硬编码冒号在 Windows 无效）
+        "PATH": cargo_dir + os.pathsep + os.environ.get("PATH", ""),
         "CARGO_PROFILE_DEV_DEBUG": "0", "CARGO_PROFILE_TEST_DEBUG": "0",
         "CARGO_INCREMENTAL": "0",
     }
-    proc = subprocess.run(cmd, cwd=REPO / "bidcore", env=env, capture_output=True, text=True, timeout=3600)
-    (OUT / "rust-run.log").write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
-    status = {"ok": proc.returncode == 0, "exit": proc.returncode}
+    proc = run_subprocess(cmd, cwd=REPO / "bidcore", env=env, timeout=3600)
+    # NoneType 防卫（#143）：run_subprocess 恒回 str，此处拼接不再
+    # TypeError(NoneType + str)——超时/启动失败伪返回也能照常落日志。
+    (OUT / "rust-run.log").write_text((proc.stdout or "") + "\n--- stderr ---\n" + (proc.stderr or ""),
+                                       encoding="utf-8")
+    status = {"ok": proc.returncode == 0, "exit": proc.returncode,
+              "stderr_tail": (proc.stderr or "")[-2000:] if proc.stderr else ""}
     (OUT / "rust-run.json").write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
     return status
 
