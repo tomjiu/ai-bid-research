@@ -577,8 +577,9 @@ out: { artifact:{url, sha256, size}, content_version_snapshot,
      · 1h 评分项未映射门（#88 审计 F-07）：unmapped_scoring_items 非空
        （装配走 scoring_wire::build_scorer 单一真源——与 score_document
        的 unmapped 面恒同口径；明细截断 10 项）→ 拒——评委无从给分 =
-       按缺项计零；解决通道 = upsert_scoring_mapping 显式映射，或
-       waive_unmapped_scoring 非空理由显式豁免（理由进 warnings）。
+       按缺项计零；解决通道 = map_scoring_item（MCP 写面，#153）逐项
+       显式映射，或 waive_unmapped_scoring 非空理由显式豁免（理由进
+       warnings）。
      · 1i 全局一致性冲突门（#88 审计 F-05——#423 四类冲突 Blocker 进导出
        门，此前只读不拦）：金额/工期/术语/承诺跨面冲突（run_review_from_
        store 单一真源——与 check_bid_quality 恒同口径）→ 拒；**无豁免
@@ -1034,8 +1035,8 @@ out: { project_id, diagnostic_only(true), result_kind("rule_heuristic"),
        非空 = 有评分项未映射章节，总分可能偏低；价格项不入——价格分不依赖
        章节映射）, request_id }
 语义: B2 SectionScorer 只调用不改（四维规则判定——覆盖度/字数/证据/具体性）。
-       #224 多对多：同一评分项可映射多章节（ScoringMapping 账本——域层
-       upsert_scoring_mapping 登记，MCP 写面后续 issue）：本章该项满分 =
+       #224 多对多：同一评分项可映射多章节（ScoringMapping 账本——MCP
+       写面 map_scoring_item（#153）登记 / 域层 upsert_scoring_mapping）：本章该项满分 =
        原满分 × weight_share（跨 2 章 0.6/0.4 → 两章该项满分 12/8）——
        同一项跨章各算一次导致总分虚高的主防；单映射 share=1.0 与历史行为
        逐位一致；rationale 带「摊分N%」说明（share≠1.0 时）。
@@ -1711,6 +1712,37 @@ out: { project_id,
 明确不做: 不自动补写（只报告——补写走 rewrite_section_segment /
       append_section_segment 后复跑本工具）；不做语义判档（#186 判档
       接入前的诚实口径）。
+
+## 27-A. map_scoring_item（#153/#113 F5 评分项→章节显式映射 · 写）
+
+```
+in : { project_id, req_id(评分项 REQ-*——须评分项/否决项类别),
+       section_id(被映射章节 SEC-*), weight_share(∈ (0,1]；跨章节分摊
+       合计 ≤ 1.0——#224 聚合不变量域层硬校验),
+       anchor{ excerpt(必填非空白——映射依据摘录，溯源面：分数→评分项→
+       规则原文；建议引用评分细则行原文), file?(缺省 agent:map_scoring_item
+       ——诚实面：未引文件即明示 Agent 推导), kind?(缺省 agent),
+       locator?, page?, line? },
+       evidence_refs?([EV-*…——每个须已 register_evidence，幽灵引用拒收]),
+       project_version? }
+out: { mapping:{ id("SM-xxxx"), req_id, section_id, weight_share,
+       created_from:"AGENT_SUBMITTED", evidence_refs, source_anchor },
+       unmapped_scoring_items_left(映射后未映射评分项计数——0 = 门 1h
+       零豁免放行的数据面；口径 = scoring_wire::build_scorer 单一真源),
+       next, project_version, request_id }
+语义: 评分项→大纲章节显式映射的 MCP 写面（#153——#113 F5 的根：映射
+      此前只有域层 API，外部 Agent 纯 MCP 驱动评分项悬空 → 门 1h 必豁免
+      → 评分项响应面系统性缺失）。包装域层 upsert_scoring_mapping：
+      AGENT_SUBMITTED 落账 + SM-xxxx 签发 + content_version bump +
+      checkpoint（映射即落盘）。幂等键 (req_id, section_id)：重提 = 更新
+      份额/锚/证据（同 id 不追加行）；全字段等值重提不制造假版本。
+      校验全在域层 fail-loud：非评分类别 / 孤儿章节 / 幽灵证据 /
+      份额合计超限（0.7+0.7 拒）各面响亮拒。
+窗口: MATRIX_READY+（MatrixReady/EvidenceBound/Drafting/Validating/
+      Reviewing/ReadyToExport/Exported——大纲已建即可映射，与
+      set_matrix_override 同窗口哲学：门 1h 的 blocking 最后能解的地方
+      映射面都必须开放）。
+```
 
 ## 28. recommend_length_profile（#287 篇幅档位推荐 · 只读 + #133 规模因子）
 

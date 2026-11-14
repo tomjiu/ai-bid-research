@@ -317,6 +317,35 @@ fn input_schema(name: &str) -> Value {
             },
             "required": ["project_id"]
         }),
+        // #153（#113 F5）：评分项→章节显式映射的 MCP 写面——包装域层
+        // upsert_scoring_mapping（AgentSubmitted 落账 + SM-xxxx 签发）。
+        // 幂等键 (req_id, section_id)：重提更新份额/锚/证据，不追加行。
+        "map_scoring_item" => json!({
+            "type": "object",
+            "description": "评分项→大纲章节显式映射（#153——门 1h 的正门通道：纯 MCP 驱动评分项不再悬空，导出零豁免）。同评分项可跨多章节分摊（各章 weight_share 合计 ≤ 1.0——聚合不变量域层硬校验）；幂等键 (req_id, section_id)，重提 = 更新非追加",
+            "properties": {
+                "project_id": pid,
+                "req_id": {"type": "string", "description": "评分项 REQ-* id（须为评分项/否决项类别——其余类别不进评分面）"},
+                "section_id": {"type": "string", "description": "被映射章节 SEC-*（须已建纲——映射是评分面的联结，不动章节正文）"},
+                "weight_share": {"type": "number", "minimum": 0.0, "maximum": 1.0, "exclusiveMinimum": 0.0, "description": "该章节承载的权重占比 ∈ (0,1]（单章节映射恒 1.0；跨章节分摊时各章合计 ≤ 1.0）"},
+                "anchor": {
+                    "type": "object",
+                    "description": "映射依据锚（溯源面：分数 → 评分项 → 规则原文——建议引用评分细则行原文）",
+                    "properties": {
+                        "excerpt": {"type": "string", "description": "依据摘录（必填非空白——不可审计的映射不成映射）"},
+                        "file": {"type": "string", "description": "来源文件名（缺省 agent:map_scoring_item——诚实面：未引文件即明示是 Agent 推导）"},
+                        "kind": {"type": "string", "description": "锚类型（缺省 agent；引规则原文用 para/table）"},
+                        "locator": {"type": "string", "description": "定位（如「第四章 评标办法」）"},
+                        "page": {"type": "integer", "description": "页号（可选）"},
+                        "line": {"type": "integer", "description": "行号（可选）"}
+                    },
+                    "required": ["excerpt"]
+                },
+                "evidence_refs": {"type": "array", "items": {"type": "string"}, "description": "支撑该映射的证据 EV-* 清单（可选——每个须已 register_evidence，幽灵引用拒收）"},
+                "project_version": pv
+            },
+            "required": ["project_id", "req_id", "section_id", "weight_share", "anchor"]
+        }),
         "get_compliance_matrix" => json!({
             "type": "object",
             "properties": {
@@ -956,6 +985,7 @@ pub(crate) fn describe(name: &str) -> &'static str {
         "reopen_section" => "ACCEPTED 章节重开（#321——→Revising+dirty，重导前修订面；非 ACCEPTED 拒；重开后需重过 pre_export_confirm）",
         "set_param_responses" => "参数应答批量写入（#321——技术参数偏离表唯一录入面；偏离判定派生态 derive_deviation 单一真源，导出时自动逐行判定；幂等）",
         "check_scoring_coverage" => "只读：评分细则逐条响应覆盖检查（#318——细则拆点（触发词+顿号枚举的字面挖掘）对映射章节正文做子串命中（纯正文——建纲标题不算，防标题派生自命中的伪覆盖）；criteria[] 逐细则 points[]{point,hit_section} 漏点即扣分面；summary 建议扣分=Σ(满分×未覆盖比)启发式；notes 明示字面口径局限（语义等价表述不识别）；只报不补——补写走 rewrite_section_segment/append_section_segment）",
+        "map_scoring_item" => "写：评分项→章节显式映射（#153/#113 F5——包装 upsert_scoring_mapping，AGENT_SUBMITTED 落账 + SM-xxxx 签发；跨章节分摊 weight_share 合计 ≤ 1.0 聚合硬校验；幂等键 (req_id, section_id) 重提更新；门 1h 正门通道，纯 MCP 驱动不再必豁免；DRAFTING+）",
         "register_performance" => "业绩材料库登记（#315——跨项目资产：库文件在项目工作区之外（BID_PERF_LIB/用户目录），无项目路由建项目前可维护；批量 + 语义幂等（四元组命中回显既有 id）；owner_name = 投标人主体（证据 subject_name 默认源）",
         "list_performance" => "业绩材料库列表（#315——只读：标签/关键词/金额窗/日期过滤；行含 client_type 推断；无项目路由）",
         "recommend_performance" => "业绩匹配推荐（#315——只读：标签重叠 40%/金额规模 30%/近三年 20%/客户类型 10% 四因子确定性打分，缺信号弃权重归一；reasons 逐因子人读依据 + suggested_section 建议章节；REQUIREMENTS_EXTRACTED+）",
@@ -1007,6 +1037,8 @@ fn is_implemented(name: &str) -> bool {
             // 漏登会让 mang-app diag 的动态断言 implemented==TOOL_NAMES 必红，
             // 且该测试只在 Windows CI 执行，Linux 侧代理本地抓不到）
             | "check_scoring_coverage"
+            // #153（#113 F5）：评分项→章节显式映射写面（tools.rs 分发臂）
+            | "map_scoring_item"
             // #243 校验状态安全与恢复
             | "recover_validating_state"
             // #254 章节级增量写入三工具
