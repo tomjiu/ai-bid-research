@@ -777,8 +777,10 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     };
 
     // #145（圈号子项一致性）：子项头行（短行 + 尾冒号自成段）向后吸收
-    // 同列举簇紧邻内容行，直到「量化在场」或边界行（新子项/条款头/章头/
-    // 空行/表格）。返回 None = 无量化形态（零激活——保持既有行为）；
+    // 同列举簇紧邻内容行，直到「量化在场的段落」或边界行（新子项/条款头/
+    // 章头/子节头/部分头/空行/表格）。#155 边界修正：按真实段落整段吸收
+    // （不以首个量化行为终点——同段量化值全保留）；已结束段落无量化即停
+    // （不跨段绑定）。返回 None = 无量化形态（零激活——保持既有行为）；
     // Some((joined, body_end)) = 头+内容拼接文本与吸收末块位（锚块集 =
     // 头行段 + i+1..=body_end 的行级块——逐行保真）。
     let circled_head_absorb = |i: usize| -> Option<(String, usize)> {
@@ -797,18 +799,38 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             let nt = nb.text.trim();
             if nt.is_empty()
                 || is_skip_line(nt)
-                || re_clause.is_match(nt)
-                || re_chapter.is_match(&nfkc(nt))
+                // #155-A：结构边界全集（is_clause_start 与段落重组同源）——
+                // 条款头/章头/子节头（re_subsection）/部分头/数字顶层。
+                // 原边界集缺 re_subsection：「三、商务要求」挡不住 → 跨节
+                // 吸收商务量化行成技术假阳性（issue #155 反例 A）。
+                || is_clause_start(k, nt)
                 || re_list_cn.is_match(nt) // 下一子项/新列举单元——边界
             {
                 break;
             }
-            joined.push_str(nt);
-            body_end = k;
+            // #155-B：整段吸收（不以首个量化行为终点）——真实段落是子项
+            // 正文的边界（行尾逗号＝续行，段内量化值/比较关系全保留）。
+            // 原实现逐行判 re_quantified 首中即返：同段「2小时」截断
+            // 「不得超过360分钟」（issue #155 反例 B）。
+            let pend_k = para_end[k];
+            for m in k..=pend_k {
+                if matches!(blocks[m].kind, BlockKind::PdfLine | BlockKind::OcrLine)
+                    && !page_noisy.contains(&m)
+                {
+                    joined.push_str(blocks[m].text.trim());
+                    body_end = m;
+                }
+            }
             if re_quantified.is_match(&joined) {
                 return Some((joined, body_end));
             }
-            k += 1;
+            // #155-A：已结束段落（段尾终结标点）无量化 → 子项正文到本段
+            // 为止，不得跨段绑定后续行（「不可跨已结束段落和新子节绑定」
+            // ——无子节头标记的后续正文行同样挡）。
+            if ends_sentence(blocks[pend_k].text.trim()) {
+                break;
+            }
+            k = pend_k + 1;
         }
         None
     };
