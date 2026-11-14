@@ -1254,30 +1254,42 @@ out: { complete, total_blocks, covered_blocks, uncovered_range_count,
 状态: FILES_IMPORTED+（Validating 起含全部状态）
 ```
 
-## 20. recover_validating_state（#243 校验状态安全与恢复 · 历史异常态出口）
+## 20. recover_validating_state（#243 校验状态安全与恢复 · #152 扩门 1i 冲突基础）
 
 ```
 in : { project_id, reason(必填非空白——审计面：不可审计的恢复不成恢复),
        project_version? }
 out: { status("DRAFTING"), recovery:{ at, from:"VALIDATING", to:"DRAFTING",
-       reason, missing_sections:[SEC-*…] }, project_version, request_id }
-语义: 历史异常态的受支持恢复。旧版缺陷（#243 之前的 main）：
-      validate_bid_document 在草稿未完成/校验失败时仍无条件推进 VALIDATING，
-      而 VALIDATING 态禁 draft_response_section → 起草死锁，用户被迫终止
-      进程并手工改 db.json 的状态字段。本工具取代那条不受支持的路径。
-      三重约束（不是任意状态写入）：①仅 VALIDATING 态（Reviewing+ 属审核/
-      导出阶段，语义不同，不在本通道）；②仅缺章（存在未 DRAFTED 的叶——
-      正是历史缺陷制造的异常态；草稿完整的 VALIDATING 是健康态（校验已过），
+       reason, missing_sections:[SEC-*…], basis("missing_leaves"|
+       "gate1i_conflicts"), conflict_sections:[SEC-*|PR-*…] },
+       project_version, request_id }
+语义: 受支持的状态恢复（双基础）。基础①缺章（#243 历史异常态）：
+      旧版缺陷（#243 之前的 main）：validate_bid_document 在草稿未完成/
+      校验失败时仍无条件推进 VALIDATING，而 VALIDATING 态禁
+      draft_response_section → 起草死锁，用户被迫终止进程并手工改
+      db.json 的状态字段。本工具取代那条不受支持的路径。基础②门 1i
+      冲突在案（#152，#113 F4）：全叶 DRAFTED 的健康 VALIDATING，导出/
+      复核期段级改写（#319）等合法变更引入跨章口径冲突——门 1i 硬拦而
+      改稿面结构性锁死（draft E_STATE / reopen 只收 ACCEPTED / 段级
+      改写只及污点叶）；本基础经 run_review_from_store 全局柱判定
+      （与 export 门 1i 同源），冲突锚清单入审计账。
+      边界（#152）：决策面冲突（锚 DECISION——导出参数与正文不一致）
+      不在恢复面：决策是调用方参数不是存储态，调整导出决策即解。
+      三重约束（不是任意状态写入）：①仅 VALIDATING 态（Reviewing+ 属
+      审核/导出阶段，语义不同，不在本通道）；②依据事实非空（缺章或
+      门 1i 冲突——草稿完整且无冲突的 VALIDATING 是健康态（校验已过），
       拒之）；③理由必填非空白。
       效果：status → DRAFTING（起草面解锁）+ content_version +1 +
-      StateRecoveryRecord 审计账（何时/为何/从哪到哪/当时缺哪些章——随快照
-      持久化，跨重启可见）+ checkpoint。章节树/矩阵/审核记录不动（恢复是
-      状态面动作，内容面原样——恢复前后的不变量由测试锁定）。
+      StateRecoveryRecord 审计账（何时/为何/从哪到哪/依据基础 + 缺章或
+      冲突锚快照——随快照持久化，跨重启可见）+ checkpoint。章节树/
+      矩阵/审核记录不动（恢复是状态面动作，内容面原样——恢复前后的
+      不变量由测试锁定）。
 重复/重试: 恢复成功后项目在 DRAFTING，重复请求被 guard 拒（E_STATE——
       非死锁态，起草面照常可用），审计账不重复；并发：MCP 服务串行处理
       （&mut 服务态），无交错写。
 错误: E_STATE（非 VALIDATING 态——含重复恢复/项目本在 DRAFTING 可起草）；
-      E_UNPROCESSABLE（草稿完整的 VALIDATING / reason 空白）。
+      E_UNPROCESSABLE（草稿完整且门 1i 无冲突的健康 VALIDATING——消息
+      含决策面指引 / reason 空白）。
 状态: 仅 VALIDATING
 ```
 

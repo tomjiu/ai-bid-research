@@ -383,7 +383,8 @@ impl ProjectStatus {
                 "register_evidence",
                 "bind_evidence",
                 // #243：历史异常态（VALIDATING + 缺章——旧版校验误推进所致）
-                // 的受支持恢复出口；三重约束见 recover_validating_to_drafting
+                // 的受支持恢复出口；#152 扩第二基础：门 1i 冲突在案
+                //（三重约束见 recover_validating_to_drafting[_for_conflicts]）
                 "recover_validating_state",
                 // #319：校验期补遗到达/复验发现需改稿——局部改写出口
                 "register_addendum_changes",
@@ -592,6 +593,21 @@ pub struct StateRecoveryRecord {
     pub reason: String,
     /// 恢复时的未完成叶快照（SEC-* 清单——审计面：恢复针对的缺章事实）
     pub missing_sections: Vec<String>,
+    /// 恢复依据（#152）：`missing_leaves`（#243 缺章异常态）|
+    /// `gate1i_conflicts`（门 1i 冲突在案——跨章/账本口径不一致，改稿
+    /// 须回 DRAFTING）。旧记录缺省 = missing_leaves（历史账面不迁移）。
+    #[serde(default = "default_recovery_basis")]
+    pub basis: String,
+    /// 门 1i 冲突在案时的冲突锚快照（SEC-*/PR-*——审计面：恢复针对的
+    /// 冲突事实；missing_leaves 基础下恒空）。
+    #[serde(default)]
+    pub conflict_sections: Vec<String>,
+}
+
+/// #152 历史恢复记录的依据缺省（#243 时代记录无 basis 字段——反序列化
+/// 缺省补 missing_leaves，账面不迁移）。
+fn default_recovery_basis() -> String {
+    "missing_leaves".into()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1127,6 +1143,66 @@ impl DomainStore {
             to: ProjectStatus::Drafting,
             reason: reason.trim().to_string(),
             missing_sections: missing,
+            basis: default_recovery_basis(),
+            conflict_sections: Vec::new(),
+        };
+        if let Some(p) = self.project.as_mut() {
+            p.status = ProjectStatus::Drafting;
+            p.content_version += 1; // 状态变更即版本变更（与 advance_project_status 同口径）
+        }
+        self.state_recoveries.push(rec.clone());
+        Ok(rec)
+    }
+
+    /// #152 门 1i 冲突在案的受支持恢复（VALIDATING → DRAFTING 的第二基础）。
+    ///
+    /// 场景：全叶 DRAFTED 的健康 VALIDATING，导出/复核期段级改写（#319）
+    /// 等合法变更引入跨章口径冲突——门 1i 硬拦而起草面已锁
+    ///（draft E_STATE / reopen 只收 ACCEPTED / 段级改写只及污点叶）＝
+    /// 结构性死锁（#113 F4）。本通道与
+    /// [`Self::recover_validating_to_drafting`]（#243 缺章异常态）同轨：
+    /// 三重约束同构——仅 VALIDATING / 依据事实非空（门 1i 冲突锚清单
+    ///——由服务层经 run_review_from_store 全局柱判定后传入，域层入
+    /// 审计账）/ 理由非空白。效果同款：status → DRAFTING +
+    /// content_version + 1 + 审计入账，不动章节树/矩阵/审核记录。拒绝
+    /// 路径零副作用。
+    ///
+    /// 边界：决策面冲突（锚 DECISION——导出参数与正文不一致）**不在
+    /// 本面**：决策是调用方参数不是存储态，调整导出决策即解，不须恢复。
+    pub fn recover_validating_to_drafting_for_conflicts(
+        &mut self,
+        reason: &str,
+        conflict_sections: &[String],
+    ) -> Result<StateRecoveryRecord, ToolError> {
+        let cur = self.project()?.status;
+        if cur != ProjectStatus::Validating {
+            return Err(ToolError::EState {
+                current: cur,
+                attempted: "recover_validating_to_drafting_for_conflicts",
+            });
+        }
+        if conflict_sections.is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: "门 1i 无冲突在案（run_review_from_store 全局柱零发现）——健康 VALIDATING 不构成恢复条件；决策面冲突（锚 DECISION）请调整导出决策参数后重试，不须恢复".into(),
+            });
+        }
+        if reason.trim().is_empty() {
+            return Err(ToolError::EUnprocessable {
+                reason: "恢复理由不得为空白（审计面：不可审计的恢复不成恢复）".into(),
+            });
+        }
+        let rec = StateRecoveryRecord {
+            at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            from: ProjectStatus::Validating,
+            to: ProjectStatus::Drafting,
+            reason: reason.trim().to_string(),
+            // 事实快照（可能为空——本基础下缺章非依据，但审计面如实留底）
+            missing_sections: self.incomplete_leaf_ids(),
+            basis: "gate1i_conflicts".into(),
+            conflict_sections: conflict_sections.to_vec(),
         };
         if let Some(p) = self.project.as_mut() {
             p.status = ProjectStatus::Drafting;
