@@ -16,8 +16,19 @@
 //! 验收（issue #155）：
 //! - A：无商务 100 元被技术头吸收；商务内容只在正确归属下保留
 //!   （任何含「100元」的 REQ 不得是技术参数——允许其为商务面 REQ）。
+//!   【交付前自查补记（诚实口径）】实测本输入修复后 REQ 总数=0：
+//!   「支付合同金额100元。」是无编号普通行，抽取器无落账路径——
+//!   与 #148 合入前 11bae540 同输入 requirements=[] 同口径，属**既有
+//!   缺口**而非本修复新回归；不宣称「正确商务内容已保留」（见首测注释）。
 //! - B：同一子项完整保留 2小时 与 360分钟 及各自约束短语，锚行逐行在位
 //!   （OR 针命中不是完整语义——statement 与锚面都要全量核对）。
+//!   【明示边界（支持范围）】吸收终点=**首个含量化的真实段落**（含其
+//!   全部续行）；此前未结束段也吸收；已结束段落（段尾终结标点）与
+//!   新子节/章头/同级新子项是绑定屏障（issue「不可跨已结束段落和新
+//!   子节绑定」）。同子项**后续不同完整段**的条件不绑入头行 REQ——
+//!   其普通行落账属上述既有缺口面，不在 #155 边界任务内扩面（防噪声）。
+//! - 边界负例（交付前自查补）：同级新头（3）/章头/页码噪声（段中透明、
+//!   不入 statement 与锚）/已结束段落屏障——见下方四测。
 //! - 原 #145 最小两例（tests/extract_circled_subitem.rs）与真实松岭
 //!   基线不回归（另面复跑）。
 
@@ -40,6 +51,18 @@ fn pf(blocks: Vec<Block>) -> ParsedFile {
 
 fn line(idx: usize, text: &str) -> Block {
     Block { idx, kind: BlockKind::PdfLine, locator: format!("l{idx}"), text: text.into(), cells: vec![] }
+}
+
+/// 带真实页号的行（页码噪声负例用——page_line_of 只认「第N页 行M」形态，
+/// 无页号的 locator 判不出页码噪声）。
+fn paged_line(idx: usize, page: u32, lno: u32, text: &str) -> Block {
+    Block {
+        idx,
+        kind: BlockKind::PdfLine,
+        locator: format!("第{page}页 行{lno}"),
+        text: text.into(),
+        cells: vec![],
+    }
 }
 
 /// 全类别 REQ 的 (category, statement) 面——误归属断言用（不限于技术参数）。
@@ -92,6 +115,16 @@ fn circled_head_absorb_must_not_cross_into_next_subsection() {
             "商务量化内容误归属技术参数: {c} / {s}"
         );
     }
+    // 【诚实口径（Lead 交付前自查）】本输入修复后 REQ 总数=0（探针实测）：
+    // 「支付合同金额100元。」是无编号普通行，抽取器无 REQ 落账路径——
+    // #148 合入前 11bae540 同输入 requirements=[]（issue #155 证据），
+    // 属既有缺口而非本修复新回归。本修复的边界语义=消除 #148 的技术
+    // 假阳性、恢复合入前不误抽行为；**不宣称商务内容已保留**。无编号
+    // 普通量化行的落账面（商务/技术通用）为候选后续项，另行登记。
+    assert!(
+        !sts.iter().any(|(_, s)| s.contains("故障历时计算") && s.contains("100元")),
+        "子项头与商务行不得绑定（上方主断言的同型直检）: {sts:?}"
+    );
 }
 
 /// A 的纵深防御（无子节头标记形态）：已结束段落（段尾终结标点）无量化
@@ -180,5 +213,163 @@ fn circled_head_absorb_keeps_all_quantifications_of_same_subitem() {
     assert!(
         anchor_text.contains("不得超过360分钟"),
         "360分钟 内容行锚在位: {anchor_text}"
+    );
+}
+
+// ------------------------------------------- 边界负例（交付前自查补充）
+
+/// 同级新子项头（3）边界：同列举簇的下一个子项是吸收终点——（2）不得
+/// 吸入（3）头与其内容；（3）自身经同款头行吸收独立成 REQ（双向守卫：
+/// 边界挡住旧子项越界 + 新子项不因边界而失活）。
+#[test]
+fn circled_head_absorb_stops_at_same_level_next_item() {
+    let f = pf(vec![
+        line(0, "第三章 采购需求"),
+        line(1, "二、技术要求"),
+        line(2, "（2）光缆线路故障历时计算："),
+        line(3, "发生故障后2小时内到达现场，"),
+        line(4, "要求单条光缆链路平均历时不得超过360分钟。"),
+        line(5, "（3）光缆线路日常维护："),
+        line(6, "维护周期不得超过30日历天。"),
+    ]);
+    let reqs = extract_requirements(&[f]);
+    let sts = statements(&reqs);
+    let (cat2, st2) = sts
+        .iter()
+        .find(|(_, s)| s.contains("故障历时计算"))
+        .cloned()
+        .unwrap_or_else(|| panic!("（2）子项头 REQ 应在位: {sts:?}"));
+    assert_eq!(cat2, "技术参数");
+    assert!(
+        st2.contains("2小时") && st2.contains("360分钟"),
+        "（2）自身内容完整: {st2}"
+    );
+    assert!(
+        !st2.contains("日常维护") && !st2.contains("30日历天"),
+        "（2）不得跨同级新头吸入（3）子项: {st2}"
+    );
+    let (cat3, st3) = sts
+        .iter()
+        .find(|(_, s)| s.contains("日常维护"))
+        .cloned()
+        .unwrap_or_else(|| {
+            panic!("（3）子项头 REQ 应独立在位（边界挡吸收 ≠ 新子项失活）: {sts:?}")
+        });
+    assert_eq!(cat3, "技术参数");
+    assert!(
+        st3.contains("30日历天"),
+        "（3）自身内容完整: {st3}"
+    );
+}
+
+/// 章头边界：新章（第四章）内容不得被本章子项头吸收。
+#[test]
+fn circled_head_absorb_stops_at_chapter_head() {
+    let f = pf(vec![
+        line(0, "第三章 采购需求"),
+        line(1, "二、技术要求"),
+        line(2, "（2）光缆线路故障历时计算："),
+        line(3, "发生故障后2小时内到达现场，"),
+        line(4, "要求单条光缆链路平均历时不得超过360分钟。"),
+        line(5, "第四章 合同条款"),
+        line(6, "合同期限为12个月。"),
+    ]);
+    let reqs = extract_requirements(&[f]);
+    let sts = statements(&reqs);
+    let (_, st2) = sts
+        .iter()
+        .find(|(_, s)| s.contains("故障历时计算"))
+        .cloned()
+        .unwrap_or_else(|| panic!("（2）子项头 REQ 应在位: {sts:?}"));
+    assert!(
+        st2.contains("2小时") && st2.contains("360分钟"),
+        "（2）自身内容完整: {st2}"
+    );
+    assert!(
+        !st2.contains("合同条款") && !st2.contains("12个月"),
+        "（2）不得跨章头吸入下一章内容: {st2}"
+    );
+}
+
+/// 页码噪声段中透明（#450 B-18 同款纪律）：续行逗号后跨页——噪声行
+/// 「— 2 —」不入 statement、不入锚，但**不截断**段落（续行 360分钟保留）。
+#[test]
+fn circled_head_absorb_page_noise_transparent_mid_paragraph() {
+    let f = pf(vec![
+        line(0, "第三章 采购需求"),
+        line(1, "二、技术要求"),
+        line(2, "（2）光缆线路故障历时计算："),
+        line(3, "发生故障后2小时内到达现场，"),
+        paged_line(4, 2, 1, "— 2 —"),
+        line(5, "要求单条光缆链路平均历时不得超过360分钟。"),
+    ]);
+    let reqs = extract_requirements(&[f]);
+    let sts = statements(&reqs);
+    let (_, st2) = sts
+        .iter()
+        .find(|(_, s)| s.contains("故障历时计算"))
+        .cloned()
+        .unwrap_or_else(|| panic!("跨页续行子项 REQ 应在位: {sts:?}"));
+    assert!(
+        st2.contains("2小时") && st2.contains("360分钟"),
+        "页码噪声不截断段落——跨页续行两量化值都在: {st2}"
+    );
+    assert!(
+        !st2.contains("— 2 —") && !st2.contains("2 —"),
+        "页码噪声不得混入 statement: {st2}"
+    );
+    let head_req = reqs
+        .iter()
+        .find(|r| {
+            r.params
+                .get("statement")
+                .and_then(|v| v.as_str())
+                .map(|s| s.contains("故障历时计算"))
+                .unwrap_or(false)
+        })
+        .expect("子项头 REQ 应在位");
+    let anchor_text: String = head_req.anchors.iter().map(|a| a.excerpt.as_str()).collect();
+    assert!(
+        !anchor_text.contains("— 2 —"),
+        "页码噪声不得混入锚: {anchor_text}"
+    );
+    assert!(
+        anchor_text.contains("不得超过360分钟"),
+        "跨页续行内容锚在位: {anchor_text}"
+    );
+}
+
+/// 明示边界（issue #155「不可跨已结束段落…绑定」）：同子项**后续不同
+/// 完整段**（段尾句号各自终结）不绑入头行 REQ——首个含量化段吸收完毕
+/// 即为子项正文终点。
+/// 【诚实口径】后续完整段的量化条件（本例 360分钟）当前**无任何 REQ
+/// 落账**——无编号普通行的既有缺口（与 A 反例商务行同类，11bae540 前
+/// 同样不抽），非本修复新回归；候选后续面另行登记，不在 #155 内扩面。
+#[test]
+fn circled_head_absorb_never_binds_across_finished_paragraph() {
+    let f = pf(vec![
+        line(0, "第三章 采购需求"),
+        line(1, "二、技术要求"),
+        line(2, "（2）光缆线路故障历时计算："),
+        line(3, "发生故障后2小时内到达现场。"),
+        line(4, "要求单条光缆链路平均历时不得超过360分钟。"),
+    ]);
+    let reqs = extract_requirements(&[f]);
+    let sts = statements(&reqs);
+    let (_, st2) = sts
+        .iter()
+        .find(|(_, s)| s.contains("故障历时计算"))
+        .cloned()
+        .unwrap_or_else(|| panic!("首个量化段的子项 REQ 应在位: {sts:?}"));
+    assert!(
+        st2.contains("2小时") && !st2.contains("360分钟"),
+        "已结束段落是绑定屏障——头行 REQ 只含首个量化段: {st2}"
+    );
+    // 屏障直检：任何 REQ 不得同时携带子项头与后续完整段内容
+    // （跨已结束段落绑定的直接检测——与 A 测同型纪律）。
+    assert!(
+        !sts.iter()
+            .any(|(_, s)| s.contains("故障历时计算") && s.contains("360分钟")),
+        "子项头不得跨已结束段落绑定后续段: {sts:?}"
     );
 }
