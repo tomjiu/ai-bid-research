@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -247,49 +248,100 @@ class TestInnerSubprocessRegression:
     失败可诊断（stderr 落日志）。
     """
 
-    def _fake_cargo_env(self, monkeypatch, stdout_bytes: bytes):
-        """受控替换：cargo 探测通过 + 真实 run_rust 起的子进程 = 直写
-        非法 UTF8 字节的 Python（模拟 GBK 平台上的 Rust 面输出）。"""
-        fake_cargo = REPO / "artifacts/fake-cargo.py"
-        fake_cargo.parent.mkdir(parents=True, exist_ok=True)
-        fake_cargo.write_text(
-            "import sys\n"
-            f"sys.stdout.buffer.write({stdout_bytes!r})\n"
-            "sys.stdout.flush()\n",
-            encoding="utf-8",
-        )
-        fake_cargo.chmod(0o755)
-        monkeypatch.setenv("PATH", str(fake_cargo.parent), prepend=":")
-        # cargo 解析路径：让 shutil.which 找到假 cargo
-        import shutil
-        monkeypatch.setattr(shutil, "which", lambda name: str(fake_cargo) if name == "cargo" else None)
-        return fake_cargo
+    def _fake_cargo_shim(self, tmp_path, *, stdout_bytes: bytes,
+                          stderr_bytes: bytes = b"", exit_code: int = 9):
+        """真·受控 cargo shim（Lead #161 审核口径重做）。
 
-    def test_run_rust_non_gbk_bytes_no_crash_stderr_logged(self, monkeypatch, tmp_path):
-        """内层受控反例（Lead 复现路径）：cargo 子进程输出含 0xa0/0xff——
-        旧 run_rust 内层 reader UnicodeDecodeError → stdout=None 拼接
-        TypeError；新面不崩、exit 非 0 照常、stderr 尾部落 json。"""
+        旧缺陷：monkeypatch shutil.which 无效（run_rust 不调 which）、
+        PATH 冒号不跨平台、假 cargo 不落非零 exit、产物写仓库 artifacts。
+
+        新面：tmp_path 里落**名为 cargo** 的真可执行 shim（POSIX:
+        .py+shebang+chmod / Windows: cargo.bat 包装 sys.executable），
+        run_rust 经 resolve_cargo→shutil.which 真搜索 PATH 选中它——
+        真实 subprocess 起的 Python 子进程，stdout 预置非法 UTF8 字节
+        （GBK 平台同形），stderr 带诊断字样，exit_code 可控（默认 9）。
+        产物全在 tmp_path，不写仓库。
+        """
+        shim_dir = tmp_path / "shim-bin"
+        shim_dir.mkdir(parents=True, exist_ok=True)
+        inner = tmp_path / "fake-cargo.py"
+        inner.write_text(
+            "import os, sys\n"
+            f"os.writefd = None\n"
+            f"sys.stdout.buffer.write({stdout_bytes!r})\n"
+            f"sys.stderr.buffer.write({stderr_bytes!r})\n"
+            "sys.stdout.flush()\n"
+            "sys.stderr.flush()\n"
+            f"sys.exit({exit_code})\n",
+            encoding="utf-8")
+        inner.chmod(0o755)
+        if os.name == "nt":
+            shim = shim_dir / "cargo.bat"
+            shim.write_text(f'@"{sys.executable}" "{inner}" %*\n',
+                            encoding="utf-8")
+        else:
+            shim = shim_dir / "cargo"
+            shim.write_text(f"#!/bin/sh\nexec \"{sys.executable}\" "
+                            f"\"{inner}\" \"$@\"\n", encoding="utf-8")
+            shim.chmod(0o755)
+        return shim_dir
+
+    def test_run_rust_fake_cargo_selected_and_bytes_really_flow(
+            self, monkeypatch, tmp_path):
+        """真选夹具反例（Lead 指名）：run_rust 必须真的选中 shim 起的
+        受控 Python 子进程——断言① shim 被选中（PATH prepend 后
+        resolve_cargo 命中 shim 路径——通过产物诊断而非环境失败假绿）；
+        ② 预置非法 UTF8 字节（0xa0/0xff）真流过 reader 不崩（显式
+        utf-8/errors=replace）；③ exit 9 照实落 json；④ stderr 诊断字样
+        真落日志。旧缺陷三合一：which 不被调/冒号 PATH/假绿 127。"""
         monkeypatch.setattr(crt, "SPEC_PATH", tmp_path / "closeout-spec.json")
         monkeypatch.setattr(crt, "OUT", tmp_path)
         (tmp_path / "closeout-spec.json").write_text("{}", encoding="utf-8")
-        self._fake_cargo_env(
-            monkeypatch, b"\xa0cargo test \xff\xfe running\n")
+        shim_dir = self._fake_cargo_shim(
+            tmp_path, stdout_bytes=b"\xa0cargo test \xff\xfe running\n",
+            stderr_bytes=b"\xa0 fake-cargo diag \xff\n", exit_code=9)
+        # PATH prepend（os.pathsep 跨平台）——resolve_cargo 的
+        # shutil.which 真搜索即命中 shim（这是 run_rust 真实路径，
+        # 不是 monkeypatch which 的假面）
+        monkeypatch.setenv(
+            "PATH", str(shim_dir) + os.pathsep + os.environ.get("PATH", ""))
+        # 防「环境失败假绿」：先证 shim 真在位可选中（否则本测试自身
+        # 环境性失效——红而非绿）
+        assert crt.resolve_cargo() == str(shim_dir / "cargo" if os.name != "nt"
+                                         else str(shim_dir / "cargo.bat")) \
+            or str(shim_dir) in crt.resolve_cargo()
+        assert Path(crt.resolve_cargo()).parent == Path(shim_dir).resolve()
         status = crt.run_rust()
         assert isinstance(status, dict)
-        assert status["ok"] is False  # 假 cargo exit 1（写完就崩——非零）
-        # 日志文件真实落盘（旧代码在此前已 TypeError 崩）
+        # ③ 真 exit 9（不是环境失败 127 假绿——shim 被真选中并真退出）
+        assert status["exit"] == 9, f"shim 未被真选中？status={status}"
+        assert status["ok"] is False
+        # ② 预置字节真流过（替换面在日志里可见——非法 UTF8 经
+        # errors=replace 不崩且留痕）
         log_text = (tmp_path / "rust-run.log").read_text(encoding="utf-8")
-        assert "--- stderr ---" in log_text
-        rust_json = json.loads((tmp_path / "rust-run.json").read_text(encoding="utf-8"))
-        assert rust_json["exit"] != 0
+        assert "cargo test" in log_text  # stdout 真进了日志（含替换字符）
+        assert "fake-cargo diag" in log_text  # stderr 真进了日志
+        rust_json = json.loads((tmp_path / "rust-run.json").read_text(
+            encoding="utf-8"))
+        assert rust_json["exit"] == 9
+        assert "fake-cargo diag" in rust_json["stderr_tail"]
+        # Lead 点名「PATH 拼接冒号在 Windows 也应核对 os.pathsep」——
+        # 落成可执行断言：run_rust 源里 PATH 拼接用 os.pathsep（两平台
+        # 分隔符真分叉：POSIX ':' / nt ';'——硬编码冒号在 nt 必假绿）
+        src_rust = (REPO / "scripts/closeout_real_test.py").read_text(
+            encoding="utf-8")
+        assert "os.pathsep + os.environ" in src_rust
+        assert f"'.cargo/bin':{{" not in src_rust  # 旧硬编码冒号拼接已除
+        # 产物全在 tmp_path——仓库无 fake-cargo 残留
+        assert not (REPO / "artifacts/fake-cargo.py").exists()
 
     def test_run_rust_timeout_partial_no_nonetype(self, monkeypatch, tmp_path):
-        """内层超时伪返回（124）：partial 输出保留、拼接不 TypeError。"""
+        """内层超时伪返回（124）：partial 输出保留、拼接不 TypeError。
+        （超时面走 helper 直测——真 shim 不 sleep 卡测试。）"""
         monkeypatch.setattr(crt, "SPEC_PATH", tmp_path / "closeout-spec.json")
         monkeypatch.setattr(crt, "OUT", tmp_path)
         (tmp_path / "closeout-spec.json").write_text("{}", encoding="utf-8")
-        fake_cargo = REPO / "artifacts/fake-cargo-sleep.py"
-        fake_cargo.parent.mkdir(parents=True, exist_ok=True)
+        fake_cargo = tmp_path / "fake-cargo-sleep.py"
         fake_cargo.write_text(
             "import sys, time\n"
             "sys.stdout.buffer.write(b'\\xa0 partial output before hang')\n"

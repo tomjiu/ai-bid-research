@@ -33,6 +33,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -269,17 +270,39 @@ def run_chain_b() -> dict:
 
 # ---------------------------------------------------------------- A/C 面真跑
 
+def resolve_cargo() -> str:
+    """cargo 可执行解析（Lead 2026-11-14 #161 审核：固定调 \"cargo\" 让
+    PATH shim/受控夹具无法被选中——run_rust 必须真用 which）。
+
+    优先级：shutil.which(\"cargo\")（PATH 真搜索——受控测试把 shim
+    目录 prepend 进 PATH 即可被选中）→ ~/.cargo/bin/cargo 兜底 →
+    None（调用方 die 可诊断）。
+    """
+    got = shutil.which("cargo")
+    if got:
+        return got
+    home_cargo = Path.home() / ".cargo/bin/cargo"
+    return str(home_cargo) if home_cargo.exists() else ""
+
+
 def run_rust() -> dict:
     env_spec = SPEC_PATH.exists()
     if not env_spec:
         return {"ok": False, "error": "规格缺失——先 --emit-spec"}
+    cargo = resolve_cargo()
+    if not cargo:
+        return {"ok": False, "exit": 127,
+                "error": "cargo 不在位（shutil.which 与 ~/.cargo/bin 均未命中"
+                         "——rust-env.sh 可自愈）"}
     cmd = [
-        "cargo", "test", "-p", "bid-mcp", "--test", "real_closeout", "--", "--nocapture",
+        cargo, "test", "-p", "bid-mcp", "--test", "real_closeout", "--", "--nocapture",
     ]
+    cargo_dir = str(Path(cargo).resolve().parent)
     env = {
         **dict(os.environ),
         "CLOSEOUT_SPEC": str(SPEC_PATH),
-        "PATH": f"{Path.home() / '.cargo/bin'}:{os.environ.get('PATH', '')}",
+        # os.pathsep 跨平台拼接（Lead 点名：硬编码冒号在 Windows 无效）
+        "PATH": cargo_dir + os.pathsep + os.environ.get("PATH", ""),
         "CARGO_PROFILE_DEV_DEBUG": "0", "CARGO_PROFILE_TEST_DEBUG": "0",
         "CARGO_INCREMENTAL": "0",
     }
