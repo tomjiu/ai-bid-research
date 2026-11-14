@@ -167,20 +167,64 @@ def norm(s: str) -> str:
 
 
 def channel_from(actual: object) -> str | None:
-    """从实际证据对象（dict/str）提取 pdfium/poppler 通道字样。
+    """从实际证据对象提取 pdfium/poppler 通道——**只采信成功文件的
+    实际解析证据字段**（Lead 2026-11-14 三版收紧：整个对象 JSON 关键
+    词扫描会把 filename=pdfium.pdf / 失败 probe 备注也当成功通道）。
 
-    纯函数（模块级——可被回归直接调用）：输入导入回执 data / db
-    files 解析摘要等**实际证据**；证据里无通道字样返回 None。
-    注意：本函数只做「证据里有/无」的字样提取——把什么当作证据
-    （成功回执 vs 失败 probe 日志）是 main 里 resolve_parse_channel
-    的职责，不在本函数混淆。"""
-    s = json.dumps(actual, ensure_ascii=False) if actual is not None else ""
-    low = s.lower()
-    if "pdfium" in low:
-        return "pdfium"
-    if "poppler" in low:
-        return "poppler"
-    return None
+    采信字段（每个 file 条目内，大小写不敏感）：
+      - parse_summary（解析摘要——成功文件的实际通道叙述）；
+      - 明确 engine 字段：engine / parse_engine / parser / channel /
+        pdf_engine（引擎自述，值为 pdfium/poppler 字样即采信）。
+    其余一切（filename、error、备注、路径）不作为通道依据——
+    证据不足返回 None（→ unknown，不冒充）。
+
+    纯函数（模块级——可被回归直接调用）；str 输入视为一段
+    parse_summary 叙述（按同一口径处理）。"""
+    if actual is None:
+        return None
+
+    def _from_summary_text(text: str) -> str | None:
+        low = text.lower()
+        if "pdfium" in low:
+            return "pdfium"
+        if "poppler" in low:
+            return "poppler"
+        return None
+
+    if isinstance(actual, str):
+        return _from_summary_text(actual)
+
+    def _walk_files(node) -> str | None:
+        """在证据对象里找 file 条目，只看其 parse_summary/engine 字段。"""
+        if isinstance(node, dict):
+            # 明确 engine 字段（引擎自述——不是 filename/error）
+            for key in ("engine", "parse_engine", "parser", "channel",
+                        "pdf_engine"):
+                v = node.get(key)
+                if isinstance(v, str):
+                    got = _from_summary_text(v)
+                    if got:
+                        return got
+            # 本条目的 parse_summary（file 条目级解析证据）
+            v = node.get("parse_summary")
+            if isinstance(v, str):
+                got = _from_summary_text(v)
+                if got:
+                    return got
+            # 其余键（filename/error/备注等）**不采信**——继续下钻
+            # 找嵌套 file 条目
+            for v in node.values():
+                got = _walk_files(v)
+                if got:
+                    return got
+        elif isinstance(node, list):
+            for item in node:
+                got = _walk_files(item)
+                if got:
+                    return got
+        return None
+
+    return _walk_files(actual)
 
 
 def resolve_parse_channel(import_receipt_data: object, db: dict,

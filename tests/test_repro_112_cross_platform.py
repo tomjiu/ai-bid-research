@@ -392,16 +392,50 @@ class TestChannelEvidence:
     测试换**可调用纯函数 + 受控真实链**行为断言——不再源字符串断言充数。
     证据不足不假报完整。"""
 
+    def test_channel_from_filename_pdfium_not_evidence(self):
+        """Lead 三版反例（#162 评论）：filename 含 pdfium.pdf（命名恰含
+        关键词）但 parse_summary 未知/不支持 → **不得**当成功通道。
+        旧面整对象 JSON 扫描会误标 pdfium——只采信实际解析证据字段。"""
+        # filename 里的 pdfium 字样 + 无任何采信字段 → None
+        got = rep.channel_from(
+            {"files": [{"filename": "report-pdfium.pdf",
+                        "pages": 65}]})
+        assert got is None
+        # 同名文件 + 明确 engine 字段 → 采信（engine 自述可作证据）
+        got2 = rep.channel_from(
+            {"files": [{"filename": "report-pdfium.pdf",
+                        "engine": "poppler"}]})
+        assert got2 == "poppler"  # filename 字样不覆盖 engine 自述
+        # 深层嵌套里的备注/error 也不采信
+        got3 = rep.channel_from(
+            {"files": [{"filename": "x.pdf",
+                        "note": "pdfium probe failed"}]})
+        assert got3 is None
+
     def test_channel_from_pure_function(self):
-        """channel_from 纯函数直接调用（行为面）：证据对象里
-        pdfium/poppler 字样 → 提取；无 → None（不冒充）。"""
-        assert rep.channel_from({"files": [{"parse_summary": "pdfium ok"}]}) == "pdfium"
+        """channel_from 纯函数直接调用（行为面）：只采信成功文件的
+        parse_summary / 明确 engine 字段；无采信字段 → None（不冒充）。"""
+        # 采信字段：file 条目的 parse_summary（嵌套在回执 data 里）
+        assert rep.channel_from(
+            {"files": [{"parse_summary": "pdfium ok"}]}) == "pdfium"
         assert rep.channel_from({"parse_summary": "poppler"}) == "poppler"
-        assert rep.channel_from({"files": [{"pages": 65}]}) is None  # 无通道字样
+        # 采信字段：明确 engine 自述（大小写不敏感）
+        assert rep.channel_from(
+            {"files": [{"engine": "PDFium-1.0"}]}) == "pdfium"
+        assert rep.channel_from(
+            {"files": [{"parse_engine": "poppler-utils"}]}) == "poppler"
+        assert rep.channel_from(
+            {"files": [{"parser": "PDFium"}]}) == "pdfium"
+        assert rep.channel_from(
+            {"files": [{"channel": "poppler"}]}) == "poppler"
+        assert rep.channel_from(
+            {"files": [{"pdf_engine": "pdfium"}]}) == "pdfium"
+        # str 输入 = 一段 parse_summary 叙述（同一口径）
+        assert rep.channel_from("parsed via pdfium, 65 pages") == "pdfium"
+        # 无采信字段（有 pages 数但无通道叙述）→ None
+        assert rep.channel_from({"files": [{"pages": 65}]}) is None
         assert rep.channel_from(None) is None  # 无证据
         assert rep.channel_from("") is None
-        # 大小写 + 嵌套 dict/str 混合证据（json.dumps 面全真）
-        assert rep.channel_from({"a": {"b": "PDFium-1.0 loaded"}}) == "pdfium"
 
     def test_resolve_parse_channel_receipt_evidence_wins(self):
         """裁决纯函数：导入回执 parse_summary 带通道 → 采信（来源=
@@ -436,6 +470,22 @@ class TestChannelEvidence:
         ch, src_, fb = rep.resolve_parse_channel({}, {}, [])
         assert ch == "unknown" and src_ == "no-evidence" and fb is None
 
+    @staticmethod
+    def _exec_tool(tmp_path: Path, body: str, name: str) -> Path:
+        """平台可执行假工具（Lead 三版点修：不得直接 exec 裸 .py——
+        Windows WinError 193）。POSIX：.py + shebang + chmod；Windows：
+        同名 .bat 包装 sys.executable（cmd 代理）——两平台都作为真实
+        子进程被 call 起。body 须自带 import sys 与 stdin 读取。"""
+        tool = tmp_path / f"{name}.py"
+        tool.write_text(body, encoding="utf-8")
+        if os.name == "nt":
+            bat = tmp_path / f"{name}.bat"
+            bat.write_text(f'@"{sys.executable}" "{tool}" %*\n',
+                           encoding="utf-8")
+            return bat
+        tool.chmod(0o755)
+        return tool
+
     def test_channel_real_chain_receipt_parsed_evidence(self, tmp_path):
         """受控真实链（行为面）：假工具回执 data.parse_summary 写 pdfium
         → 真跑 main → 落盘报告 channel=pdfium（来源 import_receipt——
@@ -443,18 +493,22 @@ class TestChannelEvidence:
         die（诚实失败），报告未落——故另用单步 call 直接取回执 + 纯函数
         裁决（=main 内同一条证据链：receipt=r.get("data") 传第一优先级）。
         与 main 的差异仅在后继步骤（db 缺失 die），裁决输入完全同构。"""
-        tool = tmp_path / "receipt-tool.py"
-        tool.write_text(
+        tool = self._exec_tool(
+            tmp_path,
             "#!/usr/bin/env python3\n"
             "import sys\n"
             "sys.stdin.readline()\n"
             "print('{\"ok\": true, \"data\": {\"files\": ["
             "{\"parse_summary\": \"parsed via pdfium, 65 pages\"}]}}')\n"
             "sys.stdout.flush()\n",
-            encoding="utf-8")
-        tool.chmod(0o755)
+            "receipt-tool")
         steps = []
         receipt = rep.call(tool, "import_tender_files", {"files": []}, {}, steps)
+        # 平台真实启动断言（Lead 三版：不许 193 假绿）——回执 JSON 真到达
+        assert receipt.get("ok") is True, receipt
+        assert "parsed via pdfium" in steps[0]["stdout_tail"]  # JSON 真流入 stdout
+        assert steps[0]["returncode"] == 0
+        assert "WinError 193" not in steps[0]["stderr_tail"]  # 无启动崩
         # 与 main 同构的证据链：r2.get("data") → resolve_parse_channel
         ch, src_, fb = rep.resolve_parse_channel(receipt.get("data"), {}, steps)
         assert ch == "pdfium" and src_ == "import_receipt"
@@ -463,8 +517,8 @@ class TestChannelEvidence:
         """受控真实链（false-positive 面）：真实子进程 stderr 打 pdfium
         失败 probe 字样 + 回执 data 无通道字段 → 裁决不采信 stderr——
         unknown。旧代码在此会把失败 probe 当成功通道（Lead 指名缺陷）。"""
-        tool = tmp_path / "probe-noise-tool.py"
-        tool.write_text(
+        tool = self._exec_tool(
+            tmp_path,
             "#!/usr/bin/env python3\n"
             "import sys\n"
             "sys.stdin.readline()\n"
@@ -472,11 +526,14 @@ class TestChannelEvidence:
             "sys.stdout.flush()\n"
             "sys.stderr.write('pdfium probe load failed fallback\\n')\n"
             "sys.stderr.flush()\n",
-            encoding="utf-8")
-        tool.chmod(0o755)
+            "probe-noise-tool")
         steps = []
         receipt = rep.call(tool, "import_tender_files", {"files": []}, {}, steps)
-        assert steps[0]["stderr_tail"].count("pdfium") >= 1  # stderr 真有噪声
+        # 平台真实启动断言（Lead 三版：不许 193 假绿）——JSON 与噪声都真到达
+        assert receipt.get("ok") is True, receipt
+        assert steps[0]["returncode"] == 0
+        assert "WinError 193" not in steps[0]["stderr_tail"]  # 无启动崩
+        assert steps[0]["stderr_tail"].count("pdfium") >= 1  # 噪声真流入 stderr
         ch, src_, fb = rep.resolve_parse_channel(receipt.get("data"), {}, steps)
         assert ch == "unknown"  # 不冒充
         assert src_ == "stderr_signal(fallback-未采信)"
