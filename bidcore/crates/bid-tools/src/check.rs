@@ -101,7 +101,8 @@ pub struct FeatureTuple {
     pub feature_type: FeatureType,
     /// 归一化维度键（如 "投标保证金" / "工期" / 缩写本身 / "服务窗口"）
     pub key: String,
-    /// 归一化值（金额统一到元整数字符串；天数统一整数；术语/承诺 N1 归一文本）
+    /// 归一化值（金额精确值 = 元整数字符串，上限 = "<=元整数"；天数统一整数；
+    /// 术语/承诺 N1 归一文本）。精确金额的既有序列化形态保持不变。
     pub value: String,
     /// 位置（章 section_id——S-5 规格的 (金额, 3500000, SEC-2.1) 第三元）
     pub section_id: String,
@@ -161,9 +162,8 @@ const SCHEDULE_DIMS: [&str; 4] = ["工期", "交付周期", "实施周期", "服
 /// 语义等价归并涉及猜测，不猜：口径留给 T-7 词表扩展）。
 const WINDOW_PATTERNS: [&str; 3] = ["7x24", "5x8", "全天候"];
 
-/// 上限语词表（#150 F2）：条款上限复述形态——前邻命中即非本方承诺值
-/// （真实成稿 SEC-0044「最高不得超过80万元」的 800000 误取面）。显式清单
-/// 口径同 PLACEHOLDER_MARKERS：宁缺毋滥，词表扩展归后续批次。
+/// 上限语词表（#150 F2）：条款上限复述不入精确金额面；只有显式本方
+/// 投标总报价上限可入约束面（PR #157 blocker）。其余维度/主体仍守卫跳过。
 const UPPER_LIMIT_WORDS: [&str; 6] = ["不得超过", "不超过", "不得高于", "不高于", "不得超出", "不超出"];
 
 /// 内部特征集合形态：(类型, 键, 归一化值, 位置) 四元组——BTreeSet 去重 +
@@ -329,21 +329,131 @@ fn is_reference_id(scan: &[char], digit_start: usize) -> bool {
     w == "REQ" || w == "EV"
 }
 
-/// 上限语守卫（#150 F2）：数字前（跳空白）回看 ≤6 个非空白字符，若以上
-/// 限语词收尾 → 该数字是法规/条款上限的复述，非本方承诺值——跳过找句内
-/// 下一个合规数字。
+/// 上限语守卫（#150 F2）：数字前跳空白和可选人民币币种词/符号，回看最多
+/// 12 个非空白字符。币种词不可把条款上限变成精确金额（如「不超过人民币400万」）。
 fn has_upper_limit_prefix(scan: &[char], digit_start: usize) -> bool {
-    let mut run: Vec<char> = Vec::with_capacity(6);
+    let mut run: Vec<char> = Vec::with_capacity(12);
     let mut i = digit_start;
-    while i > 0 && run.len() < 6 {
+    while i > 0 && run.len() < 12 {
         i -= 1;
-        if scan[i].is_whitespace() {
-            continue;
+        if matches!(
+            scan[i],
+            '。' | '；' | ';' | '！' | '!' | '？' | '?' | '\n' | '\r'
+        ) {
+            break;
         }
-        run.push(scan[i]);
+        if !scan[i].is_whitespace() {
+            run.push(scan[i]);
+        }
     }
-    let s: String = run.iter().rev().collect();
-    UPPER_LIMIT_WORDS.iter().any(|w| s.ends_with(w))
+    let s: String = run.iter().rev().collect::<String>().to_ascii_uppercase();
+    let prefix = ["人民币", "RMB", "CNY", "¥", "￥"]
+        .iter()
+        .find_map(|currency| s.strip_suffix(currency))
+        .unwrap_or(&s);
+    UPPER_LIMIT_WORDS.iter().any(|w| prefix.ends_with(w))
+}
+
+/// 本方主体必须紧邻报价维度（可带「的」），且是独立句/分句起始词元。
+/// 不以 contains("我方") 猜主体：非我方、其他投标人的本公司、前句的我方均不算。
+/// 只开放自有决策维度「投标总报价」；预算/控制价的上限依旧是招标事实。
+fn is_bidder_quote(scan: &[char], dim: &str, pos: usize) -> bool {
+    if dim != "投标总报价" {
+        return false;
+    }
+    let mut end = pos;
+    while end > 0 && scan[end - 1].is_whitespace() {
+        end -= 1;
+    }
+    if end > 0 && scan[end - 1] == '的' {
+        end -= 1;
+        while end > 0 && scan[end - 1].is_whitespace() {
+            end -= 1;
+        }
+    }
+    ["我方", "本公司", "本单位", "本企业"]
+        .iter()
+        .any(|subject| {
+            let token: Vec<char> = subject.chars().collect();
+            if end < token.len() || scan[end - token.len()..end] != token {
+                return false;
+            }
+            let mut before = end - token.len();
+            // 横向空白可跳，换行本身是词元边界，不借前句主体。
+            while before > 0 && matches!(scan[before - 1], ' ' | '\t' | '\u{3000}') {
+                before -= 1;
+            }
+            before == 0
+                || matches!(
+                    scan.get(before - 1).copied(),
+                    None | Some(
+                        '。' | '；'
+                            | ';'
+                            | '！'
+                            | '!'
+                            | '？'
+                            | '?'
+                            | ','
+                            | '，'
+                            | ':'
+                            | '：'
+                            | '\n'
+                            | '\r'
+                    )
+                )
+        })
+}
+
+/// 金额约束语义面：不加 FeatureTuple 字段、不改变既有精确金额字符串；
+/// 上限显式序列化为 <=n，重放时保留关系而不是错当精确值。
+enum AmountConstraint {
+    Exact(i64),
+    Upper(i64),
+}
+
+impl AmountConstraint {
+    fn normalized(&self) -> String {
+        match self {
+            Self::Exact(yuan) => yuan.to_string(),
+            Self::Upper(yuan) => format!("<={yuan}"),
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        let (digits, upper) = match value.strip_prefix("<=") {
+            Some(digits) => (digits, true),
+            None => (value, false),
+        };
+        let yuan: i64 = digits.parse().ok()?;
+        if yuan < 0 {
+            return None;
+        }
+        Some(if upper {
+            Self::Upper(yuan)
+        } else {
+            Self::Exact(yuan)
+        })
+    }
+}
+
+/// 同维度约束交集非空：不同上限取最小值；精确值必须一致且不高于该上限。
+/// 不可解析的外部特征退回旧冲突判据，不借坏串放宽检查。
+fn amount_constraints_compatible<'a>(values: impl Iterator<Item = &'a str>) -> bool {
+    let mut exact = None;
+    let mut upper = i64::MAX;
+    for value in values {
+        match AmountConstraint::parse(value) {
+            Some(AmountConstraint::Upper(yuan)) => upper = upper.min(yuan),
+            Some(AmountConstraint::Exact(yuan)) => {
+                if exact.is_some_and(|previous| previous != yuan) {
+                    return false;
+                }
+                exact = Some(yuan);
+            }
+            None => return false,
+        }
+    }
+    exact.is_none_or(|yuan| yuan <= upper)
 }
 
 /// 数字记号解析：`[0-9]+（,[0-9]+)*（.[0-9]{1,8})?`——返回（剥逗号数字串,
@@ -405,8 +515,9 @@ fn scale_to_int(num: &str, mult: u128) -> Option<i64> {
 /// 口径：万 ×10000、剥逗号、全角数字/逗号先归半角；「万/元/圆」是单位锚，
 /// 裸数字（无锚）需整数部分 ≥2 位（防「附件2.3」「详见第3章」类误报）；
 /// 数字后紧跟 % 视为比率面跳过；紧邻「月/年/第」的数字视为日期/序数跳过；
-/// REQ-/EV- 引用编号段（#150 F1）与上限语前邻数字（#150 F2——法规上限
-/// 复述非承诺值）跳过。每处维度词只取首个合规数字（后续数字属别的语义面）。
+/// REQ-/EV- 引用编号段（#150 F1）与法规上限（#150 F2）跳过。本方报价
+/// 上限保留为 <=元整数约束，须带金额单位锚；不把上限当精确承诺值。
+/// 每处维度词只取首个合规数字（后续数字属别的语义面）。
 fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
     for dim in AMOUNT_DIMS {
         let dim_cs: Vec<char> = dim.chars().collect();
@@ -424,7 +535,10 @@ fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
                     break;
                 };
                 // 日期/序数守卫：数字前紧邻「月/年/第」→ 非金额面
-                if matches!(prev_char_nonspace(scan, k), Some('月') | Some('年') | Some('第')) {
+                if matches!(
+                    prev_char_nonspace(scan, k),
+                    Some('月') | Some('年') | Some('第')
+                ) {
                     k = next;
                     continue;
                 }
@@ -433,20 +547,35 @@ fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
                     k = next;
                     continue;
                 }
-                // 上限语守卫（#150 F2）：前邻上限语 = 条款上限复述，非承诺值
-                if has_upper_limit_prefix(scan, k) {
+                // 上限语非精确值；只有显式本方报价才能转为上限约束。
+                let is_upper = has_upper_limit_prefix(scan, k);
+                if is_upper && !is_bidder_quote(scan, dim, pos) {
                     k = next;
                     continue;
                 }
                 let u = skip_ws(scan, next, win_end);
                 let pct = u < win_end && scan[u] == '%';
                 let has_wan = !pct && u < win_end && scan[u] == '万';
-                let after_wan = if has_wan { skip_ws(scan, u + 1, win_end) } else { u };
+                let after_wan = if has_wan {
+                    skip_ws(scan, u + 1, win_end)
+                } else {
+                    u
+                };
                 let has_yuan = after_wan < win_end && matches!(scan[after_wan], '元' | '圆');
                 let int_digits = num.find('.').unwrap_or(num.len());
-                if !pct && (has_wan || has_yuan || int_digits >= 2) {
+                if !pct && (has_wan || has_yuan || (!is_upper && int_digits >= 2)) {
                     if let Some(yuan) = scale_to_int(&num, if has_wan { 10_000 } else { 1 }) {
-                        out.insert((FeatureType::Amount, dim.to_string(), yuan.to_string(), section.to_string()));
+                        let amount = if is_upper {
+                            AmountConstraint::Upper(yuan)
+                        } else {
+                            AmountConstraint::Exact(yuan)
+                        };
+                        out.insert((
+                            FeatureType::Amount,
+                            dim.to_string(),
+                            amount.normalized(),
+                            section.to_string(),
+                        ));
                     }
                     break;
                 }
@@ -574,7 +703,8 @@ fn scan_commitments(section: &str, scan: &[char], out: &mut FeatSet) {
 
 /// 全局冲突检测（第二遍——特征集合上的分组比对，输入只有特征无原文：这就是
 /// 全局检查不炸内存的结构保证）。按 (feature_type, key) 分组；组内归一化值
-/// 去重后 >1 种 → 冲突 Blocker。message 列出全部取值 + 各自首现位置
+/// 去重后 >1 种 → 冲突 Blocker；金额按精确值/上限的约束交集判定，交集
+/// 非空不报（上限不同本身不冲突）。message 列出全部取值 + 各自首现位置
 /// （字典序最小），如「金额冲突：投标保证金 在 SEC-2.1=3500000 与
 /// SEC-5.2=3800000」；finding 锚点 = 少数派取值的首现位置（出现位置数最少
 /// 的取值——500 章一致 + 1 章偏离的场景下锚点即偏离章，复核直指异常面；
@@ -596,13 +726,23 @@ pub fn check_global(features: &[FeatureTuple]) -> Vec<CheckFinding> {
         if by_value.len() < 2 {
             continue; // 单一取值 = 一致——不报（只出现一次的值不是冲突）
         }
+        if ft == FeatureType::Amount
+            && by_value.keys().any(|value| value.starts_with("<="))
+            && amount_constraints_compatible(by_value.keys().copied())
+        {
+            continue; // 同一精确值满足全部上限，或仅有可共存的上限
+        }
         // 每个取值取首现位置（字典序最小），按 (首现位置, 值) 排序列举
         let mut entries: Vec<(&str, &str, usize)> = by_value
             .iter()
             .map(|(v, secs)| (secs.iter().next().copied().unwrap_or(""), *v, secs.len()))
             .collect();
         entries.sort();
-        let listed = entries.iter().map(|(pos, v, _)| format!("{pos}={v}")).collect::<Vec<_>>().join(" 与 ");
+        let listed = entries
+            .iter()
+            .map(|(pos, v, _)| format!("{pos}={v}"))
+            .collect::<Vec<_>>()
+            .join(" 与 ");
         // 锚点 = 少数派：(位置数, 首现位置, 值) 全序最小
         let anchor = entries
             .iter()

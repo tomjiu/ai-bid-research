@@ -127,6 +127,13 @@ fn draft_padded(svc: &mut BidService, pid: &str, sid: &str, sentence: &str) -> V
     let need = target.saturating_sub(sentence.chars().count());
     let prefix: String = filler.repeat(need / filler.chars().count() + 1)
         .chars().take(need).collect();
+    // Truncated filler must not run into the assertion's subject token. Preserve
+    // exact quota while making the final padding character a sentence boundary.
+    let mut prefix = prefix;
+    if !prefix.is_empty() {
+        prefix.pop();
+        prefix.push('。');
+    }
     let content = format!("{prefix}{sentence}");
     draft_external(svc, pid, sid, &content)
 }
@@ -206,5 +213,38 @@ fn conflict_fix_then_revalidate_passes() {
     draft_padded(&mut svc, &pid, &b, "费用说明：投标保证金金额为 3500000 元，详见附表。");
     let v2 = validate(&mut svc, &pid);
     assert_eq!(v2["ok"], json!(true), "对齐后放行：{v2}");
+    assert_eq!(svc.store().project().unwrap().status, ProjectStatus::Validating);
+}
+
+/// PR #157 blocker: the public draft -> quality -> validate path must retain a
+/// bidder upper bound, block a higher exact quote, then allow a legal correction.
+#[test]
+fn bidder_bounded_quote_blocks_validate_then_legal_correction_passes() {
+    for legal in ["350", "400"] {
+        let (mut svc, pid, a, b) = svc_two_leaves(&format!("v157-bound-{legal}"));
+        draft_padded(&mut svc, &pid, &a, "我方投标总报价不超过400万元。");
+        draft_padded(&mut svc, &pid, &b, "投标总报价为450万元。");
+        let q = ok_result(call(&mut svc, "check_bid_quality", json!({ "project_id": &pid })));
+        assert!(q["global_conflicts"].as_array().unwrap().iter()
+            .any(|g| g["kind"] == json!("amount_conflict")), "bidder bound must reach quality: {q}");
+        let v = validate(&mut svc, &pid);
+        assert_eq!(v["ok"], json!(false), "450万 exceeds bidder <=400万: {v}");
+        assert!(v["errors"].as_array().unwrap().iter()
+            .any(|e| e["rule_code"] == "E_AMOUNT_CONFLICT"));
+        assert_eq!(svc.store().project().unwrap().status, ProjectStatus::Drafting);
+        draft_padded(&mut svc, &pid, &b, &format!("投标总报价为{legal}万元。"));
+        let fixed = validate(&mut svc, &pid);
+        assert_eq!(fixed["ok"], json!(true), "legal correction {legal}万 must pass: {fixed}");
+        assert_eq!(svc.store().project().unwrap().status, ProjectStatus::Validating);
+    }
+}
+
+#[test]
+fn regulatory_budget_cap_is_not_bidder_quote_in_validate() {
+    let (mut svc, pid, a, b) = svc_two_leaves("v157-regulatory-cap");
+    draft_padded(&mut svc, &pid, &a, "项目预算不得超过人民币400万元。");
+    draft_padded(&mut svc, &pid, &b, "投标总报价为450万元。");
+    let v = validate(&mut svc, &pid);
+    assert_eq!(v["ok"], json!(true), "regulatory cap is not an exact bidder amount: {v}");
     assert_eq!(svc.store().project().unwrap().status, ProjectStatus::Validating);
 }
