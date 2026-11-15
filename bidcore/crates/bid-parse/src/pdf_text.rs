@@ -854,6 +854,14 @@ impl CMap {
     /// 数组目的地尚未实现：标记能力缺口，由实际文本使用点拒收，
     /// 避免数组成员被误读为连续码区间而制造错误文本。未使用字体不拒收。
     pub fn parse(src: &str) -> Self {
+        // PostScript comments are not CMap syntax: ignore brackets and hex-like
+        // examples in comments before both capability detection and decoding.
+        let uncommented = src
+            .split(['\r', '\n'])
+            .map(|line| line.split('%').next().unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let src = uncommented.as_str();
         let mut cm = CMap::default();
         for chunk in between_all(src, "beginbfchar", "endbfchar") {
             for (code, dst) in parse_hex_pairs(chunk) {

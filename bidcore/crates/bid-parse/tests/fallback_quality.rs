@@ -42,6 +42,17 @@ fn scalar_map_with_english_quotes_is_accepted() {
     assert_eq!(parsed.blocks[0].text, "“”„‟");
 }
 
+#[test]
+fn bracket_inside_cmap_comment_is_not_array_syntax() {
+    let path = std::env::temp_dir().join(format!("bid167-comment-{}.pdf", std::process::id()));
+    let pdf = String::from_utf8(array_pdf().to_vec()).unwrap()
+        .replace("[<0020> <0032> <0030> <4EBA>]", "<0041> % [ explanatory comment");
+    std::fs::write(&path, pdf).unwrap();
+    let result = parse_via_fallback(&path, "comment.pdf");
+    std::fs::remove_file(path).unwrap();
+    assert_eq!(result.unwrap().blocks[0].text, "ABCD");
+}
+
 fn array_pdf() -> &'static [u8] {
     b"%PDF-1.4
 1 0 obj
