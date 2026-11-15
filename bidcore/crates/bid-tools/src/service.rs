@@ -2978,9 +2978,18 @@ fn convert_doc_to_docx(doc: &std::path::Path, out_docx: &std::path::Path) -> Res
 /// - finally 释放 COM 引用（ReleaseComObject/Quit）保留不回退。
 #[must_use]
 pub fn build_doc2docx_script(doc_path: &str, out_docx_path: &str) -> String {
-    let esc = |s: &str| s.replace('\'', "''");
-    let doc_s = esc(doc_path);
-    let out_s = esc(out_docx_path);
+    // PowerShell recognizes smart quotes too. Encode those paths as UTF-16 code
+    // units rather than putting any Unicode delimiter in a script literal.
+    let literal = |s: &str| {
+        if s.chars().any(|c| matches!(c, '‘' | '’' | '‚' | '‛')) {
+            let chars = s.encode_utf16().map(|c| format!("[char]{c}")).collect::<Vec<_>>();
+            format!("(-join @({}))", chars.join(","))
+        } else {
+            format!("'{}'", s.replace('\'', "''"))
+        }
+    };
+    let doc_s = literal(doc_path);
+    let out_s = literal(out_docx_path);
     format!(
         r#"$ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -2990,8 +2999,8 @@ try {{
     $word = New-Object -ComObject Word.Application
     $word.Visible = $false
     $word.DisplayAlerts = 0
-    $doc = $word.Documents.Open('{doc_s}', $false, $true)
-    $doc.SaveAs2('{out_s}', 16)
+    $doc = $word.Documents.Open({doc_s}, $false, $true)
+    $doc.SaveAs2({out_s}, 16)
 }} catch {{
     $message = $_.Exception.Message.Replace('\', '\\').Replace("`r", '\r')
     $message = $message.Replace("`n", '\n').Replace([string][char]0x2028, '\u2028').Replace([string][char]0x2029, '\u2029')

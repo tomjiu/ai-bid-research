@@ -48,7 +48,9 @@ impl Drop for Fixture {
     }
 }
 fn literal(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
+    // Test-shim literals preserve every character without relying on PS quote parsing.
+    let chars = s.encode_utf16().map(|c| format!("[char]{c}")).collect::<Vec<_>>();
+    format!("(-join @({}))", chars.join(","))
 }
 fn shim(mode: &str, doc: &str, out: &Path, valid: &Path, cleanup: &Path) -> String {
     format!("$script:mode={}\n$script:expectedDoc={}\n$script:expectedOut={}\n$script:valid={}\n$script:cleanup={}\n",literal(mode),literal(doc),literal(&out.display().to_string()),literal(&valid.display().to_string()),literal(&cleanup.display().to_string())) + r#"
@@ -256,6 +258,18 @@ fn controlled_generated_script_and_production_runner_cover_result_matrix() {
             );
         }
     }
+}
+#[test]
+fn generated_paths_preserve_smart_apostrophes_without_injection() {
+    let Some(ps) = powershell() else { return; };
+    let f = Fixture::new("smart-quote");
+    let out = f.0.join("o’ut.docx");
+    let input = "C:/it’s ‘quoted’ document.doc";
+    let cleanup = f.0.join("cleanup");
+    let script = shim("valid", input, &out, &f.valid_docx(), &cleanup)
+        + &build_doc2docx_script(input, &out.display().to_string());
+    run_doc2docx_script(&ps, &script, &out, 10).expect("exact path survives PS smart quote lexer");
+    assert_eq!(std::fs::read_to_string(&cleanup).unwrap(), "close;quit;");
 }
 #[test]
 fn shared_evaluator_rejects_invalid_ooxml_and_nonzero_even_with_valid_artifact() {
