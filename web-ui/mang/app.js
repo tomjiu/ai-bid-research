@@ -1821,14 +1821,15 @@
     const dirtyCount = (st.dirty_sections || []).length;
     const directives = (st.pending_rewrite_directives || []).length;
     const waivers = (st.agent_waivers || []).length;
-    const human = !!st.human_review_complete;
+    // Legacy field describes pending Agent attestations, not human approval completion.
+    const attestationText = typeof st.human_review_complete !== "boolean" ? "Agent 声明追认状态未知" : st.human_review_complete ? "无待追认的 Agent 声明" : "存在待追认的 Agent 声明";
     body.innerHTML =
       '<div class="bid-side">'
       + '<div class="bid-card">'
       + '<div class="bid-proj-row"><span class="bid-proj-name" title="' + esc(p.name) + '">' + esc(p.name || "未命名项目") + '</span><span class="bid-badge" data-status="' + esc(p.status) + '">' + esc(bidProjectStatusZh(p.status)) + "</span></div>"
       + '<div class="bid-card-sub">' + esc(p.mode || "") + " · " + esc(p.id || "") + "</div>"
       + '<div class="bid-gates">'
-      + '<div class="bid-gate" data-state="' + (human ? "ok" : "pending") + '"><span class="bid-gate-dot"></span>人工复核' + (human ? "完成" : "未完成") + "</div>"
+      + '<div class="bid-gate" data-state="pending"><span class="bid-gate-dot"></span>' + attestationText + "；人工审批以逐门台账为准</div>"
       + '<div class="bid-gate" data-state="' + (waivers ? "warn" : "ok") + '"><span class="bid-gate-dot"></span>Agent 门审声明 ' + waivers + " 项</div>"
       + (dirtyCount ? '<div class="bid-gate" data-state="warn"><span class="bid-gate-dot"></span>DIRTY 章节 ' + dirtyCount + " 个</div>" : "")
       + (directives ? '<div class="bid-gate" data-state="warn"><span class="bid-gate-dot"></span>待处置改写指令 ' + directives + " 条</div>" : "")
@@ -3168,14 +3169,15 @@
     const gates = Array.isArray(d.gates) ? d.gates : [];
     const waivers = Array.isArray(d.agent_waivers) ? d.agent_waivers : [];
     const reviews = Array.isArray(d.reviews) ? d.reviews : [];
-    const human = !!d.human_review_complete;
+    const attestationText = typeof d.human_review_complete !== "boolean" ? "Agent 声明追认状态未知" : d.human_review_complete ? "无待追认的 Agent 声明" : "存在待追认的 Agent 声明";
     const approvedN = gates.filter((g) => g.approved).length;
     const passing = gt.passing;
     let html = '<div class="bid-gt">';
-    // 头部：人工复核完成度徽章 + 刷新
+    // 头部：Agent 声明追认摘要；人工审批状态由逐门台账展示。
     html +=
       '<div class="bid-gt-head">'
-      + '<span class="bid-gt-badge" data-state="' + (human ? "ok" : "warn") + '">' + (human ? ICON.check + " 人工复核完成" : ICON.warning + " 存在待追认门") + "</span>"
+      + '<span class="bid-gt-badge" data-state="warn">' + attestationText + "</span>"
+      + '<span class="bid-gt-sub">人工审批以逐门台账和当前内容有效性为准</span>'
       + '<span class="bid-gt-sub">' + approvedN + "/" + gates.length + " 门已过 · " + (gt.ts ? timeAgo(gt.ts) : "—") + "</span>"
       + '<span class="bid-wb-spacer"></span>'
       + '<button class="btn btn-sm" data-bid-act="refresh-gates" title="重新读取 bid.gates">' + ICON.refresh + "刷新台账</button>"
