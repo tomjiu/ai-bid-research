@@ -375,7 +375,7 @@ def panel_realagent(log) -> dict:
 # ---------------------------------------------------------------- 主裁定
 
 def overall_verdict(panels: list[dict], strict: bool) -> tuple[str, list]:
-    """严格模式：任一 FAIL/BLOCKED/NOT_RUN → 整体 FAIL。
+    """严格模式：任一 FAIL/SKIP/BLOCKED/NOT_RUN → 整体 FAIL。
 
     宽松模式（--allow-skip，非收官自查）：SKIP/BLOCKED/NOT_RUN 不阻断，
     但 blocking_reasons 仍如实记录（结果文件里可追踪，报告渲染区分）。
@@ -386,7 +386,7 @@ def overall_verdict(panels: list[dict], strict: bool) -> tuple[str, list]:
         v = p["verdict"]
         if v == "FAIL":
             reasons.append(f"{p['panel']}: FAIL —— {p.get('reason', '')}")
-        elif strict and v in ("BLOCKED", "NOT_RUN"):
+        elif strict and v in ("SKIP", "BLOCKED", "NOT_RUN"):
             reasons.append(f"{p['panel']}: {v} —— {p.get('reason', '')}")
         elif not strict and v in ("SKIP", "BLOCKED", "NOT_RUN"):
             reasons.append(f"[allow-skip 豁免] {p['panel']}: {v} —— {p.get('reason', '')}")

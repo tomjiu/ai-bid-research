@@ -51,6 +51,23 @@ class TestOverallVerdict:
         assert v == "FAIL"
         assert any("realagent" in r for r in reasons)
 
+    @pytest.mark.parametrize("skipped", ac.PANELS)
+    def test_strict_skip_blocks_each_required_panel(self, skipped):
+        panels = [dict(panel=p, verdict="PASS") for p in ac.PANELS]
+        for panel in panels:
+            if panel["panel"] == skipped:
+                panel.update(verdict="SKIP", reason="explicit skip")
+        verdict, reasons = ac.overall_verdict(panels, strict=True)
+        assert verdict == "FAIL"
+        assert any(skipped in r and "SKIP" in r and "explicit skip" in r for r in reasons)
+
+    def test_allow_skip_preserves_skip_reason(self):
+        panels = [dict(panel=p, verdict="PASS") for p in ac.PANELS]
+        panels[0].update(verdict="SKIP", reason="explicit skip")
+        verdict, reasons = ac.overall_verdict(panels, strict=False)
+        assert verdict == "PASS_WITH_SKIPS"
+        assert len(reasons) == 1 and "explicit skip" in reasons[0]
+
     def test_strict_all_pass(self):
         panels = [dict(panel=p, verdict="PASS") for p in ac.PANELS]
         v, reasons = ac.overall_verdict(panels, strict=True)
