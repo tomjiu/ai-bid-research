@@ -352,6 +352,8 @@ fn has_upper_limit_prefix(scan: &[char], digit_start: usize) -> bool {
         .find_map(|currency| s.strip_suffix(currency))
         .unwrap_or(&s);
     UPPER_LIMIT_WORDS.iter().any(|w| prefix.ends_with(w))
+        || prefix.ends_with("≤")
+        || prefix.ends_with("<=")
 }
 
 /// 本方主体必须紧邻报价维度（可带「的」），且是独立句/分句起始词元。
@@ -404,6 +406,25 @@ fn is_bidder_quote(scan: &[char], dim: &str, pos: usize) -> bool {
         })
 }
 
+/// New bounded commitments cannot borrow a value from a later dimension or quoted rule.
+/// This guard narrows only upper-bound recognition; legacy exact scanning is unchanged.
+fn bidder_bound_belongs_here(scan: &[char], dim: &str, pos: usize, word_end: usize, number: usize) -> bool {
+    if !is_bidder_quote(scan, dim, pos) { return false; }
+    let mut sentence_start = pos;
+    while sentence_start > 0 && !matches!(scan[sentence_start - 1], '。' | '；' | ';' | '！' | '!' | '？' | '?' | '\n' | '\r') {
+        sentence_start -= 1;
+    }
+    let framing: String = scan[sentence_start..pos].iter().collect();
+    if ["招标文件", "招标方", "采购人", "其他投标人", "引用", "条款", "规定"].iter().any(|word| framing.contains(word)) {
+        return false;
+    }
+    let between = &scan[word_end..number];
+    if between.iter().any(|c| matches!(c, ',' | '，' | '“' | '”' | '‘' | '’' | '"' | '\'')) { return false; }
+    let text: String = between.iter().collect();
+    !AMOUNT_DIMS.iter().any(|other| text.contains(other))
+        && !["采购人", "招标方", "其他投标人", "招标文件", "引用", "条款", "规定"].iter().any(|word| text.contains(word))
+}
+
 /// 金额约束语义面：不加 FeatureTuple 字段、不改变既有精确金额字符串；
 /// 上限显式序列化为 <=n，重放时保留关系而不是错当精确值。
 enum AmountConstraint {
@@ -425,7 +446,8 @@ impl AmountConstraint {
             None => (value, false),
         };
         let yuan: i64 = digits.parse().ok()?;
-        if yuan < 0 {
+        if yuan < 0 || digits != yuan.to_string() {
+            // Public exact strings remain distinct: a loose bound must not hide 0400 vs 400.
             return None;
         }
         Some(if upper {
@@ -549,7 +571,7 @@ fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
                 }
                 // 上限语非精确值；只有显式本方报价才能转为上限约束。
                 let is_upper = has_upper_limit_prefix(scan, k);
-                if is_upper && !is_bidder_quote(scan, dim, pos) {
+                if is_upper && !bidder_bound_belongs_here(scan, dim, pos, word_end, k) {
                     k = next;
                     continue;
                 }

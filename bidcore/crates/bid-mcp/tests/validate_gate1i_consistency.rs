@@ -242,7 +242,7 @@ fn bidder_bounded_quote_blocks_validate_then_legal_correction_passes() {
 #[test]
 fn regulatory_budget_cap_is_not_bidder_quote_in_validate() {
     let (mut svc, pid, a, b) = svc_two_leaves("v157-regulatory-cap");
-    draft_padded(&mut svc, &pid, &a, "项目预算不得超过人民币400万元。");
+    draft_padded(&mut svc, &pid, &a, "招标文件要求投标总报价不得超过人民币400万元。");
     draft_padded(&mut svc, &pid, &b, "投标总报价为450万元。");
     let v = validate(&mut svc, &pid);
     assert_eq!(v["ok"], json!(true), "regulatory cap is not an exact bidder amount: {v}");

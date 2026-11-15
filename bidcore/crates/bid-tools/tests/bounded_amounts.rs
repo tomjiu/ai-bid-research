@@ -195,6 +195,35 @@ fn legacy_exact_tuple_comparison_and_invalid_bounds_do_not_weaken() {
 }
 
 #[test]
+fn review_bounds_never_cross_owner_dimension_or_explicit_quotes() {
+    for text in [
+        "我方投标总报价另报，项目预算不超过400万元。",
+        "我方投标总报价另报，其他投标人投标总报价不超过400万元。",
+        "招标文件规定：我方投标总报价不超过400万元。",
+        "我方投标总报价引用条款“不超过400万元”。",
+    ] {
+        assert!(amount_features(text).is_empty(), "wrong ownership: {text}: {:?}", amount_features(text));
+        assert!(conflicts(&[text, "投标总报价为450万元。"]).is_empty());
+    }
+}
+#[test]
+fn review_symbolic_limits_are_constraints_and_regulations_are_not_commitments() {
+    for relation in ["≤", "<=", "＜＝"] {
+        let own = format!("我方投标总报价{relation}400万元。");
+        assert_eq!(amount_features(&own)[0].value, "<=4000000");
+        assert!(conflicts(&[&own, "投标总报价350万元。"]).is_empty());
+        assert_eq!(conflicts(&[&own, "投标总报价450万元。"]).len(), 1);
+        assert!(amount_features(&format!("项目预算{relation}400万元。")).is_empty());
+    }
+}
+#[test]
+fn review_loose_bound_never_masks_legacy_exact_string_conflict() {
+    let features = ["0400", "400", "<=500"].map(|value| FeatureTuple {
+        feature_type: FeatureType::Amount, key: "投标总报价".into(), value: value.into(), section_id: value.into()
+    });
+    assert_eq!(check_global(&features).len(), 1);
+}
+#[test]
 fn bidder_zero_bound_and_fractional_wan_use_existing_integer_yuan_policy() {
     assert!(conflicts(&["本企业投标总报价不得超出0万元。", "投标总报价为0元。"]).is_empty());
     assert_eq!(conflicts(&["本企业投标总报价不得超出0万元。", "投标总报价为1元。"]).len(), 1);
