@@ -236,6 +236,24 @@ if (mang) {
       panelHtml().indexOf("REV-") >= 0 || panelHtml().indexOf("已过") >= 0);
   }
 
+  // #169: legacy boolean means no pending Agent attestation, not completed human review.
+  const originalGates = state.bidGates.data;
+  const originalState = state.bid.data.state;
+  state.bidGates.data = { gates: [], reviews: [], agent_waivers: [], human_review_complete: true };
+  state.bid.data.state = { ...originalState, agent_waivers: [], human_review_complete: true };
+  ui.exitBidWizardReentry();
+  check("空审批账本不能显示人工复核完成", !panelHtml().includes("人工复核完成"));
+  check("空账本准确显示声明追认状态", panelHtml().includes("无待追认的 Agent 声明"));
+  delete state.bidGates.data.human_review_complete;
+  ui.exitBidWizardReentry();
+  check("缺失旧字段显示未知而非完成", panelHtml().includes("Agent 声明追认状态未知") && !panelHtml().includes("人工复核完成"));
+  state.bidGates.data.human_review_complete = false;
+  ui.exitBidWizardReentry();
+  check("待追认状态不冒充已审批", panelHtml().includes("存在待追认的 Agent 声明") && !panelHtml().includes("人工复核完成"));
+  state.bidGates.data = originalGates;
+  state.bid.data.state = originalState;
+  ui.exitBidWizardReentry();
+
   // ---------- ④ 面板二~五：detail / matrix / quality / coverage（点击→IPC→渲染） ----------
   const panelCases = [
     { panel: "detail", cmd: "fs.read", text: "技术参数", label: "章节详情（大纲节点 + 正文预览）" },
