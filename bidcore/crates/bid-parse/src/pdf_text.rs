@@ -60,7 +60,7 @@ impl std::fmt::Display for PdfTextError {
             PdfTextError::NoTextLayer => {
                 write!(f, "PDF 无文本层（疑扫描件——需 OCR 链）")
             }
-            PdfTextError::Unsupported(why) => write!(f, "PDF 流解压不支持：{why}"),
+            PdfTextError::Unsupported(why) => write!(f, "PDF 兜底解析能力不支持：{why}"),
         }
     }
 }
@@ -148,7 +148,7 @@ pub fn extract(bytes: &[u8]) -> Result<PdfText, PdfTextError> {
                 continue;
             }
         };
-        let lines = extract_text_lines(&decoded, &fcmaps, &fonts);
+        let lines = extract_text_lines(&decoded, &fcmaps, &fonts)?;
         if lines.is_empty() {
             // 解压成功但无字串（比如字体/图形流——正常）：不计跳过。
             streams_decoded += 1;
@@ -403,7 +403,7 @@ fn collect_font_cmaps(bytes: &[u8]) -> std::collections::HashMap<String, CMap> {
                 if let Some(body) = object_stream_bytes(bytes, tu_num) {
                     let text = String::from_utf8_lossy(&body).to_string();
                     let cm = CMap::parse(&text);
-                    if !cm.is_empty() {
+                    if !cm.is_empty() || cm.unsupported_array {
                         obj_cmap.insert(font_obj, cm);
                     }
                 }
@@ -830,6 +830,8 @@ pub struct CMap {
     ranges: Vec<(u32, u32)>,
     /// 是否已从 cidrange 建出矩阵（一次性展开）。
     range_map: std::collections::BTreeMap<u32, String>,
+    // Array destinations are not implemented by this minimal decoder.
+    unsupported_array: bool,
 }
 
 impl CMap {
@@ -849,9 +851,8 @@ impl CMap {
     /// 解析 ToUnicode CMap 流的文本。
     ///
     /// 支持 `beginbfchar`…`endbfchar` 与 `beginbfrange`…`endbfrange`。
-    /// 不支持的字段（如 `beginbfrange` 的数组形式处理不全）会被**安静地跳过**，
-    /// 因为 CMap 本身是“字体辅助信息”——拿不全楼不会造成静默错误，
-    /// 而看不明白的字会在下游被识别为缺字。
+    /// 数组目的地尚未实现：标记能力缺口，由实际文本使用点拒收，
+    /// 避免数组成员被误读为连续码区间而制造错误文本。未使用字体不拒收。
     pub fn parse(src: &str) -> Self {
         let mut cm = CMap::default();
         for chunk in between_all(src, "beginbfchar", "endbfchar") {
@@ -860,6 +861,10 @@ impl CMap {
             }
         }
         for chunk in between_all(src, "beginbfrange", "endbfrange") {
+            if chunk.contains('[') {
+                cm.unsupported_array = true;
+                continue; // Never reinterpret array members as scalar ranges.
+            }
             for (lo, hi, base) in parse_hex_triples(chunk) {
                 let n = hi.saturating_sub(lo).min(65_535) + 1;
                 let mut cur = base_codepoint(&base);
@@ -1023,7 +1028,11 @@ fn codepoint_to_string(cp: u32) -> String {
 ///
 /// 两种模式共存：合成时如果当前行已经很长且新字符序列又出现大块\u7a7a白，
 /// 说明是连续 Tj 模式的新行，也要断开。
-fn extract_text_lines(content: &[u8], fcmaps: &FontCMaps, fonts: &FontEncodings) -> Vec<String> {
+fn extract_text_lines(
+    content: &[u8],
+    fcmaps: &FontCMaps,
+    fonts: &FontEncodings,
+) -> Result<Vec<String>, PdfTextError> {
     let mut lines: Vec<String> = Vec::new();
     let mut parts: Vec<(f64, f64, String)> = Vec::new();
     let mut cur_y: Option<f64> = None;
@@ -1128,6 +1137,7 @@ fn extract_text_lines(content: &[u8], fcmaps: &FontCMaps, fonts: &FontEncodings)
                 match op.as_str() {
                     "Tj" | "TJ" | "'" | "\"" => {
                         if in_text && !pending.is_empty() {
+                            check_cmap_quality(fcmaps, cur_font.as_deref())?;
                             let joined: Vec<u8> = pending.concat();
                             let txt = decode_text_string(
                                 &joined,
@@ -1223,6 +1233,7 @@ fn extract_text_lines(content: &[u8], fcmaps: &FontCMaps, fonts: &FontEncodings)
         }
     }
     if in_text && !pending.is_empty() {
+        check_cmap_quality(fcmaps, cur_font.as_deref())?;
         let joined: Vec<u8> = pending.concat();
         let txt = decode_text_string(
             &joined,
@@ -1236,7 +1247,22 @@ fn extract_text_lines(content: &[u8], fcmaps: &FontCMaps, fonts: &FontEncodings)
         }
     }
     flush_parts(&mut parts, &mut lines);
-    lines
+    Ok(lines)
+}
+
+/// Syntax/decoder capability check, not a language or requirement-count heuristic.
+/// Run only when a selected font actually emits text; unused fonts and scans pass.
+fn check_cmap_quality(fcmaps: &FontCMaps, font: Option<&str>) -> Result<(), PdfTextError> {
+    if font
+        .and_then(|f| fcmaps.maps.get(f))
+        .is_some_and(|cm| cm.unsupported_array)
+    {
+        return Err(PdfTextError::Unsupported(format!(
+            "PDF_QUALITY_UNSUPPORTED_CMAP: route=rust-fallback quality=rejected; font={} uses ToUnicode bfrange array destinations unsupported by this decoder; use a compatible PDFium/poppler parser",
+            font.unwrap_or("unknown")
+        )));
+    }
+    Ok(())
 }
 
 /// 遇到 `Tm`：若 y 跳变就断行，并记下新行的起点 x。
@@ -2284,6 +2310,7 @@ mod tests {
         single: std::collections::BTreeMap::new(),
         ranges: Vec::new(),
         range_map: std::collections::BTreeMap::new(),
+        unsupported_array: false,
     };
 
     // ---------------------------------------------------------------- 工具
@@ -2438,7 +2465,8 @@ mod tests {
         let content = b"BT /F1 12 Tf 72 700 Td (line1) Tj ET \
                        BT /F1 12 Tf 72 680 Td [(seg-) 20 (two)] TJ ET \
                        BT /F1 12 Tf 72 660 Td (third) Tj T* ET";
-        let lines = extract_text_lines(content, &FontCMaps::default(), &FontEncodings::default());
+        let lines =
+            extract_text_lines(content, &FontCMaps::default(), &FontEncodings::default()).unwrap();
         // 连续 Tj 且中间没有 Tm 定位 → 它们就是同一行的延续（这是正确行为）。
         // 要断行必须靠 Tm 的 y 变化，见 per_char_tm_positioning_joins_into_one_line。
         assert_eq!(
@@ -2567,7 +2595,8 @@ mod tests {
                        BT /F1 12 Tf 1 0 0 -1 90 50 Tm (A) Tj ET \
                        BT /F1 12 Tf 1 0 0 -1 110 50 Tm (C) Tj ET \
                        BT /F1 12 Tf 1 0 0 -1 80 70 Tm (N) Tj ET";
-        let lines = extract_text_lines(content, &FontCMaps::default(), &FontEncodings::default());
+        let lines =
+            extract_text_lines(content, &FontCMaps::default(), &FontEncodings::default()).unwrap();
         assert_eq!(
             lines,
             vec!["ABC", "N"],
