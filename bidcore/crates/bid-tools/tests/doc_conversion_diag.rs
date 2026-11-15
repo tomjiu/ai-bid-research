@@ -1,344 +1,416 @@
-//! doc_conversion_diag.rs —— #165：Word COM .doc 转换失败根因保全验收。
-//!
-//! Lead 受控面复现（Windows PowerShell 实测）：.doc 转换脚本缺
-//! `$ErrorActionPreference='Stop'` 与显式 catch/退出码——`Write-Error`
-//! （Continue 档非终止错误）stderr 有字仍 **exit 0**；Rust 侧只在
-//! `!status.success()` 分支读 stderr，exit 0 + 产物缺失/非 docx 时只报
-//! 笼统「PK 魔数校验失败」，这次已有的 stderr/stdout 诊断被丢——根因遗失。
-//!
-//! 本文件钉的验收（红→绿）：
-//! 1. **脚本生成面**（`build_doc2docx_script`——纯函数，非 Windows 也可测）：
-//!    - 脚本头设置 `$ErrorActionPreference = 'Stop'`（对齐 PDF 面脚本）；
-//!    - 显式 `catch` 捕获 `$_.Exception` 的**类型/行号/消息**写 stderr 单行
-//!      诊断 `BID_WORD_COM_FAIL type=... line=... msg=...`，并 `exit 3`
-//!      （非零——PowerShell 进程退出码可判）；
-//!    - 单引号路径转义核对：`'` 双写（`''`）——现 PDF 面同款纪律；
-//!    - finally 释放 COM 引用（ReleaseComObject / Quit）保留不回退。
-//! 2. **诊断汇总面**（`word_com_exit_diagnostics`——纯函数）：
-//!    - 非零退出：错误串带退出码 + stderr 尾部（保留具体错误）；
-//!    - **exit 0 但产物缺失/非 docx**：错误串必须携带 stdout/stderr 尾部
-//!      与退出码（不再只说「PK 魔数校验失败」——这次已有的 stderr 不丢）；
-//!    - timeout 面：超时错误串带秒数（既有文案保留）。
-//! 3. **受控真实子进程面**（Linux pwsh 在场时执行；不在场跳过并如实 SKIP）：
-//!    - Lead 复现脚本（Write-Error + finally，**无** Stop/无 catch）→
-//!      stderr 有 CONTROLLED_WORD_COM_FAILURE 而 exit 0（证「退出判据
-//!      不足」）；
-//!    - 修复后模板脚本（Stop + catch + 诊断行 + exit 3）→ exit 3 且
-//!      stderr 单行含 type=/line=/msg=（证退出判据足以保全诊断）。
-//!    Linux pwsh ≠ Windows 真实 COM —— 分账如实（无 Word 环境不冒称）。
-//!
-//! 红面证据（Lead 复现 + 本文件先跑必红）：main 5d1ad697 的
-//! `convert_doc_to_docx_word` 脚本无 Stop/catch/退出码，产物校验失败
-//! 分支只返回「PK 魔数校验失败」——上述断言全部不成立。
-
-use std::path::Path;
+//! #166: actual generated script, COM-free shims and shared production gate.
+//! No Office or soffice activation. Real .doc conversion is not proved here.
+use bid_tools::service::{
+    build_doc2docx_script, evaluate_word_com_result, run_doc2docx_script,
+    word_com_exit_diagnostics, word_com_timeout_message,
+};
+use std::path::{Path, PathBuf};
 use std::process::Command;
-
-// ------------------------------------------------------------ 受控夹具
-
-/// Lead 受控复现脚本（#165 正文口径）：非终止 Write-Error + finally——
-/// 模拟现有 .doc 转换脚本「无 Stop/无 catch」时的行为面。
-const CONTROLLED_NO_STOP: &str = r#"
-$word = $null
-$doc = $null
-try {
-    Write-Error "CONTROLLED_WORD_COM_FAILURE" -ErrorAction Continue
-} finally {
-    Write-Output "cleanup done"
-}
-"#;
-
-/// 判定「真实 pwsh 在场可执行受控面」——不在场如实 SKIP（Linux 无 pwsh
-/// 不是失败；Windows 真实 COM 面本单不冒称已覆盖）。探测序：沙箱持久位
-/// /home/z/pwsh-root（CI/沙箱安装面）→ PATH 上 pwsh/powershell。
-fn pwsh_available() -> Option<PathBuf> {
-    for cand in [
-        "/home/z/pwsh-root/opt/microsoft/powershell/7/pwsh",
-        "/tmp/pwsh-root/opt/microsoft/powershell/7/pwsh",
-        "pwsh",
-        "powershell",
-    ] {
-        if cand.starts_with('/') {
-            if Path::new(cand).is_file() {
-                return Some(PathBuf::from(cand));
-            }
-        } else {
-            let ok = Command::new(cand)
-                .args(["-NoProfile", "-Command", "exit 0"])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
-            if ok {
-                return Some(PathBuf::from(cand));
-            }
+fn powershell() -> Option<PathBuf> {
+    for c in ["powershell", "pwsh"] {
+        if Command::new(c)
+            .args(["-NoProfile", "-Command", "exit 0"])
+            .output()
+            .is_ok_and(|o| o.status.success())
+        {
+            return Some(c.into());
         }
     }
+    eprintln!("SKIP: doc_conversion_diag subprocess\nreason: ENV_MISSING: PowerShell\nremedy: provide PowerShell; Office not required");
     None
 }
-
-use std::path::PathBuf;
-
-// ------------------------------------------------------------ 红测：脚本生成面
-
-/// #165 核心钉子：.doc→.docx PowerShell 脚本必须带 Stop + catch + 非零退出。
-/// main 5d1ad697 无该函数 → 编译红；实现后断言面逐步验证。
+struct Fixture(PathBuf);
+impl Fixture {
+    fn new(name: &str) -> Self {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let p = std::env::temp_dir().join(format!("bid166-{name}-{}-{nonce}", std::process::id()));
+        std::fs::create_dir(&p).unwrap();
+        Self(p)
+    }
+    fn valid_docx(&self) -> PathBuf {
+        let p = self.0.join("fixture.docx");
+        docx_rs::Docx::new()
+            .add_paragraph(
+                docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("真实 OOXML 标书")),
+            )
+            .build()
+            .pack(std::fs::File::create(&p).unwrap())
+            .unwrap();
+        p
+    }
+}
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+fn literal(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
+}
+fn shim(mode: &str, doc: &str, out: &Path, valid: &Path, cleanup: &Path) -> String {
+    format!("$script:mode={}\n$script:expectedDoc={}\n$script:expectedOut={}\n$script:valid={}\n$script:cleanup={}\n",literal(mode),literal(doc),literal(&out.display().to_string()),literal(&valid.display().to_string()),literal(&cleanup.display().to_string())) + r#"
+function New-Object {
+ param([string]$ComObject)
+ if ($ComObject -ne 'Word.Application') { throw 'Unexpected COM request' }
+ [Console]::Out.WriteLine(('前' * 900) + "`nSTDOUT 尾😀`nlast stdout")
+ if ($script:mode -eq 'create_fail') { throw [System.InvalidOperationException]::new("CONTROLLED_ROOT`r`nUnicode 根因`nFINAL_REASON") }
+ if ($script:mode -eq 'timeout') { Start-Sleep -Seconds 30 }
+ $document=[pscustomobject]@{}
+ $document | Add-Member ScriptMethod SaveAs2 {
+  param($path,$format)
+  if ($path -cne $script:expectedOut -or $format -ne 16) { throw 'OUTPUT_LITERAL_MISMATCH' }
+  if ($script:mode -eq 'save_fail') { throw [System.InvalidOperationException]::new("SAVE_ROOT`r`n保存根因`nSAVE_FINAL") }
+  if ($script:mode -eq 'missing') { [Console]::Error.WriteLine("MISSING_STDERR 尾😀`nlast stderr"); return }
+  if ($script:mode -eq 'invalid') { [System.IO.File]::WriteAllText($path,'NOT_DOCX'); [Console]::Error.WriteLine('INVALID_STDERR'); return }
+  if ($script:mode -eq 'pk_only') { [System.IO.File]::WriteAllBytes($path,[byte[]](80,75,3,4,0,0)); [Console]::Error.WriteLine('PK_ONLY_STDERR'); return }
+  [System.IO.File]::WriteAllBytes($path,[System.IO.File]::ReadAllBytes($script:valid))
+ }
+ $document | Add-Member ScriptMethod Close { param($save); [System.IO.File]::AppendAllText($script:cleanup,'close;') }
+ $documents=[pscustomobject]@{ Document=$document }
+ $documents | Add-Member ScriptMethod Open {
+  param($path,$confirm,$readOnly)
+  if ($path -cne $script:expectedDoc -or $confirm -ne $false -or $readOnly -ne $true) { throw 'INPUT_LITERAL_MISMATCH' }
+  if ($script:mode -eq 'open_fail') { throw [System.InvalidOperationException]::new("OPEN_ROOT`r`n打开根因`nOPEN_FINAL") }
+  return $this.Document
+ }
+ $word=[pscustomobject]@{ Visible=$true; DisplayAlerts=1; Documents=$documents }
+ $word | Add-Member ScriptMethod Quit { [System.IO.File]::AppendAllText($script:cleanup,'quit;') }
+ return $word
+}
+"#
+}
 #[test]
 fn red_doc2docx_script_has_stop_catch_typed_diag_and_exit() {
-    let script = bid_tools::service::build_doc2docx_script("/t/投标书.doc", "/t/out.docx");
-    // ① Stop 档（对齐 PDF 面 convert_to_pdf_word 首行）
-    assert!(
-        script.contains("$ErrorActionPreference = 'Stop'"),
-        "脚本必须设置 Stop（非终止错误不再静默续走）: {script}"
-    );
-    // ② 显式 catch：异常类型/行号/消息进 stderr 单行诊断 + exit 3
-    assert!(script.contains("catch {"), "脚本必须有显式 catch 块: {script}");
-    assert!(
-        script.contains("BID_WORD_COM_FAIL"),
-        "catch 块必须输出可机判诊断行 BID_WORD_COM_FAIL: {script}"
-    );
-    assert!(
-        script.contains("Exception.GetType().FullName"),
-        "诊断行必须捕获异常类型（根因保全）: {script}"
-    );
-    assert!(
-        script.contains("InvocationInfo.ScriptLineNumber"),
-        "诊断行必须捕获行号（定位）: {script}"
-    );
-    assert!(
-        script.contains("exit 3"),
-        "catch 必须 exit 3（非零退出码——退出判据可判）: {script}"
-    );
-    // ③ 单引号路径转义（现实现核对：' 双写——含撇号路径防断裂/注入）
-    let esc_script =
-        bid_tools::service::build_doc2docx_script("/t/it's 投's 标.doc", "/t/o'ut.docx");
-    assert!(
-        esc_script.contains("Open('/t/it''s 投''s 标.doc'"),
-        "路径单引号必须双写转义（PDF 面同款）: {}",
-        esc_script.lines().find(|l| l.contains("Open(")).unwrap_or("")
-    );
-    assert!(
-        !esc_script.contains("it's"),
-        "原始未转义单引号不得残留（断裂/注入面）"
-    );
-    // ④ finally 释放 COM 引用保留（不回退既有清理面）
-    assert!(script.contains("ReleaseComObject"), "finally 释放面保留: {script}");
-    assert!(script.contains("$word.Quit()"), "Quit 清理面保留: {script}");
+    let script = build_doc2docx_script("/t/it's 投's 标.doc", "/t/o'ut.docx");
+    for s in [
+        "$ErrorActionPreference = 'Stop'",
+        "catch {",
+        "BID_WORD_COM_FAIL",
+        "Exception.GetType().FullName",
+        "InvocationInfo.ScriptLineNumber",
+        "exit 3",
+        "ReleaseComObject",
+        "$word.Quit()",
+        "$doc.Close(0)",
+    ] {
+        assert!(script.contains(s), "missing {s}: {script}");
+    }
+    assert!(script.contains("Open('/t/it''s 投''s 标.doc'"));
+    assert!(script.contains("SaveAs2('/t/o''ut.docx', 16)"));
 }
-
-// ------------------------------------------------------------ 红测：诊断汇总面
-
-/// 非零退出：错误串保留退出码 + stderr 尾部（现有面已有——防回退钉子）。
 #[test]
 fn red_diag_nonzero_exit_keeps_code_and_stderr() {
-    let msg = bid_tools::service::word_com_exit_diagnostics(
+    let msg = word_com_exit_diagnostics(
         Some(3),
         "stdout-tail",
         "BID_WORD_COM_FAIL type=System.Runtime.InteropServices.COMException line=9 msg=Open 失败",
     );
-    assert!(msg.contains("3"), "退出码保留: {msg}");
-    assert!(msg.contains("BID_WORD_COM_FAIL"), "stderr 具体错误保留: {msg}");
-    assert!(msg.contains("COMException"), "异常类型保留: {msg}");
+    assert!(msg.contains("Some(3)") && msg.contains("COMException") && msg.contains("Open 失败"));
 }
-
-/// #165 核心钉子（exit0 + 产物缺失丢根因）：exit 0 且产物无效时，错误串
-/// 必须携带 stdout/stderr 尾部与退出码——不再只说「PK 魔数校验失败」。
 #[test]
 fn red_diag_exit0_invalid_artifact_carries_stdout_stderr_and_code() {
-    let msg = bid_tools::service::word_com_exit_diagnostics(
+    let f = Fixture::new("exit0");
+    let msg = evaluate_word_com_result(
         Some(0),
-        "stdout-tail：Word COM 正常输出",
-        "stderr-tail：CONTROLLED_WORD_COM_FAILURE 非终止错误残迹",
-    );
-    assert!(
-        msg.contains("stderr-tail") || msg.contains("stdout-tail"),
-        "exit0+产物无效必须携带 stdout/stderr（根因不丢）: {msg}"
-    );
-    assert!(msg.contains("0"), "退出码照实入串: {msg}");
-    // 反面钉子：不允许只剩笼统「PK 魔数校验失败」无任何流内容
-    assert!(
-        !(msg.contains("PK 魔数") && !msg.contains("stderr") && !msg.contains("stdout")),
-        "笼统 PK 魔数失败而丢弃流诊断 = #165 根因遗失面（禁）: {msg}"
-    );
+        "stdout-tail",
+        "stderr-tail",
+        &f.0.join("missing.docx"),
+    )
+    .unwrap_err();
+    assert!(msg.contains("exit 0") && msg.contains("stdout-tail") && msg.contains("stderr-tail"));
 }
-
-/// timeout 面：超时错误串带秒数（既有文案保留——防回退）。
 #[test]
-fn red_diag_timeout_message_shape_kept() {
-    let msg = bid_tools::service::word_com_timeout_message(30);
-    assert!(msg.contains("超时"), "超时面文案保留: {msg}");
-    assert!(msg.contains("30"), "超时秒数入串: {msg}");
-}
-
-// ------------------------------------------------------------ 受控真实子进程面
-
-/// Lead 复现：无 Stop/无 catch 的脚本 stderr 有字仍 exit 0（证退出判据
-/// 不足以保全诊断——**这就是 #165 的红**）。pwsh 不在场则 SKIP 如实。
-#[test]
-fn controlled_no_stop_script_stderr_nonzero_silent_exit0() {
-    let Some(pwsh) = pwsh_available() else {
-        eprintln!("SKIP：本机无 pwsh——Linux 受控面不可执行（如实跳过，不冒称）");
-        return;
-    };
-    let dir = std::env::temp_dir().join(format!("bid165-lead-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let ps1 = dir.join("lead_repro.ps1");
-    std::fs::write(&ps1, CONTROLLED_NO_STOP).unwrap();
-    let out = Command::new(&pwsh)
-        .args(["-NoProfile", "-NonInteractive", "-File"])
-        .arg(&ps1)
-        .output()
-        .expect("pwsh 执行");
-    // Lead 实测面：stderr 有 CONTROLLED_WORD_COM_FAILURE，exit 0
-    assert_eq!(out.status.code(), Some(0), "无 Stop：非终止错误仍 exit 0（Lead 复现）");
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        stderr.contains("CONTROLLED_WORD_COM_FAILURE"),
-        "stderr 确有错误字样（根因在场但被退出判据吞掉）: {stderr}"
+fn red_long_streams_keep_typed_line_and_unicode_tail() {
+    let typed = "BID_WORD_COM_FAIL type=System.InvalidOperationException line=42 msg=ROOT_CAUSE";
+    let stdout = format!("{}\nSTDOUT 尾😀\nlast stdout", "前".repeat(900));
+    let stderr = format!(
+        "{}\n{typed}\n{}\nSTDERR 尾😀\nlast stderr",
+        "初".repeat(900),
+        "中".repeat(900)
     );
-    std::fs::remove_dir_all(&dir).ok();
+    let msg = word_com_exit_diagnostics(Some(3), &stdout, &stderr);
+    assert!(
+        msg.contains(typed),
+        "typed root must survive long streams: {msg}"
+    );
+    assert!(
+        msg.contains("STDOUT 尾😀\nlast stdout"),
+        "stdout tail lost: {msg}"
+    );
+    assert!(
+        msg.contains("STDERR 尾😀\nlast stderr"),
+        "stderr tail lost: {msg}"
+    );
+    assert!(msg.chars().count() <= 1400, "diagnostics must be bounded");
 }
-
-/// 修复后模板：Stop + catch → exit 3 + stderr 单行 typed 诊断（证退出判据
-/// 足以保全诊断——**修后应绿**；实现前该脚本模板不存在即编译红的一部分）。
+#[test]
+fn red_timeout_does_not_claim_unverified_word_cleanup() {
+    let msg = word_com_timeout_message(30);
+    assert!(msg.contains("超时") && msg.contains("30"));
+    assert!(!msg.contains("已清理残留"));
+}
 #[test]
 fn controlled_fixed_script_exits_nonzero_with_typed_diag() {
-    let Some(pwsh) = pwsh_available() else {
-        eprintln!("SKIP：本机无 pwsh——Linux 受控面不可执行（如实跳过，不冒称）");
+    let Some(ps) = powershell() else {
         return;
     };
-    // 修复后脚本 = 产品脚本生成面同构（Word COM 调用在 Linux 不可真实化——
-    // 用同构受控 COM 失败调用替代：New-Object -ComObject Word.Application
-    // 在 Linux pwsh 抛类型化异常进 catch，同走 catch/诊断行/exit 3 面）
-    let script = bid_tools::service::build_doc2docx_script(
-        "/t/nonexistent-投标书.doc",
-        "/t/out-投标书.docx",
-    );
-    // 说明：Linux pwsh 的 -ComObject 本身抛类型化异常（ParameterBindingException
-    // 类）进 catch——直接跑产品生成脚本即受控等价面。
-    let dir = std::env::temp_dir().join(format!("bid165-fixed-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let ps1 = dir.join("fixed.ps1");
-    // 写文件时保 BOM（产品面同款——PowerShell 5.1 GBK 防乱码）
-    let mut bytes = vec![0xEF, 0xBB, 0xBF];
+    let f = Fixture::new("typed");
+    let out = f.0.join("out.docx");
+    let script = shim(
+        "create_fail",
+        "input.doc",
+        &out,
+        &f.valid_docx(),
+        &f.0.join("cleanup"),
+    ) + &build_doc2docx_script("input.doc", &out.display().to_string());
+    let ps1 = f.0.join("generated.ps1");
+    let mut bytes = vec![0xef, 0xbb, 0xbf];
     bytes.extend_from_slice(script.as_bytes());
-    std::fs::write(&ps1, &bytes).unwrap();
-    let out = Command::new(&pwsh)
+    std::fs::write(&ps1, bytes).unwrap();
+    let o = Command::new(&ps)
         .args(["-NoProfile", "-NonInteractive", "-File"])
         .arg(&ps1)
         .output()
-        .expect("pwsh 执行");
-    let code = out.status.code();
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    // 核心验收：非零退出 + typed 诊断行在场（Linux 上 New-Object -ComObject
-    // 抛 PSNotSupportedException/RuntimeException 类异常——类型字样照实入行）
-    assert_ne!(code, Some(0), "Stop+catch 后必须非零退出: code={code:?}");
-    assert!(
-        stderr.contains("BID_WORD_COM_FAIL"),
-        "stderr 必须含 typed 诊断行: {stderr}"
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(3));
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "typed diagnosis must be one physical line: {stderr}"
     );
     assert!(
-        stderr.contains("type=") && stderr.contains("line=") && stderr.contains("msg="),
-        "诊断行带类型/行号/消息三件套: {stderr}"
+        stderr.contains("type=System.InvalidOperationException")
+            && stderr.contains("line=")
+            && stderr.contains("msg=")
     );
-    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        stderr.contains("CONTROLLED_ROOT\\r\\nUnicode 根因\\nFINAL_REASON"),
+        "{stderr}"
+    );
+    let msg = evaluate_word_com_result(
+        o.status.code(),
+        &String::from_utf8_lossy(&o.stdout),
+        &stderr,
+        &out,
+    )
+    .unwrap_err();
+    assert!(
+        msg.contains("CONTROLLED_ROOT")
+            && msg.contains("FINAL_REASON")
+            && msg.contains("STDOUT 尾😀\nlast stdout")
+    );
 }
-
-// ------------------------------------------------------------ #165 验收第三组：
-// 合法产物成功不误伤 / 损坏产物不掩盖 / timeout——用真实子进程受控面。
-// 说明：Linux 无 Word COM——「合法产物成功」用**真实 soffice 通道**跑真
-// .doc→.docx（产品 LO 通道同一调用面），损坏产物/超时面用受控 pwsh
-// 子进程（诊断格式面）。Windows 真实 COM 验收留 Lead（分账如实）。
-
-/// soffice 在场判定（真 .doc 转真 .docx 的合法产物面需要）。
-fn soffice_available() -> bool {
-    Command::new("soffice")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// 合法产物成功不误伤：真 .doc（OLE 头 d0 cf 11 e0）→ 产品 LO 通道转
-/// .docx → PK 魔数在位 + exit 0——诊断收紧不误伤合法转换。
 #[test]
-fn controlled_real_doc_converts_to_valid_docx_not_affected() {
-    if !soffice_available() {
-        eprintln!("SKIP：本机无 soffice——合法产物面不可执行（如实跳过）");
+fn controlled_generated_script_and_production_runner_cover_result_matrix() {
+    let Some(ps) = powershell() else {
         return;
+    };
+    for mode in [
+        "create_fail",
+        "open_fail",
+        "save_fail",
+        "missing",
+        "invalid",
+        "pk_only",
+        "valid",
+    ] {
+        let f = Fixture::new(mode);
+        let out = f.0.join("o'ut;$` 标😀.docx");
+        let input = "C:/it's 投's;$`\n标.doc";
+        let cleanup = f.0.join("cleanup");
+        let script = shim(mode, input, &out, &f.valid_docx(), &cleanup)
+            + &build_doc2docx_script(input, &out.display().to_string());
+        let result = run_doc2docx_script(&ps, &script, &out, 10);
+        if mode == "valid" {
+            result.unwrap();
+        } else {
+            let msg = result.unwrap_err();
+            assert!(msg.contains("STDOUT 尾😀\nlast stdout"), "{mode}: {msg}");
+            if mode.ends_with("fail") {
+                assert!(
+                    msg.contains("Some(3)")
+                        && msg.contains("BID_WORD_COM_FAIL")
+                        && msg.contains("ROOT")
+                        && msg.contains("FINAL"),
+                    "{mode}: {msg}"
+                );
+            } else {
+                assert!(
+                    msg.contains("exit 0") && msg.contains("STDERR"),
+                    "{mode}: {msg}"
+                );
+            }
+        }
+        if mode == "open_fail" {
+            assert_eq!(std::fs::read_to_string(&cleanup).unwrap(), "quit;");
+        }
+        if ["save_fail", "missing", "invalid", "pk_only", "valid"].contains(&mode) {
+            assert_eq!(
+                std::fs::read_to_string(&cleanup).unwrap(),
+                "close;quit;",
+                "finally cleans invocation references"
+            );
+        }
     }
-    let dir = std::env::temp_dir().join(format!("bid165-ok-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let txt = dir.join("hello.txt");
-    std::fs::write(&txt, "bid 165 controlled ok").unwrap();
-    // 真 .doc 夹具：soffice txt→doc（OLE 复合文档）
-    let doc = dir.join("hello.doc");
-    let st = Command::new("soffice")
-        .args(["--headless", "--norestore", "--convert-to", "doc"])
-        .arg("--outdir")
-        .arg(&dir)
-        .arg(&txt)
-        .output()
-        .expect("soffice doc 夹具");
-    assert!(st.status.success() && doc.is_file(), "夹具 .doc 生成失败");
-    let mut magic4 = [0u8; 4];
-    use std::io::Read;
-    std::fs::File::open(&doc).unwrap().read_exact(&mut magic4).unwrap();
-    assert_eq!(&magic4, &[0xd0, 0xcf, 0x11, 0xe0], "夹具须为真 OLE .doc");
-    // 产品 LO 通道面（convert_doc_to_docx 走 docx_artifact_valid 校验——
-    // 与 Word COM 共用产物闸）：受控调用同一校验语义
-    let out = dir.join("out.docx");
-    let st2 = Command::new("soffice")
-        .args(["--headless", "--norestore", "--convert-to", "docx"])
-        .arg("--outdir")
-        .arg(&dir)
-        .arg(&doc)
-        .output()
-        .expect("soffice 转换");
-    let produced = dir.join("hello.docx");
-    let conv_ok = st2.status.success() && produced.is_file();
-    if conv_ok {
-        // 先落转换目录再 rename（产品同款）
-        std::fs::rename(&produced, &out).unwrap();
-        let mut pk = [0u8; 4];
-        std::fs::File::open(&out).unwrap().read_exact(&mut pk).unwrap();
-        assert_eq!(&pk, b"PK\x03\x04", "合法产物 PK 魔数在位——不误伤");
-    } else {
-        panic!("真 .doc→docx 转换失败：{}", String::from_utf8_lossy(&st2.stderr));
-    }
-    std::fs::remove_dir_all(&dir).ok();
 }
-
-/// 损坏产物不掩盖：产物位写成非 PK 内容（伪 docx）→ docx_artifact_valid
-/// 判负 + 诊断面照常可用（word_com_exit_diagnostics 把流面带上）。
 #[test]
-fn controlled_corrupt_artifact_keeps_diagnostics() {
-    let dir = std::env::temp_dir().join(format!("bid165-corrupt-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let bogus = dir.join("bogus.docx");
-    std::fs::write(&bogus, "NOT_A_DOCX_CORRUPTED").unwrap();
-    // docx_artifact_valid 为内部 fn——经 import 面不可直取；用公开诊断串
-    // 验证「exit0+无效产物」路径携带流面（红测钉子已证格式），此处钉
-    // 产物闸语义：损坏内容绝不能通过 PK 校验（防「伪造产物充成功」）。
-    let head = std::fs::read(&bogus).unwrap();
-    let is_pk = head.starts_with(b"PK\x03\x04");
-    assert!(!is_pk, "损坏产物不得通过 PK 闸（伪成功禁）");
-    // 诊断串在同局面（exit0）必须携带流（对照 Lead 复现：旧代码这里只剩
-    // 笼统 PK 魔数失败——本次修的核心）
-    let msg = bid_tools::service::word_com_exit_diagnostics(
-        Some(0),
-        "stdout- corrupted run",
-        "stderr- CONTROLLED_WORD_COM_FAILURE residue",
+fn shared_evaluator_rejects_invalid_ooxml_and_nonzero_even_with_valid_artifact() {
+    let f = Fixture::new("gate");
+    let valid = f.valid_docx();
+    assert!(evaluate_word_com_result(Some(0), "", "", &valid).is_ok());
+    let root = "BID_WORD_COM_FAIL type=System.Exception line=9 msg=ROOT_FAILURE";
+    for code in [Some(3), None] {
+        assert!(evaluate_word_com_result(code, "out", root, &valid)
+            .unwrap_err()
+            .contains(root));
+    }
+    let bad = f.0.join("other.docx");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&bad).unwrap());
+    z.start_file("unrelated.txt", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    std::io::Write::write_all(&mut z, b"not OOXML").unwrap();
+    z.finish().unwrap();
+    assert!(
+        evaluate_word_com_result(Some(0), "out-root", "err-root", &bad)
+            .unwrap_err()
+            .contains("err-root")
     );
-    assert!(msg.contains("stdout-") && msg.contains("stderr-"));
-    std::fs::remove_dir_all(&dir).ok();
+}
+#[test]
+fn controlled_timeout_is_bounded_and_does_not_kill_other_child() {
+    let Some(ps) = powershell() else {
+        return;
+    };
+    let f = Fixture::new("timeout");
+    let out = f.0.join("out.docx");
+    let script = shim(
+        "timeout",
+        "in.doc",
+        &out,
+        &f.valid_docx(),
+        &f.0.join("cleanup"),
+    ) + &build_doc2docx_script("in.doc", &out.display().to_string());
+    let mut sentinel = Command::new(&ps)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Start-Sleep -Seconds 30",
+        ])
+        .spawn()
+        .unwrap();
+    let start = std::time::Instant::now();
+    let result = run_doc2docx_script(&ps, &script, &out, 1);
+    let elapsed = start.elapsed();
+    let alive = sentinel.try_wait().unwrap().is_none();
+    sentinel.kill().unwrap();
+    sentinel.wait().unwrap();
+    let msg = result.unwrap_err();
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "cleanup exceeded bound: {elapsed:?}"
+    );
+    assert!(alive, "unrelated child must stay alive");
+    assert!(
+        msg.contains("超时（1s）")
+            && msg.contains("本次 PowerShell 子进程退出已确认")
+            && msg.contains("可能残留")
+    );
+}
+#[test]
+fn controlled_verbose_logs_preserve_typed_line_and_tail_without_pipe_deadlock() {
+    let Some(ps) = powershell() else {
+        return;
+    };
+    let f = Fixture::new("verbose");
+    let out = f.0.join("out.docx");
+    let mut script = shim(
+        "create_fail",
+        "in.doc",
+        &out,
+        &f.valid_docx(),
+        &f.0.join("cleanup"),
+    );
+    script += &build_doc2docx_script("in.doc", &out.display().to_string()).replace(
+        "} finally {",
+        r#"} finally {
+ [Console]::Error.WriteLine(('中' * 90000) + "`nSTDERR 尾😀`nlast stderr")
+"#,
+    );
+    let msg = run_doc2docx_script(&ps, &script, &out, 10).unwrap_err();
+    assert!(
+        msg.contains("CONTROLLED_ROOT") && msg.contains("FINAL_REASON"),
+        "{msg}"
+    );
+    assert!(
+        msg.contains("STDERR 尾😀\nlast stderr") && msg.contains("STDOUT 尾😀\nlast stdout"),
+        "{msg}"
+    );
+    assert!(msg.chars().count() < 1400);
 }
 
-/// timeout 面：超时错误串带秒数（受控：不真跑 30s——纯函数钉形状，
-/// 真实 Word 挂起面 Lead Windows 复验）。
 #[test]
-fn controlled_timeout_message_not_masked() {
-    let msg = bid_tools::service::word_com_timeout_message(30);
-    assert!(msg.contains("超时") && msg.contains("30"), "超时面文案: {msg}");
-    // 超时不得被产物校验/exit0 面吞掉：超时串独立成错（不复用 exit 诊断串）
-    assert!(!msg.contains("退出码"), "超时面独立不复用退出码串: {msg}");
+fn controlled_no_stop_script_stderr_nonzero_silent_exit0() {
+    let Some(ps) = powershell() else {
+        return;
+    };
+    let output = Command::new(&ps).args(["-NoProfile", "-NonInteractive", "-Command", "try { Write-Error 'CONTROLLED_WORD_COM_FAILURE' -ErrorAction Continue } finally { Write-Output 'cleanup done' }"]).output().unwrap();
+    assert_eq!(output.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("CONTROLLED_WORD_COM_FAILURE"));
+    let fixture = Fixture::new("continue");
+    let error = evaluate_word_com_result(
+        output.status.code(),
+        &String::from_utf8_lossy(&output.stdout),
+        &String::from_utf8_lossy(&output.stderr),
+        &fixture.0.join("missing.docx"),
+    )
+    .unwrap_err();
+    assert!(error.contains("CONTROLLED_WORD_COM_FAILURE") && error.contains("cleanup done"));
+}
+
+#[test]
+fn controlled_long_catch_is_single_line_bounded_and_preserves_unicode_tail() {
+    let Some(ps) = powershell() else {
+        return;
+    };
+    let f = Fixture::new("long-catch");
+    let out = f.0.join("out.docx");
+    let script = shim(
+        "create_fail",
+        "in.doc",
+        &out,
+        &f.valid_docx(),
+        &f.0.join("cleanup"),
+    );
+    // Replace the shim throw only: production catch is executed unchanged.
+    let script = script.replace(
+        r#"throw [System.InvalidOperationException]::new("CONTROLLED_ROOT`r`nUnicode 根因`nFINAL_REASON")"#,
+        r#"throw [System.InvalidOperationException]::new(('😀' * 700) + "`r`nFINAL_尾😀`nlast reason")"#,
+    ) + &build_doc2docx_script("in.doc", &out.display().to_string());
+    let ps1 = f.0.join("generated.ps1");
+    let mut bytes = vec![0xef, 0xbb, 0xbf];
+    bytes.extend_from_slice(script.as_bytes());
+    std::fs::write(&ps1, bytes).unwrap();
+    let output = Command::new(&ps)
+        .args(["-NoProfile", "-NonInteractive", "-File"])
+        .arg(&ps1)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(3));
+    assert_eq!(stderr.lines().count(), 1);
+    assert!(stderr.chars().count() <= 402, "{stderr}");
+    assert!(
+        !stderr.contains('\u{fffd}'),
+        "must not split surrogate pairs: {stderr}"
+    );
+    assert!(
+        stderr.contains("type=System.InvalidOperationException")
+            && stderr.contains("FINAL_尾😀\\nlast reason"),
+        "{stderr}"
+    );
 }

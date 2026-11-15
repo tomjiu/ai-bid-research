@@ -2978,142 +2978,55 @@ fn convert_doc_to_docx(doc: &std::path::Path, out_docx: &std::path::Path) -> Res
 /// - finally 释放 COM 引用（ReleaseComObject/Quit）保留不回退。
 #[must_use]
 pub fn build_doc2docx_script(doc_path: &str, out_docx_path: &str) -> String {
-    // PowerShell 单引号字符串：内部的 ' 要双写（PDF 面同款纪律——现实现核对：
-    // 旧 .doc 面直接 format! 裸拼，路径含 ' 即断裂/注入面，本函数统一收口）
     let esc = |s: &str| s.replace('\'', "''");
     let doc_s = esc(doc_path);
     let out_s = esc(out_docx_path);
     format!(
-        "$ErrorActionPreference = 'Stop'\r\n\
-         $word = $null\r\n\
-         $doc = $null\r\n\
-         try {{\r\n\
-         \x20 $word = New-Object -ComObject Word.Application\r\n\
-         \x20 $word.Visible = $false\r\n\
-         \x20 $word.DisplayAlerts = 0\r\n\
-         \x20 $doc = $word.Documents.Open('{doc_s}', $false, $true)\r\n\
-         \x20 $doc.SaveAs2('{out_s}', 16)\r\n\
-         \x20 $doc.Close(0)\r\n\
-         }} catch {{\r\n\
-         \x20 [Console]::Error.WriteLine((\"BID_WORD_COM_FAIL type=\" + $_.Exception.GetType().FullName + \" line=\" + $_.InvocationInfo.ScriptLineNumber + \" msg=\" + $_.Exception.Message))\r\n\
-         \x20 exit 3\r\n\
-         }} finally {{\r\n\
-         \x20 if ($doc) {{ try {{ [System.Runtime.InteropServices.Marshal]::ReleaseComObject($doc) | Out-Null }} catch {{}} }}\r\n\
-         \x20 if ($word) {{ try {{ $word.Quit() }} catch {{}} ; try {{ [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null }} catch {{}} }}\r\n\
-         }}\r\n"
+        r#"$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$word = $null
+$doc = $null
+try {{
+    $word = New-Object -ComObject Word.Application
+    $word.Visible = $false
+    $word.DisplayAlerts = 0
+    $doc = $word.Documents.Open('{doc_s}', $false, $true)
+    $doc.SaveAs2('{out_s}', 16)
+}} catch {{
+    $message = $_.Exception.Message.Replace('\', '\\').Replace("`r", '\r')
+    $message = $message.Replace("`n", '\n').Replace([string][char]0x2028, '\u2028').Replace([string][char]0x2029, '\u2029')
+    $diagnosis = "BID_WORD_COM_FAIL type=" + $_.Exception.GetType().FullName + " line=" + $_.InvocationInfo.ScriptLineNumber + " msg=" + $message
+    if ($diagnosis.Length -gt 400) {{
+        $headLength = 200; $tailStart = $diagnosis.Length - 199
+        if ([char]::IsHighSurrogate($diagnosis[$headLength - 1])) {{ $headLength-- }}
+        if ([char]::IsLowSurrogate($diagnosis[$tailStart])) {{ $tailStart++ }}
+        $diagnosis = $diagnosis.Substring(0, $headLength) + '…' + $diagnosis.Substring($tailStart)
+    }}
+    [Console]::Error.WriteLine($diagnosis)
+    if ($env:BID_DOC2DOCX_TYPED_DIAG) {{ try {{ [System.IO.File]::WriteAllText($env:BID_DOC2DOCX_TYPED_DIAG, $diagnosis, [System.Text.UTF8Encoding]::new($false)) }} catch {{}} }}
+    exit 3
+}} finally {{
+    if ($doc) {{ try {{ $doc.Close(0) }} catch {{}}; try {{ [System.Runtime.InteropServices.Marshal]::ReleaseComObject($doc) | Out-Null }} catch {{}} }}
+    if ($word) {{ try {{ $word.Quit() }} catch {{}}; try {{ [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null }} catch {{}} }}
+}}
+"#
     )
 }
+// DOC-only implementation: keep the production gate and runner shared with tests.
+#[path = "doc_conversion.rs"]
+mod doc_conversion;
+pub use doc_conversion::{
+    evaluate_word_com_result, run_doc2docx_script, word_com_exit_diagnostics,
+    word_com_timeout_message,
+};
 
-/// #165：Word COM 子进程退出诊断串（纯函数——两分支共用同一格式）。
-///
-/// - 非零退出：退出码 + stderr 尾部（保留具体错误——catch 块的
-///   `BID_WORD_COM_FAIL` typed 诊断行就在这里流出来）；
-/// - **exit 0**：退出码 + stdout/stderr 尾部照样入串（Lead 复现面——
-///   非终止错误可 exit 0，此前该分支直接被跳过、只剩产物校验的笼统报错）。
-#[must_use]
-pub fn word_com_exit_diagnostics(exit_code: Option<i32>, stdout_tail: &str, stderr_tail: &str) -> String {
-    format!(
-        "Word COM 退出码 {exit_code:?}: stdout: {}；stderr: {}",
-        stdout_tail.chars().take(400).collect::<String>(),
-        stderr_tail.chars().take(400).collect::<String>()
-    )
-}
-
-/// #165：Word COM 超时错误文案（纯函数——秒数入串，既有文案保留）。
-#[must_use]
-pub fn word_com_timeout_message(timeout_secs: u64) -> String {
-    format!(
-        "Word COM 超时（{timeout_secs}s）——Word 可能被其他文档占用或弹出了对话框；已清理残留"
-    )
-}
-
-/// Word COM 自动化 .doc→.docx（Windows 专属——与 [`convert_to_pdf_word`] 同模式：
-/// UTF-8 BOM PowerShell 脚本防中文路径 GBK 乱码、try_wait 循环 30s 超时防占用
-/// 挂起、taskkill 清 WINWORD 残留、ReleaseComObject 释放 COM 引用）。
-/// `SaveAs2(path, 16)` 的 16 = `wdFormatDocumentDefault`（.docx）。
-///
-/// #165 根因保全（Lead 复现）：脚本缺 `$ErrorActionPreference='Stop'` 与显式
-/// catch/退出码时，非终止错误（Write-Error/Continue 档）stderr 有字仍 exit 0，
-/// Rust 侧只在非零分支读 stderr——exit 0 + 产物缺失只剩「PK 魔数」笼统面，
-/// 已有 stderr 诊断被丢。修法与 PDF 面对齐 + 三道闸：
-/// ① Stop 档；② catch 捕获异常类型/行号/消息写 stderr 单行诊断
-/// `BID_WORD_COM_FAIL type=… line=… msg=…` 并 `exit 3`；③ exit 0 但产物
-/// 无效时携带 stdout/stderr 尾部与退出码（[`word_com_exit_diagnostics`]）。
+/// Word DOC conversion uses the invocation-created COM reference for graceful
+/// Close/Quit. A hanging invocation terminates only its own PowerShell child;
+/// ambiguous Word processes are never force-killed and may remain.
 #[cfg(windows)]
 fn convert_doc_to_docx_word(doc: &std::path::Path, out_docx: &std::path::Path) -> Result<(), String> {
-    /// Word COM 单次转换超时（秒）。冷启动 12s + 转换余量（PDF 面同款取值）。
-    const WORD_COM_TIMEOUT_SECS: u64 = 30;
     let script = build_doc2docx_script(&doc.display().to_string(), &out_docx.display().to_string());
-    // UTF-8 BOM：PowerShell 5.1 无 BOM 按 GBK 解析——中文路径必乱码（PDF 面实测坑）
-    let mut bytes = vec![0xEF, 0xBB, 0xBF];
-    bytes.extend_from_slice(script.as_bytes());
-    let script_path = std::env::temp_dir().join(format!(
-        "bid-doc2docx-{}-{}.ps1",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0),
-    ));
-    std::fs::write(&script_path, &bytes).map_err(|e| format!("脚本写入失败: {e}"))?;
-    let mut child = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"])
-        .arg("-File")
-        .arg(&script_path)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&script_path);
-            format!("powershell 启动失败: {e}")
-        })?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(WORD_COM_TIMEOUT_SECS);
-    let timed_out = loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break false,
-            Ok(None) => {
-                if std::time::Instant::now() >= deadline {
-                    break true;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(200));
-            }
-            Err(_) => break false,
-        }
-    };
-    if timed_out {
-        let _ = child.kill();
-        let _ = child.wait();
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "WINWORD.EXE"])
-            .output();
-        let _ = std::fs::remove_file(&script_path);
-        return Err(word_com_timeout_message(WORD_COM_TIMEOUT_SECS));
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("收集 powershell 输出失败: {e}"))?;
-    let _ = std::fs::remove_file(&script_path);
-    // #165：stdout/stderr 无论成败都先取——exit 0 分支不再丢流诊断。
-    let stdout_tail = String::from_utf8_lossy(&output.stdout);
-    let stderr_tail = String::from_utf8_lossy(&output.stderr);
-    if !output.status.success() {
-        return Err(word_com_exit_diagnostics(
-            output.status.code(),
-            &stdout_tail,
-            &stderr_tail,
-        ));
-    }
-    if !docx_artifact_valid(out_docx) {
-        // #165 核心修面：exit 0 但产物缺失/非 docx——携带退出码与
-        // stdout/stderr 尾部（Lead 复现：非终止错误可 exit 0，stderr 里
-        // 已有根因却只报「PK 魔数校验失败」——诊断不再丢）。
-        return Err(format!(
-            "Word COM 声称成功（exit 0）但产物缺失或非 docx（PK 魔数校验失败）——\
-             子进程流面（{}）",
-            word_com_exit_diagnostics(output.status.code(), &stdout_tail, &stderr_tail)
-        ));
-    }
-    Ok(())
+    run_doc2docx_script(std::path::Path::new("powershell"), &script, out_docx, 30)
 }
 
 /// .doc→.docx（LibreOffice headless——与 [`convert_to_pdf_lo`] 同模式：profile
