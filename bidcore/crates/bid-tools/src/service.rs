@@ -306,6 +306,49 @@ pub fn import_files(
     specs: &[ImportSpec],
     convert_dir: Option<&std::path::Path>,
 ) -> ImportReport {
+    import_files_with_pdf_parser(store, parsed, specs, convert_dir, |path, name, sha| {
+        resolve_pdf_import(bid_engine::parse_pdf_via_engine(path), || {
+            parse_file_with_sha(path, name, sha)
+        })
+    })
+}
+
+fn resolve_pdf_import(
+    primary: Result<ParsedFile, bid_engine::EngineError>,
+    fallback: impl FnOnce() -> Result<ParsedFile, String>,
+) -> Result<ParsedFile, String> {
+    match primary {
+        Ok(parsed) => Ok(parsed),
+        Err(cause) => {
+            // Preserve the enum category independently of its human-readable cause.
+            let category = match &cause {
+                bid_engine::EngineError::EngineRejected(_) => "EngineRejected",
+                bid_engine::EngineError::EngineFailed(_) => "EngineFailed",
+                bid_engine::EngineError::MappingGap(_) => "MappingGap",
+            };
+            match fallback() {
+                Ok(mut parsed) => {
+                    parsed.parse_summary = format!(
+                        "PDF_IMPORT_DEGRADED: primary=pdfium error_type={category} cause={cause}; fallback selected: {}; quality=accepted-by-fallback-checks (not a completeness guarantee)",
+                        parsed.parse_summary
+                    );
+                    Ok(parsed)
+                }
+                Err(error) => Err(format!(
+                    "PDF_IMPORT_FAILED: primary=pdfium error_type={category} cause={cause}; fallback rejected: {error}"
+                )),
+            }
+        }
+    }
+}
+
+fn import_files_with_pdf_parser(
+    store: &mut DomainStore,
+    parsed: &mut Vec<ParsedFile>,
+    specs: &[ImportSpec],
+    convert_dir: Option<&Path>,
+    mut parse_pdf: impl FnMut(&Path, &str, &str) -> Result<ParsedFile, String>,
+) -> ImportReport {
     // #270：convert_dir = .doc→docx 转换产物目录（有工作区的调用方传
     // `<ws>/.mang/convert/`；无工作区形态（runner 批处理）传 None → 服务层
     // 降级系统 temp——两种位置都不写用户目录。
@@ -360,6 +403,9 @@ pub fn import_files(
                     r.kind == spec.kind && r.declared_name == spec.filename
                 });
             let mut warnings = Vec::new();
+            if f.parse_summary.starts_with("PDF_IMPORT_DEGRADED:") {
+                warnings.push(f.parse_summary.clone());
+            }
             if !identity_known {
                 match store.register_file_role(&f.id, &spec.kind, &spec.filename, now_secs()) {
                     Ok(_) => warnings.push(format!(
@@ -414,9 +460,7 @@ pub fn import_files(
             }
             // B3-5：pdf 引擎通道（pdfium 文本层）——扫描件（MappingGap）或
             // 无 pdfium（EngineFailed）回退旧 pdftotext/OCR 路径（映射表 §3）
-            "pdf" => bid_engine::parse_pdf_via_engine(&spec.upload_ref)
-                // #529/B-23：哈希复用——幂等面已算过 sha，回退解析不再读第二遍
-                .or_else(|_| parse_file_with_sha(&spec.upload_ref, &spec.filename, &sha)),
+            "pdf" => parse_pdf(&spec.upload_ref, &spec.filename, &sha),
             // #270：.doc（Word 97-2003）——两层设计：有转换器自动转换（sha 记
             // 原件 + 响应面标注），无转换器引导报错（Skill 侧接管）
             "doc" => {
@@ -469,6 +513,9 @@ pub fn import_files(
                 // 解析失败禁引（R-01）：failed 件不进 parsed 累积（不入抽取/索引面）
                 parsed.push(p);
                 let mut warnings = Vec::new();
+                if summary.starts_with("PDF_IMPORT_DEGRADED:") {
+                    warnings.push(summary.clone());
+                }
                 // #270：.doc 经转换解析的响应面标注（per_file.warnings 透出——
                 // 与 parse_summary 落库标注双通道，Agent/用户任一面可见）
                 if let Some(note) = converted_note {
@@ -562,6 +609,169 @@ pub fn import_files(
         }
     }
     report
+}
+
+#[cfg(test)]
+mod pdf_import_quality_tests {
+    use super::*;
+
+    fn english_pdf() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "bid167-english-{}-{}.pdf",
+            std::process::id(),
+            std::thread::current()
+                .name()
+                .unwrap_or("test")
+                .replace(':', "-")
+        ));
+        std::fs::write(&path, b"%PDF-1.4\n1 0 obj\n<< /Length 90 >>\nstream\nBT (Ordinary English information with no procurement requirements) Tj ET\nendstream\nendobj\n%%EOF\n").unwrap();
+        path
+    }
+
+    #[test]
+    fn pdf_import_retains_primary_cause_and_selected_fallback() {
+        let path = english_pdf();
+        let mut store = DomainStore::new();
+        store.create_project("p", "c", "明标", "pdf167").unwrap();
+        let mut parsed = vec![];
+        let specs = [ImportSpec {
+            upload_ref: path.clone(),
+            filename: "english.pdf".into(),
+            kind: "招标文件".into(),
+            expected_pages: None,
+        }];
+        let report =
+            import_files_with_pdf_parser(&mut store, &mut parsed, &specs, None, |path, name, _| {
+                resolve_pdf_import(
+                    Err(bid_engine::EngineError::EngineFailed(
+                        "controlled DLL lookup failure".into(),
+                    )),
+                    || bid_parse::pdf_text::parse_via_fallback(path, name),
+                )
+            });
+        assert_eq!(report.item_failures, 0);
+        assert_eq!(report.per_file[0].parse_status, ParseStatus::Ok);
+        let summary = &store.files()[0].parse_summary;
+        assert!(summary.contains("EngineFailed"), "{summary}");
+        assert!(
+            summary.contains("controlled DLL lookup failure"),
+            "{summary}"
+        );
+        assert!(summary.contains("纯 Rust PDF 文本兜底"), "{summary}");
+        assert!(report.per_file[0]
+            .warnings
+            .iter()
+            .any(|w| w.contains("PDF_IMPORT_DEGRADED")));
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(
+            parsed[0].blocks[0].text,
+            "Ordinary English information with no procurement requirements"
+        );
+        let replay =
+            import_files_with_pdf_parser(&mut store, &mut parsed, &specs, None, |_, _, _| {
+                panic!("dedup must not reparse")
+            });
+        assert!(replay.per_file[0]
+            .warnings
+            .iter()
+            .any(|w| w.contains("PDF_IMPORT_DEGRADED")));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn pdf_import_quality_rejection_is_persisted_and_not_consumed() {
+        let path = std::env::temp_dir().join(format!("bid167-rejected-{}.pdf", std::process::id()));
+        std::fs::write(&path, b"%PDF-1.4\n1 0 obj\n<< /Font << /F1 2 0 R >> >>\nendobj\n2 0 obj\n<< /ToUnicode 3 0 R >>\nendobj\n3 0 obj\n<< /Length 80 >>\nstream\n1 beginbfrange\n<0020> <0023> [<0020> <0032> <0030> <4EBA>]\nendbfrange\nendstream\nendobj\n4 0 obj\n<< /Length 60 >>\nstream\nBT /F1 12 Tf <0020002100220023> Tj ET\nendstream\nendobj\n%%EOF\n").unwrap();
+        let mut store = DomainStore::new();
+        store
+            .create_project("p", "c", "明标", "pdf167-rejected")
+            .unwrap();
+        let mut parsed = vec![];
+        let specs = [ImportSpec {
+            upload_ref: path.clone(),
+            filename: "array.pdf".into(),
+            kind: "招标文件".into(),
+            expected_pages: None,
+        }];
+        let report =
+            import_files_with_pdf_parser(&mut store, &mut parsed, &specs, None, |path, name, _| {
+                resolve_pdf_import(
+                    Err(bid_engine::EngineError::EngineFailed(
+                        "controlled DLL failure".into(),
+                    )),
+                    || bid_parse::pdf_text::parse_via_fallback(path, name),
+                )
+            });
+        assert_eq!(report.item_failures, 1);
+        assert_eq!(report.per_file[0].parse_status, ParseStatus::Failed);
+        assert!(
+            parsed.is_empty(),
+            "rejected text must not enter extraction inputs"
+        );
+        assert_eq!(store.files()[0].parse_status, ParseStatus::Failed);
+        let summary = &store.files()[0].parse_summary;
+        assert!(
+            summary.contains("EngineFailed") && summary.contains("PDF_QUALITY_UNSUPPORTED_CMAP"),
+            "{summary}"
+        );
+        let replay =
+            import_files_with_pdf_parser(&mut store, &mut parsed, &specs, None, |_, _, _| {
+                panic!("dedup must not reparse")
+            });
+        assert_eq!(replay.item_failures, 1);
+        assert!(replay.per_file[0].errors[0].contains("PDF_QUALITY_UNSUPPORTED_CMAP"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn pdf_import_primary_success_does_not_attempt_fallback() {
+        let path = english_pdf();
+        let primary = bid_parse::pdf_text::parse_via_fallback(&path, "primary.pdf").unwrap();
+        std::fs::remove_file(path).unwrap();
+        let original = primary.parse_summary.clone();
+        let result =
+            resolve_pdf_import(Ok(primary), || panic!("primary success must not fall back"))
+                .unwrap();
+        assert_eq!(result.parse_summary, original);
+    }
+
+    #[test]
+    fn pdf_import_scan_mapping_gap_preserves_ocr_status() {
+        let p = ParsedFile {
+            name: "scan.pdf".into(),
+            sha256: String::new(),
+            pages: 2,
+            tables: 0,
+            has_text_layer: false,
+            ocr_blocks: 0,
+            blocks: vec![],
+            parse_summary: "tesseract: blank scan".into(),
+            components: vec![],
+        };
+        let p = resolve_pdf_import(
+            Err(bid_engine::EngineError::MappingGap("no text layer".into())),
+            || Ok(p),
+        )
+        .unwrap();
+        assert!(!p.has_text_layer);
+        assert_eq!(p.ocr_blocks, 0);
+        assert!(p.parse_summary.contains("MappingGap") && p.parse_summary.contains("tesseract"));
+        assert!(
+            ocr_blank_scan_warning(ParseStatus::OcrRequired, p.blocks.len(), p.pages).is_some()
+        );
+    }
+
+    #[test]
+    fn pdf_import_both_errors_are_preserved() {
+        let err = resolve_pdf_import(
+            Err(bid_engine::EngineError::MappingGap("scan needs OCR".into())),
+            || Err("OCR unavailable".into()),
+        )
+        .unwrap_err();
+        assert!(err.contains("MappingGap"), "{err}");
+        assert!(err.contains("scan needs OCR"), "{err}");
+        assert!(err.contains("OCR unavailable"), "{err}");
+    }
 }
 
 /// MCP 后端服务态：跨工具调用持有 `DomainStore`（权威状态机存储）与解析产物
