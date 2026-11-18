@@ -1,0 +1,390 @@
+{
+ "generated_at": "2026-11-18T13:42:42.639860+00:00",
+ "base_dir": "/home/z/my-project/repo/artifacts/multifile-acceptance-20261118",
+ "repo_root": "/home/z/my-project/repo",
+ "inventory": "/home/z/my-project/repo/artifacts/multifile-acceptance-20261118/inventory.json",
+ "projects": [
+  {
+   "id": "corpusA-full",
+   "name": "corpus-A 全件统一矩阵（合成对照·GT 可判）",
+   "real": false,
+   "full_chain": true,
+   "outline_target_chars": 48000,
+   "max_reqs_per_leaf": 8,
+   "open_date_pre": "2026-11-15",
+   "open_date_post": "2026-11-27",
+   "addendum_probe": true,
+   "real_evidence": false,
+   "files": [
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/A-招标文件.docx",
+     "filename": "A-招标文件.docx",
+     "kind": "招标文件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/B1-设备清单.pdf",
+     "filename": "B1-设备清单.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/B2-投标函格式页-扫描件.pdf",
+     "filename": "B2-投标函格式页-扫描件.pdf",
+     "kind": "格式模板"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/B3-图纸目录.xlsx",
+     "filename": "B3-图纸目录.xlsx",
+     "kind": "图纸"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/C-补遗文件01.docx",
+     "filename": "C-补遗文件01.docx",
+     "kind": "补遗"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/澄清修改文件-3.1.1.docx",
+     "filename": "澄清修改文件-3.1.1.docx",
+     "kind": "补遗"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-01-营业执照.pdf",
+     "filename": "EV-01-营业执照.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "filename": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "filename": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-04-类似业绩合同-数据中心机房工程.pdf",
+     "filename": "EV-04-类似业绩合同-数据中心机房工程.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-05-类似业绩合同-医院智能化改造.pdf",
+     "filename": "EV-05-类似业绩合同-医院智能化改造.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-06-财务审计报告-2025年度.pdf",
+     "filename": "EV-06-财务审计报告-2025年度.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-07-无失信记录承诺函.pdf",
+     "filename": "EV-07-无失信记录承诺函.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-08-ISO9001质量管理体系认证证书.pdf",
+     "filename": "EV-08-ISO9001质量管理体系认证证书.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-09-ISO27001信息安全管理体系认证证书.pdf",
+     "filename": "EV-09-ISO27001信息安全管理体系认证证书.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-10-项目团队人员证书-网络工程师高级.pdf",
+     "filename": "EV-10-项目团队人员证书-网络工程师高级.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-11-售后服务体系说明.pdf",
+     "filename": "EV-11-售后服务体系说明.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-12-银行资信证明.pdf",
+     "filename": "EV-12-银行资信证明.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-13-安全生产许可证.pdf",
+     "filename": "EV-13-安全生产许可证.pdf",
+     "kind": "附件"
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "Qualification",
+     "title": "EV-01-营业执照",
+     "source_file": "EV-01-营业执照.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-02-电子与智能化工程专业承包二级资质证书",
+     "source_file": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "valid_until": "2026-11-25"
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-03-类似业绩合同-智慧园区弱电工程",
+     "source_file": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-04-类似业绩合同-数据中心机房工程",
+     "source_file": "EV-04-类似业绩合同-数据中心机房工程.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-05-类似业绩合同-医院智能化改造",
+     "source_file": "EV-05-类似业绩合同-医院智能化改造.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-06-财务审计报告-2025年度",
+     "source_file": "EV-06-财务审计报告-2025年度.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-07-无失信记录承诺函",
+     "source_file": "EV-07-无失信记录承诺函.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-08-ISO9001质量管理体系认证证书",
+     "source_file": "EV-08-ISO9001质量管理体系认证证书.pdf",
+     "valid_until": "2028-06-30"
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-09-ISO27001信息安全管理体系认证证书",
+     "source_file": "EV-09-ISO27001信息安全管理体系认证证书.pdf",
+     "valid_until": "2027-12-31"
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-10-项目团队人员证书-网络工程师高级",
+     "source_file": "EV-10-项目团队人员证书-网络工程师高级.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-11-售后服务体系说明",
+     "source_file": "EV-11-售后服务体系说明.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-12-银行资信证明",
+     "source_file": "EV-12-银行资信证明.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "EV-13-安全生产许可证",
+     "source_file": "EV-13-安全生产许可证.pdf",
+     "valid_until": "2025-08-01"
+    }
+   ]
+  },
+  {
+   "id": "unicom-ry",
+   "name": "联通软研院国资监管中心研发项目——真实四件套（招标文件+技术规范+详细评审表+投标一览表）",
+   "real": true,
+   "full_chain": true,
+   "outline_target_chars": 48000,
+   "max_reqs_per_leaf": 8,
+   "addendum_probe": false,
+   "real_evidence": false,
+   "files": [
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+     "filename": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+     "kind": "招标文件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-unicom-ry-技术规范书.docx",
+     "filename": "B-unicom-ry-技术规范书.docx",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-unicom-ry-详细评审表.xlsx",
+     "filename": "B-unicom-ry-详细评审表.xlsx",
+     "kind": "评分办法"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-unicom-ry-投标一览表.xlsx",
+     "filename": "B-unicom-ry-投标一览表.xlsx",
+     "kind": "格式模板"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-01-营业执照.pdf",
+     "filename": "EV-01-营业执照.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "filename": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "filename": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "kind": "附件"
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "Qualification",
+     "title": "营业执照",
+     "source_file": "EV-01-营业执照.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "电子与智能化工程专业承包二级资质证书",
+     "source_file": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "valid_until": "2026-11-25"
+    },
+    {
+     "kind": "Performance",
+     "title": "类似业绩合同-智慧园区弱电工程",
+     "source_file": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "valid_until": null
+    }
+   ]
+  },
+  {
+   "id": "huaian",
+   "name": "电信淮安本地视频能力平台建设——真实四件套（主文件+技术规范+报价+合同）",
+   "real": true,
+   "full_chain": true,
+   "outline_target_chars": 48000,
+   "max_reqs_per_leaf": 8,
+   "addendum_probe": false,
+   "real_evidence": false,
+   "files": [
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/A-telecom-huaian-主文件.docx",
+     "filename": "A-telecom-huaian-主文件.docx",
+     "kind": "招标文件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-telecom-huaian-技术规范书.docx",
+     "filename": "B-telecom-huaian-技术规范书.docx",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-telecom-huaian-报价文件.xlsx",
+     "filename": "B-telecom-huaian-报价文件.xlsx",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-telecom-huaian-合同.docx",
+     "filename": "B-telecom-huaian-合同.docx",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-01-营业执照.pdf",
+     "filename": "EV-01-营业执照.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "filename": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "kind": "附件"
+    },
+    {
+     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "filename": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "kind": "附件"
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "Qualification",
+     "title": "营业执照",
+     "source_file": "EV-01-营业执照.pdf",
+     "valid_until": null
+    },
+    {
+     "kind": "Qualification",
+     "title": "电子与智能化工程专业承包二级资质证书",
+     "source_file": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "valid_until": "2026-11-25"
+    },
+    {
+     "kind": "Performance",
+     "title": "类似业绩合同-智慧园区弱电工程",
+     "source_file": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "valid_until": null
+    }
+   ]
+  },
+  {
+   "id": "cqyd",
+   "name": "重庆西永水冷空调——真实两件套（招标文件 PDF + 招标公告）",
+   "real": true,
+   "full_chain": false,
+   "files": [
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+     "filename": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+     "kind": "招标文件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-cqyd-招标公告.pdf",
+     "filename": "B-cqyd-招标公告.pdf",
+     "kind": "附件"
+    }
+   ]
+  },
+  {
+   "id": "zjyd",
+   "name": "浙江移动数据库服务器——变更公告+立项批复（无主件辅面）",
+   "real": true,
+   "full_chain": false,
+   "files": [
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/C-zjyd-20260500552-数据库服务器-变更公告.pdf",
+     "filename": "C-zjyd-20260500552-数据库服务器-变更公告.pdf",
+     "kind": "补遗"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-zjyd-立项批复.pdf",
+     "filename": "B-zjyd-立项批复.pdf",
+     "kind": "附件"
+    }
+   ]
+  },
+  {
+   "id": "unicom-ry-alt",
+   "name": "unicom-ry 统一矩阵辅探针——技术规范书按招标文件 kind（跨件 REQ 溯源对照面）",
+   "real": true,
+   "full_chain": false,
+   "files": [
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+     "filename": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+     "kind": "招标文件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-unicom-ry-技术规范书.docx",
+     "filename": "B-unicom-ry-技术规范书.docx",
+     "kind": "招标文件"
+    },
+    {
+     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-unicom-ry-投标一览表.xlsx",
+     "filename": "B-unicom-ry-投标一览表.xlsx",
+     "kind": "格式模板"
+    }
+   ]
+  }
+ ]
+}
