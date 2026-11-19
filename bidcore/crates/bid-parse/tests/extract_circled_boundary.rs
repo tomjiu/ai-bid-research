@@ -373,3 +373,103 @@ fn circled_head_absorb_never_binds_across_finished_paragraph() {
         "子项头不得跨已结束段落绑定后续段: {sts:?}"
     );
 }
+
+// ---------------------------------------- #173：页界噪声紧随头行（残留边界收口）
+
+/// #173（#145 残留登记）：圈号子项头行在**页尾**、量化正文在**次页**——
+/// 中间隔页码噪声行。当前缺陷：吸收循环在 `page_noisy.contains(&k)` 处
+/// break——噪声被当作吸收终点，整条子项丢 REQ（同簇（1）（5）量化同块
+/// 时正常开 REQ——同型行为不一致）。
+///
+/// 复现形态（#145 评论 2026-11-13 17:32 登记的合成四块同构）：
+/// ```text
+/// （3）故障响应时限：
+/// -第2页-          ← 页界噪声（页码行）
+/// 自故障发生起算，要求平均响应时长≤30分钟。
+/// ```
+///
+/// 验收（#173 issue 正文）：修复后 REQ 在位，statement 含头行与量化约束
+/// 文本，锚逐行在位（头行锚 + 次页内容行锚），噪声行不入 statement、
+/// 不入锚（#450 B-18「不吞不截不混」纪律）。
+#[test]
+fn circled_head_absorb_page_noise_transparent_after_head() {
+    let f = pf(vec![
+        paged_line(0, 1, 38, "第三章 采购需求"),
+        paged_line(1, 1, 39, "二、技术要求"),
+        paged_line(2, 1, 40, "（3）故障响应时限："),
+        // 页界噪声：头行是本页最后一个真行，量化内容在次页
+        paged_line(3, 2, 1, "-第2页-"),
+        paged_line(4, 2, 2, "自故障发生起算，要求平均响应时长≤30分钟。"),
+    ]);
+    let reqs = extract_requirements(&[f]);
+    let sts = statements(&reqs);
+    let (cat, st3) = sts
+        .iter()
+        .find(|(_, s)| s.contains("故障响应时限"))
+        .cloned()
+        .unwrap_or_else(|| {
+            panic!("页尾头行+次页量化的子项 REQ 应在位（#173 修复面）: {sts:?}")
+        });
+    assert_eq!(cat, "技术参数", "子项头 REQ 归属技术参数: {cat}");
+    assert!(
+        st3.contains("故障响应时限") && st3.contains("平均响应时长≤30分钟"),
+        "头行与次页量化约束都必须在 statement 中（不吞）: {st3}"
+    );
+    assert!(
+        !st3.contains("第2页") && !st3.contains("2页-"),
+        "页码噪声不得混入 statement（不混）: {st3}"
+    );
+    // 锚面：头行锚 + 次页内容行锚逐行在位，噪声行无锚
+    let head_req = reqs
+        .iter()
+        .find(|r| {
+            r.params
+                .get("statement")
+                .and_then(|v| v.as_str())
+                .map(|s| s.contains("故障响应时限"))
+                .unwrap_or(false)
+        })
+        .expect("子项头 REQ 应在位");
+    let anchor_text: String = head_req.anchors.iter().map(|a| a.excerpt.as_str()).collect();
+    assert!(
+        anchor_text.contains("（3）故障响应时限"),
+        "头行锚在位: {anchor_text}"
+    );
+    assert!(
+        anchor_text.contains("平均响应时长≤30分钟"),
+        "次页内容行锚在位（不截）: {anchor_text}"
+    );
+    assert!(
+        !anchor_text.contains("第2页") && !anchor_text.contains("2页-"),
+        "页码噪声不得混入锚（不混）: {anchor_text}"
+    );
+}
+
+/// #173 纵深负例：头行页尾 + 噪声 + 次页是**结构边界**（新子节头）——
+/// 透明穿越不得把边界判据也穿掉：噪声后的首个真行仍按边界全集判定，
+/// 吸收必须停（不因穿越而跨节吸收——#155-A 语义保持）。
+#[test]
+fn circled_head_absorb_page_noise_traversal_still_stops_at_structural_boundary() {
+    let f = pf(vec![
+        paged_line(0, 1, 38, "第三章 采购需求"),
+        paged_line(1, 1, 39, "二、技术要求"),
+        paged_line(2, 1, 40, "（3）故障响应时限："),
+        paged_line(3, 2, 1, "-第2页-"),
+        // 次页首行是新子节头——结构边界，不是可吸收正文
+        paged_line(4, 2, 2, "三、商务要求"),
+        paged_line(5, 2, 3, "支付合同金额100元。"),
+    ]);
+    let reqs = extract_requirements(&[f]);
+    let sts = statements(&reqs);
+    // 穿越后的边界判据保持：无量化形态 → 头行不开 REQ（零激活纪律），
+    // 且不得跨节吸收商务量化行（#155-A 反例的跨页变体）。
+    assert!(
+        !sts.iter()
+            .any(|(_, s)| s.contains("故障响应时限") && (s.contains("商务要求") || s.contains("100元"))),
+        "噪声穿越不得绕过结构边界——子项头不得跨节吸收: {sts:?}"
+    );
+    assert!(
+        !sts.iter().any(|(c, s)| c == "技术参数" && s.contains("100元")),
+        "商务量化内容不得经噪声穿越误归属技术参数: {sts:?}"
+    );
+}
