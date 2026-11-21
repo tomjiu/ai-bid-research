@@ -188,10 +188,29 @@ fn snapshot_name(rel: &str, ts: u64) -> String {
     format!("{}-{:06x}.md", ts_label(ts), (h & 0xff_ffff) as u32)
 }
 
-/// index.json → items 数组（坏文件按空处理，绝不向上抛）
+/// index.json → items 数组。
+///
+/// #190（AUD2-7）：损坏不再静默清零——原实现坏文件按空处理，随后重建
+/// 会把全部历史快照条目孤儿化（回滚面数据事故）。现在损坏时先备份
+/// 原文件（`index.json.corrupt-<nanos>`——可人工恢复）再返回空表重建，
+/// 并响亮告警（eprintln 横幅——库层无日志面，遵循仓内 SKIP 横幅纪律）。
+/// 文件不存在是正常空态（首启），不告警不备份。
 fn load_index(root: &Path) -> Vec<Value> {
-    let Ok(bytes) = std::fs::read(history_root(root).join("index.json")) else {
-        return Vec::new();
+    let path = history_root(root).join("index.json");
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(e) => {
+            eprintln!(
+                "====================================================================\n\
+                 [mang-snap][FAIL(损坏备份)] index.json 不可读（{e}）——本次返回空表重建；\n\
+                 历史条目已孤儿化风险，原文件未删除，请人工核查 {}\n\
+                 ===================================================================="
+                ,
+                path.display()
+            );
+            return Vec::new();
+        },
     };
     match serde_json::from_slice::<Value>(&bytes) {
         Ok(Value::Object(o)) => o
@@ -200,22 +219,76 @@ fn load_index(root: &Path) -> Vec<Value> {
             .cloned()
             .unwrap_or_default(),
         Ok(Value::Array(a)) => a,
-        _ => Vec::new(),
+        bad => {
+            // 损坏（语法坏/非对象非数组形态）：备份后空表重建——不静默
+            // 追加式备份名（index.json.corrupt-<nanos>——保留完整原名，
+            // 与 with_extension 的替换形态 index.corrupt-* 相比可辨识原文件）
+            let backup = std::path::PathBuf::from(format!("{}.corrupt-{}", path.display(), nanos_now()));
+            let backed = std::fs::write(&backup, &bytes).is_ok();
+            eprintln!(
+                "====================================================================\n\
+                 [mang-snap][FAIL(损坏备份)] index.json 解析失败（{:?}）——原内容已备份到\n\
+                 {}（{}），本次返回空表重建；历史快照文件仍在 history/ 目录，\n\
+                 可人工比对备份恢复条目——绝不无声清零\n\
+                 ===================================================================="
+                ,
+                bad.err().map(|e| e.to_string()).unwrap_or_else(|| "非对象/数组形态".into()),
+                backup.display(),
+                if backed { "备份成功" } else { "备份失败——原文件保留在位" }
+            );
+            Vec::new()
+        }
     }
 }
 
-/// 原子写：`.tmp` + rename（Windows 上 rename 目标存在时失败 → 先删目标）
+fn nanos_now() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+}
+
+/// 原子写：`.tmp` + fsync + rename。
+///
+/// #190（AUD2-8）：补齐 #411 fsync 纪律（同 crate 其他面走 store_io 的
+/// write_fsync_atomic，此处自备且弱化——审计 P3.20 三套原子写实现之一）；
+/// Windows remove→rename 丢失窗口收敛：先试 rename（Rust 在 Windows 用
+/// MoveFileExW+REPLACE_EXISTING，可直接替换已存在目标——常规路径零窗口），
+/// 失败再退回 remove+rename（异常文件系统保底）；tmp 名 pid+nanos 唯一
+/// （#186 同模式——并发写者不互踩）。
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), SnapError> {
-    let tmp = path.with_extension("tmp");
+    let tmp = path.with_extension(format!("{}.tmp", nanos_suffix()));
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| SnapError::new("io", format!("{}: {e}", dir.display())))?;
     }
-    std::fs::write(&tmp, bytes).map_err(|e| SnapError::new("io", format!("{}: {e}", tmp.display())))?;
-    if path.exists() {
-        let _ = std::fs::remove_file(path);
+    let mut f = std::fs::File::create(&tmp)
+        .map_err(|e| SnapError::new("io", format!("{}: {e}", tmp.display())))?;
+    std::io::Write::write_all(&mut f, bytes)
+        .map_err(|e| SnapError::new("io", format!("{}: {e}", tmp.display())))?;
+    f.sync_all() // 提交点前刷盘（#411）
+        .map_err(|e| SnapError::new("io", format!("{}: {e}", tmp.display())))?;
+    drop(f);
+    // rename 优先直接替换（Windows MoveFileExW REPLACE_EXISTING；Unix 原生替换）
+    if std::fs::rename(&tmp, path).is_err() {
+        // 异常文件系统保底：先删目标再 rename（旧实现恒走此路径——丢失
+        // 窗口只在 remove 后 crash 时打开，现在仅作 fallback）
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+        std::fs::rename(&tmp, path).map_err(|e| SnapError::new("io", format!("{}: {e}", path.display())))?;
     }
-    std::fs::rename(&tmp, path).map_err(|e| SnapError::new("io", format!("{}: {e}", path.display())))?;
+    if cfg!(unix) {
+        if let Some(parent) = path.parent() {
+            if let Ok(d) = std::fs::File::open(parent) {
+                let _ = d.sync_all(); // 目录项持久化（best-effort）
+            }
+        }
+    }
     Ok(())
+}
+
+fn nanos_suffix() -> String {
+    format!("{}.{}", std::process::id(), nanos_now())
 }
 
 fn entry_file(e: &Value) -> String {
@@ -431,6 +504,73 @@ mod tests {
         ));
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+
+    /// #190（AUD2-7）：index.json 损坏不再静默清零——备份原文件后空表
+    /// 重建，历史快照文件仍在位可人工恢复（修复前 `_ => Vec::new()` 无
+    /// 备份无告警，条目孤儿化无痕迹）。
+    #[test]
+    fn corrupt_index_backed_up_before_rebuild() {
+        let d = tmpws("corrupt-idx");
+        // 预置：合法历史一条 + 损坏的 index.json
+        let hist = history_root(&d);
+        std::fs::create_dir_all(&hist).unwrap();
+        std::fs::write(hist.join("20260101-000000-abc123.md"), b"# snapshot v1").unwrap();
+        let poison = b"{ this is not valid json";
+        std::fs::write(hist.join("index.json"), poison).unwrap();
+
+        let items = load_index(&d);
+        assert!(items.is_empty(), "损坏面返回空表重建（语义不变）");
+        // 备份在位且字节保真（可人工恢复）
+        let backups: Vec<_> = std::fs::read_dir(&hist).unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("index.json.corrupt-"))
+            .collect();
+        assert_eq!(backups.len(), 1, "恰一份损坏备份");
+        assert_eq!(
+            std::fs::read(&backups[0].path()).unwrap(),
+            poison,
+            "备份字节保真"
+        );
+        // 历史快照文件未被误删
+        assert!(hist.join("20260101-000000-abc123.md").exists(), "快照文件在位");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// #190（AUD2-7）：文件不存在是正常空态——不告警不备份（首启面）。
+    #[test]
+    fn missing_index_is_normal_empty_no_backup() {
+        let d = tmpws("missing-idx");
+        let hist = history_root(&d);
+        std::fs::create_dir_all(&hist).unwrap();
+        assert!(load_index(&d).is_empty());
+        assert!(
+            std::fs::read_dir(&hist).unwrap().flatten()
+                .all(|e| !e.file_name().to_string_lossy().starts_with("index.json.corrupt-")),
+            "无备份产生"
+        );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// #190（AUD2-8）：原子写目标已存在时直接替换（常规路径零 remove 窗口）
+    /// + tmp 名唯一（连续写不互踩、无固定名残骸）。
+    #[test]
+    fn atomic_write_replaces_existing_directly_with_unique_tmp() {
+        let d = tmpws("atomic-replace");
+        let target = d.join("index.json");
+        std::fs::write(&target, b"old").unwrap();
+        atomic_write(&target, b"new-content").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"new-content", "目标被替换");
+        // 连续第二次写（不同内容）——唯一 tmp 不互踩
+        atomic_write(&target, b"third").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"third");
+        // 无 tmp 残骸
+        assert!(
+            !d.join("index.tmp").exists(),
+            "固定名 tmp 不再被使用"
+        );
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
