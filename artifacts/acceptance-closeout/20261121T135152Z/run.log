@@ -1,0 +1,4 @@
+[2026-11-21T13:51:52+00:00] #115 独立验收启动：mode=严格
+[2026-11-21T13:51:57+00:00] [songling67] 金标准 16 条 needle 召回 16/16；层2素材缺失 5 项
+[2026-11-21T13:51:57+00:00] [multifile] 淮安项目 4 件中 4 在位
+[2026-11-21T13:51:57+00:00] [realagent] 真实 LLM 面 NOT_RUN 登记（env 门 {'BID_REAL_PATH_WS': 'unset', 'BID_REAL_PATH_PHASE': 'unset'}）
