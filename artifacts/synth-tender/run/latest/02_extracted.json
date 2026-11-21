@@ -2407,7 +2407,6 @@
       "id": "REQ-0119",
       "params": {
         "date": "2026-11-18",
-        "date_cn": "2026-11-18",
         "marked_by": "regex"
       },
       "source_file": "C-补遗文件.pdf"
@@ -2429,7 +2428,6 @@
       "id": "REQ-0120",
       "params": {
         "date": "2026-11-30",
-        "date_cn": "2026-11-30",
         "marked_by": "regex"
       },
       "source_file": "C-补遗文件.pdf"
@@ -2550,7 +2548,6 @@
       "id": "REQ-0125",
       "params": {
         "date": "2026-11-05",
-        "date_cn": "2026-11-05",
         "marked_by": "regex"
       },
       "source_file": "C-补遗文件.pdf"

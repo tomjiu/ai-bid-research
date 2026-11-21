@@ -1,17 +1,17 @@
 # e2e 全链产物报告（#80 第二批 · 任务 B）
 
-- run-id：**e2e-20261121-212758**｜载体：synth-tender（仓库自带夹具）
-- 全链总耗时：**2893ms**（11 步）
+- run-id：**e2e-20261121-220830**｜载体：synth-tender（仓库自带夹具）
+- 全链总耗时：**3007ms**（11 步）
   - 01_建项目: 0ms
   - 02_导入: 737ms
-  - 03_抽取: 170ms
-  - 04_建纲建矩阵: 13ms
+  - 03_抽取: 155ms
+  - 04_建纲建矩阵: 12ms
   - 05.5_表格数据面: 0ms
   - 05_证据绑定两门: 1ms
-  - 06_起草(mock): 738ms
+  - 06_起草(mock): 708ms
   - 07_format-spec: 0ms
-  - 08_校验: 70ms
-  - 09_导出(docx+pdf): 1148ms
+  - 08_校验: 69ms
+  - 09_导出(docx+pdf): 1309ms
   - 11_自评(score_document+score_price): 16ms
 - REQ：125 条（39 章 / 26 叶）｜mock 总字数：22847
 - 校验：ok=true blocker=0｜导出：docx 175514 字节 + pdf 655012 字节｜PDF 链 缺失 ["chi_sim.traineddata"]
