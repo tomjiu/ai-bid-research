@@ -117,7 +117,13 @@ fn baseline_files_requirement_counts_hold() {
         let reqs = extract_requirements(std::slice::from_ref(&pf));
         assert!(
             reqs.len() >= floor,
-            "{rel} 条款数 {} < 基线 {floor}（#223 修复不得掉基线）",
+            "{rel} 条款数 {} < 基线 {floor}（#223 修复不得掉基线）。
+【AUD2-14 基线下调复核纪律（#195）】：若本次变化是**有意的基线下调**
+（噪声清理/口径修正），PR 必须附逐条清单：①下调前后的差集 REQ
+（clause_no/anchor 摘录）；②每条归因（噪声/重复/口径变化 + 依据）；
+③方向性反证（本次下调不构成召回损失的论证）。无清单的下调 = 回归，
+本门不放行。先例：#234 曾下调 935→923/431→409（附清单）；cf41d2e
+反向加严 844k→1.2M（召回改善方向的门同样在位）。",
             reqs.len()
         );
     }

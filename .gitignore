@@ -61,3 +61,13 @@ output/
 data/
 !data/fonts/
 data/fonts/
+
+# #195（AUD2-15）：测试运行产物出仓——e2e/synth-tender/real-corpus-e2e/
+# acceptance-closeout 的 latest 与 run-id 目录由 cargo test/pytest 运行时生成
+# （双 cargo 并发即竞速、git status 30+ modified 脏树噪音——审计实证；曾随
+# git add -A 混入提交）。产物本体在运行目录 artifacts/e2e/<run-id>/ 等在位，
+# 「快速查看面」latest/ 不入库；需要留档的验收报告走 audit/ 显式归档。
+artifacts/e2e/
+artifacts/synth-tender/run/
+artifacts/real-corpus-e2e/
+artifacts/acceptance-closeout/

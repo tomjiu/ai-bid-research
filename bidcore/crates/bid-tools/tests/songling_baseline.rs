@@ -494,6 +494,11 @@ fn pdf_engine_scoring_items_and_mapping() {
 
 // ---------------------------------------------------------------- 层2：全链路基线（素材缺件 → SKIP）
 
+// #195（AUD2-13）：占位测试改 #[ignore]——原形态素材缺件时 SKIP 横幅 +
+// return（恒绿，fullchain_baseline 名目长期计入绿总量且无 cargo 侧台账）。
+// 素材到位后 --include-ignored 补跑（todo!() 红即暴露未实现——fail-loud
+// 语义保留），与全仓 15 个 #[ignore] 的 main 阶段补跑机制同纪律。
+#[ignore = "层2 素材待提供（issue #251 素材表）——到位后 --include-ignored 补跑（#195 台账）"]
 #[test]
 fn fullchain_agent_recall_precision_baseline() {
     // 素材：Agent 67 条 + 76 区间 + TF-0003 docx（issue #251 素材表）
@@ -510,6 +515,7 @@ fn fullchain_agent_recall_precision_baseline() {
     todo!("素材到位后实现：67 条召回对账 / 295 条精度抽查 / 同文同源去重 / anchor 页码校验 / 分类对照——issue #251 §4 七维断言")
 }
 
+#[ignore = "层2 素材待提供（97 页基线 PDF）——到位后 --include-ignored 补跑（#195 台账）"]
 #[test]
 fn fullchain_baseline_export_pages() {
     // 素材：97 页产物 PDF（页数 fitz 实测口径——层2 到位后固化 97 基线与 ≥1000 目标）
