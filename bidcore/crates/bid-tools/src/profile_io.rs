@@ -166,20 +166,25 @@ mod tests {
     /// 注入方式（跨平台、零权限戏法）：把 tmp 位置占成一个目录——
     /// `File::create` 必失败 → save 返回 Io，落盘目标保持旧内容原字节。
     #[test]
+    #[cfg(unix)]
     fn failed_write_preserves_original_file() {
         let dir = tmp_ws("fail-inject");
         let old = complete();
         save(&old, &dir).unwrap();
         let old_bytes = fs::read(dir.join(PROFILE_FILE)).unwrap();
 
-        // tmp 位置被目录占位 → 本次写失败
-        fs::create_dir_all(dir.join(format!("{PROFILE_FILE}.tmp"))).unwrap();
+        // #186 tmp 名唯一化后，预置固定名 tmp 不再构成占用（这正是修复
+        // 目的）。失败注入迁移：父目录只读 → 唯一名 tmp 的 create 报
+        // EACCES（不可自愈）→ 本次写失败。
+        use std::os::unix::fs::PermissionsExt as _;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o500)).unwrap();
         let mut newer = complete();
         newer.company_name = "新公司名——不应落盘".into();
         match save(&newer, &dir) {
             Err(FormError::Io { .. }) => {}
             other => panic!("注入失败应为 Io 错，实际：{other:?}"),
         }
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
 
         assert_eq!(
             fs::read(dir.join(PROFILE_FILE)).unwrap(),

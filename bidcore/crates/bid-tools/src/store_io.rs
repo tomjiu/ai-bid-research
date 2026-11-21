@@ -60,6 +60,11 @@ pub enum StoreIoError {
     SchemaUnsupported { found: u32, supported: u32 },
     /// JSON 语法损坏 / 域语义不完整（restore 拒绝面）——原文件保留
     Corrupt(String),
+    /// #186（AUD2-2）：跨进程 lost-update 防线——盘上 content_version
+    /// 高于本内存态（另一进程已提交新版本），本态整态覆盖会静默吞掉
+    /// 先写者全部变更。拒绝并要求调用方重载（mang-app 指纹重开 / bid-mcp
+    /// 重启）后再写。
+    StaleOverwrite { disk: u64, mine: u64 },
 }
 
 impl std::fmt::Display for StoreIoError {
@@ -71,6 +76,10 @@ impl std::fmt::Display for StoreIoError {
                 f, "快照 schema_version={found} 高于当前支持 {supported}（升级程序后重试）"
             ),
             StoreIoError::Corrupt(why) => write!(f, "快照损坏（拒绝加载，原文件保留）: {why}"),
+            StoreIoError::StaleOverwrite { disk, mine } => write!(
+                f,
+                "跨进程 lost-update 防线拒绝陈旧覆盖：盘上 content_version={disk} 高于内存 {mine}——另一进程（bid-mcp-stdio / Agent）已提交新版本，本内存态已过期；重载后再写，不得直接覆盖"
+            ),
         }
     }
 }
@@ -172,6 +181,25 @@ impl StoreFile {
     pub fn save(&self, domain: &StoreSnapshot, parsed: &[ParsedFile]) -> Result<(), StoreIoError> {
         std::fs::create_dir_all(&self.dir).map_err(StoreIoError::Io)?;
 
+        // #186（AUD2-2）：写前陈旧检测——盘上 content_version 高于本内存态
+        // 时拒绝（双进程共写是设计预期场景：mang-app 侧指纹重开只防自己读
+        // 陈旧，防不了 bid-mcp 侧陈旧覆盖）。盘上读不出（损坏/锁窗口/首建）
+        // → 放行（与 GC 的 Unreadable 同保守面——不能因读不出阻塞正常写）。
+        if let Some(disk) = self.disk_content_version() {
+            let mine = domain.project.as_ref().map(|p| p.content_version);
+            let stale = match mine {
+                Some(m) => disk > m,
+                // 内存无项目而盘上有项目：空态覆盖会吞掉整项目——同拒
+                None => true,
+            };
+            if stale {
+                return Err(StoreIoError::StaleOverwrite {
+                    disk,
+                    mine: mine.unwrap_or(0),
+                });
+            }
+        }
+
         // ---- 1. parsed 内容寻址落盘（仅在文件缺时写入）
         let parsed_ref = if parsed.is_empty() {
             None
@@ -193,6 +221,17 @@ impl StoreFile {
         // ---- 3. GC：清除未被引用的 parsed 文件（单进程串行——服务态无并发写）
         self.gc_parsed()?;
         Ok(())
+    }
+
+    /// 盘上 db.json 的 content_version（#186 陈旧检测用）。
+    ///
+    /// None = 读不出（无文件/IO 失败/解析失败）——保守放行面，与
+    /// [`StoreFile::current_parsed_ref_state`] 的 Unreadable 语义同族：
+    /// 「读不出」与「盘上旧」是两种语义，前者不得阻塞正常写。
+    fn disk_content_version(&self) -> Option<u64> {
+        let raw = std::fs::read_to_string(self.path()).ok()?;
+        let svc: ServiceSnapshot = serde_json::from_str(&raw).ok()?;
+        svc.domain.project.as_ref().map(|p| p.content_version)
     }
 
     /// 删除目录内未被 db.json 引用的 `parsed-*.json`。
@@ -295,7 +334,15 @@ fn parsed_file_name(bytes: &[u8]) -> String {
 pub fn write_fsync_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 
-    let tmp = path.with_extension("json.tmp");
+    // #186（AUD2-2）：tmp 名唯一化（pid + nanos）——原固定名 `db.json.tmp`
+    // 两个并发写者互踩同一 tmp（A truncate 后 B 覆写，A 的 rename 提交的
+    // 是 B 的内容——无感知数据错位）。唯一名后各写各的 tmp，rename 各自
+    // 提交；崩溃残骸由目录属主清理（与固定名时代同面，不新增）。
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = path.with_extension(format!("json.{}.{}.tmp", std::process::id(), nanos));
     // 重试耗尽后清 tmp 残骸（#457 增量，#546 统一后两侧同享）——
     // 注意闭包内部的重试成功路径不经过此分支。
     if let Err(e) = retry_transient(|| -> std::io::Result<()> {
@@ -843,15 +890,15 @@ mod tests {
         let dir = tmp_store("whole-seq-fail-closed");
         std::fs::create_dir_all(&dir).unwrap();
         let target = dir.join("db.json");
-        std::fs::write(&target, b"old-content").unwrap();
-        let tmp = target.with_extension("json.tmp");
-        std::fs::create_dir_all(&tmp).unwrap(); // tmp 位置被目录占据
+        // #186 tmp 名唯一化后，预置固定名 tmp 不再构成占用（这正是修复
+        // 目的）。fail-closed 注入迁移：目标位置被目录占据——rename 提交
+        // 点报 EISDIR/ENOTEMPTY（非瞬态，一次即报），目标不被半截污染。
+        std::fs::create_dir_all(&target).unwrap(); // 目标位置被目录占据
         let r = write_fsync_atomic(&target, b"new-content");
-        assert!(r.is_err(), "tmp 被目录占用必须报错（fail-closed）");
-        assert_eq!(
-            std::fs::read(&target).unwrap(),
-            b"old-content",
-            "失败路径不得触碰旧文件（rename 前不覆盖——原子性）"
+        assert!(r.is_err(), "目标被目录占用必须报错（fail-closed）");
+        assert!(
+            target.is_dir(),
+            "失败路径不得把目标目录替换成文件（rename 前不覆盖——原子性）"
         );
     }
 
@@ -969,4 +1016,94 @@ mod tests {
         assert_eq!(leftovers.len(), 1, "只留当前引用的 parsed: {leftovers:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// #186（AUD2-2）：跨进程 lost-update 防线——盘上 content_version 高于
+    /// 本内存态时 save 必须响亮拒绝（修复前静默整态覆盖，吞掉先写者全部
+    /// 变更）。双进程共写是设计预期场景（mang-app 注释明示 bid-mcp-stdio
+    /// / Agent 改写 db.json 后下一条命令自动重开——现防线只防读陈旧）。
+    #[test]
+    fn save_rejects_stale_overwrite_when_disk_version_newer() {
+        let dir = std::env::temp_dir().join(format!("bid-store-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let sf = StoreFile::new(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // 进程 B 先写：盘上 content_version = 6（create=1 + 5 个不同名文件追加）
+        // ——upsert 同名文件是幂等更新不递增，须用不同名驱动版本
+        let mut disk_store = DomainStore::new();
+        disk_store.create_project("B 进程项目", "B-2026", "明标", "b-key").unwrap();
+        for i in 0..5 {
+            disk_store.upsert_file(&format!("A-招标文件-{i}.docx"), "招标文件", &format!("aa{i}"), 3, 1, 30, 0,
+                                   ParseStatus::Ok, "t").unwrap();
+        }
+        sf.save(&disk_store.to_snapshot(), &[]).unwrap();
+
+        // 进程 A（陈旧内存态 v5 < 盘上 v6）：覆盖写必须拒绝
+        let mut my_store = DomainStore::new();
+        my_store.create_project("A 进程项目", "A-2026", "明标", "a-key").unwrap();
+        for i in 0..4 {
+            my_store.upsert_file(&format!("B-设备清单-{i}.pdf"), "设备清单", &format!("bb{i}"), 3, 1, 30, 0,
+                                 ParseStatus::Ok, "t").unwrap();
+        }
+        let err = sf.save(&my_store.to_snapshot(), &[]).unwrap_err();
+        assert!(
+            matches!(err, StoreIoError::StaleOverwrite { disk: 6, mine: 5 }),
+            "陈旧覆盖须 StaleOverwrite 拒绝（实得 {err:?}）"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// #186：正常写面零扰动——内存版本 ≥ 盘上（自己上次写的 / 单进程串行
+    /// 递增）时 save 照常成功；同版本重写（幂等 checkpoint）也放行。
+    #[test]
+    fn save_allows_equal_or_newer_memory_version() {
+        let dir = std::env::temp_dir().join(format!("bid-store-fresh-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let sf = StoreFile::new(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut store = DomainStore::new();
+        store.create_project("同进程项目", "S-2026", "明标", "s-key").unwrap();
+        store.upsert_file("A-招标文件.docx", "招标文件", "aa", 3, 1, 30, 0,
+                          ParseStatus::Ok, "t").unwrap();
+        let snap = store.to_snapshot();
+        sf.save(&snap, &[]).unwrap(); // v2 落盘（首次，盘上无文件 → 放行）
+        sf.save(&snap, &[]).unwrap(); // 同版本幂等重写 → 放行
+
+        // 内存递增（新变更）→ 盘上旧 → 放行
+        store.upsert_file("C-补遗.docx", "补遗", "cc", 2, 0, 10, 0,
+                          ParseStatus::Ok, "t").unwrap();
+        sf.save(&store.to_snapshot(), &[]).unwrap();
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// #186（AUD2-5 同面）：tmp 名唯一化——预置固定名 `db.json.tmp`（毒占
+    /// 位/他进程残骸）不再阻塞或污染原子写；save 后 db.json 内容完整。
+    #[test]
+    fn tmp_name_unique_not_hijacked_by_preexisting_fixed_tmp() {
+        let dir = std::env::temp_dir().join(format!("bid-store-tmpu-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let sf = StoreFile::new(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // 预置固定名 tmp（旧实现的目标名——投毒/残骸面）
+        std::fs::write(sf.dir.join("db.json.tmp"), b"poison-fixed-tmp").unwrap();
+
+        let mut store = DomainStore::new();
+        store.create_project("唯一tmp项目", "U-2026", "明标", "u-key").unwrap();
+        sf.save(&store.to_snapshot(), &[]).unwrap();
+
+        // db.json 完整可读且是本项目（预置毒 tmp 未进入提交路径）
+        let raw = std::fs::read_to_string(sf.path()).unwrap();
+        assert!(raw.contains("唯一tmp项目"), "db.json 须为本项目快照（非毒内容）");
+        // 预置毒 tmp 原样残留（未被消费/篡改——唯一名写者不碰它）
+        assert_eq!(
+            std::fs::read(sf.dir.join("db.json.tmp")).unwrap(),
+            b"poison-fixed-tmp",
+            "固定名残骸不被唯一名写者触碰"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
 }
