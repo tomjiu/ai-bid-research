@@ -192,7 +192,13 @@ class TestCliSmoke:
         assert result["replay"]["commands"], "replay.commands 不得为空"
         # 日志无密钥（对 result/log 双面扫）
         log_text = (latest / "run.log").read_text(encoding="utf-8")
-        assert "secretpw" not in log_text and "<redacted>" in log_text or True
+        # #188（AUD2-12）：原写法 `... and ... or True` 在 Python 优先级下恒真，
+        # 脱敏校验（本测试自己的声明目标）落空。移除恒真后暴露：宽松快速
+        # 路径的 run.log 本就无密钥形内容（env_keys 只记键名不记值）——
+        # `<redacted>` 恒不出现，该期望是对不存在行为的假设。E2E 面守
+        # 「无泄漏」；「脱敏标记留痕」由 redact 单测（TestRedact 的
+        # test_url_basic_auth_redacted / test_token_kv_redacted）守卫。
+        assert "secretpw" not in log_text, "run.log 不得含明文密钥（secretpw）"
         for blob in (json.dumps(result), log_text):
             assert "9b78979" not in blob  # 仓内代理 token 前缀不得泄漏
 
