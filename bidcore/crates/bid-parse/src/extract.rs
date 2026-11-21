@@ -318,11 +318,11 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     // 例外从句（排除面——「除不可抗力外」不算否决信号，句法同 DOCX 侧 P0-B）
     let re_exception = Regex::new(r"除[^，。；]{0,24}外(，|以外)?").unwrap();
     // 资格面（要求/证书/审查语境——弱提及不算）
-    let re_qual = Regex::new(concat!(
-        "资质等级|资格审查|资格后审|资格预审|资质证书|营业执照|安全生产许可证|类似工程|",
-        "级资质|资格条件|注册建造师|注册造价工程师",
-    ))
-    .unwrap();
+    // #189（AUD2-19）：资格词表单一真源——原私有词表与 veto_lexicon 共享
+    // 表差集两向（PDF 独有「级资质」已上提并入共享表；共享独有的
+    // 「项目负责人|项目总监|监理工程师|具备.*资质|须具备」此前 PDF 面
+    // 漏判——跨格式资格分类分叉根因），改消费共享真源。
+    let re_qual = crate::veto_lexicon::re_qual();
     // #266-C 量化参数形态（数值 + 单位/%）——技术章子项内容行的判据
     // （「完好率≥95%」「平均接头损耗应不大于0.2dB/个」类——单位集保守：
     // 条/个/人/年等泛用量词不进面，防止技术章整段泛化）
@@ -367,7 +367,10 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     .unwrap();
     // 分值形态特征（评分结构行「①施工组织设计20分②…」——多处「N分」，
     // 圈号开头不匹配 re_score_line 的数字头，需独立排除——评分项语义非否决）
-    let re_score_shape = Regex::new(r"\d+(?:\.\d+)?分").unwrap();
+    // #189（AUD2-19）：评分分值形态与 DOCX 侧（extract_main_docx）统一容
+    // 空格口径——pdftotext 恰常在「N分」间插空格（「10 分」），不容空格
+    // 的 PDF 版会把评分结构行判漏（:416 的 ≥2 处分值语义判定面）。
+    let re_score_shape = Regex::new(r"\d+(?:\.\d+)?\s*分").unwrap();
     // 表头词聚集（格式模板表头行：姓名/年龄/学历/职称/证号 ≥3 同现）
     let header_words = ["姓名", "年龄", "学历", "职称", "证号", "职务", "专业", "毕业学校"];
     let is_header_row = |t: &str| -> bool { header_words.iter().filter(|w| t.contains(**w)).count() >= 3 };
