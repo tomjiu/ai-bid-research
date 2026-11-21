@@ -2,7 +2,8 @@
 
 > **定性：选项 A——独立研究工具（非生产链路）。**
 > 本文件是 Python 侧模块与 Rust bid 链路职责边界的**唯一真源**。
-> 创建于 #563；最后更新 2026-11-10（#601 迭代三段 R99：批 N 沉睡字段唤醒）。
+> 创建于 #563；最后更新 2026-11-21（#196 文档卫生包：§2 补登 scripts/ 验收与评测脚本面——AUD2-20；
+> 章节编号重排——原两个误编的「## 6.」（维护纪律 / SEMUL 引用口径）顺为 §7 / §9——P3.17）。
 
 ---
 
@@ -51,6 +52,30 @@
 | `src/analyze/duplicates.py`（近重复检测，R79-R80） | 项目名归一 + pigeonhole 块倒排候选 + Ukkonen 带限编辑距离 + 传递闭包聚类；报告十六节与 `--export --dedupe` 消费 | **研究信号非事实认定**（一期/二期与改包重发同为 1-2 步编辑——聚族是提示人工复核）；候选对预算 5 万，超限**诚实截断**不装完成 |
 | `src/analyze/quality.py` 语义扩展（R81/R89） | 四类语义审计（预算负/零/超大/非数值、日期逻辑、标识完整/唯一）+ 加权健康分 + 单位错位群体对照 | 健康分是**加权启发**（权重服务研究可信度排序，非认证）；审计揭示不拦截（`data-quality` 发现问题仍退 0，门槛面 `--min-score` 才拦截） |
 | `src/analyze/windows.py` / `agencies.py` / `categories.py` / `platforms.py`（沉睡字段唤醒，R95-R98） | 响应窗口（发布→截止天数分布+短窗提示）/代理机构画像/品类分布/平台来源（域名归一+跨平台转发信号）——deadline/agency/category/source_url 四字段首次进分析面，报告十八至二十一节 | 短窗是**研究提示非违规认定**（法定 20 日起算点是招标文件发出日，本节以发布日近似偏短估计）；品类自由文本**精确匹配**归并不做词表归一（映射由研究者判断）；跨平台信号是簇成员≥2 平台的**实证**（缺 URL 不参与判定，非猜测） |
+
+**scripts/ 验收与评测脚本面（AUD2-20 补登记 · #196 校准 2026-11-21）**：
+
+scripts/ 顶层共 **48 个 `.py`**（实测 `ls scripts/*.py | wc -l`），按下表功能族
+分组登记（各族括号内为该族文件数，八个顶层族合计 48）；子目录另有 12 个 `.py`
+（4 个 Python 子包）、5 个 Rust harness 子包（Cargo 工程，非 Python）与
+9 个非 Python 辅件，一并登记防再漏。**全部为验收/评测/语料工作面**：消费仓内
+夹具与语料、驱动 cargo 真跑（bid-mcp `real_closeout` / `multifile_matrix` 等），
+产物落 `artifacts/` / `baseline/` / `audit/`——不属 §1 研究管道生产面，产物
+不回流生产链路；SEMUL 仿真族的结论引用遵守 §9 口径。
+
+| 脚本族（文件数） | 代表文件 | 职责 | 消费边界（读 → 写） |
+|---|---|---|---|
+| 验收链族（5） | `run_tests.py`、`multifile_acceptance.py`、`closeout_real_test.py`、`acceptance_closeout.py`、`run_real_llm_path.py` | 每轮验收/收官编排：夹具自检 → cargo 真跑 → GT 对照 → 审计报告（四分栏五态结果 schema） | 读 `fixtures/`、`real-corpus/`、`real-samples/`、`baseline/`、`artifacts/`；写 `artifacts/`、`audit/`（验收/收官报告） |
+| 基线族（1） | `baseline_run.py` | #2 基线冻结一键复现：逐文件解析结果 + 敌意件行为基线 + 环境指纹，双跑确定性比对 | 读 `real-corpus/` 全语料；写 `baseline/`（`env.json`、`MANIFEST.json`、`parse/**`、`security/**`） |
+| 合成夹具族（6） | `fixture_spec.py`、`fixture_gen.py`、`synth_tender_spec.py`、`synth_tender_gen.py`、`make_425_addendum.py`、`add_1n_waiver.py` | 评测夹具与内容规格单一真源（corpus-A / synth-tender，sha256 确定性可复现） | 规格自含；写 `fixtures/corpus-A/`、`fixtures/corpus-R/`、`fixtures/synth-tender/`（`make_425_addendum.py` 默认写 `/tmp`） |
+| 真实链语料族（8） | `telecom_chain.py`、`telecom_fetch.py`、`telecom_file_level.py`、`telecom_gt_draft.py`、`telecom_prepare_files.py`、`telecom_refetch.py`、`m17_real_chain.py`、`m17_inventory.py` | 通信/政采真实公告链采集、镜像落盘、溯源核验与 GT 草案 | 读 `real-corpus/telecom/`、`real-corpus/gov-procurement/`；写 `real-corpus/**`（sources/files/链报告/GT 草案） |
+| 评测族（12） | `grade.py`、`b5_engine_gt_eval.py`、`real_eval_score.py`、`real_eval_gt_enrich.py`、`real_eval_gt_crosscheck.py`、`fp_sampling.py`、`title_impact_score.py`、`title_impact_summary.py`、`repro_112.py`、`repro_132.py`、`m145_repro.py`、`review_113_analysis.py` | corpus-A 判分器、引擎路径 GT 评测、真实语料 GT 草案/异源抽检/判分、issue 复现与独立审校 | 读 `fixtures/**/ground-truth/`、`real-corpus/`、`artifacts/`、运行产物 `runs/`；写 `artifacts/real-eval/`、`artifacts/title-impact/`、stdout 报告 |
+| 诊断族（7） | `gh_audit.py`、`gh_deep.py`、`gh_search.py`、`engine_diff.py`、`scan_docx_scoring_tables.py`、`check_mdcore_rev_sync.py`、`xref_check.py` | GitHub 仓外审计取证、B3 双跑差分、DOCX 评分表素材盘点、mdcore rev 一致性门禁（FG-08）、跨文档一致性检查 | 读 `baseline/parse/`、`bidcore/Cargo.lock`、`research/*.md`、全仓 DOCX 素材；写 `research/raw/`、stdout 报告 |
+| SEMUL 仿真族（8） | `v1_citation.py`、`v1_corpus_r.py`、`v1_darkbid.py`、`v1_export.py`、`v1_pipeline.py`、`v2_impact.py`、`v3_integration.py`、`ooxml_util.py` | Python 语义仿真验证（自认 SEMUL ≠ ENGINE_RUN，引用口径见 §9） | 读 `fixtures/`；写 `runs/`、临时产物 |
+| 文档工具族（1） | `patch_docs_r10.py` | 文档状态回填（verification-plan / test-plan / README） | 读写 `research/` 计划文档与 `README.md`（`DOCS_BASE` 可覆盖） |
+| Python 子包（12 `.py`） | `e2e_bid/`（2）、`fp_attribution/`（2）、`mang-dev/`（2）、`veto_gt/`（6） | #269 黑盒 MCP 调用留痕 + 人肉 LLM 中继；FP 归因/TP 误伤扫描；#76 设置面板 UI 探针；GT 增补轮裁决/合并 | 读 `artifacts/`、web-ui dist、`/tmp` 工作区（`BID_WS`）；写 `artifacts/`（`veto-gt/`、`mang-shots/`）、`scripts/fp_attribution/`、`/tmp` |
+| Rust harness 子包（非 Python） | `baseline_harness/`、`bid_health_check/`、`engine_probe/`、`title_impact/`、`veto_measure/` | Cargo 探针/harness 工程（引擎双跑、健康自检、标题影响实验、否决测量） | 各自 `src/`；产物经上列 Python 编排器汇入 `baseline/` / `artifacts/` |
+| 非 Python 辅件（9） | `run_bidmcp_direct.sh`、`run_pkg_direct.sh`、`rust-env.sh`、`smoke-linux.sh`、`smoke-windows.ps1`、`syntax-check.sh`、`package-mang-app.ps1`、`fixtures-requirements.txt`、`zai-llm-bridge.mjs` | 测试直跑器（分批链接防盘满）、Rust 沙箱环境自愈、离线全链冒烟、秒级语法检查、mang-app 绿色版打包、夹具依赖钉版、真实 LLM 本地桥 | 读仓内构建面；写 `dist-pkg/`、`/tmp` 日志 |
 
 **判定规则**：任何"投标生产"语义的数据与产物 → Rust 侧是真源；
 Python 侧产物（研究缓存/研究快照）**永不回流**生产链路。
@@ -120,7 +145,7 @@ data/              # SQLite 研究数据库（本地工作区，不入库）
 __pycache__/       # 字节码缓存
 ```
 
-## 6. 维护纪律（#563 验收 4）
+## 7. 维护纪律（#563 验收 4；原误编为「## 6.」——#196 编号校准 2026-11-21）
 
 **未来新增任何 Python 模块，必须同步更新本文件**：
 
@@ -128,21 +153,24 @@ __pycache__/       # 字节码缓存
 2. 涉及数据存储的，在 §3 补 schema 说明；
 3. 模块 docstring 首行必须带「非生产链路——仅供研究」标注
    （与本文件定性一致）；
-4. 需要跑测试的，路径加入 python-tests.yml 的触发列表。
+4. 需要跑测试的，路径加入 python-tests.yml 的触发列表；
+5. scripts/ 下新增脚本，按 §2 scripts/ 面的功能族归组登记（新起族须写明
+   代表文件、职责与消费边界）——AUD2-20 整改项，#196 校准 2026-11-21。
 
 违反任一条 = 新的隐式真源 = 重复 #563 的问题。
 
-## 7. 关联
+## 8. 关联（原编号 7——#196 编号校准 2026-11-21）
 
 - #554 PR——引入 Python 模块（本边界声明所回应的对象）
 - #563 Issue——边界任务（本文件即其交付物）
 - #457 PR——ai-bid 三层架构（bid-domain / bid-tools / bid-mcp）
 - `AGENTS.md` 0.0.10——引擎能力 ≠ 产品可用（模块存在 ≠ 职责清晰）
 
-## 6. SEMUL 引用口径（TA-2 / FG-06 残余收口——审计 #135）
+## 9. SEMUL 引用口径（TA-2 / FG-06 残余收口——审计 #135；原误编为「## 6.」——#196 编号校准 2026-11-21）
 
 **规则：凡结论来自 Python 语义仿真（`v2_impact.py` / `ooxml_util.py` / `v1_*.py` 等自认
-`SEMUL ≠ ENGINE_RUN` 的脚本），文档/报告/issue 引用时必须带 `(SEMUL)` 标注。**
+`SEMUL ≠ ENGINE_RUN` 的脚本——已按 §2 scripts/ SEMUL 仿真族登记），文档/报告/issue
+引用时必须带 `(SEMUL)` 标注。**
 
 - 仿真件验证的是**语义设计的自洽性**，不构成对 Rust 产品面行为的验证；
 - Rust 产品面结论只能引用 cargo 测试（如 `four_contracts.rs` / `changediff_chain.rs`）

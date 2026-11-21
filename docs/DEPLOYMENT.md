@@ -2,25 +2,33 @@
 
 ## 推荐包内容
 
+> **#196 校准 2026-11-21**：原文的包内容清单引用了仓内**不存在**的 MCP 客户端
+> 配置预置目录（claude-desktop.json / generic.json 两件）——客户端配置模板实际由
+> 启动器 `bid-mcp --init [--client claude|cursor|continue|json]` 按需生成
+> （`bidcore/crates/bid-mcp/src/bin/cli.rs`，#314；用法见 `docs/agent-integration.md`），
+> 仓内无预置目录，已从清单移除；原 `bin/` 清单漏登 `bid-mcp` 启动器，已补；
+> `KNOWN-ISSUES.md` 仓内不存在，已从清单移除。仓库当前结构（以仓库当前结构
+> 为准）：无根级 `bin/`——MCP 可执行目标定义于 `bidcore/crates/bid-mcp/Cargo.toml`
+> （`bid-mcp` / `bid-mcp-server` / `bid-mcp-stdio`），由 cargo 构建产出；Skill 实际
+> 位于 `sdk/skill/bid-response-pipeline/`；契约文档位于 `docs/`。
+
 ```
 mang-bid/
   bin/
-    bid-mcp-server.exe    标准 MCP（JSON-RPC 2.0）
-    bid-mcp-stdio.exe     裸 JSON 行协议
+    bid-mcp.exe            启动器/自检 CLI（--init 生成 MCP 客户端配置、--doctor 自检，#314）
+    bid-mcp-server.exe     标准 MCP（JSON-RPC 2.0）
+    bid-mcp-stdio.exe      裸 JSON 行协议
   skill/
     bid-response-pipeline/   可直接导入的 Skill
   docs/
     bid-mcp-contract.md      工具契约单一真源
     agent-integration.md     外部 Agent 集成说明
     DEPLOYMENT.md            本文件
-  mcp-config/
-    claude-desktop.json
-    generic.json
   README.md
-  KNOWN-ISSUES.md
 ```
 
-**体积**：约 30 MB（两个 exe 静态链接运行时，无需安装 .NET / Rust / Python）
+**体积**：约 30 MB 量级（exe 静态链接运行时，无需安装 .NET / Rust / Python；
+bin/ 三件——启动器 + server + stdio，体积以实际打包产出为准。#196 校准 2026-11-21）
 
 ---
 
