@@ -15,7 +15,7 @@ cargo build --release
 
 ## 能力面
 
-### 八阶段链路
+### 九阶段链路（P0–P8 共 9 段，#191 校准）
 
 ```
 P0 建项  → create_bid_project
@@ -31,30 +31,34 @@ P8 导出  → export_bid_document（篇幅门 + 矩阵 blocking 清零）
 ```
 
 
-### 50 个 MCP 工具
+### 51 个 MCP 工具
+
+真源：`bidcore/crates/bid-mcp/src/lib.rs` 的 `TOOL_NAMES`（编译期钉死，#191 校准——
+下述清单与真源逐名核对一致）。
 
 ```
 建项导入（2）：create_bid_project / import_tender_files
-抽取矩阵（6）：extract_requirements / get_compliance_matrix / set_matrix_override
-              / get_requirement_provenance / get_block_requirements
-              / get_annotation_overlay（#285② 块级双向索引对账族）
+抽取矩阵（7）：extract_requirements / get_compliance_matrix / map_scoring_item
+              / set_matrix_override / get_requirement_provenance
+              / get_block_requirements / get_annotation_overlay（#285② 块级双向索引对账族）
+分包（1）：list_packages（#316 多标段/多包识别与选包状态只读）
 建纲篇幅（2）：build_outline / recommend_length_profile
 证据（4）：list_evidence / register_evidence / bind_evidence / search_evidence
-
-起草（7）：draft_response_section / append_section_segment /
-            rewrite_section_segment / list_section_segments /
-            register_addendum_changes / rewrite_section_partial（#319 补遗增量重写）
-            / validate_bid_document
-复核评分（6）：record_review_gate / record_addendum_waiver / check_bid_quality
-              / score_price / score_section / score_document
-              / check_scoring_coverage（#318 细则逐条响应覆盖检查）
+业绩材料库（4）：register_performance / list_performance / recommend_performance
+              / write_performance_section（#315 跨项目业绩资产）
+起草分段（6）：draft_response_section / append_section_segment /
+              rewrite_section_segment / list_section_segments /
+              register_addendum_changes / rewrite_section_partial（#319 补遗增量重写）
+校验评分（6）：validate_bid_document / check_bid_quality / score_price /
+              score_section / score_document / check_scoring_coverage（#318 细则逐条响应覆盖检查）
+复核（2）：record_review_gate / record_addendum_waiver（#184 补遗分级阻塞确认）
 RT 生命周期（7）：assign_revision / advance_revision / complete_revision
               / batch_task / advance_task / reopen_section / set_param_responses（#321）
 全块覆盖（4）：get_document_chunks / submit_block_marks / get_coverage_report
               / get_star_coverage（★漏标检测）
-导出恢复（4）：export_bid_document / get_bid_project_state / save_version
+导出版本恢复（4）：export_bid_document / get_bid_project_state / save_version
               / recover_validating_state
-其他（3）：list_tasks / list_tools（#279 行协议发现面）
+发现与任务（2）：list_tasks / list_tools（#279 行协议发现面）
 ```
 
 （工具面持续演进——以 `list_tools` / `tools/list` 应答为准，#278。）
@@ -100,7 +104,7 @@ fixtures/
   songling-232762/      松岭项目 65 页真实招标文件 + 金标准
   corpus-A/             39 件合成语料
   corpus-R/             D1/D2/D5 确定性合成
-  synth-tender/         25 埋点合成件
+  synth-tender/         合成招标包 5 件（A–E 五件 + 7 坑；埋点全量召回属 corpus-A GT，#191 校准）
 ```
 
 **语料纪律**：文件名不许改——文件名带项目名称和编号，是 Agent 的合法信息来源。
@@ -140,7 +144,7 @@ INFO     仅记录
 | [docs/PYTHON-BOUNDARY.md](docs/PYTHON-BOUNDARY.md) | **Python 研究工具边界**——src/llm·report·storage·collect·extract·analyze·pipeline 为非生产链路（#563/#601） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 环境搭建 + 开发流程 |
 | [docs/bid-domain-model.md](docs/bid-domain-model.md) | 领域对象 + 状态机 + ID 命名空间 |
-| [docs/bid-mcp-contract.md](docs/bid-mcp-contract.md) | MCP 工具契约（33 个工具） |
+| [docs/bid-mcp-contract.md](docs/bid-mcp-contract.md) | MCP 工具契约（51 个工具——真源 `TOOL_NAMES`，#191 校准） |
 | [docs/bid-skill-design.md](docs/bid-skill-design.md) | Skill 九阶段路径 + 停止条件 |
 | [docs/architecture-decision.md](docs/architecture-decision.md) | AD-01~AD-07 决策记录 |
 | [docs/threat-model.md](docs/threat-model.md) | 安全威胁模型 |
@@ -168,7 +172,7 @@ cargo test --workspace              # 全量
 cargo test -p bid-domain            # 领域层
 cargo test -p bid-tools             # 工具层 + 真实语料
 
-# Python 研究工具链（src/ + tests/，283 用例——独立于 Rust 链；
+# Python 研究工具链（src/ + tests/，962 用例——pytest 收集口径、#191 校准；独立于 Rust 链；
 # 非生产链路，边界见 #563/#601（docs/PYTHON-BOUNDARY.md））
 python3 -m pip install -r requirements.txt
 python3 -m pytest
@@ -220,4 +224,4 @@ FG-04  T18a 引擎路径评测断裂
 
 ---
 
-**最后更新**：2026-11-06
+**最后更新**：2026-11-21（#191 README 工具面对齐 51 真源）

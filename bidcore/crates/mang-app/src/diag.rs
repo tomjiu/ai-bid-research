@@ -310,7 +310,7 @@ mod tests {
             bid_mcp::TOOL_NAMES.len(),
             "工具面必须与 bid_mcp::TOOL_NAMES 单一真源同量"
         );
-        // 当前 31 工具全部实装（schema::is_implemented 白名单覆盖全部 TOOL_NAMES）。
+        // 当前 51 工具全部实装（schema::is_implemented 白名单覆盖全部 TOOL_NAMES；#191 校准）。
         // 若未来新增「未实装」工具导致此处红：把基线改成显式列出允许未实装的
         // 白名单，而不是删断言——基线随真源同步，不是放宽（AGENTS.md 第 9 条）。
         assert_eq!(
