@@ -2040,7 +2040,17 @@ fn push_req(reqs: &mut Vec<Requirement>, seq: &mut usize, category: &str,
     if category == "评分项" && !params.contains_key("score") {
         let joined: String = anchors.iter().map(|a| a.excerpt.as_str()).collect();
         if let Some(s) = score_of(&joined) {
-            params.insert("score".into(), serde_json::json!(s));
+            // #178（F-4）：分值 JSON 口径对齐 review_table（整数落 i64、
+            // 小数落 f64）——矩阵 as_i64 消费面两侧同口径（原恒 f64，
+            // 25.0 与 25 混流）。
+            params.insert(
+                "score".into(),
+                if s.fract() == 0.0 {
+                    serde_json::json!(s as i64)
+                } else {
+                    serde_json::json!(s)
+                },
+            );
         }
     }
     // #250：来源字段完整化——正则产物统一 `marked_by: "regex"`（Agent 项
