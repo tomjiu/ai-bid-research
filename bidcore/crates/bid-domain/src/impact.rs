@@ -82,6 +82,9 @@ pub struct ImportImpact {
 pub enum AcceptBlock {
     Dirty,
     UnresolvedConflict(Vec<String>),
+    /// #194（AUD2-10）：未知章节——原 expect/unwrap 直接 panic（潜伏雷，接
+    /// MCP 壳即用户可触发）；对齐同文件 resolve_conflict 的优雅返回面。
+    NotFound,
 }
 
 pub struct ImpactEngine {
@@ -460,7 +463,10 @@ impl ImpactEngine {
     /// R3-P2-2：关联 GT 从各冲突记录自身取（不耦合最近一次 addendum_spec）。
     pub fn try_accept(&mut self, section_id: &str) -> Result<(), AcceptBlock> {
         {
-            let v = self.sections.get(section_id).expect("章节存在");
+            // #194（AUD2-10）：未知 section_id 优雅拒绝（原 expect panic）
+            let Some(v) = self.sections.get(section_id) else {
+                return Err(AcceptBlock::NotFound);
+            };
             if v.dirty {
                 return Err(AcceptBlock::Dirty);
             }
@@ -474,15 +480,27 @@ impl ImpactEngine {
                 return Err(AcceptBlock::UnresolvedConflict(unresolved));
             }
         }
-        self.sections.get_mut(section_id).unwrap().status = "ACCEPTED".into();
+        // get_mut 不会 miss（上面 get 已过）——miss 属内部不变量破坏，仍防御
+        if let Some(v) = self.sections.get_mut(section_id) {
+            v.status = "ACCEPTED".into();
+        } else {
+            return Err(AcceptBlock::NotFound);
+        }
         Ok(())
     }
 
     /// 重起草（清 dirty——终裁门禁测试用）。
-    pub fn redraft(&mut self, section_id: &str) {
-        let s = self.sections.get_mut(section_id).unwrap();
-        s.dirty = false;
-        s.status = "DRAFTED".into();
+    /// #194（AUD2-10）：未知 section_id 原 unwrap panic——改为无操作返回
+    /// false（miss 不构成状态变更；调用方可见是否生效）。
+    pub fn redraft(&mut self, section_id: &str) -> bool {
+        match self.sections.get_mut(section_id) {
+            Some(s) => {
+                s.dirty = false;
+                s.status = "DRAFTED".into();
+                true
+            }
+            None => false,
+        }
     }
 
     // ---- 合成规则事件（SYNTHETIC——D3 真实样本待建）----
