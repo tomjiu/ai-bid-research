@@ -54,7 +54,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「资格证明材料响应（条款 1.4.1-1.4.7）」字数 1153 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「资格证明材料响应（条款 1.4.1-1.4.6）」字数 1163 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0029",
@@ -62,7 +62,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「资格证明材料响应（条款 3.2.1-7.4）」字数 707 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「资格证明材料响应（条款 1.4.7-7.4）」字数 847 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0030",
@@ -70,7 +70,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（条款 1.2-3.3.5）」字数 1138 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（条款 1.2-3.4.3）」字数 1086 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0031",
@@ -78,7 +78,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（条款 3.4.2-3.7.2）」字数 1149 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（第2组 6条）」字数 1110 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0032",
@@ -86,7 +86,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（第3组 6条）」字数 977 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（第3组 6条）」字数 961 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0033",
@@ -94,7 +94,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（第4组 6条）」字数 981 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（第4组 6条）」字数 989 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0034",
@@ -102,7 +102,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（第5组 6条）」字数 972 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（第5组 6条）」字数 1027 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0035",
@@ -110,7 +110,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（条款 3.7.4-表-4）」字数 1081 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（条款 4.5-表-6）」字数 1024 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0036",
@@ -118,7 +118,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（第7组 6条）」字数 973 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（第7组 6条）」字数 993 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0037",
@@ -126,7 +126,7 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「否决情形响应（原文第1页）」字数 1043 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「否决情形响应（原文第1-2页）」字数 1040 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0038",
@@ -134,7 +134,15 @@
         },
         {
           "kind": "DETERMINISTIC",
-          "message": "章节「格式要求（条款 3.3.1-7.2）」字数 1058 超出配额 500（+20% 带外：上限 600）",
+          "message": "章节「格式要求（条款 3.3.1-3.3.6）」字数 1084 超出配额 500（+20% 带外：上限 600）",
+          "requirement_id": null,
+          "rule_code": "W_CHARS_OFF_TARGET",
+          "section_id": "SEC-0040",
+          "severity": "MINOR"
+        },
+        {
+          "kind": "DETERMINISTIC",
+          "message": "章节「格式要求（条款 7.1-7.6）」字数 872 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
           "section_id": "SEC-0041",
@@ -145,7 +153,7 @@
           "message": "章节「技术参数（条款 5.0-5.2.1）」字数 1208 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
-          "section_id": "SEC-0044",
+          "section_id": "SEC-0043",
           "severity": "MINOR"
         },
         {
@@ -153,7 +161,7 @@
           "message": "章节「技术参数（条款 5.3.1-5.4.1）」字数 1191 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
-          "section_id": "SEC-0045",
+          "section_id": "SEC-0044",
           "severity": "MINOR"
         },
         {
@@ -161,7 +169,7 @@
           "message": "章节「技术参数（条款 5.5.1-5.6.1）」字数 694 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
-          "section_id": "SEC-0046",
+          "section_id": "SEC-0045",
           "severity": "MINOR"
         },
         {
@@ -169,7 +177,7 @@
           "message": "章节「商务要求」字数 732 超出配额 500（+20% 带外：上限 600）",
           "requirement_id": null,
           "rule_code": "W_CHARS_OFF_TARGET",
-          "section_id": "SEC-0048",
+          "section_id": "SEC-0047",
           "severity": "MINOR"
         }
       ],
@@ -178,9 +186,9 @@
   },
   "counts": {
     "blocker": 0,
-    "deterministic": 20,
+    "deterministic": 21,
     "major": 0,
-    "minor": 20,
+    "minor": 21,
     "model": 0
   },
   "errors": [],
@@ -227,7 +235,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「资格证明材料响应（条款 1.4.1-1.4.7）」字数 1153 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「资格证明材料响应（条款 1.4.1-1.4.6）」字数 1163 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0029",
@@ -235,7 +243,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「资格证明材料响应（条款 3.2.1-7.4）」字数 707 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「资格证明材料响应（条款 1.4.7-7.4）」字数 847 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0030",
@@ -243,7 +251,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（条款 1.2-3.3.5）」字数 1138 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（条款 1.2-3.4.3）」字数 1086 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0031",
@@ -251,7 +259,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（条款 3.4.2-3.7.2）」字数 1149 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（第2组 6条）」字数 1110 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0032",
@@ -259,7 +267,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（第3组 6条）」字数 977 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（第3组 6条）」字数 961 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0033",
@@ -267,7 +275,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（第4组 6条）」字数 981 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（第4组 6条）」字数 989 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0034",
@@ -275,7 +283,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（第5组 6条）」字数 972 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（第5组 6条）」字数 1027 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0035",
@@ -283,7 +291,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（条款 3.7.4-表-4）」字数 1081 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（条款 4.5-表-6）」字数 1024 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0036",
@@ -291,7 +299,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（第7组 6条）」字数 973 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（第7组 6条）」字数 993 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0037",
@@ -299,7 +307,7 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「否决情形响应（原文第1页）」字数 1043 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「否决情形响应（原文第1-2页）」字数 1040 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0038",
@@ -307,7 +315,15 @@
     },
     {
       "kind": "DETERMINISTIC",
-      "message": "章节「格式要求（条款 3.3.1-7.2）」字数 1058 超出配额 500（+20% 带外：上限 600）",
+      "message": "章节「格式要求（条款 3.3.1-3.3.6）」字数 1084 超出配额 500（+20% 带外：上限 600）",
+      "requirement_id": null,
+      "rule_code": "W_CHARS_OFF_TARGET",
+      "section_id": "SEC-0040",
+      "severity": "MINOR"
+    },
+    {
+      "kind": "DETERMINISTIC",
+      "message": "章节「格式要求（条款 7.1-7.6）」字数 872 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
       "section_id": "SEC-0041",
@@ -318,7 +334,7 @@
       "message": "章节「技术参数（条款 5.0-5.2.1）」字数 1208 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
-      "section_id": "SEC-0044",
+      "section_id": "SEC-0043",
       "severity": "MINOR"
     },
     {
@@ -326,7 +342,7 @@
       "message": "章节「技术参数（条款 5.3.1-5.4.1）」字数 1191 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
-      "section_id": "SEC-0045",
+      "section_id": "SEC-0044",
       "severity": "MINOR"
     },
     {
@@ -334,7 +350,7 @@
       "message": "章节「技术参数（条款 5.5.1-5.6.1）」字数 694 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
-      "section_id": "SEC-0046",
+      "section_id": "SEC-0045",
       "severity": "MINOR"
     },
     {
@@ -342,15 +358,15 @@
       "message": "章节「商务要求」字数 732 超出配额 500（+20% 带外：上限 600）",
       "requirement_id": null,
       "rule_code": "W_CHARS_OFF_TARGET",
-      "section_id": "SEC-0048",
+      "section_id": "SEC-0047",
       "severity": "MINOR"
     }
   ],
   "ok": true,
   "project_status": "VALIDATING",
   "project_version": 213,
-  "request_id": "req-000034",
-  "sections_checked": 27,
+  "request_id": "req-000033",
+  "sections_checked": 26,
   "submission_readiness": {
     "blockers": 0,
     "evidence_missing": [],
@@ -366,17 +382,18 @@
     "章节「第三章 投标人须知（条款 3.8.1-3.9.2）」字数 616 超出配额 500（+20% 带外：上限 600）",
     "章节「第八章 附件说明」字数 604 超出配额 500（+20% 带外：上限 600）",
     "章节「技术方案要求」字数 838 超出配额 500（+20% 带外：上限 600）",
-    "章节「资格证明材料响应（条款 1.4.1-1.4.7）」字数 1153 超出配额 500（+20% 带外：上限 600）",
-    "章节「资格证明材料响应（条款 3.2.1-7.4）」字数 707 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（条款 1.2-3.3.5）」字数 1138 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（条款 3.4.2-3.7.2）」字数 1149 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（第3组 6条）」字数 977 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（第4组 6条）」字数 981 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（第5组 6条）」字数 972 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（条款 3.7.4-表-4）」字数 1081 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（第7组 6条）」字数 973 超出配额 500（+20% 带外：上限 600）",
-    "章节「否决情形响应（原文第1页）」字数 1043 超出配额 500（+20% 带外：上限 600）",
-    "章节「格式要求（条款 3.3.1-7.2）」字数 1058 超出配额 500（+20% 带外：上限 600）",
+    "章节「资格证明材料响应（条款 1.4.1-1.4.6）」字数 1163 超出配额 500（+20% 带外：上限 600）",
+    "章节「资格证明材料响应（条款 1.4.7-7.4）」字数 847 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（条款 1.2-3.4.3）」字数 1086 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（第2组 6条）」字数 1110 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（第3组 6条）」字数 961 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（第4组 6条）」字数 989 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（第5组 6条）」字数 1027 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（条款 4.5-表-6）」字数 1024 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（第7组 6条）」字数 993 超出配额 500（+20% 带外：上限 600）",
+    "章节「否决情形响应（原文第1-2页）」字数 1040 超出配额 500（+20% 带外：上限 600）",
+    "章节「格式要求（条款 3.3.1-3.3.6）」字数 1084 超出配额 500（+20% 带外：上限 600）",
+    "章节「格式要求（条款 7.1-7.6）」字数 872 超出配额 500（+20% 带外：上限 600）",
     "章节「技术参数（条款 5.0-5.2.1）」字数 1208 超出配额 500（+20% 带外：上限 600）",
     "章节「技术参数（条款 5.3.1-5.4.1）」字数 1191 超出配额 500（+20% 带外：上限 600）",
     "章节「技术参数（条款 5.5.1-5.6.1）」字数 694 超出配额 500（+20% 带外：上限 600）",
