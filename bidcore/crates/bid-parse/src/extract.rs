@@ -298,6 +298,11 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
     let re_model = model_regex();
     let re_amount = Regex::new(r"(\d+(?:\.\d+)?)\s*万\s*元").unwrap();
     let re_date = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
+    // #184（AUD2-1）：中文大写日期正则——主路径编号行的 fill_params 第 5
+    // 实参（re_date_cn 槽位）此前误传 re_date（ISO 正则跑两遍），中文大写
+    // 日期在 PDF 主路径永不产出 date_cn 参数；DOCX/B1 面均正确。补齐定义
+    // 并修正实参，跨格式参数面对称（测试 main_pdf_numbered_clause_params_date_cn）。
+    let re_date_cn = date_cn_regex();
     // 强否决短语（判定动词面——正文提及"否决"的弱引用不算）。
     // P0-A 扩展（#35 missed 样例驱动）：拒收/不予受理/不予接收/不接受/
     // 否决条件/取消中标资格/按无效标处理/视为串通 等
@@ -1114,7 +1119,7 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
             veto_ctx = false;
             review_ctx = false;
             let mut params = HashMap::new();
-            fill_params(&para, &re_model, &re_amount, &re_date, &re_date, &mut params);
+            fill_params(&para, &re_model, &re_amount, &re_date, &re_date_cn, &mut params);
             // 编号行归类优先级（R3-S3-5）：强否决短语 > 资格面 > 章节上下文——
             // 编号否决条款（如"3.4.2 …将被否决"）不得落"其他"（漏否决=废标风险）
             // #226 层 2：否决信号若其实是「招标人规则陈述」（本次招标/招标人/
@@ -1572,6 +1577,27 @@ fn category_for(chapter: &str, subsection: &str) -> &'static str {
     "其他"
 }
 
+/// #175：点分编号表格头判定——N(.N)+ 形态且编号头后跟 CJK 内容。
+/// 数据行守卫（延迟候选准入面）：
+/// - 纯数字/费率行（「1」「100万元以下 1.5%」）无点分头不入；
+/// - 「1.5%」式费率碎片有点分但头后无 CJK 内容不入（松岭费率表负例）；
+/// - 纯编号头无内容（「11.3」整行）不入——无条款本体可抽。
+fn numbered_table_head(text: &str) -> Option<String> {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r"^(\d{1,3}(?:\.\d{1,3})+)").unwrap());
+    let t = text.trim_start();
+    let m = re.captures(t)?;
+    let head = m.get(0).map(|g| g.as_str()).unwrap_or_default();
+    let rest = &t[head.len()..];
+    let has_cjk = rest
+        .chars()
+        .any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c));
+    if !has_cjk {
+        return None;
+    }
+    Some(head.to_string())
+}
+
 /// 主文件（A）与补遗（C）：编号条款段落 + 前附表否决行 + 技术需求参数表。
 /// DOCX 主文件（合成夹具 corpus-A 形态）；PDF 主文件（真实招标文件形态——P2
 /// 评测驱动新增，语义与 DOCX 版一致：章节上下文 → 编号条款抽取）。
@@ -1632,6 +1658,13 @@ fn extract_main_docx(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usiz
             None => format!("表-{}", row_no_of(&b.locator)),
         }
     };
+    // #175（PR #180 补账）：未被任何专路/既有分支消费的点分编号表格行进
+    // 「延迟候选」；主循环后与段面（本文件已开 REQ）clause_no 去重——前附
+    // 表镜像正文的冗余副本（unicom 45/45 全覆盖）不双抽，同号仅表格在场的
+    // 补开 REQ（huaian 11.3 伪缺号根因：段面缺号即 missing_sequence 伪缺）。
+    // start 钳位：reqs 是跨文件共享 Vec，去重面限定本文件已开 REQ。
+    let start = reqs.len();
+    let mut deferred_rows: Vec<(String, usize)> = Vec::new();
     let mut bi = 0usize;
     while bi < blocks.len() {
     let b = &blocks[bi];
@@ -1891,12 +1924,36 @@ fn extract_main_docx(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usiz
                     fill_params(&b.text, &re_model, &re_amount, &re_date, &re_date_cn, &mut params);
                     push_req(reqs, seq, "技术参数", last_numbered_head.clone(),
                              vec![anchor(f, b)], params, &f.name);
+                } else if let Some(cno) = numbered_table_head(&b.text) {
+                    // #175 延迟候选：点分编号头（N(.N)+ + CJK 内容——数据行
+                    // 守卫见辅助函数）未被任何专路消费 → 登记待主循环后
+                    // 与段面去重裁定（不在此直接开 REQ：同号段面已开的不双抽）。
+                    deferred_rows.push((cno, b.idx));
                 }
                 } // #144：审查表接管 else 块闭合
             }
             _ => {}
         }
         bi += 1;
+    }
+    // #175：延迟候选裁定——同号仅表格在场的补开 REQ，类别随章节上下文
+    // （category_for 单一真源，与段面同簇同类别：格式章 → 格式要求）。
+    // 冗余副本（同号段面已开）静默跳过；补开行的 excerpt 锚保真（块原文）。
+    if !deferred_rows.is_empty() {
+        let opened: std::collections::HashSet<String> = reqs[start..]
+            .iter()
+            .filter_map(|r| r.clause_no.clone())
+            .collect();
+        for (cno, bidx) in deferred_rows {
+            if opened.contains(&cno) {
+                continue;
+            }
+            let Some(b) = blocks.iter().find(|x| x.idx == bidx) else { continue };
+            let (chapter, subsection) = split_locator(&b.locator);
+            let cat = category_for(chapter, subsection);
+            push_req(reqs, seq, cat, Some(cno),
+                     vec![anchor(f, b)], HashMap::new(), &f.name);
+        }
     }
 }
 
