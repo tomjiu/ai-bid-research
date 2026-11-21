@@ -34,9 +34,20 @@ fn open_global_service() -> BidService {
         .filter(|s| !s.is_empty());
     match std::env::var("BID_WS") {
         Ok(dir) if !dir.trim().is_empty() => {
-            let mut svc = BidService::open(dir.trim()).unwrap_or_else(|e| {
-                panic!("bid-mcp 全局服务态：BID_WS={dir} 打开失败（工作区损坏或不可写）: {e}")
-            });
+            // #194（AUD2-9）：打开失败不得 panic——panic 发生在 LazyLock 初始化
+            // 会毒化静态量，此后**每次**工具调用重复 panic，stdio 服务变僵尸
+            // 而非退出（宿主无从得知启动失败）。fail-fast 进程退出（exit 3 与
+            // 文档转换诊断同码段）：宿主看到非零退出码即可定位启动面并处置。
+            let mut svc = match BidService::open(dir.trim()) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!(
+                        "[bid-mcp] 全局服务态启动失败：BID_WS={} 打开失败（工作区损坏或不可写）: {e}——进程退出（防 LazyLock 毒化成僵尸服务）",
+                        dir.trim()
+                    );
+                    std::process::exit(3);
+                }
+            };
             if let Some(root) = fs_root {
                 svc = svc.with_fs_root(root);
             }

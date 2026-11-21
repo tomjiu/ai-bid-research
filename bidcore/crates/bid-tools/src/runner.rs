@@ -270,11 +270,22 @@ pub fn run_scenario(scenario: &str, fixtures_dir: &Path) -> Result<RunOutput, St
                 let queries = load_queries(fixtures_dir)?;
                 let mut per = vec![];
                 let mut all_consistent = true;
-                for qv in &queries {
+                for (qi, qv) in queries.iter().enumerate() {
+                    // #194（AUD2-11）：夹具字段漂移原 unwrap 直接 panic（runner
+                    // 被 bid-grade 消费——夹具面错误应报 Err 而非崩）；对齐
+                    // #193 bid-grade 的 fail-fast 校验口径。
+                    let req_field = |key: &str| -> Result<String, String> {
+                        qv[key].as_str().map(String::from).ok_or_else(|| {
+                            format!(
+                                "queries[{}] 必填字段 `{key}` 缺失或非字符串（值: {}）——夹具漂移，拒绝执行",
+                                qi, qv[key]
+                            )
+                        })
+                    };
                     let q = ExactQuery {
-                        query_id: qv["query_id"].as_str().unwrap().into(),
-                        query_type: qv["query_type"].as_str().unwrap().into(),
-                        query: qv["query"].as_str().unwrap().into(),
+                        query_id: req_field("query_id")?,
+                        query_type: req_field("query_type")?,
+                        query: req_field("query")?,
                     };
                     let mut texts = vec![];
                     for _ in 0..5 {
