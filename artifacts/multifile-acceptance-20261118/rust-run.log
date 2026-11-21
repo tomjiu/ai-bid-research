@@ -1,0 +1,32 @@
+$ cargo test -p bid-mcp --test multifile_matrix -- --nocapture
+exit=0
+
+
+running 1 test
+test multifile_matrix_acceptance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.95s
+
+
+    Finished `test` profile [unoptimized] target(s) in 0.14s
+     Running tests/multifile_matrix.rs (target/debug/build/bid-mcp/9078310038a5c422/out/multifile_matrix-9078310038a5c422)
+
+== #114 多件矩阵 · corpusA-full（19 件）==
+#114 corpusA-full | real=false | reqs=123 | files_ok=19 | conflicts=2 | scoring_items=14 | unmapped_after=0
+
+== #114 多件矩阵 · unicom-ry（7 件）==
+#114 unicom-ry | real=true | reqs=302 | files_ok=7 | conflicts=0 | scoring_items=106 | unmapped_after=0
+
+== #114 多件矩阵 · huaian（7 件）==
+#114 huaian | real=true | reqs=371 | files_ok=7 | conflicts=0 | scoring_items=150 | unmapped_after=0
+
+== #114 多件矩阵 · cqyd（2 件）==
+#114 cqyd | real=true | reqs=339 | files_ok=2 | conflicts=0 | scoring_items=0 | unmapped_after=0
+
+== #114 多件矩阵 · zjyd（2 件）==
+#114 zjyd | real=true | reqs=37 | files_ok=2 | conflicts=0 | scoring_items=0 | unmapped_after=0
+
+== #114 多件矩阵 · unicom-ry-alt（3 件）==
+#114 unicom-ry-alt | real=true | reqs=323 | files_ok=3 | conflicts=0 | scoring_items=0 | unmapped_after=0
+
+#114 多件矩阵真跑完成：6 项目 → /home/z/my-project/repo/artifacts/multifile-acceptance-20261118/multifile-all.json

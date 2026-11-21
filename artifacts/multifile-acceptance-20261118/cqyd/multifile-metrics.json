@@ -1,0 +1,5978 @@
+{
+  "extract_conflicts": [],
+  "extract_counts": {
+    "added": 339,
+    "by_category": {
+      "commercial": 1,
+      "format": 65,
+      "other": 163,
+      "qualification": 13,
+      "scoring": 29,
+      "veto": 68
+    },
+    "total": 339
+  },
+  "extract_merge": {
+    "agent_requirements": 0,
+    "coverage_complete": false,
+    "regex_dropped_covered": 0,
+    "regex_kept_unbacked_requirement": 0,
+    "regex_total": 339,
+    "uncovered_blocks": 1090
+  },
+  "extract_missing_sequence": [],
+  "extract_warnings": [
+    "STAR_MISSING: ★漏标警告：10 处★未见对应 REQ——用 get_star_coverage 查看后补标",
+    "UNCOVERED_BLOCKS: 1090 块未标记（正则已兜底补漏——用 get_coverage_report 查看后 submit_block_marks 补标，重跑 extract 更准）"
+  ],
+  "files": [
+    {
+      "chunks": 1090,
+      "kind": "招标文件",
+      "name": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "ocr_blocks": 0,
+      "pages": 32,
+      "parse_status": "Ok",
+      "sha256": "f5c81b416c4d2a4274689d7b065950679dcf6345d70fb86db15c7a8a497cf66b",
+      "tables": 297
+    },
+    {
+      "chunks": 174,
+      "kind": "附件",
+      "name": "B-cqyd-招标公告.pdf",
+      "ocr_blocks": 0,
+      "pages": 4,
+      "parse_status": "Ok",
+      "sha256": "e2317602fa32b776dc9d35940d2ba3170813f27952dac7936233a621bb7e913f",
+      "tables": 24
+    }
+  ],
+  "files_planned": 2,
+  "full_chain": false,
+  "id": "cqyd",
+  "import_addendum_readiness": {
+    "not_ready": [],
+    "ready": 0,
+    "total": 0
+  },
+  "import_input_integrity": {
+    "complete": true,
+    "restricted": false,
+    "unready": [],
+    "waived_unready": []
+  },
+  "import_item_errors": [],
+  "import_partial": false,
+  "import_totals": {
+    "chunks": 1264,
+    "files": 2,
+    "parse_failed": 0,
+    "partial": 0
+  },
+  "import_warnings": [],
+  "name": "重庆西永水冷空调——真实两件套（招标文件 PDF + 招标公告）",
+  "outline_probe": {
+    "blocking": 81,
+    "outcome": "ok",
+    "rows": 339,
+    "sections": 76
+  },
+  "project_id": "PRJ-0001",
+  "provenance_samples": [
+    {
+      "anchors": [
+        {
+          "block_idx": 0,
+          "excerpt": "2026 年西永、龙洲湾、水土数据中心水冷空调",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 1,
+          "locator": "第1页 行1",
+          "page": 1,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 1,
+          "excerpt": "群控系统优化项目硬件采购项目",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 2,
+          "locator": "第1页 行2",
+          "page": 1,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 2,
+          "excerpt": "公开招标(资格后审)",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 3,
+          "locator": "第1页 行3",
+          "page": 1,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 3,
+          "excerpt": "招标人： 中国移动通信集团重庆有限公司",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 4,
+          "locator": "第1页 行4",
+          "page": 1,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 4,
+          "excerpt": "招标代理机构： 江苏中博通信有限公司",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 5,
+          "locator": "第1页 行5",
+          "page": 1,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 5,
+          "excerpt": "2026-10-24",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 6,
+          "locator": "第1页 行6",
+          "page": 1,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 6,
+          "excerpt": "1/32",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 7,
+          "locator": "第1页 行7",
+          "page": 1,
+          "resolved_via": "backfilled"
+        }
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "marked_by": "regex",
+      "next": "锚点带 block_idx——get_block_requirements(block_idx) 反查原文上下文",
+      "project_id": "PRJ-0001",
+      "req_id": "REQ-0001",
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "statement": null,
+      "substantive": false
+    },
+    {
+      "anchors": [
+        {
+          "block_idx": 13,
+          "excerpt": "1.1 项目概况",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 7,
+          "locator": "第2页 行7",
+          "page": 2,
+          "resolved_via": "backfilled"
+        }
+      ],
+      "category": "其他",
+      "clause_no": "1.1",
+      "marked_by": "regex",
+      "next": "锚点带 block_idx——get_block_requirements(block_idx) 反查原文上下文",
+      "project_id": "PRJ-0001",
+      "req_id": "REQ-0002",
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "statement": null,
+      "substantive": false
+    },
+    {
+      "anchors": [
+        {
+          "block_idx": 14,
+          "excerpt": "1.1.1 项目名称：2026 年西永、龙洲湾、水土数据中心水冷空调群控系统优化项目硬件采购项",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 8,
+          "locator": "第2页 行8",
+          "page": 2,
+          "resolved_via": "backfilled"
+        },
+        {
+          "block_idx": 15,
+          "excerpt": "目",
+          "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+          "kind": "pdf_line",
+          "line": 9,
+          "locator": "第2页 行9",
+          "page": 2,
+          "resolved_via": "backfilled"
+        }
+      ],
+      "category": "其他",
+      "clause_no": "1.1.1",
+      "marked_by": "regex",
+      "next": "锚点带 block_idx——get_block_requirements(block_idx) 反查原文上下文",
+      "project_id": "PRJ-0001",
+      "req_id": "REQ-0003",
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "statement": null,
+      "substantive": false
+    }
+  ],
+  "real": true,
+  "req_count": 339,
+  "reqs_by_file": {
+    "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf": 339
+  },
+  "requirements": [
+    {
+      "anchor_excerpts": [
+        "2026 年西永、龙洲湾、水土数据中心水冷空调",
+        "群控系统优化项目硬件采购项目",
+        "公开招标(资格后审)",
+        "招标人： 中国移动通信集团重庆有限公司",
+        "招标代理机构： 江苏中博通信有限公司",
+        "2026-10-24",
+        "1/32"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "2026 年西永、龙洲湾、水土数据中心水冷空调",
+      "has_scoring_params": false,
+      "id": "REQ-0001",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1 项目概况"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.1",
+      "excerpt": "1.1 项目概况",
+      "has_scoring_params": false,
+      "id": "REQ-0002",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.1 项目名称：2026 年西永、龙洲湾、水土数据中心水冷空调群控系统优化项目硬件采购项",
+        "目"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.1",
+      "excerpt": "1.1.1 项目名称：2026 年西永、龙洲湾、水土数据中心水冷空调群控系统优化项目硬件采购项",
+      "has_scoring_params": false,
+      "id": "REQ-0003",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.2 项目编号：CQYD20260500728"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.2",
+      "excerpt": "1.1.2 项目编号：CQYD20260500728",
+      "has_scoring_params": false,
+      "id": "REQ-0004",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2 招标内容"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2",
+      "excerpt": "1.2 招标内容",
+      "has_scoring_params": false,
+      "id": "REQ-0005",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2.1 项目预估规模：预估不含税总额：2685868 元，预估含税总金额：3035030.84 元。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2.1",
+      "excerpt": "1.2.1 项目预估规模：预估不含税总额：2685868 元，预估含税总金额：3035030.84 元。",
+      "has_scoring_params": false,
+      "id": "REQ-0006",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2.2 合同有效期：合同签订之日起一年。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2.2",
+      "excerpt": "1.2.2 合同有效期：合同签订之日起一年。",
+      "has_scoring_params": false,
+      "id": "REQ-0007",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2.3 招标货物的名称、数量、不含税单价限价："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2.3",
+      "excerpt": "1.2.3 招标货物的名称、数量、不含税单价限价：",
+      "has_scoring_params": false,
+      "id": "REQ-0008",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2、投标厂家报统一折扣，限价折扣 100%。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2",
+      "excerpt": "2、投标厂家报统一折扣，限价折扣 100%。",
+      "has_scoring_params": false,
+      "id": "REQ-0009",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2.4 主要技术参数：详见技术规范书。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2.4",
+      "excerpt": "1.2.4 主要技术参数：详见技术规范书。",
+      "has_scoring_params": false,
+      "id": "REQ-0010",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2.5 交货周期:订单下达后 30 日内完成到货。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2.5",
+      "excerpt": "1.2.5 交货周期:订单下达后 30 日内完成到货。",
+      "has_scoring_params": false,
+      "id": "REQ-0011",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2.6 交货地点:重庆。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2.6",
+      "excerpt": "1.2.6 交货地点:重庆。",
+      "has_scoring_params": false,
+      "id": "REQ-0012",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.3 招标范围：重庆市。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.3",
+      "excerpt": "1.3 招标范围：重庆市。",
+      "has_scoring_params": false,
+      "id": "REQ-0013",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4 标包及份额划分：本项目不划分标包。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.4",
+      "excerpt": "1.4 标包及份额划分：本项目不划分标包。",
+      "has_scoring_params": false,
+      "id": "REQ-0014",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5 限价说明：本项目最高限价详见投标一览表。投标人的报价高于最高限价的，其投标将被",
+        "否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "1.5",
+      "excerpt": "1.5 限价说明：本项目最高限价详见投标一览表。投标人的报价高于最高限价的，其投标将被",
+      "has_scoring_params": false,
+      "id": "REQ-0015",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2、投标人资格要求",
+        "本项目采用资格后审，由评标委员会根据招标文件的规定对投标人进行资格审查，投标人资格",
+        "要求如下："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "2",
+      "excerpt": "2、投标人资格要求",
+      "has_scoring_params": false,
+      "id": "REQ-0016",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1 基本要求：投标人须在中华人民共和国境内登记注册、根据中华人民共和国有关法律合法",
+        "成立并存续的法人或非法人组织。（提供清晰、完整、有效的中华人民共和国境内行政管理部",
+        "门登记的主体资格证扫描件。）"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.1",
+      "excerpt": "2.1 基本要求：投标人须在中华人民共和国境内登记注册、根据中华人民共和国有关法律合法",
+      "has_scoring_params": false,
+      "id": "REQ-0017",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2 业绩要求：提供至少 1 份 2023 年 1 月 1 日至本次项目发布首次公告为止，投标人签订的合",
+        "同作为业绩证明材料，合同内容均须包含空调群控类系统，累计合同含税总金额不低于 150 万",
+        "元。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.2",
+      "excerpt": "2.2 业绩要求：提供至少 1 份 2023 年 1 月 1 日至本次项目发布首次公告为止，投标人签订的合",
+      "has_scoring_params": false,
+      "id": "REQ-0018",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.3 代理商：接受代理商投标。投标人所投核心产品（群控系统控制柜产品）如非自有制造，",
+        "须提供制造商对本项目所投核心产品的授权书扫描件。一个制造商对同一品牌同一型号的货物",
+        "，仅能委托一个代理商参加投标，不允许同一品牌同一型号的货物制造商与代理商同时投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.3",
+      "excerpt": "2.3 代理商：接受代理商投标。投标人所投核心产品（群控系统控制柜产品）如非自有制造，",
+      "has_scoring_params": false,
+      "id": "REQ-0019",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4 联合体：不接受联合体投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "2.4",
+      "excerpt": "2.4 联合体：不接受联合体投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0020",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "本项目不接受联合体投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "本项目不接受联合体投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0021",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3、资格审查方法",
+        "本项目将进行资格后审，资格审查标准和内容见招标文件第三章“评标办法”，凡未通过资格",
+        "后审的投标人，其投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3",
+      "excerpt": "3、资格审查方法",
+      "has_scoring_params": false,
+      "id": "REQ-0022",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4、招标文件的获取",
+        "电子招标文件获取（采用电子招标适用）"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "4、招标文件的获取",
+      "has_scoring_params": false,
+      "id": "REQ-0023",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1 招标文件获取时间:2026 年 10 月 24 日 00 时 00 分至 2026 年 10 月 29 日 00 时 00 分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1",
+      "excerpt": "4.1 招标文件获取时间:2026 年 10 月 24 日 00 时 00 分至 2026 年 10 月 29 日 00 时 00 分。",
+      "has_scoring_params": false,
+      "id": "REQ-0024",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2 招标文件获取方式：凡有意参与的潜在投标人，请登录中国移动电子采购与招投标系统（",
+        "http://b2b.10086.cn）进行购买招标文件（已在该系统注册过的投标人请直接登录系统购买",
+        "招标文件，未在该系统注册的投标人请先进行系统注册而后购买招标文件）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.2",
+      "excerpt": "4.2 招标文件获取方式：凡有意参与的潜在投标人，请登录中国移动电子采购与招投标系统（",
+      "has_scoring_params": false,
+      "id": "REQ-0025",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.3 招标文件费用：每套售价零元（￥0 元），售后不退。支付要求：无。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.3",
+      "excerpt": "4.3 招标文件费用：每套售价零元（￥0 元），售后不退。支付要求：无。",
+      "has_scoring_params": false,
+      "id": "REQ-0026",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.4 投标人针对投标人注册、购买、CA 证书办理、网上应答操作等相关业务的咨询，请直接拨",
+        "打中国移动采购与招标网技术支持联系电话，详见系统首页“技术服务”专区。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.4",
+      "excerpt": "4.4 投标人针对投标人注册、购买、CA 证书办理、网上应答操作等相关业务的咨询，请直接拨",
+      "has_scoring_params": false,
+      "id": "REQ-0027",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.5 投标人必须在投标截止时间之前办理 CA 证书，并使用 CA 证书进行加密后才能投标；否则",
+        "将无法正常投标。CA 证书具体办理流程参见中国移动采购与招标网首页下方下载专区“CA 证",
+        "书办理及安装”说明。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.5",
+      "excerpt": "4.5 投标人必须在投标截止时间之前办理 CA 证书，并使用 CA 证书进行加密后才能投标；否则",
+      "has_scoring_params": false,
+      "id": "REQ-0028",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.1 纸质投标文件的递交：本招标项目不接受纸质投标文件的递交（投标保函、法定代表人授",
+        "权书除外如有）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.1",
+      "excerpt": "5.1 纸质投标文件的递交：本招标项目不接受纸质投标文件的递交（投标保函、法定代表人授",
+      "has_scoring_params": false,
+      "id": "REQ-0029",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2 电子投标文件的递交：电子投标文件通过中国移动电子采购与招投标系统递交，投标截止",
+        "时间为 2026 年 11 月 13 日 09 时 00 分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.2",
+      "excerpt": "5.2 电子投标文件的递交：电子投标文件通过中国移动电子采购与招投标系统递交，投标截止",
+      "has_scoring_params": false,
+      "id": "REQ-0030",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3 本项目将于上述投标截止时间的同一时间在中国移动电子采购与招投标系统进行开标，投",
+        "标人的法定代表人或者其委托的代理人可在中国移动电子采购与招投标系统准时参加。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.3",
+      "excerpt": "5.3 本项目将于上述投标截止时间的同一时间在中国移动电子采购与招投标系统进行开标，投",
+      "has_scoring_params": false,
+      "id": "REQ-0031",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.4 电子投标文件递交异常的处理规则：投标人的电子投标文件出现递交异常时，招标人/招",
+        "标代理机构需与系统支撑团队确认，若为系统故障原因造成的，则应推迟该项目的投标截止时",
+        "间（具体时间另行通知）直至该投标人完成电子投标文件递交；若非系统故障原因造成的，由",
+        "该投标人自行承担相应责任。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.4",
+      "excerpt": "5.4 电子投标文件递交异常的处理规则：投标人的电子投标文件出现递交异常时，招标人/招",
+      "has_scoring_params": false,
+      "id": "REQ-0032",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.5 出现下列情形之一时，招标人/招标代理机构不予接收投标文件："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.5",
+      "excerpt": "5.5 出现下列情形之一时，招标人/招标代理机构不予接收投标文件：",
+      "has_scoring_params": false,
+      "id": "REQ-0033",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.5.1 逾期递交或者未递交中国移动电子采购与招投标系统的投标人；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.5.1",
+      "excerpt": "5.5.1 逾期递交或者未递交中国移动电子采购与招投标系统的投标人；",
+      "has_scoring_params": false,
+      "id": "REQ-0034",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.5.2 未按照本公告要求获得本项目招标文件的投标人。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.5.2",
+      "excerpt": "5.5.2 未按照本公告要求获得本项目招标文件的投标人。",
+      "has_scoring_params": false,
+      "id": "REQ-0035",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6、样品的递交",
+        "本项目不涉及。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6",
+      "excerpt": "6、样品的递交",
+      "has_scoring_params": false,
+      "id": "REQ-0036",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1 投标人须在投标截止时间前完成在系统上递交电子投标文件。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.1",
+      "excerpt": "7.1 投标人须在投标截止时间前完成在系统上递交电子投标文件。",
+      "has_scoring_params": false,
+      "id": "REQ-0037",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2 当所有投标人电子投标文件开标解密异常时，则推迟开标，直至投标文件可正常解密。当",
+        "个别供应商电子投标文件开标解密异常时，由系统确认非系统原因造成的，由投标人自行承担",
+        "相应责任。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.2",
+      "excerpt": "7.2 当所有投标人电子投标文件开标解密异常时，则推迟开标，直至投标文件可正常解密。当",
+      "has_scoring_params": false,
+      "id": "REQ-0038",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3 投标人的电子投标文件是经过 CA 证书加密后上传提交的，任何单位或个人均无法在投标",
+        "截止时间（即开标时间，下同）之前查看或篡改，不存在泄密风险。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.3",
+      "excerpt": "7.3 投标人的电子投标文件是经过 CA 证书加密后上传提交的，任何单位或个人均无法在投标",
+      "has_scoring_params": false,
+      "id": "REQ-0039",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.4 投标人在投标截止时间之前可以多次提交或撤回电子投标文件，提交新投标文件前需撤回",
+        "前一次提交的电子投标文件，并且前一次提交的电子投标文件系统将彻底删除。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.4",
+      "excerpt": "7.4 投标人在投标截止时间之前可以多次提交或撤回电子投标文件，提交新投标文件前需撤回",
+      "has_scoring_params": false,
+      "id": "REQ-0040",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.5 投标人可以登录系统查看电子投标文件上传提交结果，了解和确认电子投标文件提交状态",
+        "。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.5",
+      "excerpt": "7.5 投标人可以登录系统查看电子投标文件上传提交结果，了解和确认电子投标文件提交状态",
+      "has_scoring_params": false,
+      "id": "REQ-0041",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.6 系统提供递交电子投标文件的渠道："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.6",
+      "excerpt": "7.6 系统提供递交电子投标文件的渠道：",
+      "has_scoring_params": false,
+      "id": "REQ-0042",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8、发布公告的媒介",
+        "本次招标公告同时在 工信部通信工程建设项目招标投标管理信息平台 （",
+        "https://txzbqy.miit.gov.cn/）、中国移动采购与招标网（http://b2b.10086.cn）、中国招",
+        "标投标公共服务平台（cebpubservice.com）上发布，其他媒介转载无效。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8",
+      "excerpt": "8、发布公告的媒介",
+      "has_scoring_params": false,
+      "id": "REQ-0043",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "9、联系方式",
+        "招标人：中国移动通信集团重庆有限公司",
+        "地 址：重庆市渝北区星光三路 2 号",
+        "联 系 人：张老师",
+        "电 话：18723215851",
+        "招标代理机构：江苏中博通信有限公司",
+        "地 址：重庆市两江新区天宫殿街道洪湖西路 26 号 A 栋 2-1",
+        "联系人：庞洪美、赵潇雨",
+        "联系电话：15025781763",
+        "邮箱：15025781763@139.com",
+        "异议渠道：点击进入异议页面",
+        "(此链接仅用于潜在投标人或其他利害关系人认为招标文件存在影响招标公平性、公正性问",
+        "题的异议；不接受业务咨询)",
+        "行政监督部门：重庆市通信管理局"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "9",
+      "excerpt": "9、联系方式",
+      "has_scoring_params": false,
+      "id": "REQ-0044",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10、免责声明",
+        "我公司发布本次项目招标采购信息的官方媒介包括： 工信部通信工程建设项目招标投标管理",
+        "信息平台 （https://txzbqy.miit.gov.cn/）、中国移动采购与招标网（",
+        "5/32",
+        "http://b2b.10086.cn）、中国招标投标公共服务平台（cebpubservice.com）。除上述外，我",
+        "公司不在其他任何网站、论坛等媒介上发布任何招标采购信息，其他任何媒介上转载的、以我",
+        "公司为采购主体的招标采购信息均为非法转载，均为无效。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "10",
+      "excerpt": "10、免责声明",
+      "has_scoring_params": false,
+      "id": "REQ-0045",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.1 投标人在项目报名时所留的联系人及联系方式将作为唯一联系方式及地址，请务必保证信",
+        "息准确。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "11.1",
+      "excerpt": "11.1 投标人在项目报名时所留的联系人及联系方式将作为唯一联系方式及地址，请务必保证信",
+      "has_scoring_params": false,
+      "id": "REQ-0046",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.2 投标人针对会员注册、电子钥匙办理、网上应答操作等相关业务的咨询，请直接拨打中国",
+        "移动电子采购与招投标系统技术支持联系电话：4001381860-2-02，联系邮箱：es-",
+        "support@139.com。（注：服务热线接听时间为：工作日 9:00-18:00）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "11.2",
+      "excerpt": "11.2 投标人针对会员注册、电子钥匙办理、网上应答操作等相关业务的咨询，请直接拨打中国",
+      "has_scoring_params": false,
+      "id": "REQ-0047",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.3 本项目将采用 ES 系统线上唱价，不再组织现场唱价，参与本项目的供应商可通过中国移",
+        "动招标投标系统（b2b.10086.cn）登录供应商账号，进入开标大厅查看唱价相关内容，如对唱",
+        "价过程有异议，请于开标后 1 小时内通过中国移动招标投标系统（b2b.10086.cn）提出相关异",
+        "议。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "11.3",
+      "excerpt": "11.3 本项目将采用 ES 系统线上唱价，不再组织现场唱价，参与本项目的供应商可通过中国移",
+      "has_scoring_params": false,
+      "id": "REQ-0048",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.4 ★投标人须通过“辅助标书编制-投标工具”进行电子投标文件的编制和递交，如未使用",
+        "上述工具递交全部电子应答文件，则投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "11.4",
+      "excerpt": "11.4 ★投标人须通过“辅助标书编制-投标工具”进行电子投标文件的编制和递交，如未使用",
+      "has_scoring_params": false,
+      "id": "REQ-0049",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.2 招标人 详见 招标公告"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.2",
+      "excerpt": "1.1.2 招标人 详见 招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0050",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.3 招标项目名称 详见 招标公告"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.3",
+      "excerpt": "1.1.3 招标项目名称 详见 招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0051",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2 资金来源 招标人自筹"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.2",
+      "excerpt": "1.2 资金来源 招标人自筹",
+      "has_scoring_params": false,
+      "id": "REQ-0052",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.3 招标范围 详见招标公告"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.3",
+      "excerpt": "1.3 招标范围 详见招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0053",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4 标包划分 不划分标包"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.4",
+      "excerpt": "1.4 标包划分 不划分标包",
+      "has_scoring_params": false,
+      "id": "REQ-0054",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.1 招标方式 公开招标"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.5.1",
+      "excerpt": "1.5.1 招标方式 公开招标",
+      "has_scoring_params": false,
+      "id": "REQ-0055",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.6 招标组织形式 详见招标公告"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.6",
+      "excerpt": "1.6 招标组织形式 详见招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0056",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7 资格审查方式 资格后审，资格条件见第一章“招标公告”"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7",
+      "excerpt": "1.7 资格审查方式 资格后审，资格条件见第一章“招标公告”",
+      "has_scoring_params": false,
+      "id": "REQ-0057",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8.1 投标人不得存在的 本条款增加以下规定：详见投标文件格式附件《投标人经营状况承诺书",
+        "情形 》"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.8.1",
+      "excerpt": "1.8.1 投标人不得存在的 本条款增加以下规定：详见投标文件格式附件《投标人经营状况承诺书",
+      "has_scoring_params": false,
+      "id": "REQ-0058",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.1 招标文件的组成 本条款替换为："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.1.1",
+      "excerpt": "2.1.1 招标文件的组成 本条款替换为：",
+      "has_scoring_params": false,
+      "id": "REQ-0059",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.3 招标文件实质性要 （1）招标文件中标识“★”的条款，均为实质性条款，投标人任何不满",
+        "求的标识及非实质 足实质性条款的投标均将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "2.1.3",
+      "excerpt": "2.1.3 招标文件实质性要 （1）招标文件中标识“★”的条款，均为实质性条款，投标人任何不满",
+      "has_scoring_params": false,
+      "id": "REQ-0060",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.4 是否以单项报价核 不要求",
+        "定低于成本"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.1.4",
+      "excerpt": "2.1.4 是否以单项报价核 不要求",
+      "has_scoring_params": false,
+      "id": "REQ-0061",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.1 踏勘现场 不组织"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.2.1",
+      "excerpt": "2.2.1 踏勘现场 不组织",
+      "has_scoring_params": false,
+      "id": "REQ-0062",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.3 投标预备会 不召开"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.3",
+      "excerpt": "2.3 投标预备会 不召开",
+      "has_scoring_params": false,
+      "id": "REQ-0063",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.1 投标人提出澄清问 （1）截止时间：2026 年 10 月 30 日 09 时 00 分（北京时间）",
+        "题的截止时间和方 （2）方式：通过中国移动电子采购与招标投标系统（",
+        "式 http://b2b.10086.cn）提出澄清疑问，并将问题以可编辑的 EXCEL 版格",
+        "式以附件形式上传。（格式详见第六章投标文件格式《澄清问题反馈表",
+        "》）"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.4.1",
+      "excerpt": "2.4.1 投标人提出澄清问 （1）截止时间：2026 年 10 月 30 日 09 时 00 分（北京时间）",
+      "has_scoring_params": false,
+      "id": "REQ-0064",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.2 招标人发出招标文 （1）截止时间：澄清或修改的内容可能影响投标文件编制的，招标人在",
+        "件澄清或者修改的 投标截止时间至少 15 日前通知所有获取招标文件的潜在投标人。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.4.2",
+      "excerpt": "2.4.2 招标人发出招标文 （1）截止时间：澄清或修改的内容可能影响投标文件编制的，招标人在",
+      "has_scoring_params": false,
+      "id": "REQ-0065",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.4 投标人确认收到澄 （1）截止时间：收到招标人澄清或修改后 1 日内。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.4.4",
+      "excerpt": "2.4.4 投标人确认收到澄 （1）截止时间：收到招标人澄清或修改后 1 日内。",
+      "has_scoring_params": false,
+      "id": "REQ-0066",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1 投标文件组成 投标文件应包含以下内容："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.1",
+      "excerpt": "3.1 投标文件组成 投标文件应包含以下内容：",
+      "has_scoring_params": false,
+      "id": "REQ-0067",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2 投标文件应答和编 本条款增加以下规定："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.2.2",
+      "excerpt": "3.2.2 投标文件应答和编 本条款增加以下规定：",
+      "has_scoring_params": false,
+      "id": "REQ-0068",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.4 投标文件的盖章或 经 CA 证书电子签名、压缩加密并成功上传至中国移动电子采购与招标投",
+        "者签字 标系统的投标文件，仅视为已加盖投标人公章，可直接加密上传，无需",
+        "盖章。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.2.4",
+      "excerpt": "3.2.4 投标文件的盖章或 经 CA 证书电子签名、压缩加密并成功上传至中国移动电子采购与招标投",
+      "has_scoring_params": false,
+      "id": "REQ-0069",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "注 1：对于投标文件中须通过盖章形式，证明文件有效性的其他材料（包",
+        "括但不限于联合体协议、制造商授权函等）仍须提供已盖公章的扫描件",
+        "，CA 证书不能替代此类文件的盖章，否则相关材料视为无效。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "注 1：对于投标文件中须通过盖章形式，证明文件有效性的其他材料（包",
+      "has_scoring_params": false,
+      "id": "REQ-0070",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.3 最高投标限价或者 ★最高投标限价或者其计算方法",
+        "其计算方法 设置最高投标限价，最高投标限价/最高投标限价计算方法：详见招标公",
+        "告"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.3.3",
+      "excerpt": "3.3.3 最高投标限价或者 ★最高投标限价或者其计算方法",
+      "has_scoring_params": false,
+      "id": "REQ-0071",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.5 投标报价优惠条件 不接受报优惠价"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.3.5",
+      "excerpt": "3.3.5 投标报价优惠条件 不接受报优惠价",
+      "has_scoring_params": false,
+      "id": "REQ-0072",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.6 投标报价具体要求 、本条款增加以下规定："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.3.6",
+      "excerpt": "3.3.6 投标报价具体要求 、本条款增加以下规定：",
+      "has_scoring_params": false,
+      "id": "REQ-0073",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "如果投标人不接受对其错误的更正，其投标无效。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "如果投标人不接受对其错误的更正，其投标无效。",
+      "has_scoring_params": false,
+      "id": "REQ-0074",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1 个最高价和 1 个最低价；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "1 个最高价和 1 个最低价；",
+      "has_scoring_params": false,
+      "id": "REQ-0075",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（二）投标（响应）报价低于通过符合性审查且报价次低供应商投标（",
+        "响应）报价 50%的，即投标（响应）报价<通过符合性审查且报价次低供",
+        "应商投标（响应）报价×50%；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（二）投标（响应）报价低于通过符合性审查且报价次低供应商投标（",
+      "has_scoring_params": false,
+      "id": "REQ-0076",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（三）投标（响应）报价低于采购项目最高限价 45%的，即投标（响应）",
+        "报价<采购项目最高限价×45%；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（三）投标（响应）报价低于采购项目最高限价 45%的，即投标（响应）",
+      "has_scoring_params": false,
+      "id": "REQ-0077",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.1 投标有效期 ★投标有效期： 120 天"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.4.1",
+      "excerpt": "3.4.1 投标有效期 ★投标有效期： 120 天",
+      "has_scoring_params": false,
+      "id": "REQ-0078",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.1 投标保证金金额 ★投标保证金金额：30000 元/投标人"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.5.1",
+      "excerpt": "3.5.1 投标保证金金额 ★投标保证金金额：30000 元/投标人",
+      "has_scoring_params": false,
+      "id": "REQ-0079",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.2 投标保证金形式 本条款替换为：投标保证金形式："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.5.2",
+      "excerpt": "3.5.2 投标保证金形式 本条款替换为：投标保证金形式：",
+      "has_scoring_params": false,
+      "id": "REQ-0080",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.4 投标保证金不予退 本条款替换为："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.5.4",
+      "excerpt": "3.5.4 投标保证金不予退 本条款替换为：",
+      "has_scoring_params": false,
+      "id": "REQ-0081",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（一）投标人在投标截止时间后、招标文件中规定的投标有效期内撤销",
+        "投标的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（一）投标人在投标截止时间后、招标文件中规定的投标有效期内撤销",
+      "has_scoring_params": false,
+      "id": "REQ-0082",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（三）投标人有串通投标、弄虚作假等行为的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（三）投标人有串通投标、弄虚作假等行为的；",
+      "has_scoring_params": false,
+      "id": "REQ-0083",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（五）投标人对采购活动的相关方有行贿或违法违规提供不正当利益行",
+        "为的。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（五）投标人对采购活动的相关方有行贿或违法违规提供不正当利益行",
+      "has_scoring_params": false,
+      "id": "REQ-0084",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.1 备选投标方案 不允许"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.6.1",
+      "excerpt": "3.6.1 备选投标方案 不允许",
+      "has_scoring_params": false,
+      "id": "REQ-0085",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.1 投标文件份数、式 上传 ES 平台电子版 壹 份",
+        "样?"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.7.1",
+      "excerpt": "3.7.1 投标文件份数、式 上传 ES 平台电子版 壹 份",
+      "has_scoring_params": false,
+      "id": "REQ-0086",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.6 投标文件的密封和 电子版投标文件可通过 word、excel、pdf 等形式提交，并经中国移动电",
+        "标记要求 子采购与招标投标系统压缩加密后在线递交；无需对投标文件打印后扫",
+        "描、盖章、签字。（如项目有特殊要求的除外。）",
+        "纸质银行保函原件（如有）或招标文件规定的其他纸质文件需要密封提",
+        "交的，包封的所有粘接缝隙必须加盖单位章或由投标人的法定代表人或",
+        "其授权的代表人签字。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.7.6",
+      "excerpt": "3.7.6 投标文件的密封和 电子版投标文件可通过 word、excel、pdf 等形式提交，并经中国移动电",
+      "has_scoring_params": false,
+      "id": "REQ-0087",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.8 电子招标的投标文 投标人必须在投标截止时间之前上传使用有效 CA 证书进行加密后的投标",
+        "件上传形式 文件。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.8",
+      "excerpt": "3.8 电子招标的投标文 投标人必须在投标截止时间之前上传使用有效 CA 证书进行加密后的投标",
+      "has_scoring_params": false,
+      "id": "REQ-0088",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.1 投标文件递交截止 详见招标公告",
+        "时间"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.1.1",
+      "excerpt": "4.1.1 投标文件递交截止 详见招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0089",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.2 投标文件递交地点 本项目为无纸化投标，无须递交纸质投标文件。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.1.2",
+      "excerpt": "4.1.2 投标文件递交地点 本项目为无纸化投标，无须递交纸质投标文件。",
+      "has_scoring_params": false,
+      "id": "REQ-0090",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.4 投标文件退还 本项目为无纸化投标，不退还。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.1.4",
+      "excerpt": "4.1.4 投标文件退还 本项目为无纸化投标，不退还。",
+      "has_scoring_params": false,
+      "id": "REQ-0091",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.6 电子招标投标文件 见招标公告",
+        "递交异常的处理方",
+        "式"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.1.6",
+      "excerpt": "4.1.6 电子招标投标文件 见招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0092",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.1 开标时间和地点 同投标文件递交截止时间和地点"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "5.1",
+      "excerpt": "5.1 开标时间和地点 同投标文件递交截止时间和地点",
+      "has_scoring_params": false,
+      "id": "REQ-0093",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2 开标程序 本项目实行系统开标，在招标文件规定的时间通过中国移动电子采购与",
+        "招标投标系统进行解密、开标唱价，各投标人通过登录系统查看开标情",
+        "况，提出问题与异议及确认开标记录。招标人将在系统设置提异议的截",
+        "止时间，请关注系统流程，超出截止时间未提出异议的视为无异议。开",
+        "标时间详见招标公告。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "5.2",
+      "excerpt": "5.2 开标程序 本项目实行系统开标，在招标文件规定的时间通过中国移动电子采购与",
+      "has_scoring_params": false,
+      "id": "REQ-0094",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.4 电子招标开标的其 详见招标公告",
+        "他要求及异常处理"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "5.4",
+      "excerpt": "5.4 电子招标开标的其 详见招标公告",
+      "has_scoring_params": false,
+      "id": "REQ-0095",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.5 不得开标 投标人数量少于 3 个"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "5.5",
+      "excerpt": "5.5 不得开标 投标人数量少于 3 个",
+      "has_scoring_params": false,
+      "id": "REQ-0096",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.1 评标委员会组成人 5 人",
+        "数"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "6.1.1",
+      "excerpt": "6.1.1 评标委员会组成人 5 人",
+      "has_scoring_params": false,
+      "id": "REQ-0097",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3 评标方法 综合评估法"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "6.3",
+      "excerpt": "6.3 评标方法 综合评估法",
+      "has_scoring_params": false,
+      "id": "REQ-0098",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.4 中标候选人推荐原 通过初步评审的投标人≥三家，则按照最终综合得分由高到低依次排名",
+        "则 并推荐三名中标候选人。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "6.4",
+      "excerpt": "6.4 中标候选人推荐原 通过初步评审的投标人≥三家，则按照最终综合得分由高到低依次排名",
+      "has_scoring_params": false,
+      "id": "REQ-0099",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.2 邀请招标中标候选 本项目不涉及。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "7.1.2",
+      "excerpt": "7.1.2 邀请招标中标候选 本项目不涉及。",
+      "has_scoring_params": false,
+      "id": "REQ-0100",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.1 中标人确定 招标人确定中标人，中标人数量： 1 个"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "7.2.1",
+      "excerpt": "7.2.1 中标人确定 招标人确定中标人，中标人数量： 1 个",
+      "has_scoring_params": false,
+      "id": "REQ-0101",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.2 中标原则 推荐排名第一中标候选人为中标人。中标份额 100%。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "7.2.2",
+      "excerpt": "7.2.2 中标原则 推荐排名第一中标候选人为中标人。中标份额 100%。",
+      "has_scoring_params": false,
+      "id": "REQ-0102",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1.1 履约保证金金额和 履约保证金：合同含税总金额的 5%（向下取整至元）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "8.1.1",
+      "excerpt": "8.1.1 履约保证金金额和 履约保证金：合同含税总金额的 5%（向下取整至元）。",
+      "has_scoring_params": false,
+      "id": "REQ-0103",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1、采购代理服务费由中选单位承担。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1",
+      "excerpt": "1、采购代理服务费由中选单位承担。",
+      "has_scoring_params": false,
+      "id": "REQ-0104",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2、收费标准参照国家发展计划委员会计价格[2002]1980 号文《招标代理",
+        "服务收费管理暂行办法》标准及招标人明确的折扣为依据计算。折扣："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2",
+      "excerpt": "2、收费标准参照国家发展计划委员会计价格[2002]1980 号文《招标代理",
+      "has_scoring_params": false,
+      "id": "REQ-0105",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3、交纳方式：中标人在收到付款通知书后 5 个工作日内向招标代理机构",
+        "支付采购代理服务费。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "3",
+      "excerpt": "3、交纳方式：中标人在收到付款通知书后 5 个工作日内向招标代理机构",
+      "has_scoring_params": false,
+      "id": "REQ-0106",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4、交纳形式：可用电汇、转账等形式。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "4",
+      "excerpt": "4、交纳形式：可用电汇、转账等形式。",
+      "has_scoring_params": false,
+      "id": "REQ-0107",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5、汇款账户为：江苏中博通信有限公司",
+        "开户行名称：中信银行南京城北支行",
+        "银行账号：以代理机构发出的收款通知书为准"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "5",
+      "excerpt": "5、汇款账户为：江苏中博通信有限公司",
+      "has_scoring_params": false,
+      "id": "REQ-0108",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "★3.投标（应答）人承诺遵守中国移动采购与招标网（",
+        "https://b2b.10086.cn）公布的《采购项目串通投标（应答）行为认定",
+        "处理规则》。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "★3.投标（应答）人承诺遵守中国移动采购与招标网（",
+      "has_scoring_params": false,
+      "id": "REQ-0109",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "★5. 投标人对于招标文件的应答应真实准确，应答及履约过程中资格资",
+        "质、产品参数、服务人员等关键条件变化后，须向招标人主动报告。如",
+        "发现任何串通应答、弄虚作假或隐瞒事实的行为，招标人根据相关规定",
+        "有权："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "★5. 投标人对于招标文件的应答应真实准确，应答及履约过程中资格资",
+      "has_scoring_params": false,
+      "id": "REQ-0110",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）取消其投标资格；如中标，取消中标资格；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）取消其投标资格；如中标，取消中标资格；",
+      "has_scoring_params": false,
+      "id": "REQ-0111",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）依据《采购项目串通投标（应答）行为认定处理规则》判定。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）依据《采购项目串通投标（应答）行为认定处理规则》判定。",
+      "has_scoring_params": false,
+      "id": "REQ-0112",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.1 特殊情况处理原则 （1）招标失败处理原则",
+        "若投标人不足三家时，本项目招标失败，重新启动招标程序，重新招标",
+        "后投标人仍少于三家的，按国家有关规定属于必须审批、核准的依法必",
+        "须招标的项目，须报审批、核准部门审批、核准后可以不再进行招标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "11.1",
+      "excerpt": "11.1 特殊情况处理原则 （1）招标失败处理原则",
+      "has_scoring_params": false,
+      "id": "REQ-0113",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.2 ★电子投标文件编 ★投标人须通过“辅助标书编制-投标工具”进行电子应答文件的编制和",
+        "制 递交，如未使用上述工具递交全部电子应答文件，则应答将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "11.2",
+      "excerpt": "11.2 ★电子投标文件编 ★投标人须通过“辅助标书编制-投标工具”进行电子应答文件的编制和",
+      "has_scoring_params": false,
+      "id": "REQ-0114",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11.3 其他要点 （1）交货周期:订单下达后 30 日内完成到货。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "11.3",
+      "excerpt": "11.3 其他要点 （1）交货周期:订单下达后 30 日内完成到货。",
+      "has_scoring_params": false,
+      "id": "REQ-0115",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1 1．总则"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.1",
+      "excerpt": "1.1 1．总则",
+      "has_scoring_params": false,
+      "id": "REQ-0116",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1 项目概况"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.1",
+      "excerpt": "1.1 项目概况",
+      "has_scoring_params": false,
+      "id": "REQ-0117",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.1 根据《中华人民共和国招标投标法》（以下简称《招标投标法》）《中华人民共",
+        "和国招标投标法实施条例》（以下简称《实施条例》）和《通信工程建设项目招标投标管理办",
+        "法》（以下简称《管理办法》）等有关法律、法规和规章的规定，本招标项目已具备招标条件",
+        "，现对本项目进行招标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.1.1",
+      "excerpt": "1.1.1 根据《中华人民共和国招标投标法》（以下简称《招标投标法》）《中华人民共",
+      "has_scoring_params": false,
+      "id": "REQ-0118",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.2 招标人：招标人单位名称及联系方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.1.2",
+      "excerpt": "1.1.2 招标人：招标人单位名称及联系方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0119",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.3 招标项目名称：项目名称及招标编号见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.1.3",
+      "excerpt": "1.1.3 招标项目名称：项目名称及招标编号见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0120",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2 资金来源和落实情况",
+        "本项目资金已落实，资金来源见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.2",
+      "excerpt": "1.2 资金来源和落实情况",
+      "has_scoring_params": false,
+      "id": "REQ-0121",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.3 招标范围",
+        "本项目招标范围见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.3",
+      "excerpt": "1.3 招标范围",
+      "has_scoring_params": false,
+      "id": "REQ-0122",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4 标包划分",
+        "本项目标包划分情况见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.4",
+      "excerpt": "1.4 标包划分",
+      "has_scoring_params": false,
+      "id": "REQ-0123",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5 招标方式"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.5",
+      "excerpt": "1.5 招标方式",
+      "has_scoring_params": false,
+      "id": "REQ-0124",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.1 招标方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.5.1",
+      "excerpt": "1.5.1 招标方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0125",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.2 公开招标：是指招标人以招标公告的方式邀请不特定的法人或者其他组织投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.5.2",
+      "excerpt": "1.5.2 公开招标：是指招标人以招标公告的方式邀请不特定的法人或者其他组织投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0126",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.3 邀请招标：是指招标人以投标邀请书的方式邀请特定的法人或者其他组织投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.5.3",
+      "excerpt": "1.5.3 邀请招标：是指招标人以投标邀请书的方式邀请特定的法人或者其他组织投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0127",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.6 招标组织形式",
+        "本项目由招标人自行组织/委托招标代理机构采用代理招标的方式进行，招标组织形式、",
+        "招标代理机构名称及联系方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.6",
+      "excerpt": "1.6 招标组织形式",
+      "has_scoring_params": false,
+      "id": "REQ-0128",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7 资格审查"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7",
+      "excerpt": "1.7 资格审查",
+      "has_scoring_params": false,
+      "id": "REQ-0129",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.1 本招标项目资格审查方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.1",
+      "excerpt": "1.7.1 本招标项目资格审查方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0130",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.2 资格预审：是指在投标前对投标人进行的资格审查。采用资格预审方式的，资格",
+        "条件已经在招标文件发出前的“资格预审文件”中做出规定。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.2",
+      "excerpt": "1.7.2 资格预审：是指在投标前对投标人进行的资格审查。采用资格预审方式的，资格",
+      "has_scoring_params": false,
+      "id": "REQ-0131",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.3 资格后审：是指在开标后由评标委员会根据招标文件的规定对投标人进行的资格",
+        "审查。采用资格后审方式的，投标人应当具备的资格条件见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.3",
+      "excerpt": "1.7.3 资格后审：是指在开标后由评标委员会根据招标文件的规定对投标人进行的资格",
+      "has_scoring_params": false,
+      "id": "REQ-0132",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.4 采用资格后审的，招标人必须在招标文件中详细规定资格审查标准和方法。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.4",
+      "excerpt": "1.7.4 采用资格后审的，招标人必须在招标文件中详细规定资格审查标准和方法。",
+      "has_scoring_params": false,
+      "id": "REQ-0133",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.5 资格后审一般包括下列内容："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.5",
+      "excerpt": "1.7.5 资格后审一般包括下列内容：",
+      "has_scoring_params": false,
+      "id": "REQ-0134",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.6 资格后审不合格的投标人，评标委员会应当否决其投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "1.7.6",
+      "excerpt": "1.7.6 资格后审不合格的投标人，评标委员会应当否决其投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0135",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8 投标人不得存在的情形"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.8",
+      "excerpt": "1.8 投标人不得存在的情形",
+      "has_scoring_params": false,
+      "id": "REQ-0136",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8.1 投标人不得存在下列情形之一："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.8.1",
+      "excerpt": "1.8.1 投标人不得存在下列情形之一：",
+      "has_scoring_params": false,
+      "id": "REQ-0137",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）被责令停业的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）被责令停业的；",
+      "has_scoring_params": false,
+      "id": "REQ-0138",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）被暂停或者取消投标资格的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）被暂停或者取消投标资格的；",
+      "has_scoring_params": false,
+      "id": "REQ-0139",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（5）在最近三年内有骗取中标、严重违约、重大工程质量或者安全问题的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（5）在最近三年内有骗取中标、严重违约、重大工程质量或者安全问题的；",
+      "has_scoring_params": false,
+      "id": "REQ-0140",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8.2 单位负责人为同一人或者存在控股、管理关系的不同单位，不得同时参加本项目",
+        "中同一标包投标或者未划分标包的同一招标项目投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.8.2",
+      "excerpt": "1.8.2 单位负责人为同一人或者存在控股、管理关系的不同单位，不得同时参加本项目",
+      "has_scoring_params": false,
+      "id": "REQ-0141",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9 合格的货物和服务"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.9",
+      "excerpt": "1.9 合格的货物和服务",
+      "has_scoring_params": false,
+      "id": "REQ-0142",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9.1 投标人提供的所有货物及其有关服务的原产地，均应当来自中国或者是与中国有正",
+        "常贸易往来的国家或者地区。招标人的支付也仅限于这些货物和服务。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.9.1",
+      "excerpt": "1.9.1 投标人提供的所有货物及其有关服务的原产地，均应当来自中国或者是与中国有正",
+      "has_scoring_params": false,
+      "id": "REQ-0143",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9.2 本招标文件所属的“原产地”是指货物开采、生长、生产或者提供有关服务的来",
+        "源地。所述的“货物”是指制造、加工或者实质上装配了主要部件而形成的货物。商业上公认",
+        "的产品是指基本特征、性能或者功能上与部件有着实质性区别的产品。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.9.2",
+      "excerpt": "1.9.2 本招标文件所属的“原产地”是指货物开采、生长、生产或者提供有关服务的来",
+      "has_scoring_params": false,
+      "id": "REQ-0144",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9.3 投标人提供的所有货物及其有关服务应当符合国家规定的资格条件。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.9.3",
+      "excerpt": "1.9.3 投标人提供的所有货物及其有关服务应当符合国家规定的资格条件。",
+      "has_scoring_params": false,
+      "id": "REQ-0145",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.10 投标费用",
+        "不论结果如何，投标人自行承担所有准备和参与投标有关的费用。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.10",
+      "excerpt": "1.10 投标费用",
+      "has_scoring_params": false,
+      "id": "REQ-0146",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.11 保密",
+        "参与招标投标活动的各方应当对招标文件和投标文件中的商业和技术等秘密保密，违者应",
+        "当对由此造成的后果承担法律责任。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.11",
+      "excerpt": "1.11 保密",
+      "has_scoring_params": false,
+      "id": "REQ-0147",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2 2．招标文件"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.2",
+      "excerpt": "1.2 2．招标文件",
+      "has_scoring_params": false,
+      "id": "REQ-0148",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1 招标文件的组成"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.1",
+      "excerpt": "2.1 招标文件的组成",
+      "has_scoring_params": false,
+      "id": "REQ-0149",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.1 招标文件一般由以下部分组成："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.1.1",
+      "excerpt": "2.1.1 招标文件一般由以下部分组成：",
+      "has_scoring_params": false,
+      "id": "REQ-0150",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.2 招标文件对同一内容的表述应当一致。第一章“招标公告”或者“投标邀请书”",
+        "与招标文件在同一内容的表述上有矛盾或者冲突时，以第一章“招标公告”或者“投标邀请书",
+        "”为准；投标人须知前附表与投标人须知正文在同一内容的表述上有矛盾或者冲突时，以投标",
+        "人须知前附表为准。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.1.2",
+      "excerpt": "2.1.2 招标文件对同一内容的表述应当一致。第一章“招标公告”或者“投标邀请书”",
+      "has_scoring_params": false,
+      "id": "REQ-0151",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.3 招标人在招标文件中以显著的方式标明实质性要求、条件以及不满足实质性要求",
+        "和条件的投标将被否决的提示；对于非实质性要求和条件，规定允许偏差的最大范围、最高项",
+        "数和调整偏差的方法。显著标识方式和具体要求见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "2.1.3",
+      "excerpt": "2.1.3 招标人在招标文件中以显著的方式标明实质性要求、条件以及不满足实质性要求",
+      "has_scoring_params": false,
+      "id": "REQ-0152",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.4 招标人可以要求以某一单项报价核定是否低于成本，具体要求见投标人须知前附",
+        "表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.1.4",
+      "excerpt": "2.1.4 招标人可以要求以某一单项报价核定是否低于成本，具体要求见投标人须知前附",
+      "has_scoring_params": false,
+      "id": "REQ-0153",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2 踏勘现场"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.2",
+      "excerpt": "2.2 踏勘现场",
+      "has_scoring_params": false,
+      "id": "REQ-0154",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.1 投标人须知前附表规定组织踏勘现场的，招标人按照投标人须知前附表规定的时",
+        "间、地点组织投标人踏勘项目现场。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.1",
+      "excerpt": "2.2.1 投标人须知前附表规定组织踏勘现场的，招标人按照投标人须知前附表规定的时",
+      "has_scoring_params": false,
+      "id": "REQ-0155",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.2 潜在投标人踏勘现场发生的费用自理。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.2",
+      "excerpt": "2.2.2 潜在投标人踏勘现场发生的费用自理。",
+      "has_scoring_params": false,
+      "id": "REQ-0156",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.3 除招标人的原因外，潜在投标人自行负责在踏勘现场中所发生的人员伤亡和财产",
+        "损失。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.3",
+      "excerpt": "2.2.3 除招标人的原因外，潜在投标人自行负责在踏勘现场中所发生的人员伤亡和财产",
+      "has_scoring_params": false,
+      "id": "REQ-0157",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.4 招标人在踏勘现场中介绍的项目现场和相关的周边环境情况，供潜在投标人在编",
+        "制投标文件时参考，招标人不对投标人据此作出的判断和决策负责。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.4",
+      "excerpt": "2.2.4 招标人在踏勘现场中介绍的项目现场和相关的周边环境情况，供潜在投标人在编",
+      "has_scoring_params": false,
+      "id": "REQ-0158",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.3 投标预备会",
+        "投标人须知前附表规定召开投标预备会的，招标人按照投标人须知前附表规定的时间和地",
+        "点召开投标预备会，澄清潜在投标人提出的问题。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.3",
+      "excerpt": "2.3 投标预备会",
+      "has_scoring_params": false,
+      "id": "REQ-0159",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4 招标文件的澄清和修改"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.4",
+      "excerpt": "2.4 招标文件的澄清和修改",
+      "has_scoring_params": false,
+      "id": "REQ-0160",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.1 投标人对招标文件有疑问的，应当按照投标人须知前附表规定的时间和方式，要",
+        "求招标人对招标文件进行澄清。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.1",
+      "excerpt": "2.4.1 投标人对招标文件有疑问的，应当按照投标人须知前附表规定的时间和方式，要",
+      "has_scoring_params": false,
+      "id": "REQ-0161",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.2 招标人应当按照投标人须知前附表规定的时间和方式，将澄清或者修改内容发给",
+        "所有购买招标文件的投标人，但不指明问题的来源。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.2",
+      "excerpt": "2.4.2 招标人应当按照投标人须知前附表规定的时间和方式，将澄清或者修改内容发给",
+      "has_scoring_params": false,
+      "id": "REQ-0162",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.3 如澄清或者修改的内容可能影响投标文件编制的，应当在递交投标文件截止时间",
+        "至少 15 日前发出，不足 15 日的，招标人应当相应顺延投标截止时间。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.3",
+      "excerpt": "2.4.3 如澄清或者修改的内容可能影响投标文件编制的，应当在递交投标文件截止时间",
+      "has_scoring_params": false,
+      "id": "REQ-0163",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.4 投标人收到澄清或者修改后，应当按照投标人须知前附表规定的时间和方式通知",
+        "招标人，确认已收到该澄清或者修改。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.4",
+      "excerpt": "2.4.4 投标人收到澄清或者修改后，应当按照投标人须知前附表规定的时间和方式通知",
+      "has_scoring_params": false,
+      "id": "REQ-0164",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.5 所有关于招标文件的澄清和修改均作为招标文件的补充部分。当招标文件、招标",
+        "文件的澄清或者修改等在同一内容的表述上不一致时，以最后发出的书面文件为准。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.5",
+      "excerpt": "2.4.5 所有关于招标文件的澄清和修改均作为招标文件的补充部分。当招标文件、招标",
+      "has_scoring_params": false,
+      "id": "REQ-0165",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.3 3．投标文件"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.3",
+      "excerpt": "1.3 3．投标文件",
+      "has_scoring_params": false,
+      "id": "REQ-0166",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1 投标文件的组成",
+        "投标人应当按照投标人须知前附表的要求制作并递交投标文件。投标文件组成见投标人须",
+        "知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.1",
+      "excerpt": "3.1 投标文件的组成",
+      "has_scoring_params": false,
+      "id": "REQ-0167",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2 投标文件的编制"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.2",
+      "excerpt": "3.2 投标文件的编制",
+      "has_scoring_params": false,
+      "id": "REQ-0168",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.1 投标人应当按照招标文件的要求编制投标文件，投标文件应当对招标文件提出的",
+        "实质性要求和条件作出响应。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.2.1",
+      "excerpt": "3.2.1 投标人应当按照招标文件的要求编制投标文件，投标文件应当对招标文件提出的",
+      "has_scoring_params": false,
+      "id": "REQ-0169",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2 投标人应当认真阅读招标文件中所有的事项、格式、条款和技术规范等。投标人",
+        "没有按照招标文件要求递交全部资料或者投标人没有对招标文件在各方面都作出实质性响应是",
+        "投标人的风险，并可能导致其投标被否决。投标文件应答和编写的具体要求见投标人须知前附",
+        "表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.2.2",
+      "excerpt": "3.2.2 投标人应当认真阅读招标文件中所有的事项、格式、条款和技术规范等。投标人",
+      "has_scoring_params": false,
+      "id": "REQ-0170",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.3 投标人递交的投标文件以及投标人与招标人就有关投标的所有往来函电均应当使",
+        "用中文。投标人递交的证明文件和文献可以使用另一种语言，但相应内容应当译成中文，在解",
+        "释投标文件时以中文译本为准。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.2.3",
+      "excerpt": "3.2.3 投标人递交的投标文件以及投标人与招标人就有关投标的所有往来函电均应当使",
+      "has_scoring_params": false,
+      "id": "REQ-0171",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.4 投标文件应当使用不褪色的材料书写或者打印，并加盖单位公章或者由投标人的",
+        "法定代表人或者其委托代理人签字。委托代理人签字的，投标文件应当附法定代表人签署的授",
+        "权委托书。投标文件应当尽量避免涂改、行间插字或者删除。如果出现上述情况，改动之处应",
+        "当加盖单位公章或者由投标人的法定代表人或者其委托代理人签字确认。盖章或者签字另有要",
+        "求的，见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.2.4",
+      "excerpt": "3.2.4 投标文件应当使用不褪色的材料书写或者打印，并加盖单位公章或者由投标人的",
+      "has_scoring_params": false,
+      "id": "REQ-0172",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3 投标报价"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3",
+      "excerpt": "3.3 投标报价",
+      "has_scoring_params": false,
+      "id": "REQ-0173",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.1 投标人应当根据招标文件要求进行报价，投标人应当报出符合招标文件要求的拟",
+        "提供投标货物的单价（如适用）和总价。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.1",
+      "excerpt": "3.3.1 投标人应当根据招标文件要求进行报价，投标人应当报出符合招标文件要求的拟",
+      "has_scoring_params": false,
+      "id": "REQ-0174",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.2 投标货币：人民币。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.2",
+      "excerpt": "3.3.2 投标货币：人民币。",
+      "has_scoring_params": false,
+      "id": "REQ-0175",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.3 招标人设有最高投标限价的，投标人的投标报价不得超过最高投标限价，否则其",
+        "投标将被否决。最高投标限价或者其计算方法见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.3.3",
+      "excerpt": "3.3.3 招标人设有最高投标限价的，投标人的投标报价不得超过最高投标限价，否则其",
+      "has_scoring_params": false,
+      "id": "REQ-0176",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.4 招标人不接受投标人的任何低于成本报价的不正当竞争方式。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.4",
+      "excerpt": "3.3.4 招标人不接受投标人的任何低于成本报价的不正当竞争方式。",
+      "has_scoring_params": false,
+      "id": "REQ-0177",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.5 只有在招标文件要求或者允许报优惠价时，投标人才可以报出。投标人优惠报价",
+        "的数额，开标时也必须当众宣读。关于优惠条件的规定见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.5",
+      "excerpt": "3.3.5 只有在招标文件要求或者允许报优惠价时，投标人才可以报出。投标人优惠报价",
+      "has_scoring_params": false,
+      "id": "REQ-0178",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.6 投标报价的具体要求见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.6",
+      "excerpt": "3.3.6 投标报价的具体要求见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0179",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4 投标有效期"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.4",
+      "excerpt": "3.4 投标有效期",
+      "has_scoring_params": false,
+      "id": "REQ-0180",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.1 投标有效期从递交投标文件截止日起计算。投标有效期的具体时间见投标人须知",
+        "前附表。在此期间，投标人不得要求撤销或者修改其投标文件。投标有效期不满足招标文件要",
+        "求的投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.4.1",
+      "excerpt": "3.4.1 投标有效期从递交投标文件截止日起计算。投标有效期的具体时间见投标人须知",
+      "has_scoring_params": false,
+      "id": "REQ-0181",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.2 在原定投标有效期满之前，如果出现特殊情况，招标人决定延长投标有效期的，",
+        "应当以书面形式向投标人提出延长投标有效期的要求，投标人须以书面形式予以答复。投标人",
+        "同意延长投标有效期的，不得修改其投标文件的实质性内容，但应当相应延长其投标保证金有",
+        "效期；投标人拒绝延长投标有效期的，其投标失效，投标人有权收回其投标保证金。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.4.2",
+      "excerpt": "3.4.2 在原定投标有效期满之前，如果出现特殊情况，招标人决定延长投标有效期的，",
+      "has_scoring_params": false,
+      "id": "REQ-0182",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5 投标保证金"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.5",
+      "excerpt": "3.5 投标保证金",
+      "has_scoring_params": false,
+      "id": "REQ-0183",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.1 招标人要求投标人递交投标保证金的，投标人必须在递交投标文件的同时，按照",
+        "投标人须知前附表的规定递交投标保证金。投标保证金一般不超过项目估算价的 2%，但最高不",
+        "得超过 80 万元人民币，本招标项目的投标保证金金额见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.1",
+      "excerpt": "3.5.1 招标人要求投标人递交投标保证金的，投标人必须在递交投标文件的同时，按照",
+      "has_scoring_params": false,
+      "id": "REQ-0184",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.2 招标人可以规定投标保证金是以现金、支票、银行汇票、在中国注册的银行出具",
+        "的银行保函等方式递交，依法必须进行招标的项目的境内投标人，以现金或者支票形式递交的",
+        "投标保证金应当从其基本账户转出。投标保证金有效期应当与投标有效期一致。投标保证金的",
+        "形式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.2",
+      "excerpt": "3.5.2 招标人可以规定投标保证金是以现金、支票、银行汇票、在中国注册的银行出具",
+      "has_scoring_params": false,
+      "id": "REQ-0185",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.3 招标人最迟应当在书面合同签订后 5 日内向中标人和未中标的投标人退还投标保",
+        "证金及银行同期存款利息。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.3",
+      "excerpt": "3.5.3 招标人最迟应当在书面合同签订后 5 日内向中标人和未中标的投标人退还投标保",
+      "has_scoring_params": false,
+      "id": "REQ-0186",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.4 发生下列情形之一时，投标保证金可不予退还："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.4",
+      "excerpt": "3.5.4 发生下列情形之一时，投标保证金可不予退还：",
+      "has_scoring_params": false,
+      "id": "REQ-0187",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）投标人在招标文件中规定的投标有效期内撤销投标的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）投标人在招标文件中规定的投标有效期内撤销投标的；",
+      "has_scoring_params": false,
+      "id": "REQ-0188",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）投标人有串通投标、弄虚作假等行为的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）投标人有串通投标、弄虚作假等行为的；",
+      "has_scoring_params": false,
+      "id": "REQ-0189",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.5 未递交投标保证金或者递交的投标保证金有瑕疵的投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.5.5",
+      "excerpt": "3.5.5 未递交投标保证金或者递交的投标保证金有瑕疵的投标将被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0190",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6 备选投标方案"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.6",
+      "excerpt": "3.6 备选投标方案",
+      "has_scoring_params": false,
+      "id": "REQ-0191",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.1 除投标人须知前附表另有规定外，投标人不得递交备选投标方案。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.1",
+      "excerpt": "3.6.1 除投标人须知前附表另有规定外，投标人不得递交备选投标方案。",
+      "has_scoring_params": false,
+      "id": "REQ-0192",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.2 若招标人在招标文件中邀请投标人递交备选方案，则投标人除按照招标文件规定",
+        "的基本方案编制和递交投标文件外，可以附加递交备选投标方案。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.2",
+      "excerpt": "3.6.2 若招标人在招标文件中邀请投标人递交备选方案，则投标人除按照招标文件规定",
+      "has_scoring_params": false,
+      "id": "REQ-0193",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.3 备选投标方案应当说明其对基本方案的改进意见和带来的效益，并附必要的图纸",
+        "、设计计算、技术要求及其他有关资料，在封面上应当注明“备选投标方案”字样。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.3",
+      "excerpt": "3.6.3 备选投标方案应当说明其对基本方案的改进意见和带来的效益，并附必要的图纸",
+      "has_scoring_params": false,
+      "id": "REQ-0194",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.4 允许投标人递交备选投标方案的，只有符合招标文件要求且评标价最低或者综合",
+        "评分最高而被推荐为中标候选人的投标人所递交的备选投标方案，可予以考虑。评标委员会认",
+        "为其备选投标方案优于其按照招标文件要求编制的投标方案的，招标人可以接受该备选投标方",
+        "案。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.4",
+      "excerpt": "3.6.4 允许投标人递交备选投标方案的，只有符合招标文件要求且评标价最低或者综合",
+      "has_scoring_params": false,
+      "id": "REQ-0195",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7 投标文件的式样、密封和标记（递交纸质文件适用）"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7",
+      "excerpt": "3.7 投标文件的式样、密封和标记（递交纸质文件适用）",
+      "has_scoring_params": false,
+      "id": "REQ-0196",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.1 投标人应当编制一份投标文件“正本”和投标人须知前附表所述份数的“副本”",
+        "和“电子版”，副本为正本复印件。投标文件正本和副本如有不一致之处，以正本为准；纸质",
+        "版文件与电子版文件不一致时，以纸质版文件为准。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.1",
+      "excerpt": "3.7.1 投标人应当编制一份投标文件“正本”和投标人须知前附表所述份数的“副本”",
+      "has_scoring_params": false,
+      "id": "REQ-0197",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.2 每份投标文件的正本、副本及电子版应当分别装订，并于封面上明确标明“正本",
+        "”“副本”和“电子版”字样。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.2",
+      "excerpt": "3.7.2 每份投标文件的正本、副本及电子版应当分别装订，并于封面上明确标明“正本",
+      "has_scoring_params": false,
+      "id": "REQ-0198",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.3 投标文件应当按照招标文件规定密封包装，并于封装封面上明确标明“正本”“",
+        "副本”和“电子版”字样。密封的所有黏接缝隙必须加盖单位公章或者由投标人的法定代表人",
+        "或者其委托代理人签字。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.3",
+      "excerpt": "3.7.3 投标文件应当按照招标文件规定密封包装，并于封装封面上明确标明“正本”“",
+      "has_scoring_params": false,
+      "id": "REQ-0199",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.4 外层包封应当写明招标人的名称和地址、项目名称、招标编号，并注明开标时间",
+        "以前不得开封。还应当写明投标人的名称与地址、邮政编码，以便投标出现逾期送达时能原封",
+        "退回。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.4",
+      "excerpt": "3.7.4 外层包封应当写明招标人的名称和地址、项目名称、招标编号，并注明开标时间",
+      "has_scoring_params": false,
+      "id": "REQ-0200",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.5 递交投标文件时，招标人应当对符合招标文件规定密封和标记的投标文件进行签",
+        "收。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.5",
+      "excerpt": "3.7.5 递交投标文件时，招标人应当对符合招标文件规定密封和标记的投标文件进行签",
+      "has_scoring_params": false,
+      "id": "REQ-0201",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.6 招标人对于投标文件密封、标记另有要求的，见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.6",
+      "excerpt": "3.7.6 招标人对于投标文件密封、标记另有要求的，见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0202",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.8 电子招标的投标文件上传形式",
+        "投标文件应当按照投标人须知前附表要求的形式上传。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.8",
+      "excerpt": "3.8 电子招标的投标文件上传形式",
+      "has_scoring_params": false,
+      "id": "REQ-0203",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4 4．投标"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.4",
+      "excerpt": "1.4 4．投标",
+      "has_scoring_params": false,
+      "id": "REQ-0204",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1 投标文件的递交"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1",
+      "excerpt": "4.1 投标文件的递交",
+      "has_scoring_params": false,
+      "id": "REQ-0205",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.1 投标文件递交截止时间：见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.1",
+      "excerpt": "4.1.1 投标文件递交截止时间：见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0206",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.2 投标文件递交地点：见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.2",
+      "excerpt": "4.1.2 投标文件递交地点：见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0207",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.3 招标人收到投标文件后，向投标人出具签收凭证。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.3",
+      "excerpt": "4.1.3 招标人收到投标文件后，向投标人出具签收凭证。",
+      "has_scoring_params": false,
+      "id": "REQ-0208",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.4 除投标人须知前附表另有规定外，投标人所递交的投标文件不予退还。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.4",
+      "excerpt": "4.1.4 除投标人须知前附表另有规定外，投标人所递交的投标文件不予退还。",
+      "has_scoring_params": false,
+      "id": "REQ-0209",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.5 出现下列情形之一时，招标人/招标代理机构不予接收投标文件："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.5",
+      "excerpt": "4.1.5 出现下列情形之一时，招标人/招标代理机构不予接收投标文件：",
+      "has_scoring_params": false,
+      "id": "REQ-0210",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）逾期送达或者未送达指定地点的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）逾期送达或者未送达指定地点的；",
+      "has_scoring_params": false,
+      "id": "REQ-0211",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）未按照招标文件要求密封的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）未按照招标文件要求密封的；",
+      "has_scoring_params": false,
+      "id": "REQ-0212",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）未通过资格预审的申请人递交的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）未通过资格预审的申请人递交的；",
+      "has_scoring_params": false,
+      "id": "REQ-0213",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（4）未按照第一章“招标公告”或者投标邀请书要求获得本项目招标文件的。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（4）未按照第一章“招标公告”或者投标邀请书要求获得本项目招标文件的。",
+      "has_scoring_params": false,
+      "id": "REQ-0214",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.6 招标人采用电子招标投标方式的，投标文件递交异常的处理方式见投标人须知前",
+        "附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.6",
+      "excerpt": "4.1.6 招标人采用电子招标投标方式的，投标文件递交异常的处理方式见投标人须知前",
+      "has_scoring_params": false,
+      "id": "REQ-0215",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2 投标文件的修改、撤回和撤销"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.2",
+      "excerpt": "4.2 投标文件的修改、撤回和撤销",
+      "has_scoring_params": false,
+      "id": "REQ-0216",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.1 在规定的投标截止时间前，投标人可以修改或者撤回已递交的投标文件。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.1",
+      "excerpt": "4.2.1 在规定的投标截止时间前，投标人可以修改或者撤回已递交的投标文件。",
+      "has_scoring_params": false,
+      "id": "REQ-0217",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.2 投标人修改后的投标文件，应当在规定的投标截止时间前按照招标文件的规定编",
+        "制、密封、标记、递交。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.2",
+      "excerpt": "4.2.2 投标人修改后的投标文件，应当在规定的投标截止时间前按照招标文件的规定编",
+      "has_scoring_params": false,
+      "id": "REQ-0218",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.3 投标人撤回已递交的投标文件，应当书面通知招标人。招标人已收取投标保证金",
+        "的，应当自收到投标人书面撤回通知之日起 5 日内退还。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.3",
+      "excerpt": "4.2.3 投标人撤回已递交的投标文件，应当书面通知招标人。招标人已收取投标保证金",
+      "has_scoring_params": false,
+      "id": "REQ-0219",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.4 投标人在规定的投标截止时间后，不得在投标有效期内撤销其投标。否则招标人",
+        "有权不退还其投标保证金。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.4",
+      "excerpt": "4.2.4 投标人在规定的投标截止时间后，不得在投标有效期内撤销其投标。否则招标人",
+      "has_scoring_params": false,
+      "id": "REQ-0220",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5 5．开标"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.5",
+      "excerpt": "1.5 5．开标",
+      "has_scoring_params": false,
+      "id": "REQ-0221",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.1 开标时间和地点",
+        "招标人将按照投标人须知前附表规定的时间和地点公开开标，参加开标的投标人代表应当",
+        "签名报到，以证明其出席开标。开标时间和投标截止时间应当为同一时间。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.1",
+      "excerpt": "5.1 开标时间和地点",
+      "has_scoring_params": false,
+      "id": "REQ-0222",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2 开标程序"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.2",
+      "excerpt": "5.2 开标程序",
+      "has_scoring_params": false,
+      "id": "REQ-0223",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.1 开标会议由招标人或者其委托的招标代理机构组织并主持，邀请所有的投标人或",
+        "者其代表出席。投标人代表或者招标人委托的公证机构对投标文件密封性进行检查。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.1",
+      "excerpt": "5.2.1 开标会议由招标人或者其委托的招标代理机构组织并主持，邀请所有的投标人或",
+      "has_scoring_params": false,
+      "id": "REQ-0224",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.2 招标人在投标文件递交截止时间前收到的所有投标文件在开标时都应当当众予以",
+        "拆封、宣读，但按照招标文件规定递交合格的书面撤回通知的投标文件不予开封。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.2",
+      "excerpt": "5.2.2 招标人在投标文件递交截止时间前收到的所有投标文件在开标时都应当当众予以",
+      "has_scoring_params": false,
+      "id": "REQ-0225",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.3 开标时，招标人应当当众宣布参加本项目招标的投标人个数及投标文件的密封情",
+        "况，并宣读收到的所有未撤回的投标文件的“投标一览表”中的内容。“投标一览表”一般包",
+        "括：投标人名称、投标总报价、交货期、投标保证金以及招标文件中规定的其他内容。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.3",
+      "excerpt": "5.2.3 开标时，招标人应当当众宣布参加本项目招标的投标人个数及投标文件的密封情",
+      "has_scoring_params": false,
+      "id": "REQ-0226",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.4 开标内容填写在“开标记录表”中，由唱标人、记录人、投标人代表、监督人签",
+        "字确认，存档备查。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.4",
+      "excerpt": "5.2.4 开标内容填写在“开标记录表”中，由唱标人、记录人、投标人代表、监督人签",
+      "has_scoring_params": false,
+      "id": "REQ-0227",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3 异议"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.3",
+      "excerpt": "5.3 异议",
+      "has_scoring_params": false,
+      "id": "REQ-0228",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3.1 投标人对开标有异议的，应当在开标现场提出，招标人应当当场作出答复，并制",
+        "作记录。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.3.1",
+      "excerpt": "5.3.1 投标人对开标有异议的，应当在开标现场提出，招标人应当当场作出答复，并制",
+      "has_scoring_params": false,
+      "id": "REQ-0229",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3.2 投标人认为存在低于成本价投标情形的，可以在开标现场提出异议，并在评标完",
+        "成前向招标人递交书面材料，招标人应当及时将书面材料转交给评标委员会。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.3.2",
+      "excerpt": "5.3.2 投标人认为存在低于成本价投标情形的，可以在开标现场提出异议，并在评标完",
+      "has_scoring_params": false,
+      "id": "REQ-0230",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.4 电子招标开标的其他要求及异常处理",
+        "招标人采用电子招标投标方式的，开标的其他要求及异常处理方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "5.4",
+      "excerpt": "5.4 电子招标开标的其他要求及异常处理",
+      "has_scoring_params": false,
+      "id": "REQ-0231",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.6 6．评标"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.6",
+      "excerpt": "1.6 6．评标",
+      "has_scoring_params": false,
+      "id": "REQ-0232",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1 评标委员会"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.1",
+      "excerpt": "6.1 评标委员会",
+      "has_scoring_params": false,
+      "id": "REQ-0233",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.1 评标由依法组建的评标委员会负责，具体人数见投标人须知前附表。依法必须进",
+        "行招标的通信工程建设项目，评标委员会的专家应当从通信工程建设项目评标专家库内相关专",
+        "业的专家名单中采取随机抽取方式确定。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.1.1",
+      "excerpt": "6.1.1 评标由依法组建的评标委员会负责，具体人数见投标人须知前附表。依法必须进",
+      "has_scoring_params": false,
+      "id": "REQ-0234",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.2 评标期间，任何单位和个人不得非法干预或者影响评标的过程和结果。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.1.2",
+      "excerpt": "6.1.2 评标期间，任何单位和个人不得非法干预或者影响评标的过程和结果。",
+      "has_scoring_params": false,
+      "id": "REQ-0235",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.3 评标委员会成员名单在中标结果确定前保密。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.1.3",
+      "excerpt": "6.1.3 评标委员会成员名单在中标结果确定前保密。",
+      "has_scoring_params": false,
+      "id": "REQ-0236",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2 评标原则"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.2",
+      "excerpt": "6.2 评标原则",
+      "has_scoring_params": false,
+      "id": "REQ-0237",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2.1 评标活动遵循公平、公正、科学和择优的原则。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.2.1",
+      "excerpt": "6.2.1 评标活动遵循公平、公正、科学和择优的原则。",
+      "has_scoring_params": false,
+      "id": "REQ-0238",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2.2 评标委员会按照第三章“评标办法”规定的方法、评审因素、标准和程序对投标",
+        "文件进行评审。第三章“评标办法”没有规定的方法、评审因素和标准，不得作为评标依据。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.2.2",
+      "excerpt": "6.2.2 评标委员会按照第三章“评标办法”规定的方法、评审因素、标准和程序对投标",
+      "has_scoring_params": false,
+      "id": "REQ-0239",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3 评标方法"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.3",
+      "excerpt": "6.3 评标方法",
+      "has_scoring_params": false,
+      "id": "REQ-0240",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3.1 招标文件中详细载明下述评标方法之一作为本项目评标所采用的评标方法。评标",
+        "方法见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.3.1",
+      "excerpt": "6.3.1 招标文件中详细载明下述评标方法之一作为本项目评标所采用的评标方法。评标",
+      "has_scoring_params": false,
+      "id": "REQ-0241",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3.2 采用经评审的最低投标价法的，能够满足招标文件的实质性要求，并且经评审的",
+        "最低投标价的投标，应当推荐为中标候选人，但是价格低于成本的除外。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.3.2",
+      "excerpt": "6.3.2 采用经评审的最低投标价法的，能够满足招标文件的实质性要求，并且经评审的",
+      "has_scoring_params": false,
+      "id": "REQ-0242",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3.3 法律、法规允许的其他评标方法。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.3.3",
+      "excerpt": "6.3.3 法律、法规允许的其他评标方法。",
+      "has_scoring_params": false,
+      "id": "REQ-0243",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.4 中标候选人推荐原则",
+        "评标委员会应当根据《招标投标法》《实施条例》和《管理办法》的有关规定推荐中标",
+        "候选人，具体推荐原则见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.4",
+      "excerpt": "6.4 中标候选人推荐原则",
+      "has_scoring_params": false,
+      "id": "REQ-0244",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.5 评标报告",
+        "评标完成后，评标委员会应当根据《招标投标法》《实施条例》和《管理办法》的有关规",
+        "定及时向招标人提交评标报告和中标候选人名单。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "6.5",
+      "excerpt": "6.5 评标报告",
+      "has_scoring_params": false,
+      "id": "REQ-0245",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7 7．中标"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.7",
+      "excerpt": "1.7 7．中标",
+      "has_scoring_params": false,
+      "id": "REQ-0246",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1 中标候选人公示"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.1",
+      "excerpt": "7.1 中标候选人公示",
+      "has_scoring_params": false,
+      "id": "REQ-0247",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.1 依法必须进行招标的通信工程建设项目，采用公开招标方式的，招标人在收到评",
+        "标报告之日起 3 日内在“资格预审公告”或者“招标公告”发布媒介公示全部中标候选人，公",
+        "示期不少于 3 日。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": "7.1.1",
+      "excerpt": "7.1.1 依法必须进行招标的通信工程建设项目，采用公开招标方式的，招标人在收到评",
+      "has_scoring_params": false,
+      "id": "REQ-0248",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.2 依法必须进行招标的通信工程建设项目，采用邀请招标方式的，招标人在收到评",
+        "标报告之日起 3 日内在通信工程建设项目招标投标管理信息平台公示全部中标候选人，公示期",
+        "不少于 3 日。其他公示媒介见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.1.2",
+      "excerpt": "7.1.2 依法必须进行招标的通信工程建设项目，采用邀请招标方式的，招标人在收到评",
+      "has_scoring_params": false,
+      "id": "REQ-0249",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.3 投标人或者其他利害关系人对依法必须进行招标项目的评标结果有异议的，应当",
+        "在中标候选人公示期间提出。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.1.3",
+      "excerpt": "7.1.3 投标人或者其他利害关系人对依法必须进行招标项目的评标结果有异议的，应当",
+      "has_scoring_params": false,
+      "id": "REQ-0250",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2 确定中标人"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.2",
+      "excerpt": "7.2 确定中标人",
+      "has_scoring_params": false,
+      "id": "REQ-0251",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.1 除投标人须知前附表规定评标委员会直接确定中标人外，招标人依据评标委员会",
+        "推荐的中标候选人确定中标人，中标人数量见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.2.1",
+      "excerpt": "7.2.1 除投标人须知前附表规定评标委员会直接确定中标人外，招标人依据评标委员会",
+      "has_scoring_params": false,
+      "id": "REQ-0252",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.2 招标人根据评标委员会推荐的中标候选人名单排序依次确定中标人，具体中标原",
+        "则见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.2.2",
+      "excerpt": "7.2.2 招标人根据评标委员会推荐的中标候选人名单排序依次确定中标人，具体中标原",
+      "has_scoring_params": false,
+      "id": "REQ-0253",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.3 在签订合同之前，中标人放弃中标或者不能履行合同的，招标人可以按照评标委",
+        "员会提出的中标候选人名单排序依次确定其他中标候选人为中标人，也可以重新招标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.2.3",
+      "excerpt": "7.2.3 在签订合同之前，中标人放弃中标或者不能履行合同的，招标人可以按照评标委",
+      "has_scoring_params": false,
+      "id": "REQ-0254",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3 中标通知"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.3",
+      "excerpt": "7.3 中标通知",
+      "has_scoring_params": false,
+      "id": "REQ-0255",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.1 在中标通知书发出前，中标候选人的经营、财务状况发生较大变化或者存在违法",
+        "行为，可能影响其履约能力的，投标人应当主动告知招标人。招标人认为可能影响其履约能力",
+        "的，应当在发出中标通知书前由原评标委员会按照招标文件规定的标准和方法审查确认。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.1",
+      "excerpt": "7.3.1 在中标通知书发出前，中标候选人的经营、财务状况发生较大变化或者存在违法",
+      "has_scoring_params": false,
+      "id": "REQ-0256",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.2 中标人确定后，招标人应当自行或者委托招标代理机构向中标人发出中标通知书",
+        "，同时通知未中标人。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.2",
+      "excerpt": "7.3.2 中标人确定后，招标人应当自行或者委托招标代理机构向中标人发出中标通知书",
+      "has_scoring_params": false,
+      "id": "REQ-0257",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.3 中标通知书是招标投标档案和合同的组成部分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.3",
+      "excerpt": "7.3.3 中标通知书是招标投标档案和合同的组成部分。",
+      "has_scoring_params": false,
+      "id": "REQ-0258",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.4 中标通知书对招标人和中标人具有法律约束力。中标通知书发出后，招标人改变",
+        "中标结果或者中标人放弃中标的，应当承担法律责任。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.4",
+      "excerpt": "7.3.4 中标通知书对招标人和中标人具有法律约束力。中标通知书发出后，招标人改变",
+      "has_scoring_params": false,
+      "id": "REQ-0259",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8 8．合同签订"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.8",
+      "excerpt": "1.8 8．合同签订",
+      "has_scoring_params": false,
+      "id": "REQ-0260",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1 履约保证金"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8.1",
+      "excerpt": "8.1 履约保证金",
+      "has_scoring_params": false,
+      "id": "REQ-0261",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1.1 在签订合同前，中标人应当按照投标人须知前附表中规定的履约保证金的金额和",
+        "形式向招标人递交履约保证金。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8.1.1",
+      "excerpt": "8.1.1 在签订合同前，中标人应当按照投标人须知前附表中规定的履约保证金的金额和",
+      "has_scoring_params": false,
+      "id": "REQ-0262",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1.2 中标人不能按照招标文件要求递交履约担保的，视为放弃中标，其投标保证金不",
+        "予退还，给招标人造成的损失超过投标保证金数额的，中标人还应当对超过部分予以赔偿。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8.1.2",
+      "excerpt": "8.1.2 中标人不能按照招标文件要求递交履约担保的，视为放弃中标，其投标保证金不",
+      "has_scoring_params": false,
+      "id": "REQ-0263",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.2 合同签订"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8.2",
+      "excerpt": "8.2 合同签订",
+      "has_scoring_params": false,
+      "id": "REQ-0264",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.2.1 招标人和中标人应当自中标通知书发出之日起 30 日内，根据招标文件和中标人的",
+        "投标文件订立书面合同。招标人和中标人不得订立背离合同实质性内容的其他协议。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8.2.1",
+      "excerpt": "8.2.1 招标人和中标人应当自中标通知书发出之日起 30 日内，根据招标文件和中标人的",
+      "has_scoring_params": false,
+      "id": "REQ-0265",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.2.2 中标人无正当理由拒签合同的，招标人取消其中标资格，其投标保证金不予退还",
+        "；给招标人造成的损失超过投标保证金数额的，中标人还应当对超过部分予以赔偿。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "8.2.2",
+      "excerpt": "8.2.2 中标人无正当理由拒签合同的，招标人取消其中标资格，其投标保证金不予退还",
+      "has_scoring_params": false,
+      "id": "REQ-0266",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9 9．招标代理服务费",
+        "中标人应当按照招标文件规定交纳招标代理服务费，招标人和招标代理机构另有约定的从",
+        "其约定。招标代理服务费的金额、交纳方式和时限见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.9",
+      "excerpt": "1.9 9．招标代理服务费",
+      "has_scoring_params": false,
+      "id": "REQ-0267",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.10 10．纪律和监督"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.10",
+      "excerpt": "1.10 10．纪律和监督",
+      "has_scoring_params": false,
+      "id": "REQ-0268",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.1 对招标人的纪律要求",
+        "招标人不得泄露招标投标活动中应当保密的情况和资料，不得与投标人串通损害国家利益",
+        "、社会公共利益或者他人合法权益。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "10.1",
+      "excerpt": "10.1 对招标人的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0269",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.2 对投标人的纪律要求",
+        "投标人不得相互串通投标或者与招标人串通投标，不得向招标人或者评标委员会成员行贿",
+        "谋取中标，不得以他人名义投标或者以其他方式弄虚作假骗取中标；投标人不得以任何方式干",
+        "扰、影响评标工作。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "10.2",
+      "excerpt": "10.2 对投标人的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0270",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.3 对评标委员会成员的纪律要求",
+        "评标委员会成员不得收受他人的财物或者其他好处，不得向他人透露对投标文件的评审和",
+        "比较、中标候选人的推荐情况以及评标有关的其他情况。在评标活动中，评标委员会成员应当",
+        "客观、公正地履行职责，遵守职业道德，不得擅离职守，影响评标程序正常进行，不得使用第",
+        "三章“评标办法”没有规定的评审因素和标准进行评标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "10.3",
+      "excerpt": "10.3 对评标委员会成员的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0271",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.4 对与评标活动有关的工作人员的纪律要求",
+        "与评标活动有关的工作人员不得收受他人的财物或者其他好处，不得向他人透露对投标文",
+        "件的评审和比较、中标候选人的推荐情况以及评标有关的其他情况。在评标活动中，与评标活",
+        "动有关的工作人员不得擅离职守，影响评标程序正常进行。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "10.4",
+      "excerpt": "10.4 对与评标活动有关的工作人员的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0272",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.5 投诉",
+        "投标人或者其他利害关系人认为招标投标活动不符合法律、法规规定的，可以自知道或应",
+        "当知道之日起 10 日内向有关行政监督部门投诉。投诉应当有明确的请求和必要的证明材料。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "10.5",
+      "excerpt": "10.5 投诉",
+      "has_scoring_params": false,
+      "id": "REQ-0273",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.11 11．需要补充的其他内容",
+        "需要补充的其他内容：见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "1.11",
+      "excerpt": "1.11 11．需要补充的其他内容",
+      "has_scoring_params": false,
+      "id": "REQ-0274",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "评标价格等于评标基准价的，其价格得分",
+        "为满分，其他投标人的价格得分根据评标",
+        "价格与评标基准价的偏离度计算。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "评标价格等于评标基准价的，其价格得分",
+      "has_scoring_params": false,
+      "id": "REQ-0275",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "F：价格得分；D1：评标价格；D：评标基",
+        "准价；E：减分系数=1；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "F：价格得分；D1：评标价格；D：评标基",
+      "has_scoring_params": false,
+      "id": "REQ-0276",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）评标基准价计算："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "（1）评标基准价计算：",
+      "has_scoring_params": false,
+      "id": "REQ-0277",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1）有效投标人数量≤6，D=有效投标人评标",
+        "价格的算术平均值×K；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "1）有效投标人数量≤6，D=有效投标人评标",
+      "has_scoring_params": false,
+      "id": "REQ-0278",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2",
+        "标准 标人数/6 后向下取整）个最高有效评标价",
+        "格和最低有效评标价格。D=最终剩余有效",
+        "价格 价格评审 70",
+        "投标人评标价格的算术平均值×K。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2.2",
+      "excerpt": "3.2.2",
+      "has_scoring_params": false,
+      "id": "REQ-0279",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "以最低有效投标报价作为评标基准价，有",
+        "效投标报价等于评标基准价得 100 分，其",
+        "他有效投标报价与评标基准价相比，每上",
+        "23/32",
+        "浮 1%扣 1 分，得分计算公式为 100-(报价-",
+        "评标基准价)/评标基准价*100*1，线性得分",
+        "，保留 2 位小数（四舍五入），扣完为止",
+        "。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "以最低有效投标报价作为评标基准价，有",
+      "has_scoring_params": false,
+      "id": "REQ-0280",
+      "score": 100.0,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "23/32",
+        "浮 1%扣 1 分，得分计算公式为 100-(报价-",
+        "评标基准价)/评标基准价*100*1，线性得分",
+        "，保留 2 位小数（四舍五入），扣完为止",
+        "。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "23/32",
+      "has_scoring_params": false,
+      "id": "REQ-0281",
+      "score": 1.0,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.2. 评分计算",
+        "司负面行为处罚中的要求（如有）扣分后的分数为最终综合得分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3.2",
+      "excerpt": "3.3.2. 评分计算",
+      "has_scoring_params": false,
+      "id": "REQ-0282",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.4 人推荐原 详见第二章投标人须知前附表 6.4",
+        "则",
+        "增值税税率调整评审方法按以下三种情况进行价格调整："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3.4",
+      "excerpt": "3.3.4 人推荐原 详见第二章投标人须知前附表 6.4",
+      "has_scoring_params": false,
+      "id": "REQ-0283",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5 下价格评",
+        "③同一应答人分项报价存在多个税率时：评审价格=分项 1 的该应答人不",
+        "审的调整",
+        "含税价格*（1+[max(所有应答人的货物/服务税率)-该应答人税率]*12%）",
+        "+分项 2 的该应答人不含税价格*（1+[max(所有应答人的货物/服务税率)-",
+        "该应答人税率]*12%）+…+分项 n 的该应答人不含税价格*（1+[max(所有",
+        "应答人的货物/服务税率)-该应答人税率]*12%）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5",
+      "excerpt": "3.5 下价格评",
+      "has_scoring_params": false,
+      "id": "REQ-0284",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "初步评审办法",
+        "序号 评审大类 二级评审子类 主要内容",
+        "与营业执照、资质证书或其他组织证明一致"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "初步评审办法",
+      "has_scoring_params": false,
+      "id": "REQ-0285",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7 商务实质性条款",
+        "决投标的关键条款）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "7 商务实质性条款",
+      "has_scoring_params": false,
+      "id": "REQ-0286",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8 技术实质性条款",
+        "决投标的关键条款）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "8 技术实质性条款",
+      "has_scoring_params": false,
+      "id": "REQ-0287",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "9 负面行为",
+        "负面行为供应商。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "9 负面行为",
+      "has_scoring_params": false,
+      "id": "REQ-0288",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "串通投标行为认 投标人不存在串通投标行为，认定规则包括",
+        "10",
+        "定规则 但不限于招标文件及法律法规相关规定。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "串通投标行为认 投标人不存在串通投标行为，认定规则包括",
+      "has_scoring_params": false,
+      "id": "REQ-0289",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "弄虚作假行为认"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "弄虚作假行为认",
+      "has_scoring_params": false,
+      "id": "REQ-0290",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "11 投标人提供材料是否不存在弄虚作假。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "11 投标人提供材料是否不存在弄虚作假。",
+      "has_scoring_params": false,
+      "id": "REQ-0291",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "13 其他实质性要求 符合招标文件规定的其他实质性要求。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "13 其他实质性要求 符合招标文件规定的其他实质性要求。",
+      "has_scoring_params": false,
+      "id": "REQ-0292",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "14 经营情况承诺函",
+        "形的应答将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "14 经营情况承诺函",
+      "has_scoring_params": false,
+      "id": "REQ-0293",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "16 基本要求 续的法人或非法人组织。（提供清晰、完整",
+        "、有效的中华人民共和国境内行政管理部门",
+        "登记的主体资格证扫描件。）",
+        "提供至少 1 份 2023 年 1 月 1 日至本次项目发",
+        "布首次公告为止，投标人签订的合同作为业",
+        "绩证明材料，合同内容均须包含空调群控类",
+        "系统，累计合同含税总金额不低于 150 万元",
+        "。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "16 基本要求 续的法人或非法人组织。（提供清晰、完整",
+      "has_scoring_params": false,
+      "id": "REQ-0294",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "资格审查",
+        "同对应的订单累计含税金额为准（订单内容",
+        "与合同内容一致）；若该合同既无含税总金",
+        "额也无订单，以合同主体双方签署并加盖公",
+        "章的项目证明材料为准（此证明材料应体现",
+        "项目执行内容须与合同内容一致，且有执行",
+        "含税总金额）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "资格审查",
+      "has_scoring_params": false,
+      "id": "REQ-0295",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "18 联合体 不接受联合体投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "18 联合体 不接受联合体投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0296",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "19 代理商 件。一个制造商对同一品牌同一型号的货物",
+        "，仅能委托一个代理商参加投标，不允许同",
+        "一品牌同一型号的货物制造商与代理商同时",
+        "投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "19 代理商 件。一个制造商对同一品牌同一型号的货物",
+      "has_scoring_params": false,
+      "id": "REQ-0297",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）供货安装、调试、现网保护各环节方案完整规范，绿",
+        "技术方",
+        "色环保各项均有相关证明支撑，可操作性强，得 11-15 分；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "（1）供货安装、调试、现网保护各环节方案完整规范，绿",
+      "has_scoring_params": false,
+      "id": "REQ-0298",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）供货安装、调试、现网保护各环节方案基本齐全但细",
+        "分）",
+        "节不足，绿色环保仅定性描述无证明支撑，可操作性较强，",
+        "得 5-10 分；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "（2）供货安装、调试、现网保护各环节方案基本齐全但细",
+      "has_scoring_params": false,
+      "id": "REQ-0299",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）供货安装、调试、现网保护各环节方案内容不完整、",
+        "绿色环保描述简单，可操作性一般，得 1-4 分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "（3）供货安装、调试、现网保护各环节方案内容不完整、",
+      "has_scoring_params": false,
+      "id": "REQ-0300",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（4）未提供方案，得 0 分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": null,
+      "excerpt": "（4）未提供方案，得 0 分。",
+      "has_scoring_params": false,
+      "id": "REQ-0301",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1 初步评审标准",
+        "初步评审标准：见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "2.1",
+      "excerpt": "2.1 初步评审标准",
+      "has_scoring_params": false,
+      "id": "REQ-0302",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2 详细评审标准",
+        "详细评审标准：见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "2.2",
+      "excerpt": "2.2 详细评审标准",
+      "has_scoring_params": false,
+      "id": "REQ-0303",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1 初步评审"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.1",
+      "excerpt": "3.1 初步评审",
+      "has_scoring_params": false,
+      "id": "REQ-0304",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.1 评标委员会根据本章第 2.1 款规定的标准对投标文件进行初步评审。有一项不符",
+        "合评审标准的，评标委员会应当否决其投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.1",
+      "excerpt": "3.1.1 评标委员会根据本章第 2.1 款规定的标准对投标文件进行初步评审。有一项不符",
+      "has_scoring_params": false,
+      "id": "REQ-0305",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.2 投标人有以下情形之一的，评标委员会应当否决其投标："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.2",
+      "excerpt": "3.1.2 投标人有以下情形之一的，评标委员会应当否决其投标：",
+      "has_scoring_params": false,
+      "id": "REQ-0306",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）第二章“投标人须知”第 1.8 款规定的任何一种情形的；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）第二章“投标人须知”第 1.8 款规定的任何一种情形的；",
+      "has_scoring_params": false,
+      "id": "REQ-0307",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（4）允许联合体投标的，投标联合体没有递交共同投标协议；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（4）允许联合体投标的，投标联合体没有递交共同投标协议；",
+      "has_scoring_params": false,
+      "id": "REQ-0308",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（5）投标人不符合国家或者招标文件规定的资格条件；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（5）投标人不符合国家或者招标文件规定的资格条件；",
+      "has_scoring_params": false,
+      "id": "REQ-0309",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（6）同一投标人递交两个以上不同的投标文件或者投标报价，但招标文件要求递交备选",
+        "投标的除外；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（6）同一投标人递交两个以上不同的投标文件或者投标报价，但招标文件要求递交备选",
+      "has_scoring_params": false,
+      "id": "REQ-0310",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（7）投标报价低于成本或者高于招标文件设定的最高投标限价；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（7）投标报价低于成本或者高于招标文件设定的最高投标限价；",
+      "has_scoring_params": false,
+      "id": "REQ-0311",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（8）投标文件没有对招标文件的实质性要求和条件作出响应；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（8）投标文件没有对招标文件的实质性要求和条件作出响应；",
+      "has_scoring_params": false,
+      "id": "REQ-0312",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（9）投标人有串通投标、弄虚作假、行贿等违法行为；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（9）投标人有串通投标、弄虚作假、行贿等违法行为；",
+      "has_scoring_params": false,
+      "id": "REQ-0313",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（10）投标人以他人名义投标；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（10）投标人以他人名义投标；",
+      "has_scoring_params": false,
+      "id": "REQ-0314",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（11）没有按照招标文件要求提供投标担保或者所提供的投标担保有瑕疵；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（11）没有按照招标文件要求提供投标担保或者所提供的投标担保有瑕疵；",
+      "has_scoring_params": false,
+      "id": "REQ-0315",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（12）投标文件载明的招标项目完成期限超过招标文件规定的期限；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（12）投标文件载明的招标项目完成期限超过招标文件规定的期限；",
+      "has_scoring_params": false,
+      "id": "REQ-0316",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（13）明显不符合技术规格、技术标准的要求；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（13）明显不符合技术规格、技术标准的要求；",
+      "has_scoring_params": false,
+      "id": "REQ-0317",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（14）投标文件载明的货物包装方式、检验标准和方法等不符合招标文件的要求；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（14）投标文件载明的货物包装方式、检验标准和方法等不符合招标文件的要求；",
+      "has_scoring_params": false,
+      "id": "REQ-0318",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（15）投标文件附有招标人不能接受的条件；"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（15）投标文件附有招标人不能接受的条件；",
+      "has_scoring_params": false,
+      "id": "REQ-0319",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（16）不符合招标文件中规定的其他实质性要求。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（16）不符合招标文件中规定的其他实质性要求。",
+      "has_scoring_params": false,
+      "id": "REQ-0320",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.3 评标过程中，评标委员会收到低于成本价投标的书面质疑材料、发现投标人的综",
+        "合报价明显低于其他投标报价或者设有标底时明显低于标底，认为投标报价可能低于其个别成",
+        "本的，应当书面要求该投标人做出书面说明并提供相关证明材料。投标人不能合理说明或者不",
+        "能提供相应证明材料的，由评标委员会认定该投标人以低于成本报价竞标，评标委员会应当否",
+        "决其投标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.3",
+      "excerpt": "3.1.3 评标过程中，评标委员会收到低于成本价投标的书面质疑材料、发现投标人的综",
+      "has_scoring_params": false,
+      "id": "REQ-0321",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.4 投标报价有算术错误的，评标委员会按照以下原则对投标报价进行修正，修正的",
+        "价格经投标人书面确认后具有约束力。投标人不接受修正价格的，评标委员会应当否决其投",
+        "标。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.4",
+      "excerpt": "3.1.4 投标报价有算术错误的，评标委员会按照以下原则对投标报价进行修正，修正的",
+      "has_scoring_params": false,
+      "id": "REQ-0322",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2 详细评审"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2",
+      "excerpt": "3.2 详细评审",
+      "has_scoring_params": false,
+      "id": "REQ-0323",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.1 评标委员会按照本章第 2.2 款规定的评审因素和量化标准进行评分，并计算出综",
+        "合评估得分。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2.1",
+      "excerpt": "3.2.1 评标委员会按照本章第 2.2 款规定的评审因素和量化标准进行评分，并计算出综",
+      "has_scoring_params": false,
+      "id": "REQ-0324",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2 评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规",
+        "定的，见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2.2",
+      "excerpt": "3.2.2 评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规",
+      "has_scoring_params": false,
+      "id": "REQ-0325",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3 投标文件的澄清"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3",
+      "excerpt": "3.3 投标文件的澄清",
+      "has_scoring_params": false,
+      "id": "REQ-0326",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.1 在评标过程中，评标委员会应当以书面形式要求投标人对所递交的投标文件中不",
+        "明确的内容进行书面澄清、说明或者对投标文件中的细微偏差进行补正。评标委员会不接受投",
+        "标人主动提出的澄清、说明或者补正。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.1",
+      "excerpt": "3.3.1 在评标过程中，评标委员会应当以书面形式要求投标人对所递交的投标文件中不",
+      "has_scoring_params": false,
+      "id": "REQ-0327",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.2 细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者",
+        "提供了不完整的技术信息和数据等情况，并且补正这些遗漏或者不完整不会对其他投标人造成",
+        "不公平的结果。细微偏差不影响投标文件的有效性。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3.2",
+      "excerpt": "3.3.2 细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者",
+      "has_scoring_params": false,
+      "id": "REQ-0328",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.3 澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3.3",
+      "excerpt": "3.3.3 澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。",
+      "has_scoring_params": false,
+      "id": "REQ-0329",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.4 评标委员会对投标人递交的澄清、说明或者补正有疑问的，可以要求投标人进一",
+        "步澄清、说明或者补正，直至满足评标委员会的要求。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.4",
+      "excerpt": "3.3.4 评标委员会对投标人递交的澄清、说明或者补正有疑问的，可以要求投标人进一",
+      "has_scoring_params": false,
+      "id": "REQ-0330",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.5 评标委员会必要时可以要求投标人递交有关证明和证件的原件，以便核验。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.5",
+      "excerpt": "3.3.5 评标委员会必要时可以要求投标人递交有关证明和证件的原件，以便核验。",
+      "has_scoring_params": false,
+      "id": "REQ-0331",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4 中标候选人推荐原则"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.4",
+      "excerpt": "3.4 中标候选人推荐原则",
+      "has_scoring_params": false,
+      "id": "REQ-0332",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.1 除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委员会",
+        "按照综合评分由高到低的顺序推荐中标候选人。综合评分相同的，处理原则见评标办法前附表",
+        "。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.4.1",
+      "excerpt": "3.4.1 除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委员会",
+      "has_scoring_params": false,
+      "id": "REQ-0333",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.2 中标候选人推荐原则见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.4.2",
+      "excerpt": "3.4.2 中标候选人推荐原则见评标办法前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0334",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5 评标结果"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5",
+      "excerpt": "3.5 评标结果",
+      "has_scoring_params": false,
+      "id": "REQ-0335",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.1 评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审",
+        "的，应当形成统一、完整的评标报告。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5.1",
+      "excerpt": "3.5.1 评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审",
+      "has_scoring_params": false,
+      "id": "REQ-0336",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.2 评标报告应当包括下列内容："
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5.2",
+      "excerpt": "3.5.2 评标报告应当包括下列内容：",
+      "has_scoring_params": false,
+      "id": "REQ-0337",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）★投标人须通过“辅助标书编制-投标工具”进行电子投标文件的编制和递交，如未使用",
+        "上述工具递交全部电子投标/应答文件，则投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）★投标人须通过“辅助标书编制-投标工具”进行电子投标文件的编制和递交，如未使用",
+      "has_scoring_params": false,
+      "id": "REQ-0338",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "15 投标保证金的金额:30000 元/投标人"
+      ],
+      "anchor_files": [
+        "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf"
+      ],
+      "category": "商务要求",
+      "clause_no": "值-投标保证金",
+      "excerpt": "15 投标保证金的金额:30000 元/投标人",
+      "has_scoring_params": false,
+      "id": "REQ-0339",
+      "score": null,
+      "source_file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "substantive": false
+    }
+  ],
+  "stopped_at": "import_extract_face",
+  "waived_failed_files": [],
+  "ws": "/home/z/my-project/repo/artifacts/multifile-acceptance-20261118/cqyd"
+}

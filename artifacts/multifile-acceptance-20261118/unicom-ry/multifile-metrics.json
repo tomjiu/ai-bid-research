@@ -1,0 +1,6208 @@
+{
+  "addendum_gate": {
+    "has_addendum_file": false
+  },
+  "draft": {
+    "generator": "mock",
+    "input_integrity": {
+      "status": "RESTRICTED",
+      "waived_files": [
+        {
+          "file_id": "TF-0004",
+          "name": "B-unicom-ry-详细评审表.xlsx",
+          "readiness": "FAILED",
+          "reason": "engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+        }
+      ]
+    },
+    "leaf_stats": [
+      {
+        "citations": 8,
+        "sid": "SEC-0011",
+        "title": "第一章  招标公告（条款 1.1-1.4.1）",
+        "words": 1366
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0012",
+        "title": "第一章  招标公告（条款 1-1.4.2）",
+        "words": 1345
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0013",
+        "title": "第一章  招标公告（条款 1.4.3-4.2）",
+        "words": 1372
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0014",
+        "title": "第一章  招标公告（条款 4.2.1-5.3）",
+        "words": 1392
+      },
+      {
+        "citations": 6,
+        "sid": "SEC-0015",
+        "title": "第一章  招标公告（条款 5.4-7.2）",
+        "words": 1066
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0017",
+        "title": "第二章  投标人须知（条款 1.1-1.5）",
+        "words": 1372
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0018",
+        "title": "第二章  投标人须知（条款 1.5.1-1.9）",
+        "words": 1366
+      },
+      {
+        "citations": 7,
+        "sid": "SEC-0019",
+        "title": "第二章  投标人须知（条款 1.9.1-2.1.1）",
+        "words": 1192
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0021",
+        "title": "第七章  其他（条款 2.1.2-2.3）",
+        "words": 1379
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0022",
+        "title": "第七章  其他（条款 2.4-3.2）",
+        "words": 1358
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0023",
+        "title": "第七章  其他（条款 3.2.2-3.3.5）",
+        "words": 1383
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0024",
+        "title": "第七章  其他（第4组 8条）",
+        "words": 1383
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0025",
+        "title": "第七章  其他（条款 3.6-3.7.2）",
+        "words": 1387
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0026",
+        "title": "第七章  其他（条款 3.7.3-4.1.2）",
+        "words": 1364
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0027",
+        "title": "第七章  其他（条款 4.1.3-4.2.3）",
+        "words": 1364
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0028",
+        "title": "第七章  其他（条款 4.2.4-5.3）",
+        "words": 1358
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0029",
+        "title": "第七章  其他（条款 5.3.1-6.2）",
+        "words": 1345
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0030",
+        "title": "第七章  其他（条款 6.2.1-6.5）",
+        "words": 1375
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0031",
+        "title": "第七章  其他（条款 7.1-7.3）",
+        "words": 1356
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0032",
+        "title": "第七章  其他（条款 7.3.1-8.2）",
+        "words": 1369
+      },
+      {
+        "citations": 7,
+        "sid": "SEC-0033",
+        "title": "第七章  其他（条款 8.2.1-10.5）",
+        "words": 1185
+      },
+      {
+        "citations": 4,
+        "sid": "SEC-0035",
+        "title": "第三章  评标办法（综合评估法）",
+        "words": 711
+      },
+      {
+        "citations": 1,
+        "sid": "SEC-0037",
+        "title": "第六章  投标文件格式",
+        "words": 503
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0039",
+        "title": "资格证明材料响应（第1组 8条）",
+        "words": 1353
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0040",
+        "title": "资格证明材料响应（第2组 8条）",
+        "words": 1372
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0041",
+        "title": "否决情形响应（第1组 8条）",
+        "words": 1496
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0042",
+        "title": "否决情形响应（第2组 8条）",
+        "words": 1375
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0043",
+        "title": "否决情形响应（第3组 8条）",
+        "words": 1346
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0044",
+        "title": "否决情形响应（第4组 8条）",
+        "words": 1356
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0045",
+        "title": "否决情形响应（条款 表-2-表-14）",
+        "words": 1375
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0046",
+        "title": "否决情形响应（第6组 8条）",
+        "words": 1416
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0047",
+        "title": "否决情形响应（第7组 8条）",
+        "words": 1386
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0048",
+        "title": "否决情形响应（第8组 8条）",
+        "words": 1373
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0049",
+        "title": "否决情形响应（第9组 8条）",
+        "words": 1384
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0050",
+        "title": "否决情形响应（第10组 8条）",
+        "words": 1359
+      },
+      {
+        "citations": 9,
+        "sid": "SEC-0051",
+        "title": "否决情形响应（第11组 8条）",
+        "words": 1586
+      },
+      {
+        "citations": 8,
+        "sid": "SEC-0053",
+        "title": "格式要求（条款 1.1-4.3）",
+        "words": 1480
+      },
+      {
+        "citations": 3,
+        "sid": "SEC-0054",
+        "title": "格式要求（条款 5.1-6.2）",
+        "words": 593
+      }
+    ],
+    "leaves": 38,
+    "total_words": 49541
+  },
+  "evidence_binding": {
+    "bind_rejected": 0,
+    "bound_reqs": 104,
+    "open_date_used": "2026-11-15"
+  },
+  "evidence_registered": 3,
+  "extract_conflicts": [],
+  "extract_counts": {
+    "added": 302,
+    "by_category": {
+      "format": 11,
+      "other": 169,
+      "qualification": 16,
+      "scoring": 18,
+      "veto": 88
+    },
+    "total": 302
+  },
+  "extract_merge": {
+    "agent_requirements": 0,
+    "coverage_complete": false,
+    "regex_dropped_covered": 0,
+    "regex_kept_unbacked_requirement": 0,
+    "regex_total": 302,
+    "uncovered_blocks": 984
+  },
+  "extract_missing_sequence": [],
+  "extract_warnings": [
+    "ENGINE_PATH: A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx 经引擎路径解析（已知缺口：嵌套表 mdcore#39 / 域边界 mdcore#40——docs/b3-3-acceptance-report.md §6）",
+    "UNCOVERED_BLOCKS: 984 块未标记（正则已兜底补漏——用 get_coverage_report 查看后 submit_block_marks 补标，重跑 extract 更准）"
+  ],
+  "files": [
+    {
+      "chunks": 984,
+      "kind": "招标文件",
+      "name": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "ocr_blocks": 0,
+      "pages": 0,
+      "parse_status": "Ok",
+      "sha256": "c6e225afd9425256ee890576f3da410195e2ab5311ffc81e44f4b4edb1ec1ac9",
+      "tables": 15
+    },
+    {
+      "chunks": 323,
+      "kind": "附件",
+      "name": "B-unicom-ry-技术规范书.docx",
+      "ocr_blocks": 0,
+      "pages": 0,
+      "parse_status": "Ok",
+      "sha256": "277c2a70e8aef90a7946a997c61be966d5e99c493b3a8806e9c5fc8ca856ae82",
+      "tables": 2
+    },
+    {
+      "chunks": 0,
+      "kind": "评分办法",
+      "name": "B-unicom-ry-详细评审表.xlsx",
+      "ocr_blocks": 0,
+      "pages": 0,
+      "parse_status": "Failed",
+      "sha256": "c6ee8eb61c98d888433ee8b8d8e1e1f7a7da50f50ce22541df87c484e3b63c68",
+      "tables": 0
+    },
+    {
+      "chunks": 33,
+      "kind": "格式模板",
+      "name": "B-unicom-ry-投标一览表.xlsx",
+      "ocr_blocks": 0,
+      "pages": 4,
+      "parse_status": "Ok",
+      "sha256": "96ae879e106ba94dad3f2946f52f43a26b2d520b0c2d8507101f767733e37f68",
+      "tables": 4
+    },
+    {
+      "chunks": 8,
+      "kind": "附件",
+      "name": "EV-01-营业执照.pdf",
+      "ocr_blocks": 0,
+      "pages": 1,
+      "parse_status": "Ok",
+      "sha256": "b1b4811b9c1b96e1bff95a49dcba07434cd391d7939e82b7453d18142b80258c",
+      "tables": 0
+    },
+    {
+      "chunks": 7,
+      "kind": "附件",
+      "name": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+      "ocr_blocks": 0,
+      "pages": 1,
+      "parse_status": "Ok",
+      "sha256": "60a2e9ce86ccab9bb8ad89be98bcfd8e802ee8d9ff6e20ce7ea4f2e23964c7b6",
+      "tables": 0
+    },
+    {
+      "chunks": 6,
+      "kind": "附件",
+      "name": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+      "ocr_blocks": 0,
+      "pages": 1,
+      "parse_status": "Ok",
+      "sha256": "cd8accd98cc7ad32a0ae229ffe6212a764a2018e32fc6c2667fed9b164d2cfd0",
+      "tables": 0
+    }
+  ],
+  "files_planned": 7,
+  "full_chain": true,
+  "id": "unicom-ry",
+  "import_addendum_readiness": {
+    "not_ready": [],
+    "ready": 0,
+    "total": 0
+  },
+  "import_input_integrity": {
+    "complete": false,
+    "restricted": false,
+    "unready": [
+      {
+        "file_id": "TF-0004",
+        "name": "B-unicom-ry-详细评审表.xlsx",
+        "readiness": "FAILED",
+        "reason": "engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+      }
+    ],
+    "waived_unready": []
+  },
+  "import_item_errors": [
+    "B-unicom-ry-详细评审表.xlsx: engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+  ],
+  "import_partial": true,
+  "import_totals": {
+    "chunks": 1361,
+    "files": 7,
+    "parse_failed": 1,
+    "partial": 1
+  },
+  "import_warnings": [
+    "INPUT_FILE_NOT_READY: B-unicom-ry-详细评审表.xlsx 未就绪（engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF）——「已提取出一部分需求」不等于输入完整，起草将被拒；请修复重传，或对本件人工确认后放行（record_addendum_waiver file_id=<本件>——逐件免责，不构成「本项目无补遗」确认）"
+  ],
+  "matrix_rows_pre_bind": 302,
+  "name": "联通软研院国资监管中心研发项目——真实四件套（招标文件+技术规范+详细评审表+投标一览表）",
+  "outline": {
+    "blocking_pre_bind": 104,
+    "quota_leaf_sum": 48000,
+    "quota_target": 48000,
+    "rows": 302,
+    "sections": 45
+  },
+  "project_id": "PRJ-0001",
+  "provenance_samples": [
+    {
+      "anchors": [
+        {
+          "block_idx": 10,
+          "excerpt": "1.1项目概况",
+          "file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+          "kind": "para",
+          "line": null,
+          "locator": "第一章  招标公告",
+          "page": null,
+          "resolved_via": "backfilled"
+        }
+      ],
+      "category": "其他",
+      "clause_no": "1.1",
+      "marked_by": "regex",
+      "next": "锚点带 block_idx——get_block_requirements(block_idx) 反查原文上下文",
+      "project_id": "PRJ-0001",
+      "req_id": "REQ-0001",
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "statement": null,
+      "substantive": false
+    },
+    {
+      "anchors": [
+        {
+          "block_idx": 11,
+          "excerpt": "1.1.1招标编号：2026CUC-RJY-PT0783；",
+          "file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+          "kind": "para",
+          "line": null,
+          "locator": "第一章  招标公告",
+          "page": null,
+          "resolved_via": "backfilled"
+        }
+      ],
+      "category": "其他",
+      "clause_no": "1.1.1",
+      "marked_by": "regex",
+      "next": "锚点带 block_idx——get_block_requirements(block_idx) 反查原文上下文",
+      "project_id": "PRJ-0001",
+      "req_id": "REQ-0002",
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "statement": null,
+      "substantive": false
+    },
+    {
+      "anchors": [
+        {
+          "block_idx": 12,
+          "excerpt": "1.1.2项目性质：服务；",
+          "file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+          "kind": "para",
+          "line": null,
+          "locator": "第一章  招标公告",
+          "page": null,
+          "resolved_via": "backfilled"
+        }
+      ],
+      "category": "其他",
+      "clause_no": "1.1.2",
+      "marked_by": "regex",
+      "next": "锚点带 block_idx——get_block_requirements(block_idx) 反查原文上下文",
+      "project_id": "PRJ-0001",
+      "req_id": "REQ-0003",
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "statement": null,
+      "substantive": false
+    }
+  ],
+  "real": true,
+  "req_count": 302,
+  "reqs_by_file": {
+    "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx": 302
+  },
+  "requirements": [
+    {
+      "anchor_excerpts": [
+        "1.1项目概况"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1",
+      "excerpt": "1.1项目概况",
+      "has_scoring_params": false,
+      "id": "REQ-0001",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.1招标编号：2026CUC-RJY-PT0783；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.1",
+      "excerpt": "1.1.1招标编号：2026CUC-RJY-PT0783；",
+      "has_scoring_params": false,
+      "id": "REQ-0002",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.2项目性质：服务；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.2",
+      "excerpt": "1.1.2项目性质：服务；",
+      "has_scoring_params": false,
+      "id": "REQ-0003",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.3招标方式：公开招标（资格后审）；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.1.3",
+      "excerpt": "1.1.3招标方式：公开招标（资格后审）；",
+      "has_scoring_params": false,
+      "id": "REQ-0004",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.4建设地点：北京市，招标人指定地点；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.4",
+      "excerpt": "1.1.4建设地点：北京市，招标人指定地点；",
+      "has_scoring_params": false,
+      "id": "REQ-0005",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2本项目不划分标段；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.2",
+      "excerpt": "1.2本项目不划分标段；",
+      "has_scoring_params": false,
+      "id": "REQ-0006",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.3采购预算：本项目采购总预算为500万元人民币（不含税），最终结算金额以实际订单为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.3",
+      "excerpt": "1.3采购预算：本项目采购总预算为500万元人民币（不含税），最终结算金额以实际订单为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0007",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4招标内容"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.4",
+      "excerpt": "1.4招标内容",
+      "has_scoring_params": false,
+      "id": "REQ-0008",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4.1建设内容：",
+        "2026年中国联通软研院管理中台国资监管中心研发项目软件开发服务一套，本期工作是支撑国资监管平台业务需求、优化需求以及系统升级改造所做的开发、测试和实施工作，其中主要包括："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.4.1",
+      "excerpt": "1.4.1建设内容：",
+      "has_scoring_params": false,
+      "id": "REQ-0009",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1、根据集团公司的统一规划，对现有的国资监管平台进行改造，升级为穿透式国资监管平台，实现监管业务一站式处理。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1",
+      "excerpt": "1、根据集团公司的统一规划，对现有的国资监管平台进行改造，升级为穿透式国资监管平台，实现监管业务一站式处理。",
+      "has_scoring_params": false,
+      "id": "REQ-0010",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2、建设穿透式监管驾驶舱，完善监管大屏管理框架和大屏运营框架，构建\"1总屏+N个业务领域屏\"风险监管场景体系。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2",
+      "excerpt": "2、建设穿透式监管驾驶舱，完善监管大屏管理框架和大屏运营框架，构建\"1总屏+N个业务领域屏\"风险监管场景体系。",
+      "has_scoring_params": false,
+      "id": "REQ-0011",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3、建设模型中心，统一监管口径与监管语言，实现监管模型从登记到下架的全过程线上管理，为穿透式监管提供标准化、规范化的统一模型底座。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3",
+      "excerpt": "3、建设模型中心，统一监管口径与监管语言，实现监管模型从登记到下架的全过程线上管理，为穿透式监管提供标准化、规范化的统一模型底座。",
+      "has_scoring_params": false,
+      "id": "REQ-0012",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4、建设预警中心，实现监管运行结果统一纳管、统一预警和结果共享共用，推动风险从被动处置向主动预警转变，助力风险早发现、早预警、早处置。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4",
+      "excerpt": "4、建设预警中心，实现监管运行结果统一纳管、统一预警和结果共享共用，推动风险从被动处置向主动预警转变，助力风险早发现、早预警、早处置。",
+      "has_scoring_params": false,
+      "id": "REQ-0013",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5、建设派单中心，建立风险核查标准化处置流程，实现从确认、派单、核查到销号的全流程闭环管理，全面提升预警业务处置效率。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5",
+      "excerpt": "5、建设派单中心，建立风险核查标准化处置流程，实现从确认、派单、核查到销号的全流程闭环管理，全面提升预警业务处置效率。",
+      "has_scoring_params": false,
+      "id": "REQ-0014",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6、建设整改中心，对问题整改业务进行全面纳管，构建标准化问题整改管理流程，实现从整改派单到验收归档的全流程闭环管理。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6",
+      "excerpt": "6、建设整改中心，对问题整改业务进行全面纳管，构建标准化问题整改管理流程，实现从整改派单到验收归档的全流程闭环管理。",
+      "has_scoring_params": false,
+      "id": "REQ-0015",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7、落实国资委监管要求，完成国资委国资监管数据报送采集平台接口适配改造、通道切换相关功能开发，完成新增事项无缝对接。",
+        "具体详见招标文件第五章《技术标准和要求》。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7",
+      "excerpt": "7、落实国资委监管要求，完成国资委国资监管数据报送采集平台接口适配改造、通道切换相关功能开发，完成新增事项无缝对接。",
+      "has_scoring_params": false,
+      "id": "REQ-0016",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4.2技术标准：具体详见招标文件第五章《技术标准和要求》。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.4.2",
+      "excerpt": "1.4.2技术标准：具体详见招标文件第五章《技术标准和要求》。",
+      "has_scoring_params": false,
+      "id": "REQ-0017",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4.3建设工期：自合同签订之日起启动建设，各项需求分阶段上线，2027年8月底月前，完成2026年项目全部上线实施工作。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.4.3",
+      "excerpt": "1.4.3建设工期：自合同签订之日起启动建设，各项需求分阶段上线，2027年8月底月前，完成2026年项目全部上线实施工作。",
+      "has_scoring_params": false,
+      "id": "REQ-0018",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4.4保修期：自最终验收完成之日起至少免费保修1年。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.4.4",
+      "excerpt": "1.4.4保修期：自最终验收完成之日起至少免费保修1年。",
+      "has_scoring_params": false,
+      "id": "REQ-0019",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "※1.5本项目设置最高投标限价，本采购项目以“2026年总需求工作量”为报价模型，最高投标总限价为475万元人民币（不含税），投标人2026年不含税投标总价不得高于最高总限价，否则投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "※1.5本项目设置最高投标限价，本采购项目以“2026年总需求工作量”为报价模型，最高投标总限价为475万元人民币（不含税），投标人2026年不含税投标总价不得高于最高总限价，否则投标将被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0020",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1本项目要求投标人在中华人民共和国境内登记注册的独立法人或其他组织。须提供合法有效的有统一社会信用代码的营业执照扫描件或经有关机关批准的有效执业许可/证照/单位法人证明/登记证书等扫描件。若投标人为分公司，须提供总公司的投标授权函。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "2.1",
+      "excerpt": "2.1本项目要求投标人在中华人民共和国境内登记注册的独立法人或其他组织。须提供合法有效的有统一社会信用代码的营业执照扫描件或经有关机关批准的有效执业许可/证照/单位法人证明/登记证书等扫描件。若投标人为分公司，须提供总公司的投标授权函。",
+      "has_scoring_params": false,
+      "id": "REQ-0021",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2本项目要求投标人满足以下财务要求：投标人须具备开具增值税专用发票的能力。若投标人为增值税一般纳税人，须提供税务局相关网页截图；若投标人为非增值税一般纳税人，须提供可开具增值税专用发票承诺书并加盖公章及已开具的增值税专用发票扫描件。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "2.2",
+      "excerpt": "2.2本项目要求投标人满足以下财务要求：投标人须具备开具增值税专用发票的能力。若投标人为增值税一般纳税人，须提供税务局相关网页截图；若投标人为非增值税一般纳税人，须提供可开具增值税专用发票承诺书并加盖公章及已开具的增值税专用发票扫描件。",
+      "has_scoring_params": false,
+      "id": "REQ-0022",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.3本项目要求投标人具备自 2023年1月1日至招标公告发布之日 以来的相关业绩，应当满足下列要求：须提供2023年1月1日至招标公告发布之日期间与采购内容同类型的IT系统案例3个或以上。须保证上述每个案例合同金额（或同一框架协议下的订单总额）不得低于400万元。上述案例须提供合同扫描件或框架合同及框架订单扫描件关键页，包括但不限于：合同首页、服务内容页、合同大签页、合同金额页，如为框架协议还须"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.3",
+      "excerpt": "2.3本项目要求投标人具备自 2023年1月1日至招标公告发布之日 以来的相关业绩，应当满足下列要求：须提供2023年1月1日至招标公告发布之日期间与采购内容同类型的IT系统案例3个或以上。须保证上述每个案例合同金额（或同一框架协议下的订单总额）不得低于400万元。上述案例须提供合同扫描件或框架合同及框架订单扫描件关键页，包括但不限于：合同首页、服务内容页、合同大签页、合同金额页，如为框架协议还须",
+      "has_scoring_params": false,
+      "id": "REQ-0023",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4本项目要求投标人满足以下信誉要求：具有良好的银行资信和商业信誉："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4",
+      "excerpt": "2.4本项目要求投标人满足以下信誉要求：具有良好的银行资信和商业信誉：",
+      "has_scoring_params": false,
+      "id": "REQ-0024",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）未处于被责令停业，财产被接管，冻结，破产状态，在近三年（2023年01月01日至投标截止日）的经营活动中没有重大违法、违规记录，没有骗取中标和严重违约行为（已被中国联通集团或软研院列入黑名单并被处罚的事项不属于上述情形）。须提供加盖公章的合规经营承诺书；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）未处于被责令停业，财产被接管，冻结，破产状态，在近三年（2023年01月01日至投标截止日）的经营活动中没有重大违法、违规记录，没有骗取中标和严重违约行为（已被中国联通集团或软研院列入黑名单并被处罚的事项不属于上述情形）。须提供加盖公章的合规经营承诺书；",
+      "has_scoring_params": false,
+      "id": "REQ-0025",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）未处于“国家企业信用信息公示系统（www.gsxt.gov.cn）”的“经营异常名录”或“严重违法失信企业名单”禁入期内的；未被“信用中国（www.creditchina.gov.cn）”列入“失信被执行人和重大税收违法失信主体”（已执行完毕或不再执行的除外）。以评标当日核查结果为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）未处于“国家企业信用信息公示系统（www.gsxt.gov.cn）”的“经营异常名录”或“严重违法失信企业名单”禁入期内的；未被“信用中国（www.creditchina.gov.cn）”列入“失信被执行人和重大税收违法失信主体”（已执行完毕或不再执行的除外）。以评标当日核查结果为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0026",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.5本项目 不接受 联合体投标。联合体投标的，应当满足下列要求： / 。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "2.5",
+      "excerpt": "2.5本项目 不接受 联合体投标。联合体投标的，应当满足下列要求： / 。",
+      "has_scoring_params": false,
+      "id": "REQ-0027",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.6其他要求："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.6",
+      "excerpt": "2.6其他要求：",
+      "has_scoring_params": false,
+      "id": "REQ-0028",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）处于禁入期内的中国联通以及软研院黑名单供应商不得参与投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）处于禁入期内的中国联通以及软研院黑名单供应商不得参与投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0029",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3．资格审查方法"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "3．资格审查方法",
+      "has_scoring_params": false,
+      "id": "REQ-0030",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "本项目将进行资格后审，资格审查标准和内容见招标文件第三章“评标办法”，凡未通过资格后审的投标人，其投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "本项目将进行资格后审，资格审查标准和内容见招标文件第三章“评标办法”，凡未通过资格后审的投标人，其投标将被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0031",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1电子招标文件获取"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1",
+      "excerpt": "4.1电子招标文件获取",
+      "has_scoring_params": false,
+      "id": "REQ-0032",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.1招标文件获取时间：2026年10月26日23时00分至2026年11月3日00时00分。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.1",
+      "excerpt": "4.1.1招标文件获取时间：2026年10月26日23时00分至2026年11月3日00时00分。",
+      "has_scoring_params": false,
+      "id": "REQ-0033",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2招标文件获取方式："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2",
+      "excerpt": "4.2招标文件获取方式：",
+      "has_scoring_params": false,
+      "id": "REQ-0034",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.1 有意向的潜在投标人登录网站中国联通智慧供应链-招标采购中心（https://www.cuecp.cn） 获取招标文件，且下载招标文件后才可参与招标。未按照招标公告中规定时间获取招标文件的投标人不能参加招标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.1",
+      "excerpt": "4.2.1 有意向的潜在投标人登录网站中国联通智慧供应链-招标采购中心（https://www.cuecp.cn） 获取招标文件，且下载招标文件后才可参与招标。未按照招标公告中规定时间获取招标文件的投标人不能参加招标。",
+      "has_scoring_params": false,
+      "id": "REQ-0035",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.2 投标人访问中国联通合作方自服务门户（https://www.cuecp.cn）登录后，进入中国联通智慧供应链-招标采购中心，点击“招标项目→寻找项目”，在招标文件售卖时间内，填写并提交购买招标文件申请，选择网上支付。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.2",
+      "excerpt": "4.2.2 投标人访问中国联通合作方自服务门户（https://www.cuecp.cn）登录后，进入中国联通智慧供应链-招标采购中心，点击“招标项目→寻找项目”，在招标文件售卖时间内，填写并提交购买招标文件申请，选择网上支付。",
+      "has_scoring_params": false,
+      "id": "REQ-0036",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.3投标人在招标采购中心上找到要参与的项目，将项目加入到购物车中，选择“网上支付”的方式并进行结算；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.3",
+      "excerpt": "4.2.3投标人在招标采购中心上找到要参与的项目，将项目加入到购物车中，选择“网上支付”的方式并进行结算；",
+      "has_scoring_params": false,
+      "id": "REQ-0037",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.4 支付成功后可直接下载招标文件。",
+        "注：潜在投标人必须接受电子采购流程。凡有意参加本次采购但尚未注册的投标人，应于本公告发布之日起，登录“中国联通合作方自服务门户”（网址：https://www.cuecp.cn）完成注册工作，成为联通系统在册供应商。未注册或系统使用有问题的供应商将无法参与本项目。已注册的供应商，请查验子账户联系人是否设置，数字证书是否购买或过期等问题。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.4",
+      "excerpt": "4.2.4 支付成功后可直接下载招标文件。",
+      "has_scoring_params": false,
+      "id": "REQ-0038",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.3招标文件费用：每套售价300元人民币，售后不退。投标人须通过“沃支付”付款（中国联通智慧供应链-招标采购中心（https://www.cuecp.cn）），通过“沃支付”支付成功后即可下载招标文件。投标人需注意超过文件发售截至时间则不允许提交购买文件的申请或支付文件费用，由此造成的损失由投标方自行承担（招标文件费用发票开具：可关注“普天招标”微信公众可关注“普天招标”微信公众号。点击“招标专",
+        "注：潜在投标人须在购买标书前，开通联通“沃支付”功能，并通过“沃支付”付费购买标书，如未及时办理成功对获取招标文件及投标所产生后果，潜在投标人自行承担相应后果。联通“沃支付”开通操作指南（《中国联通智慧供应链-招标采购中心理机构（商户）在线售标流程指引》），请潜在投标人登录中国联通智慧供应链-招标采购中心https://www.cuecp.cn在下载中心自行下载。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.3",
+      "excerpt": "4.3招标文件费用：每套售价300元人民币，售后不退。投标人须通过“沃支付”付款（中国联通智慧供应链-招标采购中心（https://www.cuecp.cn）），通过“沃支付”支付成功后即可下载招标文件。投标人需注意超过文件发售截至时间则不允许提交购买文件的申请或支付文件费用，由此造成的损失由投标方自行承担（招标文件费用发票开具：可关注“普天招标”微信公众可关注“普天招标”微信公众号。点击“招标专",
+      "has_scoring_params": false,
+      "id": "REQ-0039",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.1 纸质投标文件的递交： / 。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.1",
+      "excerpt": "5.1 纸质投标文件的递交： / 。",
+      "has_scoring_params": false,
+      "id": "REQ-0040",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2 电子投标文件的递交：电子投标文件通过中国联通智慧供应链平台（https://www.cuecp.cn）递交，投标截止时间为 2026 年 11 月 17 日 9 时 30 分。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.2",
+      "excerpt": "5.2 电子投标文件的递交：电子投标文件通过中国联通智慧供应链平台（https://www.cuecp.cn）递交，投标截止时间为 2026 年 11 月 17 日 9 时 30 分。",
+      "has_scoring_params": false,
+      "id": "REQ-0041",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3 本项目将于上述同一时间进行电子开标，招标人/招标代理机构邀请投标人的法定代表人或者其委托的代理人须准时登录中国联通合作方自服务门户，并在网上用IPASS进行签名确认开标结果。如对开标情况有异议，请在30分钟内联系招标代理机构，超时确认将视为确认开标结果。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.3",
+      "excerpt": "5.3 本项目将于上述同一时间进行电子开标，招标人/招标代理机构邀请投标人的法定代表人或者其委托的代理人须准时登录中国联通合作方自服务门户，并在网上用IPASS进行签名确认开标结果。如对开标情况有异议，请在30分钟内联系招标代理机构，超时确认将视为确认开标结果。",
+      "has_scoring_params": false,
+      "id": "REQ-0042",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.4 本次招标采取电子招标形式，投标人参与投标的全过程应该按照本公告要求在中国联通智慧供应链-招标采购中心(https://www.cuecp.cn）上进行，提交数据电文形式的投标文件（投标文件与报价文件应同时上传），招标人可拒绝投标人以其他形式提交的投标文件。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.4",
+      "excerpt": "5.4 本次招标采取电子招标形式，投标人参与投标的全过程应该按照本公告要求在中国联通智慧供应链-招标采购中心(https://www.cuecp.cn）上进行，提交数据电文形式的投标文件（投标文件与报价文件应同时上传），招标人可拒绝投标人以其他形式提交的投标文件。",
+      "has_scoring_params": false,
+      "id": "REQ-0043",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.5 投标人应在投标截止日前三天验证iPASS电子证书及系统可操作性等，如出现故障应及时联系招标代理机构协调处理。超出上述时限未通知招标代理机构协调处理、且投标人无法通过其它渠道解决，造成投标人不能正常投标的情况，责任由投标人自行承担。投标人针对中国联通智慧供应链-招标采购中心注册、电子钥匙办理、网上招投标操作等相关业务的咨询，请直接拨打中国联通采购与招标网技术支持联系电话：010-678822"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.5",
+      "excerpt": "5.5 投标人应在投标截止日前三天验证iPASS电子证书及系统可操作性等，如出现故障应及时联系招标代理机构协调处理。超出上述时限未通知招标代理机构协调处理、且投标人无法通过其它渠道解决，造成投标人不能正常投标的情况，责任由投标人自行承担。投标人针对中国联通智慧供应链-招标采购中心注册、电子钥匙办理、网上招投标操作等相关业务的咨询，请直接拨打中国联通采购与招标网技术支持联系电话：010-678822",
+      "has_scoring_params": false,
+      "id": "REQ-0044",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1\t投标人须在投标截止时间前完成上传电子投标文件及在系统中填写报价信息。为避免因系统故障导致投标人无法上传投标文件或无法正常解密投标文件，投标人应提前验证系统可操作性（建议在投标截止时间前三日进行验证。提醒：电子招标系统一般在每周六、日或节假日进行升级、维护等操作，各投标人应尽量避免在此期间进行上传标书等操作，尽早在投标截止日前上传标书文件）。若投标人无法上传投标文件请及时通知招标代理联系人与"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.1",
+      "excerpt": "6.1\t投标人须在投标截止时间前完成上传电子投标文件及在系统中填写报价信息。为避免因系统故障导致投标人无法上传投标文件或无法正常解密投标文件，投标人应提前验证系统可操作性（建议在投标截止时间前三日进行验证。提醒：电子招标系统一般在每周六、日或节假日进行升级、维护等操作，各投标人应尽量避免在此期间进行上传标书等操作，尽早在投标截止日前上传标书文件）。若投标人无法上传投标文件请及时通知招标代理联系人与",
+      "has_scoring_params": false,
+      "id": "REQ-0045",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2\t投标截止时间未完成电子投标文件上传的，视为撤回投标文件。投标截止时间后，电子投标文件无法上传。如投标人在投标截止时间未在系统中填写报价、未上传投标文件或上传的投标文件有缺漏，将可能导致投标被否决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.2",
+      "excerpt": "6.2\t投标截止时间未完成电子投标文件上传的，视为撤回投标文件。投标截止时间后，电子投标文件无法上传。如投标人在投标截止时间未在系统中填写报价、未上传投标文件或上传的投标文件有缺漏，将可能导致投标被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0046",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1 样品递交的时间、地点： / 。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.1",
+      "excerpt": "7.1 样品递交的时间、地点： / 。",
+      "has_scoring_params": false,
+      "id": "REQ-0047",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2 检测相关费用： / 。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.2",
+      "excerpt": "7.2 检测相关费用： / 。",
+      "has_scoring_params": false,
+      "id": "REQ-0048",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.3 招标文件实质性要求的标识及非实质性要求的偏离要求 （1）招标文件中标识“※”及“本条不可偏离”的条款，均为实质性条款，投标人任何不满足实质性条款的投标均将被否决。\n※（2）本项目设置技术评分基准线：技术部分评分基准线＝技术部分分值×60%（即60×60%= 36分）；\n技术部分评分低于基准线的投标将被视为存在重大技术偏差，其投标将被否决。\n（3）非实质性要求的偏离要求： 详见招标文件第"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-12",
+      "excerpt": "2.1.3 招标文件实质性要求的标识及非实质性要求的偏离要求 （1）招标文件中标识“※”及“本条不可偏离”的条款，均为实质性条款，投标人任何不满足实质性条款的投标均将被否决。\n※（2）本项目设置技术评分基准线：技术部分评分基准线＝技术部分分值×60%（即60×60%= 36分）；\n技术部分评分低于基准线的投标将被视为存在重大技术偏差，其投标将被否决。\n（3）非实质性要求的偏离要求： 详见招标文件第",
+      "has_scoring_params": false,
+      "id": "REQ-0049",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2 投标文件应答和编写 本条款增加以下规定：投标人应当对招标文件中的第四章《合同条款》、第五章《技术标准和要求》中的内容进行点对点应答。\n如点对点应答与偏离表不一致，以偏离表为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-20",
+      "excerpt": "3.2.2 投标文件应答和编写 本条款增加以下规定：投标人应当对招标文件中的第四章《合同条款》、第五章《技术标准和要求》中的内容进行点对点应答。\n如点对点应答与偏离表不一致，以偏离表为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0050",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "※3.3.6 投标报价具体要求 本条款增加以下规定：\n（1）投标人的投标总价将被认为满足本项目第五章“技术标准及要求”中所要求的一切服务所需的全部费用，若有漏项均由投标人承担。\n（2）报价方式：进行一次性报价。\n（3）报价要求：\n①不接受零报价。\n②设置总价拦标价。\n③按照要求的工作量标准，填报人员单价和数量，最终计算评审总价。\n④本项目增值税税率服务为6%，如增值税税率不按前述记取，注明原因并提"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-24",
+      "excerpt": "※3.3.6 投标报价具体要求 本条款增加以下规定：\n（1）投标人的投标总价将被认为满足本项目第五章“技术标准及要求”中所要求的一切服务所需的全部费用，若有漏项均由投标人承担。\n（2）报价方式：进行一次性报价。\n（3）报价要求：\n①不接受零报价。\n②设置总价拦标价。\n③按照要求的工作量标准，填报人员单价和数量，最终计算评审总价。\n④本项目增值税税率服务为6%，如增值税税率不按前述记取，注明原因并提",
+      "has_scoring_params": false,
+      "id": "REQ-0051",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.2 投标保证金形式 投标保证金形式：现金/银行汇票/银行支票/银行保函等，或遵守联通集团“资金管理[2018]19号”文件\n1.如采用银行电汇形式，银行汇款单上应注明“2026CUC-RJY-PT0783”，若未注明，由此造成无法查实是否到账的后果由投标人自行负责。在投标文件中递交相关银行转账凭证。\n汇款账户信息：\n单位名称：普天信息工程设计服务有限公司\n开户银行：中国建设银行北京德胜支行"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-27",
+      "excerpt": "3.5.2 投标保证金形式 投标保证金形式：现金/银行汇票/银行支票/银行保函等，或遵守联通集团“资金管理[2018]19号”文件\n1.如采用银行电汇形式，银行汇款单上应注明“2026CUC-RJY-PT0783”，若未注明，由此造成无法查实是否到账的后果由投标人自行负责。在投标文件中递交相关银行转账凭证。\n汇款账户信息：\n单位名称：普天信息工程设计服务有限公司\n开户银行：中国建设银行北京德胜支行",
+      "has_scoring_params": false,
+      "id": "REQ-0052",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.4 投标保证金不予退还的其他规定 本条款增加以下规定：\n（1）投标人在招标文件中规定的投标有效期内撤销投标的；\n（2）投标人存在串通投标、弄虚作假等行为的；\n（3）中标人无正当理由不与招标人在规定期限内订立合同、在签订合同时向招标人提出附加条件，或者不按照招标文件要求递交履约保证金的；\n（4）中标人未按相关承诺执行。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-28",
+      "excerpt": "3.5.4 投标保证金不予退还的其他规定 本条款增加以下规定：\n（1）投标人在招标文件中规定的投标有效期内撤销投标的；\n（2）投标人存在串通投标、弄虚作假等行为的；\n（3）中标人无正当理由不与招标人在规定期限内订立合同、在签订合同时向招标人提出附加条件，或者不按照招标文件要求递交履约保证金的；\n（4）中标人未按相关承诺执行。",
+      "has_scoring_params": false,
+      "id": "REQ-0053",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.2 中标原则 招标人最终确定1名中标人，综合评分最高者为中标人，评标委员会按照综合评分由高到低的顺序排名最多推荐3名中标候选人。如投标人得分相同，则依次以投标技术部分得分高者、报价得分高者、成功案例多者，具有中国环境标志产品包装材料的进行排名。对中标人放弃中标或根据法律法规不符合中标条件的，招标人可按照评标委员会推荐的中标候选人名单排序依次确定其他中标候选人为中标人，或重新采购。\n中标金额"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-47",
+      "excerpt": "7.2.2 中标原则 招标人最终确定1名中标人，综合评分最高者为中标人，评标委员会按照综合评分由高到低的顺序排名最多推荐3名中标候选人。如投标人得分相同，则依次以投标技术部分得分高者、报价得分高者、成功案例多者，具有中国环境标志产品包装材料的进行排名。对中标人放弃中标或根据法律法规不符合中标条件的，招标人可按照评标委员会推荐的中标候选人名单排序依次确定其他中标候选人为中标人，或重新采购。\n中标金额",
+      "has_scoring_params": false,
+      "id": "REQ-0054",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1  项目概况"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1",
+      "excerpt": "1.1  项目概况",
+      "has_scoring_params": false,
+      "id": "REQ-0055",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.1  根据《中华人民共和国招标投标法》（以下简称《招标投标法》）《中国人民共和国招标投标法实施条例》（以下简称《实施条例》）和《通信工程建设项目招标投标管理办法》（以下简称《管理办法》）等有关法律、法规和规章的规定，本招标项目已具备招标条件，现对本项目进行招标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.1",
+      "excerpt": "1.1.1  根据《中华人民共和国招标投标法》（以下简称《招标投标法》）《中国人民共和国招标投标法实施条例》（以下简称《实施条例》）和《通信工程建设项目招标投标管理办法》（以下简称《管理办法》）等有关法律、法规和规章的规定，本招标项目已具备招标条件，现对本项目进行招标。",
+      "has_scoring_params": false,
+      "id": "REQ-0056",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.2  招标人：招标人单位名称及联系方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.2",
+      "excerpt": "1.1.2  招标人：招标人单位名称及联系方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0057",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1.3  招标项目名称：项目名称及招标编号见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.1.3",
+      "excerpt": "1.1.3  招标项目名称：项目名称及招标编号见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0058",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.2  资金来源和落实情况",
+        "本项目资金已落实，资金来源见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.2",
+      "excerpt": "1.2  资金来源和落实情况",
+      "has_scoring_params": false,
+      "id": "REQ-0059",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.3  招标范围",
+        "本项目招标范围见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.3",
+      "excerpt": "1.3  招标范围",
+      "has_scoring_params": false,
+      "id": "REQ-0060",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.4  标包划分",
+        "本项目标包划分情况见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.4",
+      "excerpt": "1.4  标包划分",
+      "has_scoring_params": false,
+      "id": "REQ-0061",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5  招标方式"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.5",
+      "excerpt": "1.5  招标方式",
+      "has_scoring_params": false,
+      "id": "REQ-0062",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.1  招标方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.5.1",
+      "excerpt": "1.5.1  招标方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0063",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.2  公开招标：是指招标人以招标公告的方式邀请不特定的法人或者其他组织投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.5.2",
+      "excerpt": "1.5.2  公开招标：是指招标人以招标公告的方式邀请不特定的法人或者其他组织投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0064",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.5.3  邀请招标：是指招标人以投标邀请书的方式邀请特定的法人或者其他组织投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.5.3",
+      "excerpt": "1.5.3  邀请招标：是指招标人以投标邀请书的方式邀请特定的法人或者其他组织投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0065",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.6  招标组织形式",
+        "本项目由招标人自行组织/委托招标代理机构采用代理招标的方式进行，招标组织形式、招标代理机构名称及联系方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.6",
+      "excerpt": "1.6  招标组织形式",
+      "has_scoring_params": false,
+      "id": "REQ-0066",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7  资格审查"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7",
+      "excerpt": "1.7  资格审查",
+      "has_scoring_params": false,
+      "id": "REQ-0067",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.1  本招标项目资格审查方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.1",
+      "excerpt": "1.7.1  本招标项目资格审查方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0068",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.2  资格预审：是指在投标前对投标人进行的资格审查。采用资格预审方式的，资格条件已经在招标文件发出前的“资格预审文件”中做出规定。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.2",
+      "excerpt": "1.7.2  资格预审：是指在投标前对投标人进行的资格审查。采用资格预审方式的，资格条件已经在招标文件发出前的“资格预审文件”中做出规定。",
+      "has_scoring_params": false,
+      "id": "REQ-0069",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.3  资格后审：是指在开标后由评标委员会根据招标文件的规定对投标人进行的资格审查。采用资格后审方式的，投标人应当具备的资格条件见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.3",
+      "excerpt": "1.7.3  资格后审：是指在开标后由评标委员会根据招标文件的规定对投标人进行的资格审查。采用资格后审方式的，投标人应当具备的资格条件见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0070",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.4  采用资格后审的，招标人必须在招标文件中详细规定资格审查标准和方法。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.4",
+      "excerpt": "1.7.4  采用资格后审的，招标人必须在招标文件中详细规定资格审查标准和方法。",
+      "has_scoring_params": false,
+      "id": "REQ-0071",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.5 资格后审一般包括下列内容："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "1.7.5",
+      "excerpt": "1.7.5 资格后审一般包括下列内容：",
+      "has_scoring_params": false,
+      "id": "REQ-0072",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.7.6  资格后审不合格的投标人，评标委员会应当否决其投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "1.7.6",
+      "excerpt": "1.7.6  资格后审不合格的投标人，评标委员会应当否决其投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0073",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8  投标人不得存在的情形"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.8",
+      "excerpt": "1.8  投标人不得存在的情形",
+      "has_scoring_params": false,
+      "id": "REQ-0074",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8.1  投标人不得存在下列情形之一："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.8.1",
+      "excerpt": "1.8.1  投标人不得存在下列情形之一：",
+      "has_scoring_params": false,
+      "id": "REQ-0075",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）为招标人不具有独立法人资格的附属机构（单位）；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）为招标人不具有独立法人资格的附属机构（单位）；",
+      "has_scoring_params": false,
+      "id": "REQ-0076",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）被责令停业的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）被责令停业的；",
+      "has_scoring_params": false,
+      "id": "REQ-0077",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）被暂停或者取消投标资格的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）被暂停或者取消投标资格的；",
+      "has_scoring_params": false,
+      "id": "REQ-0078",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（4）财产被接管或者冻结的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（4）财产被接管或者冻结的；",
+      "has_scoring_params": false,
+      "id": "REQ-0079",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（5）在最近三年内有骗取中标、严重违约、重大工程质量或者安全问题的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（5）在最近三年内有骗取中标、严重违约、重大工程质量或者安全问题的；",
+      "has_scoring_params": false,
+      "id": "REQ-0080",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（6）法律法规限定的其他情形；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（6）法律法规限定的其他情形；",
+      "has_scoring_params": false,
+      "id": "REQ-0081",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（7）招标文件规定的其他情形：见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（7）招标文件规定的其他情形：见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0082",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.8.2  单位负责人为同一人或者存在控股、管理关系的不同单位，不得同时参加本项目中同一标包投标或者未划分标包的同一招标项目投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.8.2",
+      "excerpt": "1.8.2  单位负责人为同一人或者存在控股、管理关系的不同单位，不得同时参加本项目中同一标包投标或者未划分标包的同一招标项目投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0083",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9  合格的货物和服务"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.9",
+      "excerpt": "1.9  合格的货物和服务",
+      "has_scoring_params": false,
+      "id": "REQ-0084",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9.1  投标人提供的所有货物及其有关服务的原产地，均应当来自中国或者是与中国有正常贸易往来的国家或者地区。招标人的支付也仅限于这些货物和服务。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.9.1",
+      "excerpt": "1.9.1  投标人提供的所有货物及其有关服务的原产地，均应当来自中国或者是与中国有正常贸易往来的国家或者地区。招标人的支付也仅限于这些货物和服务。",
+      "has_scoring_params": false,
+      "id": "REQ-0085",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9.2  本招标文件所属的“原产地”是指货物开采、生长、生产或者提供有关服务的来源地。所述的“货物”是指制造、加工或者实质上装配了主要部件而形成的货物。商业上公认的产品是指基本特征、性能或者功能上与部件有着实质性区别的产品。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.9.2",
+      "excerpt": "1.9.2  本招标文件所属的“原产地”是指货物开采、生长、生产或者提供有关服务的来源地。所述的“货物”是指制造、加工或者实质上装配了主要部件而形成的货物。商业上公认的产品是指基本特征、性能或者功能上与部件有着实质性区别的产品。",
+      "has_scoring_params": false,
+      "id": "REQ-0086",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.9.3  投标人提供的所有货物及其有关服务应当符合国家规定的资格条件。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.9.3",
+      "excerpt": "1.9.3  投标人提供的所有货物及其有关服务应当符合国家规定的资格条件。",
+      "has_scoring_params": false,
+      "id": "REQ-0087",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.10  投标费用",
+        "不论结果如何，投标人自行承担所有准备和参与投标有关的费用。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.10",
+      "excerpt": "1.10  投标费用",
+      "has_scoring_params": false,
+      "id": "REQ-0088",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.11  保 密",
+        "参与招标投标活动的各方应当对招标文件和投标文件中的商业和技术等秘密保 密，违者应当对由此造成的后果承担法律责任。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "1.11",
+      "excerpt": "1.11  保 密",
+      "has_scoring_params": false,
+      "id": "REQ-0089",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1  招标文件的组成"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.1",
+      "excerpt": "2.1  招标文件的组成",
+      "has_scoring_params": false,
+      "id": "REQ-0090",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.1  招标文件一般由以下部分组成："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.1.1",
+      "excerpt": "2.1.1  招标文件一般由以下部分组成：",
+      "has_scoring_params": false,
+      "id": "REQ-0091",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.2  招标文件对同一内容的表述应当一致。第一章“招标公告”或者“投标邀请书”与招标文件在同一内容的表述上有矛盾或者冲突时，以第一章“招标公告”或者“投标邀请书”为准；投标人须知前附表与投标人须知正文在同一内容的表述上有矛盾或者冲突时，以投标人须知前附表为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.1.2",
+      "excerpt": "2.1.2  招标文件对同一内容的表述应当一致。第一章“招标公告”或者“投标邀请书”与招标文件在同一内容的表述上有矛盾或者冲突时，以第一章“招标公告”或者“投标邀请书”为准；投标人须知前附表与投标人须知正文在同一内容的表述上有矛盾或者冲突时，以投标人须知前附表为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0092",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.3  招标人在招标文件中以显著的方式标明实质性要求、条件以及不满足实质性要求和条件的投标将被否决的提示；对于非实质性要求和条件，规定允许偏差的最大范围、最高项数和调整偏差的方法。显著标识方式和具体要求见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "2.1.3",
+      "excerpt": "2.1.3  招标人在招标文件中以显著的方式标明实质性要求、条件以及不满足实质性要求和条件的投标将被否决的提示；对于非实质性要求和条件，规定允许偏差的最大范围、最高项数和调整偏差的方法。显著标识方式和具体要求见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0093",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1.4  招标人可以要求以某一单项报价核定是否低于成本，具体要求见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.1.4",
+      "excerpt": "2.1.4  招标人可以要求以某一单项报价核定是否低于成本，具体要求见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0094",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2  踏勘现场"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.2",
+      "excerpt": "2.2  踏勘现场",
+      "has_scoring_params": false,
+      "id": "REQ-0095",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.1  投标人须知前附表规定组织踏勘现场的，招标人按照投标人须知前附表规定的时间、地点组织投标人踏勘项目现场。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.1",
+      "excerpt": "2.2.1  投标人须知前附表规定组织踏勘现场的，招标人按照投标人须知前附表规定的时间、地点组织投标人踏勘项目现场。",
+      "has_scoring_params": false,
+      "id": "REQ-0096",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.2  潜在投标人踏勘现场发生的费用自理。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.2",
+      "excerpt": "2.2.2  潜在投标人踏勘现场发生的费用自理。",
+      "has_scoring_params": false,
+      "id": "REQ-0097",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.3  除招标人的原因外，潜在投标人自行负责在踏勘现场中所发生的人员伤亡和财产损失。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.3",
+      "excerpt": "2.2.3  除招标人的原因外，潜在投标人自行负责在踏勘现场中所发生的人员伤亡和财产损失。",
+      "has_scoring_params": false,
+      "id": "REQ-0098",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.4  招标人在踏勘现场中介绍的项目现场和相关的周边环境情况，供潜在投标人在编制投标文件时参考，招标人不对投标人据此作出的判断和决策负责。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.2.4",
+      "excerpt": "2.2.4  招标人在踏勘现场中介绍的项目现场和相关的周边环境情况，供潜在投标人在编制投标文件时参考，招标人不对投标人据此作出的判断和决策负责。",
+      "has_scoring_params": false,
+      "id": "REQ-0099",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.3  投标预备会",
+        "投标人须知前附表规定召开投标预备会的，招标人按照投标人须知前附表规定的时间和地点召开投标预备会，澄清潜在投标人提出的问题。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.3",
+      "excerpt": "2.3  投标预备会",
+      "has_scoring_params": false,
+      "id": "REQ-0100",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4  招标文件的澄清和修改"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4",
+      "excerpt": "2.4  招标文件的澄清和修改",
+      "has_scoring_params": false,
+      "id": "REQ-0101",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.1  投标人对招标文件有疑问的，应当按照投标人须知前附表规定的时间和方式，要求招标人对招标文件进行澄清。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.1",
+      "excerpt": "2.4.1  投标人对招标文件有疑问的，应当按照投标人须知前附表规定的时间和方式，要求招标人对招标文件进行澄清。",
+      "has_scoring_params": false,
+      "id": "REQ-0102",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.2  招标人应当按照投标人须知前附表规定的时间和方式，将澄清或者修改内容发给所有购买招标文件的投标人，但不指明问题的来源。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.2",
+      "excerpt": "2.4.2  招标人应当按照投标人须知前附表规定的时间和方式，将澄清或者修改内容发给所有购买招标文件的投标人，但不指明问题的来源。",
+      "has_scoring_params": false,
+      "id": "REQ-0103",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.3  如澄清或者修改的内容可能影响投标文件编制的，应当在递交投标文件截止时间至少15日前发出，不足15日的，招标人应当相应顺延投标截止时间。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.3",
+      "excerpt": "2.4.3  如澄清或者修改的内容可能影响投标文件编制的，应当在递交投标文件截止时间至少15日前发出，不足15日的，招标人应当相应顺延投标截止时间。",
+      "has_scoring_params": false,
+      "id": "REQ-0104",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.4  投标人收到澄清或者修改后，应当按照投标人须知前附表规定的时间和方式通知招标人，确认已收到该澄清或者修改。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.4",
+      "excerpt": "2.4.4  投标人收到澄清或者修改后，应当按照投标人须知前附表规定的时间和方式通知招标人，确认已收到该澄清或者修改。",
+      "has_scoring_params": false,
+      "id": "REQ-0105",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.4.5  所有关于招标文件的澄清和修改均作为招标文件的补充部分。当招标文件、招标文件的澄清或者修改等在同一内容的表述上不一致时，以最后发出的书面文件为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "2.4.5",
+      "excerpt": "2.4.5  所有关于招标文件的澄清和修改均作为招标文件的补充部分。当招标文件、招标文件的澄清或者修改等在同一内容的表述上不一致时，以最后发出的书面文件为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0106",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1  投标文件的组成",
+        "投标人应当按照投标人须知前附表的要求制作并递交投标文件。投标文件组成见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.1",
+      "excerpt": "3.1  投标文件的组成",
+      "has_scoring_params": false,
+      "id": "REQ-0107",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2  投标文件的编制"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.2",
+      "excerpt": "3.2  投标文件的编制",
+      "has_scoring_params": false,
+      "id": "REQ-0108",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.1  投标人应当按照招标文件的要求编制投标文件，投标文件应当对招标文件提出的实质性要求和条件作出响应。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.2.1",
+      "excerpt": "3.2.1  投标人应当按照招标文件的要求编制投标文件，投标文件应当对招标文件提出的实质性要求和条件作出响应。",
+      "has_scoring_params": false,
+      "id": "REQ-0109",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2  投标人应当认真阅读招标文件中所有的事项、格式、条款和技术规范等。投标人没有按照招标文件要求递交全部资料或者投标人没有对招标文件在各方面都作出实质性响应是投标人的风险，并可能导致其投标被否决。投标文件应答和编写的具体要求见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.2.2",
+      "excerpt": "3.2.2  投标人应当认真阅读招标文件中所有的事项、格式、条款和技术规范等。投标人没有按照招标文件要求递交全部资料或者投标人没有对招标文件在各方面都作出实质性响应是投标人的风险，并可能导致其投标被否决。投标文件应答和编写的具体要求见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0110",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.3  投标人递交的投标文件以及投标人与招标人就有关投标的所有往来函电均应当使用中文。投标人递交的证明文件和文献可以使用另一种语言，但相应内容应当译成中文，在解释投标文件时以中文译本为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.2.3",
+      "excerpt": "3.2.3  投标人递交的投标文件以及投标人与招标人就有关投标的所有往来函电均应当使用中文。投标人递交的证明文件和文献可以使用另一种语言，但相应内容应当译成中文，在解释投标文件时以中文译本为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0111",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.4  投标文件应当使用不褪色的材料书写或者打印，并加盖单位公章或者由投标人的法定代表人或者其委托代理人签字。委托代理人签字的，投标文件应当附法定代表人签署的授权委托书。投标文件应当尽量避免涂改、行间插字或者删除。如果出现上述情况，改动之处应当加盖单位公章或者由投标人的法定代表人或者其委托代理人签字确认。盖章或者签字另有要求的，见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.2.4",
+      "excerpt": "3.2.4  投标文件应当使用不褪色的材料书写或者打印，并加盖单位公章或者由投标人的法定代表人或者其委托代理人签字。委托代理人签字的，投标文件应当附法定代表人签署的授权委托书。投标文件应当尽量避免涂改、行间插字或者删除。如果出现上述情况，改动之处应当加盖单位公章或者由投标人的法定代表人或者其委托代理人签字确认。盖章或者签字另有要求的，见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0112",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3  投标报价"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3",
+      "excerpt": "3.3  投标报价",
+      "has_scoring_params": false,
+      "id": "REQ-0113",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.1  投标人应当根据招标文件要求进行报价，投标人应当报出符合招标文件要求的拟提供投标货物的单价（如适用）和总价。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.1",
+      "excerpt": "3.3.1  投标人应当根据招标文件要求进行报价，投标人应当报出符合招标文件要求的拟提供投标货物的单价（如适用）和总价。",
+      "has_scoring_params": false,
+      "id": "REQ-0114",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.2  投标货币：人民币。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.2",
+      "excerpt": "3.3.2  投标货币：人民币。",
+      "has_scoring_params": false,
+      "id": "REQ-0115",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.3  招标人设有最高投标限价的，投标人的投标报价不得超过最高投标限价，否则其投标将被否决。最高投标限价或者其计算方法见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.3.3",
+      "excerpt": "3.3.3  招标人设有最高投标限价的，投标人的投标报价不得超过最高投标限价，否则其投标将被否决。最高投标限价或者其计算方法见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0116",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.4  招标人不接受投标人的任何低于成本报价的不正当竞争方式。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.4",
+      "excerpt": "3.3.4  招标人不接受投标人的任何低于成本报价的不正当竞争方式。",
+      "has_scoring_params": false,
+      "id": "REQ-0117",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.5  只有在招标文件要求或者允许报优惠价时，投标人才可以报出。投标人优惠报价的数额，开标时也必须当众宣读。关于优惠条件的规定见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.5",
+      "excerpt": "3.3.5  只有在招标文件要求或者允许报优惠价时，投标人才可以报出。投标人优惠报价的数额，开标时也必须当众宣读。关于优惠条件的规定见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0118",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.6  投标报价的具体要求见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.6",
+      "excerpt": "3.3.6  投标报价的具体要求见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0119",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4  投标有效期"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.4",
+      "excerpt": "3.4  投标有效期",
+      "has_scoring_params": false,
+      "id": "REQ-0120",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.1  投标有效期从递交投标文件截止日起计算。投标有效期的具体时间见投标人须知前附表。在此期间，投标人不得要求撤销或者修改其投标文件。投标有效期不满足招标文件要求的投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.4.1",
+      "excerpt": "3.4.1  投标有效期从递交投标文件截止日起计算。投标有效期的具体时间见投标人须知前附表。在此期间，投标人不得要求撤销或者修改其投标文件。投标有效期不满足招标文件要求的投标将被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0121",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.2  在原定投标有效期满之前，如果出现特殊情况，招标人决定延长投标有效期的，应当以书面形式向投标人提出延长投标有效期的要求，投标人须以书面形式予以答复。投标人同意延长投标有效期的，不得修改其投标文件的实质性内容，但应当相应延长其投标保证金有效期；投标人拒绝延长投标有效期的，其投标失效，投标人有权收回其投标保证金。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.4.2",
+      "excerpt": "3.4.2  在原定投标有效期满之前，如果出现特殊情况，招标人决定延长投标有效期的，应当以书面形式向投标人提出延长投标有效期的要求，投标人须以书面形式予以答复。投标人同意延长投标有效期的，不得修改其投标文件的实质性内容，但应当相应延长其投标保证金有效期；投标人拒绝延长投标有效期的，其投标失效，投标人有权收回其投标保证金。",
+      "has_scoring_params": false,
+      "id": "REQ-0122",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5  投标保证金"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.5",
+      "excerpt": "3.5  投标保证金",
+      "has_scoring_params": false,
+      "id": "REQ-0123",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.1  招标人要求投标人递交投标保证金的，投标人必须在递交投标文件的同时，按照投标人须知前附表的规定递交投标保证金。投标保证金一般不超过项目估算价的2%，但最高不得超过80万元人民币，本招标项目的投标保证金金额见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.1",
+      "excerpt": "3.5.1  招标人要求投标人递交投标保证金的，投标人必须在递交投标文件的同时，按照投标人须知前附表的规定递交投标保证金。投标保证金一般不超过项目估算价的2%，但最高不得超过80万元人民币，本招标项目的投标保证金金额见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0124",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.2  招标人可以规定投标保证金是以现金、支票、银行汇票、在中国注册的银行出具的银行保函等方式递交，依法必须进行招标的项目的境内投标人，以现金或者支票形式递交的投标保证金应当从其基本账户转出。投标保证金有效期应当与投标有效期一致。投标保证金的形式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.2",
+      "excerpt": "3.5.2  招标人可以规定投标保证金是以现金、支票、银行汇票、在中国注册的银行出具的银行保函等方式递交，依法必须进行招标的项目的境内投标人，以现金或者支票形式递交的投标保证金应当从其基本账户转出。投标保证金有效期应当与投标有效期一致。投标保证金的形式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0125",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.3  招标人最迟应当在书面合同签订后5日内向中标人和未中标的投标人退还投标保证金及银行同期存款利息。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.3",
+      "excerpt": "3.5.3  招标人最迟应当在书面合同签订后5日内向中标人和未中标的投标人退还投标保证金及银行同期存款利息。",
+      "has_scoring_params": false,
+      "id": "REQ-0126",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.4  发生下列情形之一时，投标保证金可不予退还："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.5.4",
+      "excerpt": "3.5.4  发生下列情形之一时，投标保证金可不予退还：",
+      "has_scoring_params": false,
+      "id": "REQ-0127",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）投标人在招标文件中规定的投标有效期内撤销投标的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）投标人在招标文件中规定的投标有效期内撤销投标的；",
+      "has_scoring_params": false,
+      "id": "REQ-0128",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）中标人无正当理由不与招标人在规定期限内订立合同、在签订合同时向招标人提出附加条件，或者不按照招标文件要求递交履约保证金的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": null,
+      "excerpt": "（2）中标人无正当理由不与招标人在规定期限内订立合同、在签订合同时向招标人提出附加条件，或者不按照招标文件要求递交履约保证金的；",
+      "has_scoring_params": false,
+      "id": "REQ-0129",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）投标人有串通投标、弄虚作假等行为的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）投标人有串通投标、弄虚作假等行为的；",
+      "has_scoring_params": false,
+      "id": "REQ-0130",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（4）其他规定见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（4）其他规定见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0131",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.5  未递交投标保证金或者递交的投标保证金有瑕疵的投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.5.5",
+      "excerpt": "3.5.5  未递交投标保证金或者递交的投标保证金有瑕疵的投标将被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0132",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6  备选投标方案"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.6",
+      "excerpt": "3.6  备选投标方案",
+      "has_scoring_params": false,
+      "id": "REQ-0133",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.1  除投标人须知前附表另有规定外，投标人不得递交备选投标方案。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.1",
+      "excerpt": "3.6.1  除投标人须知前附表另有规定外，投标人不得递交备选投标方案。",
+      "has_scoring_params": false,
+      "id": "REQ-0134",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.2  若招标人在招标文件中邀请投标人递交备选方案，则投标人除按照招标文件规定的基本方案编制和递交投标文件外，可以附加递交备选投标方案。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.2",
+      "excerpt": "3.6.2  若招标人在招标文件中邀请投标人递交备选方案，则投标人除按照招标文件规定的基本方案编制和递交投标文件外，可以附加递交备选投标方案。",
+      "has_scoring_params": false,
+      "id": "REQ-0135",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.3  备选投标方案应当说明其对基本方案的改进意见和带来的效益，并附必要的图纸、设计计算、技术要求及其他有关资料，在封面上应当注明“备选投标方案”字样。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.3",
+      "excerpt": "3.6.3  备选投标方案应当说明其对基本方案的改进意见和带来的效益，并附必要的图纸、设计计算、技术要求及其他有关资料，在封面上应当注明“备选投标方案”字样。",
+      "has_scoring_params": false,
+      "id": "REQ-0136",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.6.4  允许投标人递交备选投标方案的，只有符合招标文件要求且评标价最低或者综合评分最高而被推荐为中标候选人的投标人所递交的备选投标方案，可予以考虑。评标委员会认为其备选投标方案优于其按照招标文件要求编制的投标方案的，招标人可以接受该备选投标方案。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.6.4",
+      "excerpt": "3.6.4  允许投标人递交备选投标方案的，只有符合招标文件要求且评标价最低或者综合评分最高而被推荐为中标候选人的投标人所递交的备选投标方案，可予以考虑。评标委员会认为其备选投标方案优于其按照招标文件要求编制的投标方案的，招标人可以接受该备选投标方案。",
+      "has_scoring_params": false,
+      "id": "REQ-0137",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7  投标文件的式样、密封和标记（递交纸质文件适用）"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7",
+      "excerpt": "3.7  投标文件的式样、密封和标记（递交纸质文件适用）",
+      "has_scoring_params": false,
+      "id": "REQ-0138",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.1  投标人应当编制一份投标文件“正本”和投标人须知前附表所述份数的“副本”和“电子版”，副本为正本复印件。投标文件正本和副本如有不一致之处，以正本为准；纸质版文件与电子版文件不一致时，以纸质版文件为准。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.1",
+      "excerpt": "3.7.1  投标人应当编制一份投标文件“正本”和投标人须知前附表所述份数的“副本”和“电子版”，副本为正本复印件。投标文件正本和副本如有不一致之处，以正本为准；纸质版文件与电子版文件不一致时，以纸质版文件为准。",
+      "has_scoring_params": false,
+      "id": "REQ-0139",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.2  每份投标文件的正本、副本及电子版应当分别装订，并于封面上明确标明“正本”“副本”和“电子版”字样。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.2",
+      "excerpt": "3.7.2  每份投标文件的正本、副本及电子版应当分别装订，并于封面上明确标明“正本”“副本”和“电子版”字样。",
+      "has_scoring_params": false,
+      "id": "REQ-0140",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.3  投标文件应当按照招标文件规定密封包装，并于封装封面上明确标明“正本”“副本”和“电子版”字样。密封的所有粘接缝隙必须加盖单位公章或者由投标人的法定代表人或者其委托代理人签字。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.3",
+      "excerpt": "3.7.3  投标文件应当按照招标文件规定密封包装，并于封装封面上明确标明“正本”“副本”和“电子版”字样。密封的所有粘接缝隙必须加盖单位公章或者由投标人的法定代表人或者其委托代理人签字。",
+      "has_scoring_params": false,
+      "id": "REQ-0141",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.4  外层包封应当写明招标人的名称和地址、项目名称、招标编号，并注明开标时间以前不得开封。还应当写明投标人的名称与地址、邮政编码，以便投标出现逾期送达时能原封退回。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.4",
+      "excerpt": "3.7.4  外层包封应当写明招标人的名称和地址、项目名称、招标编号，并注明开标时间以前不得开封。还应当写明投标人的名称与地址、邮政编码，以便投标出现逾期送达时能原封退回。",
+      "has_scoring_params": false,
+      "id": "REQ-0142",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.5  递交投标文件时，招标人应当对符合招标文件规定密封和标记的投标文件进行签收。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.5",
+      "excerpt": "3.7.5  递交投标文件时，招标人应当对符合招标文件规定密封和标记的投标文件进行签收。",
+      "has_scoring_params": false,
+      "id": "REQ-0143",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.7.6  招标人对于投标文件密封、标记另有要求的，见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.7.6",
+      "excerpt": "3.7.6  招标人对于投标文件密封、标记另有要求的，见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0144",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.8  电子招标的投标文件上传形式",
+        "投标文件应当按照投标人须知前附表要求的形式上传。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.8",
+      "excerpt": "3.8  电子招标的投标文件上传形式",
+      "has_scoring_params": false,
+      "id": "REQ-0145",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1  投标文件的递交"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1",
+      "excerpt": "4.1  投标文件的递交",
+      "has_scoring_params": false,
+      "id": "REQ-0146",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.1  投标文件递交截止时间：见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.1",
+      "excerpt": "4.1.1  投标文件递交截止时间：见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0147",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.2  投标文件递交地点：见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.2",
+      "excerpt": "4.1.2  投标文件递交地点：见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0148",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.3  招标人收到投标文件后，向投标人出具签收凭证。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.3",
+      "excerpt": "4.1.3  招标人收到投标文件后，向投标人出具签收凭证。",
+      "has_scoring_params": false,
+      "id": "REQ-0149",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.4  除投标人须知前附表另有规定外，投标人所递交的投标文件不予退还。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.4",
+      "excerpt": "4.1.4  除投标人须知前附表另有规定外，投标人所递交的投标文件不予退还。",
+      "has_scoring_params": false,
+      "id": "REQ-0150",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.5  出现下列情形之一时，招标人/招标代理机构不予接收投标文件："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.5",
+      "excerpt": "4.1.5  出现下列情形之一时，招标人/招标代理机构不予接收投标文件：",
+      "has_scoring_params": false,
+      "id": "REQ-0151",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）逾期送达或者未送达指定地点的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）逾期送达或者未送达指定地点的；",
+      "has_scoring_params": false,
+      "id": "REQ-0152",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）未按照招标文件要求密封的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）未按照招标文件要求密封的；",
+      "has_scoring_params": false,
+      "id": "REQ-0153",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）未通过资格预审的申请人递交的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "（3）未通过资格预审的申请人递交的；",
+      "has_scoring_params": false,
+      "id": "REQ-0154",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1.6  招标人采用电子招标投标方式的，投标文件递交异常的处理方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.1.6",
+      "excerpt": "4.1.6  招标人采用电子招标投标方式的，投标文件递交异常的处理方式见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0155",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2  投标文件的修改、撤回和撤销"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2",
+      "excerpt": "4.2  投标文件的修改、撤回和撤销",
+      "has_scoring_params": false,
+      "id": "REQ-0156",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.1  在规定的投标截止时间前，投标人可以修改或者撤回已递交的投标文件。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.1",
+      "excerpt": "4.2.1  在规定的投标截止时间前，投标人可以修改或者撤回已递交的投标文件。",
+      "has_scoring_params": false,
+      "id": "REQ-0157",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.2  投标人修改后的投标文件，应当在规定的投标截止时间前按照招标文件的规定编制、密封、标记、递交。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.2",
+      "excerpt": "4.2.2  投标人修改后的投标文件，应当在规定的投标截止时间前按照招标文件的规定编制、密封、标记、递交。",
+      "has_scoring_params": false,
+      "id": "REQ-0158",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.3  投标人撤回已递交的投标文件，应当书面通知招标人。招标人已收取投标保证金的，应当自收到投标人书面撤回通知之日起5日内退还。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.3",
+      "excerpt": "4.2.3  投标人撤回已递交的投标文件，应当书面通知招标人。招标人已收取投标保证金的，应当自收到投标人书面撤回通知之日起5日内退还。",
+      "has_scoring_params": false,
+      "id": "REQ-0159",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2.4  投标人在规定的投标截止时间后，不得在投标有效期内撤销其投标。否则招标人有权不退还其投标保证金。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "4.2.4",
+      "excerpt": "4.2.4  投标人在规定的投标截止时间后，不得在投标有效期内撤销其投标。否则招标人有权不退还其投标保证金。",
+      "has_scoring_params": false,
+      "id": "REQ-0160",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.1  开标时间和地点",
+        "招标人将按照投标人须知前附表规定的时间和地点公开开标，参加开标的投标人代表应当签名报到，以证明其出席开标。开标时间和投标截止时间应当为同一时间。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.1",
+      "excerpt": "5.1  开标时间和地点",
+      "has_scoring_params": false,
+      "id": "REQ-0161",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2  开标程序"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.2",
+      "excerpt": "5.2  开标程序",
+      "has_scoring_params": false,
+      "id": "REQ-0162",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.1  开标会议由招标人或者其委托的招标代理机构组织并主持，邀请所有的投标人或者其代表出席。投标人代表或者招标人委托的公证机构对投标文件密封性进行检查。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.1",
+      "excerpt": "5.2.1  开标会议由招标人或者其委托的招标代理机构组织并主持，邀请所有的投标人或者其代表出席。投标人代表或者招标人委托的公证机构对投标文件密封性进行检查。",
+      "has_scoring_params": false,
+      "id": "REQ-0163",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.2  招标人在投标文件递交截止时间前收到的所有投标文件在开标时都应当当众予以拆封、宣读，但按照招标文件规定递交合格的书面撤回通知的投标文件不予开封。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.2",
+      "excerpt": "5.2.2  招标人在投标文件递交截止时间前收到的所有投标文件在开标时都应当当众予以拆封、宣读，但按照招标文件规定递交合格的书面撤回通知的投标文件不予开封。",
+      "has_scoring_params": false,
+      "id": "REQ-0164",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.3  开标时，招标人应当当众宣布参加本项目招标的投标人个数及投标文件的密封情况，并宣读收到的所有未撤回的投标文件的“投标一览表”中的内容。“投标一览表”一般包括：投标人名称、投标总报价、交货期、投标保证金以及招标文件中规定的其他内容。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.3",
+      "excerpt": "5.2.3  开标时，招标人应当当众宣布参加本项目招标的投标人个数及投标文件的密封情况，并宣读收到的所有未撤回的投标文件的“投标一览表”中的内容。“投标一览表”一般包括：投标人名称、投标总报价、交货期、投标保证金以及招标文件中规定的其他内容。",
+      "has_scoring_params": false,
+      "id": "REQ-0165",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.2.4  开标内容填写在“开标记录表”中，由唱标人、记录人、投标人代表、监督人签字确认，存档备查。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.2.4",
+      "excerpt": "5.2.4  开标内容填写在“开标记录表”中，由唱标人、记录人、投标人代表、监督人签字确认，存档备查。",
+      "has_scoring_params": false,
+      "id": "REQ-0166",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3  异议"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.3",
+      "excerpt": "5.3  异议",
+      "has_scoring_params": false,
+      "id": "REQ-0167",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3.1  投标人对开标有异议的，应当在开标现场提出，招标人应当当场作出答复，并制作记录。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.3.1",
+      "excerpt": "5.3.1  投标人对开标有异议的，应当在开标现场提出，招标人应当当场作出答复，并制作记录。",
+      "has_scoring_params": false,
+      "id": "REQ-0168",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.3.2  投标人认为存在低于成本价投标情形的，可以在开标现场提出异议，并在评标完成前向招标人递交书面材料，招标人应当及时将书面材料转交给评标委员会。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.3.2",
+      "excerpt": "5.3.2  投标人认为存在低于成本价投标情形的，可以在开标现场提出异议，并在评标完成前向招标人递交书面材料，招标人应当及时将书面材料转交给评标委员会。",
+      "has_scoring_params": false,
+      "id": "REQ-0169",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.4  电子招标开标的其他要求及异常处理",
+        "招标人采用电子招标投标方式的，开标的其他要求及异常处理方式见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "5.4",
+      "excerpt": "5.4  电子招标开标的其他要求及异常处理",
+      "has_scoring_params": false,
+      "id": "REQ-0170",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1  评标委员会"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.1",
+      "excerpt": "6.1  评标委员会",
+      "has_scoring_params": false,
+      "id": "REQ-0171",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.1  评标由依法组建的评标委员会负责，具体人数见投标人须知前附表。依法必须进行招标的通信工程建设项目，评标委员会的专家应当从通信工程建设项目评标专家库内相关专业的专家名单中采取随机抽取方式确定。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.1.1",
+      "excerpt": "6.1.1  评标由依法组建的评标委员会负责，具体人数见投标人须知前附表。依法必须进行招标的通信工程建设项目，评标委员会的专家应当从通信工程建设项目评标专家库内相关专业的专家名单中采取随机抽取方式确定。",
+      "has_scoring_params": false,
+      "id": "REQ-0172",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.2  评标期间，任何单位和个人不得非法干预或者影响评标的过程和结果。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.1.2",
+      "excerpt": "6.1.2  评标期间，任何单位和个人不得非法干预或者影响评标的过程和结果。",
+      "has_scoring_params": false,
+      "id": "REQ-0173",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1.3  评标委员会成员名单在中标结果确定前保 密。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.1.3",
+      "excerpt": "6.1.3  评标委员会成员名单在中标结果确定前保 密。",
+      "has_scoring_params": false,
+      "id": "REQ-0174",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2  评标原则"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.2",
+      "excerpt": "6.2  评标原则",
+      "has_scoring_params": false,
+      "id": "REQ-0175",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2.1  评标活动遵循公平、公正、科学和择优的原则。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.2.1",
+      "excerpt": "6.2.1  评标活动遵循公平、公正、科学和择优的原则。",
+      "has_scoring_params": false,
+      "id": "REQ-0176",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2.2  评标委员会按照第三章“评标办法”规定的方法、评审因素、标准和程序对投标文件进行评审。第三章“评标办法”没有规定的方法、评审因素和标准，不得作为评标依据。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.2.2",
+      "excerpt": "6.2.2  评标委员会按照第三章“评标办法”规定的方法、评审因素、标准和程序对投标文件进行评审。第三章“评标办法”没有规定的方法、评审因素和标准，不得作为评标依据。",
+      "has_scoring_params": false,
+      "id": "REQ-0177",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3  评标方法"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.3",
+      "excerpt": "6.3  评标方法",
+      "has_scoring_params": false,
+      "id": "REQ-0178",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3.1  招标文件中详细载明下述评标方法之一作为本项目评标所采用的评标方法。评标方法见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.3.1",
+      "excerpt": "6.3.1  招标文件中详细载明下述评标方法之一作为本项目评标所采用的评标方法。评标方法见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0179",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3.2  采用经评审的最低投标价法的，能够满足招标文件的实质性要求，并且经评审的最低投标价的投标，应当推荐为中标候选人，但是价格低于成本的除外。",
+        "采用综合评估法的，最大限度地满足招标文件中规定的各项综合评价标准的投标，应当推荐为中标候选人，量化的标准和权重应当在招标文件中明确规定。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.3.2",
+      "excerpt": "6.3.2  采用经评审的最低投标价法的，能够满足招标文件的实质性要求，并且经评审的最低投标价的投标，应当推荐为中标候选人，但是价格低于成本的除外。",
+      "has_scoring_params": false,
+      "id": "REQ-0180",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.3.3  法律、法规允许的其他评标方法。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.3.3",
+      "excerpt": "6.3.3  法律、法规允许的其他评标方法。",
+      "has_scoring_params": false,
+      "id": "REQ-0181",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.4  中标候选人推荐原则",
+        "评标委员会应当根据《招标投标法》《实施条例》和《管理办法》的有关规定推荐中标候选人，具体推荐原则见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.4",
+      "excerpt": "6.4  中标候选人推荐原则",
+      "has_scoring_params": false,
+      "id": "REQ-0182",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.5  评标报告",
+        "评标完成后，评标委员会应当根据《招标投标法》《实施条例》和《管理办法》的有关规定及时向招标人提交评标报告和中标候选人名单。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "6.5",
+      "excerpt": "6.5  评标报告",
+      "has_scoring_params": false,
+      "id": "REQ-0183",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1  中标候选人公示"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.1",
+      "excerpt": "7.1  中标候选人公示",
+      "has_scoring_params": false,
+      "id": "REQ-0184",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.1  依法必须进行招标的通信工程建设项目，采用公开招标方式的，招标人在收到评标报告之日起3日内在“资格预审公告”或者“招标公告”发布媒介公示全部中标候选人，公示期不少于3日。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": "7.1.1",
+      "excerpt": "7.1.1  依法必须进行招标的通信工程建设项目，采用公开招标方式的，招标人在收到评标报告之日起3日内在“资格预审公告”或者“招标公告”发布媒介公示全部中标候选人，公示期不少于3日。",
+      "has_scoring_params": false,
+      "id": "REQ-0185",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.2  依法必须进行招标的通信工程建设项目，采用邀请招标方式的，招标人在收到评标报告之日起3日内在通信工程建设项目招标投标管理信息平台公示全部中标候选人，公示期不少于3日。其他公示媒介见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.1.2",
+      "excerpt": "7.1.2  依法必须进行招标的通信工程建设项目，采用邀请招标方式的，招标人在收到评标报告之日起3日内在通信工程建设项目招标投标管理信息平台公示全部中标候选人，公示期不少于3日。其他公示媒介见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0186",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.1.3  投标人或者其他利害关系人对依法必须进行招标项目的评标结果有异议的，应当在中标候选人公示期间提出。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.1.3",
+      "excerpt": "7.1.3  投标人或者其他利害关系人对依法必须进行招标项目的评标结果有异议的，应当在中标候选人公示期间提出。",
+      "has_scoring_params": false,
+      "id": "REQ-0187",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2  确定中标人"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.2",
+      "excerpt": "7.2  确定中标人",
+      "has_scoring_params": false,
+      "id": "REQ-0188",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.1  除投标人须知前附表规定评标委员会直接确定中标人外，招标人依据评标委员会推荐的中标候选人确定中标人，中标人数量见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.2.1",
+      "excerpt": "7.2.1  除投标人须知前附表规定评标委员会直接确定中标人外，招标人依据评标委员会推荐的中标候选人确定中标人，中标人数量见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0189",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.2  招标人根据评标委员会推荐的中标候选人名单排序依次确定中标人，具体中标原则见投标人须知前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.2.2",
+      "excerpt": "7.2.2  招标人根据评标委员会推荐的中标候选人名单排序依次确定中标人，具体中标原则见投标人须知前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0190",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.2.3  在签订合同之前，中标人放弃中标或者不能履行合同的，招标人可以按照评标委员会提出的中标候选人名单排序依次确定其他中标候选人为中标人，也可以重新招标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.2.3",
+      "excerpt": "7.2.3  在签订合同之前，中标人放弃中标或者不能履行合同的，招标人可以按照评标委员会提出的中标候选人名单排序依次确定其他中标候选人为中标人，也可以重新招标。",
+      "has_scoring_params": false,
+      "id": "REQ-0191",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3  中标通知"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.3",
+      "excerpt": "7.3  中标通知",
+      "has_scoring_params": false,
+      "id": "REQ-0192",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.1  在中标通知书发出前，中标候选人的经营、财务状况发生较大变化或者存在违法行为，可能影响其履约能力的，投标人应当主动告知招标人。招标人认为可能影响其履约能力的，应当在发出中标通知书前由原评标委员会按照招标文件规定的标准和方法审查确认。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.1",
+      "excerpt": "7.3.1  在中标通知书发出前，中标候选人的经营、财务状况发生较大变化或者存在违法行为，可能影响其履约能力的，投标人应当主动告知招标人。招标人认为可能影响其履约能力的，应当在发出中标通知书前由原评标委员会按照招标文件规定的标准和方法审查确认。",
+      "has_scoring_params": false,
+      "id": "REQ-0193",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.2  中标人确定后，招标人应当自行或者委托招标代理机构向中标人发出中标通知书，同时通知未中标人。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.2",
+      "excerpt": "7.3.2  中标人确定后，招标人应当自行或者委托招标代理机构向中标人发出中标通知书，同时通知未中标人。",
+      "has_scoring_params": false,
+      "id": "REQ-0194",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.3  中标通知书是招标投标档案和合同的组成部分。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.3",
+      "excerpt": "7.3.3  中标通知书是招标投标档案和合同的组成部分。",
+      "has_scoring_params": false,
+      "id": "REQ-0195",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "7.3.4  中标通知书对招标人和中标人具有法律约束力。中标通知书发出后，招标人改变中标结果或者中标人放弃中标的，应当承担法律责任。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "7.3.4",
+      "excerpt": "7.3.4  中标通知书对招标人和中标人具有法律约束力。中标通知书发出后，招标人改变中标结果或者中标人放弃中标的，应当承担法律责任。",
+      "has_scoring_params": false,
+      "id": "REQ-0196",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1  履约保证金"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "8.1",
+      "excerpt": "8.1  履约保证金",
+      "has_scoring_params": false,
+      "id": "REQ-0197",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1.1  在签订合同前，中标人应当按照投标人须知前附表中规定的履约保证金的金额和形式向招标人递交履约保证金。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "8.1.1",
+      "excerpt": "8.1.1  在签订合同前，中标人应当按照投标人须知前附表中规定的履约保证金的金额和形式向招标人递交履约保证金。",
+      "has_scoring_params": false,
+      "id": "REQ-0198",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.1.2  中标人不能按照招标文件要求递交履约担保的，视为放弃中标，其投标保证金不予退还，给招标人造成的损失超过投标保证金数额的，中标人还应当对超过部分予以赔偿。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "8.1.2",
+      "excerpt": "8.1.2  中标人不能按照招标文件要求递交履约担保的，视为放弃中标，其投标保证金不予退还，给招标人造成的损失超过投标保证金数额的，中标人还应当对超过部分予以赔偿。",
+      "has_scoring_params": false,
+      "id": "REQ-0199",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.2  合同签订"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "8.2",
+      "excerpt": "8.2  合同签订",
+      "has_scoring_params": false,
+      "id": "REQ-0200",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.2.1  招标人和中标人应当自中标通知书发出之日起30日内，根据招标文件和中标人的投标文件订立书面合同。招标人和中标人不得订立背离合同实质性内容的其他协议。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "8.2.1",
+      "excerpt": "8.2.1  招标人和中标人应当自中标通知书发出之日起30日内，根据招标文件和中标人的投标文件订立书面合同。招标人和中标人不得订立背离合同实质性内容的其他协议。",
+      "has_scoring_params": false,
+      "id": "REQ-0201",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "8.2.2  中标人无正当理由拒签合同的，招标人取消其中标资格，其投标保证金不予退还；给招标人造成的损失超过投标保证金数额的，中标人还应当对超过部分予以赔偿。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "8.2.2",
+      "excerpt": "8.2.2  中标人无正当理由拒签合同的，招标人取消其中标资格，其投标保证金不予退还；给招标人造成的损失超过投标保证金数额的，中标人还应当对超过部分予以赔偿。",
+      "has_scoring_params": false,
+      "id": "REQ-0202",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.1  对招标人的纪律要求",
+        "招标人不得泄漏招标投标活动中应当保 密的情况和资料，不得与投标人串通损害国家利益、社会公共利益或者他人合法权益。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "10.1",
+      "excerpt": "10.1  对招标人的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0203",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.2  对投标人的纪律要求"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "10.2",
+      "excerpt": "10.2  对投标人的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0204",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "投标人不得相互串通投标或者与招标人串通投标，不得向招标人或者评标委员会成员行贿谋取中标，不得以他人名义投标或者以其他方式弄虚作假骗取中标；投标人不得以任何方式干扰、影响评标工作。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "投标人不得相互串通投标或者与招标人串通投标，不得向招标人或者评标委员会成员行贿谋取中标，不得以他人名义投标或者以其他方式弄虚作假骗取中标；投标人不得以任何方式干扰、影响评标工作。",
+      "has_scoring_params": false,
+      "id": "REQ-0205",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.3  对评标委员会成员的纪律要求",
+        "评标委员会成员不得收受他人的财物或者其他好处，不得向他人透漏对投标文件的评审和比较、中标候选人的推荐情况以及评标有关的其他情况。在评标活动中，评标委员会成员应当客观、公正地履行职责，遵守职业道德，不得擅离职守，影响评标程序正常进行，不得使用第三章“评标办法”没有规定的评审因素和标准进行评标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "10.3",
+      "excerpt": "10.3  对评标委员会成员的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0206",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.4  对与评标活动有关的工作人员的纪律要求",
+        "与评标活动有关的工作人员不得收受他人的财物或者其他好处，不得向他人透漏对投标文件的评审和比较、中标候选人的推荐情况以及评标有关的其他情况。在评标活动中，与评标活动有关的工作人员不得擅离职守，影响评标程序正常进行。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "10.4",
+      "excerpt": "10.4  对与评标活动有关的工作人员的纪律要求",
+      "has_scoring_params": false,
+      "id": "REQ-0207",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "10.5  投诉",
+        "投标人或者其他利害关系人认为招标投标活动不符合法律、法规规定的，可以自知道或应当知道之日起10日内向有关行政监督部门投诉。投诉应当有明确的请求和必要的证明材料。就招标文件、开标、中标候选人公示投诉的，应当先向招标人提出异议，异议答复期间不计算在前款规定的期限内。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "10.5",
+      "excerpt": "10.5  投诉",
+      "has_scoring_params": false,
+      "id": "REQ-0208",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1 初步评审"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "2.1",
+      "excerpt": "2.1 初步评审",
+      "has_scoring_params": false,
+      "id": "REQ-0209",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1 初步\n评审\n标准 形式评审 投标人名称 与营业执照、资质证书一致"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-2",
+      "excerpt": "2.1 初步\n评审\n标准 形式评审 投标人名称 与营业执照、资质证书一致",
+      "has_scoring_params": false,
+      "id": "REQ-0210",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "投标文件签字盖章 符合第二章“投标人须知”规定并提供签字盖章页的扫描件"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-3",
+      "excerpt": "投标文件签字盖章 符合第二章“投标人须知”规定并提供签字盖章页的扫描件",
+      "has_scoring_params": false,
+      "id": "REQ-0211",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "投标文件格式 符合第六章“投标文件格式”的要求"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-4",
+      "excerpt": "投标文件格式 符合第六章“投标文件格式”的要求",
+      "has_scoring_params": false,
+      "id": "REQ-0212",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "财务要求 投标人须具备开具增值税专用发票的能力。若投标人为增值税一般纳税人，须提供税务局相关网页截图；若投标人为非增值税一般纳税人，须提供可开具增值税专用发票承诺书并加盖公章及已开具的增值税专用发票扫描件。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-9",
+      "excerpt": "财务要求 投标人须具备开具增值税专用发票的能力。若投标人为增值税一般纳税人，须提供税务局相关网页截图；若投标人为非增值税一般纳税人，须提供可开具增值税专用发票承诺书并加盖公章及已开具的增值税专用发票扫描件。",
+      "has_scoring_params": false,
+      "id": "REQ-0213",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "信誉要求 具有良好的银行资信和商业信誉：\n（1）未处于被责令停业，财产被接管，冻结，破产状态，在近三年（2023年01月01日至投标截止日）的经营活动中没有重大违法、违规记录，没有骗取中标和严重违约行为（被中国联通集团或软研院列入黑名单但解除禁入期的不属于上述情形）。须提供加盖公章的合规经营承诺书；\n（2）未处于“国家企业信用信息公示系统（www.gsxt.gov.cn）”的“经营异常名录”或“严"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-11",
+      "excerpt": "信誉要求 具有良好的银行资信和商业信誉：\n（1）未处于被责令停业，财产被接管，冻结，破产状态，在近三年（2023年01月01日至投标截止日）的经营活动中没有重大违法、违规记录，没有骗取中标和严重违约行为（被中国联通集团或软研院列入黑名单但解除禁入期的不属于上述情形）。须提供加盖公章的合规经营承诺书；\n（2）未处于“国家企业信用信息公示系统（www.gsxt.gov.cn）”的“经营异常名录”或“严",
+      "has_scoring_params": false,
+      "id": "REQ-0214",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "联合体要求 本项目 不接受 联合体投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-12",
+      "excerpt": "联合体要求 本项目 不接受 联合体投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0215",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "其他要求 （1）处于禁入期内的中国联通以及软研院黑名单供应商不得参与投标。\n（2）单位负责人为同一人或者存在控股、管理关系的不同投标人，不得同时参加本项目的投标。如同时参加，否决符合上述情况的所有投标人在本项目的投标。\n（3）法定代表人为同一人的两个及两个以上法人，母公司、全资子公司及其控股公司，不得在本项目中同时投标。如同时参加，否决符合上述情况的所有投标人在本项目的投标。\n（4）投标人须承诺不"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-13",
+      "excerpt": "其他要求 （1）处于禁入期内的中国联通以及软研院黑名单供应商不得参与投标。\n（2）单位负责人为同一人或者存在控股、管理关系的不同投标人，不得同时参加本项目的投标。如同时参加，否决符合上述情况的所有投标人在本项目的投标。\n（3）法定代表人为同一人的两个及两个以上法人，母公司、全资子公司及其控股公司，不得在本项目中同时投标。如同时参加，否决符合上述情况的所有投标人在本项目的投标。\n（4）投标人须承诺不",
+      "has_scoring_params": false,
+      "id": "REQ-0216",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "响应性评审 投标有效期 响应投标有效期180天，符合第二章“投标人须知”第3.4.1款规定"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-14",
+      "excerpt": "响应性评审 投标有效期 响应投标有效期180天，符合第二章“投标人须知”第3.4.1款规定",
+      "has_scoring_params": false,
+      "id": "REQ-0217",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "商务部分偏离表 响应招标文件“投标人须知”“合同条款”，偏离标准符合第二章“投标人须知”第2.1.3款规定"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-15",
+      "excerpt": "商务部分偏离表 响应招标文件“投标人须知”“合同条款”，偏离标准符合第二章“投标人须知”第2.1.3款规定",
+      "has_scoring_params": false,
+      "id": "REQ-0218",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "技术部分偏离表 响应招标文件“技术标准及要求”，偏离标准符合第二章“投标人须知”第2.1.3款规定"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-16",
+      "excerpt": "技术部分偏离表 响应招标文件“技术标准及要求”，偏离标准符合第二章“投标人须知”第2.1.3款规定",
+      "has_scoring_params": false,
+      "id": "REQ-0219",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "初步评审为合格制，投标人上述资格审查项中有一项不合格，评标委员会将否决其投标，不再对其进行商务、技术、价格的详细评审。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-17",
+      "excerpt": "初步评审为合格制，投标人上述资格审查项中有一项不合格，评标委员会将否决其投标，不再对其进行商务、技术、价格的详细评审。",
+      "has_scoring_params": false,
+      "id": "REQ-0220",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2详细评审"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "2.2",
+      "excerpt": "2.2详细评审",
+      "has_scoring_params": false,
+      "id": "REQ-0221",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "分值构成及权重 (1) 价格部分（占总分权重40%）：40分\n(2) 技术部分（占总分权重60%）：60分\n注：以上打分最终均保留2位小数，第三位四舍五入。\n※本项目设置技术评分基准线：技术部分评分基准线＝技术部分分值×60%（即60×60%= 36分）；\n技术部分评分低于基准线的投标将被视为存在重大技术偏差，其投标将被否决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-2",
+      "excerpt": "分值构成及权重 (1) 价格部分（占总分权重40%）：40分\n(2) 技术部分（占总分权重60%）：60分\n注：以上打分最终均保留2位小数，第三位四舍五入。\n※本项目设置技术评分基准线：技术部分评分基准线＝技术部分分值×60%（即60×60%= 36分）；\n技术部分评分低于基准线的投标将被视为存在重大技术偏差，其投标将被否决。",
+      "has_scoring_params": false,
+      "id": "REQ-0222",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.1 投标报价评审标准 价格公式：价格分=总价得分+单价得分\n总价得分＝价格分权重×75%×（1－（评审总价－下限总价）÷有效最高总价）\n单价得分＝价格分权重×25%×（1－（评审单价－下限单价）÷有效最高单价）\n价格评审规则：\n1.评审总价：经评标委员会评审后的有效投标人不含增值税总价；\n2.评审单价：经评标委员会评审后的有效投标人不含增值税平均单价（即为：投标总价（不含增值税）/总工作量"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "表-4",
+      "excerpt": "2.2.1 投标报价评审标准 价格公式：价格分=总价得分+单价得分\n总价得分＝价格分权重×75%×（1－（评审总价－下限总价）÷有效最高总价）\n单价得分＝价格分权重×25%×（1－（评审单价－下限单价）÷有效最高单价）\n价格评审规则：\n1.评审总价：经评标委员会评审后的有效投标人不含增值税总价；\n2.评审单价：经评标委员会评审后的有效投标人不含增值税平均单价（即为：投标总价（不含增值税）/总工作量",
+      "has_scoring_params": false,
+      "id": "REQ-0223",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2.2 技术部分评审标准 详见附件1：详细评审表\n注：根据中国联通集团关于供应商管理的相关规定，对因业务不可替代暂不列入黑名单的供应商（具体名单及有效期，以纪检部门发布的名单为准），详细评审时扣减2分；其他供应商不扣分。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "表-5",
+      "excerpt": "2.2.2 技术部分评审标准 详见附件1：详细评审表\n注：根据中国联通集团关于供应商管理的相关规定，对因业务不可替代暂不列入黑名单的供应商（具体名单及有效期，以纪检部门发布的名单为准），详细评审时扣减2分；其他供应商不扣分。",
+      "has_scoring_params": false,
+      "id": "REQ-0224",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1  初步评审标准",
+        "初步评审标准：见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "2.1",
+      "excerpt": "2.1  初步评审标准",
+      "has_scoring_params": false,
+      "id": "REQ-0225",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2  详细评审标准",
+        "详细评审标准：见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "2.2",
+      "excerpt": "2.2  详细评审标准",
+      "has_scoring_params": false,
+      "id": "REQ-0226",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1  初步评审"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.1",
+      "excerpt": "3.1  初步评审",
+      "has_scoring_params": false,
+      "id": "REQ-0227",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.1  评标委员会根据本章第2.1款规定的标准对投标文件进行初步评审。有一项不符合评审标准的，评标委员会应当否决其投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.1",
+      "excerpt": "3.1.1  评标委员会根据本章第2.1款规定的标准对投标文件进行初步评审。有一项不符合评审标准的，评标委员会应当否决其投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0228",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.2  投标人有以下情形之一的，评标委员会应当否决其投标："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.2",
+      "excerpt": "3.1.2  投标人有以下情形之一的，评标委员会应当否决其投标：",
+      "has_scoring_params": false,
+      "id": "REQ-0229",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）第二章“投标人须知”第1.8款规定的任何一种情形的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）第二章“投标人须知”第1.8款规定的任何一种情形的；",
+      "has_scoring_params": false,
+      "id": "REQ-0230",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）不按照评标委员会要求澄清、说明或者补正的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）不按照评标委员会要求澄清、说明或者补正的；",
+      "has_scoring_params": false,
+      "id": "REQ-0231",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（3）投标文件未经投标单位盖章和单位负责人签字；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（3）投标文件未经投标单位盖章和单位负责人签字；",
+      "has_scoring_params": false,
+      "id": "REQ-0232",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（4）允许联合体投标的，投标联合体没有递交共同投标协议；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（4）允许联合体投标的，投标联合体没有递交共同投标协议；",
+      "has_scoring_params": false,
+      "id": "REQ-0233",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（5）投标人不符合国家或者招标文件规定的资格条件；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（5）投标人不符合国家或者招标文件规定的资格条件；",
+      "has_scoring_params": false,
+      "id": "REQ-0234",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（6）同一投标人递交两个以上不同的投标文件或者投标报价，但招标文件要求递交备选投标的除外；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（6）同一投标人递交两个以上不同的投标文件或者投标报价，但招标文件要求递交备选投标的除外；",
+      "has_scoring_params": false,
+      "id": "REQ-0235",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（7）投标报价低于成本或者高于招标文件设定的最高投标限价；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（7）投标报价低于成本或者高于招标文件设定的最高投标限价；",
+      "has_scoring_params": false,
+      "id": "REQ-0236",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（8）投标文件没有对招标文件的实质性要求和条件作出响应；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（8）投标文件没有对招标文件的实质性要求和条件作出响应；",
+      "has_scoring_params": false,
+      "id": "REQ-0237",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（9）投标人有串通投标、弄虚作假、行贿等违法行为；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（9）投标人有串通投标、弄虚作假、行贿等违法行为；",
+      "has_scoring_params": false,
+      "id": "REQ-0238",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（10）投标人以他人名义投标；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（10）投标人以他人名义投标；",
+      "has_scoring_params": false,
+      "id": "REQ-0239",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（11）没有按照招标文件要求提供投标担保或者所提供的投标担保有瑕疵；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（11）没有按照招标文件要求提供投标担保或者所提供的投标担保有瑕疵；",
+      "has_scoring_params": false,
+      "id": "REQ-0240",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（12）投标文件载明的招标项目完成期限超过招标文件规定的期限；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（12）投标文件载明的招标项目完成期限超过招标文件规定的期限；",
+      "has_scoring_params": false,
+      "id": "REQ-0241",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（13）明显不符合技术规格、技术标准的要求；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（13）明显不符合技术规格、技术标准的要求；",
+      "has_scoring_params": false,
+      "id": "REQ-0242",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（14）投标文件载明的货物包装方式、检验标准和方法等不符合招标文件的要求；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（14）投标文件载明的货物包装方式、检验标准和方法等不符合招标文件的要求；",
+      "has_scoring_params": false,
+      "id": "REQ-0243",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（15）投标文件附有招标人不能接受的条件；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（15）投标文件附有招标人不能接受的条件；",
+      "has_scoring_params": false,
+      "id": "REQ-0244",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（16）不符合招标文件中规定的其他实质性要求。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（16）不符合招标文件中规定的其他实质性要求。",
+      "has_scoring_params": false,
+      "id": "REQ-0245",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.3  评标过程中，评标委员会收到低于成本价投标的书面质疑材料、发现投标人的综合报价明显低于其他投标报价或者设有标底时明显低于标底，认为投标报价可能低于其个别成本的，应当书面要求该投标人做出书面说明并提供相关证明材料。投标人不能合理说明或者不能提供相应证明材料的，由评标委员会认定该投标人以低于成本报价竞标，评标委员会应当否决其投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.3",
+      "excerpt": "3.1.3  评标过程中，评标委员会收到低于成本价投标的书面质疑材料、发现投标人的综合报价明显低于其他投标报价或者设有标底时明显低于标底，认为投标报价可能低于其个别成本的，应当书面要求该投标人做出书面说明并提供相关证明材料。投标人不能合理说明或者不能提供相应证明材料的，由评标委员会认定该投标人以低于成本报价竞标，评标委员会应当否决其投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0246",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1.4  投标报价有算术错误的，评标委员会按照以下原则对投标报价进行修正，修正的价格经投标人书面确认后具有约束力。投标人不接受修正价格的，评标委员会应当否决其投标。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.1.4",
+      "excerpt": "3.1.4  投标报价有算术错误的，评标委员会按照以下原则对投标报价进行修正，修正的价格经投标人书面确认后具有约束力。投标人不接受修正价格的，评标委员会应当否决其投标。",
+      "has_scoring_params": false,
+      "id": "REQ-0247",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1） 投标文件中的大写金额与小写金额不一致的，以大写金额为准；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": null,
+      "excerpt": "（1） 投标文件中的大写金额与小写金额不一致的，以大写金额为准；",
+      "has_scoring_params": false,
+      "id": "REQ-0248",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2） 总价金额与根据单价计算出的结果不一致的，以单价金额为准修正总价，但单价金额小数点有明显错误的除外。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": null,
+      "excerpt": "（2） 总价金额与根据单价计算出的结果不一致的，以单价金额为准修正总价，但单价金额小数点有明显错误的除外。",
+      "has_scoring_params": false,
+      "id": "REQ-0249",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2  详细评审"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2",
+      "excerpt": "3.2  详细评审",
+      "has_scoring_params": false,
+      "id": "REQ-0250",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.1  评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计算出综合评估得分。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2.1",
+      "excerpt": "3.2.1  评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计算出综合评估得分。",
+      "has_scoring_params": false,
+      "id": "REQ-0251",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2.2  评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规定的，见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.2.2",
+      "excerpt": "3.2.2  评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规定的，见评标办法前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0252",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3  投标文件的澄清"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3",
+      "excerpt": "3.3  投标文件的澄清",
+      "has_scoring_params": false,
+      "id": "REQ-0253",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.1  在评标过程中，评标委员会应当以书面形式要求投标人对所递交的投标文件中不明确的内容进行书面澄清、说明或者对投标文件中的细微偏差进行补正。评标委员会不接受投标人主动提出的澄清、说明或者补正。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": "3.3.1",
+      "excerpt": "3.3.1  在评标过程中，评标委员会应当以书面形式要求投标人对所递交的投标文件中不明确的内容进行书面澄清、说明或者对投标文件中的细微偏差进行补正。评标委员会不接受投标人主动提出的澄清、说明或者补正。",
+      "has_scoring_params": false,
+      "id": "REQ-0254",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.2  细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者提供了不完整的技术信息和数据等情况，并且补正这些遗漏或者不完整不会对其他投标人造成不公平的结果。细微偏差不影响投标文件的有效性。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3.2",
+      "excerpt": "3.3.2  细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者提供了不完整的技术信息和数据等情况，并且补正这些遗漏或者不完整不会对其他投标人造成不公平的结果。细微偏差不影响投标文件的有效性。",
+      "has_scoring_params": false,
+      "id": "REQ-0255",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.3  澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。投标人的书面澄清、说明和补正属于投标文件的组成部分。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.3.3",
+      "excerpt": "3.3.3  澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。投标人的书面澄清、说明和补正属于投标文件的组成部分。",
+      "has_scoring_params": false,
+      "id": "REQ-0256",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.4  评标委员会对投标人递交的澄清、说明或者补正有疑问的，可以要求投标人进一步澄清、说明或者补正，直至满足评标委员会的要求。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.4",
+      "excerpt": "3.3.4  评标委员会对投标人递交的澄清、说明或者补正有疑问的，可以要求投标人进一步澄清、说明或者补正，直至满足评标委员会的要求。",
+      "has_scoring_params": false,
+      "id": "REQ-0257",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.3.5  评标委员会必要时可以要求投标人递交有关证明和证件的原件，以便核验。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": "3.3.5",
+      "excerpt": "3.3.5  评标委员会必要时可以要求投标人递交有关证明和证件的原件，以便核验。",
+      "has_scoring_params": false,
+      "id": "REQ-0258",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4  中标候选人推荐原则"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.4",
+      "excerpt": "3.4  中标候选人推荐原则",
+      "has_scoring_params": false,
+      "id": "REQ-0259",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.1  除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委员会按照综合评分由高到低的顺序推荐中标候选人。综合评分相同的，处理原则见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.4.1",
+      "excerpt": "3.4.1  除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委员会按照综合评分由高到低的顺序推荐中标候选人。综合评分相同的，处理原则见评标办法前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0260",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.4.2  中标候选人推荐原则见评标办法前附表。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.4.2",
+      "excerpt": "3.4.2  中标候选人推荐原则见评标办法前附表。",
+      "has_scoring_params": false,
+      "id": "REQ-0261",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5  评标结果"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5",
+      "excerpt": "3.5  评标结果",
+      "has_scoring_params": false,
+      "id": "REQ-0262",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.1  评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审的，应当形成统一、完整的评标报告。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5.1",
+      "excerpt": "3.5.1  评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审的，应当形成统一、完整的评标报告。",
+      "has_scoring_params": false,
+      "id": "REQ-0263",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.5.2  评标报告应当包括下列内容："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "评分项",
+      "clause_no": "3.5.2",
+      "excerpt": "3.5.2  评标报告应当包括下列内容：",
+      "has_scoring_params": false,
+      "id": "REQ-0264",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（6）资格审查资料（详见附件六）"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "（6）资格审查资料（详见附件六）",
+      "has_scoring_params": false,
+      "id": "REQ-0265",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "附件六：资格审查资料内容及格式"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "附件六：资格审查资料内容及格式",
+      "has_scoring_params": false,
+      "id": "REQ-0266",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "附件六所列的内容应符合第二章“投标人须知”第3.5.2款规定的要求。即使采用资格预审方式，如第三章“评标办法”中对投标人财务状况、同类业绩等进行评审，附件六所列的内容也应根据评审相关要求提供，否则评标委员会有权作出对投标人不利的评审。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "附件六所列的内容应符合第二章“投标人须知”第3.5.2款规定的要求。即使采用资格预审方式，如第三章“评标办法”中对投标人财务状况、同类业绩等进行评审，附件六所列的内容也应根据评审相关要求提供，否则评标委员会有权作出对投标人不利的评审。",
+      "has_scoring_params": false,
+      "id": "REQ-0267",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "15、供应商黑名单管理承诺书（格式见附件六-15）"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "15、供应商黑名单管理承诺书（格式见附件六-15）",
+      "has_scoring_params": false,
+      "id": "REQ-0268",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2．本表不够时可自制和扩展，并请在本表后附营业执照、组织机构代码证书、税务登记证书或三（五）证合一的统一社会信用代码的营业执照、质量管理体系等扫描件。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "资格条件",
+      "clause_no": null,
+      "excerpt": "2．本表不够时可自制和扩展，并请在本表后附营业执照、组织机构代码证书、税务登记证书或三（五）证合一的统一社会信用代码的营业执照、质量管理体系等扫描件。",
+      "has_scoring_params": false,
+      "id": "REQ-0269",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（2）我司满足“处于禁入期内的中国联通以及软研院黑名单供应商不得参与投标”的要求；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（2）我司满足“处于禁入期内的中国联通以及软研院黑名单供应商不得参与投标”的要求；",
+      "has_scoring_params": false,
+      "id": "REQ-0270",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "我公司在此郑重承诺，我公司在近三年（2023年1月1日至投标文件递交截止之日）的经营活动中没有骗取中标、严重违约、重大工程质量或安全问题，不存在如下情形："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "我公司在此郑重承诺，我公司在近三年（2023年1月1日至投标文件递交截止之日）的经营活动中没有骗取中标、严重违约、重大工程质量或安全问题，不存在如下情形：",
+      "has_scoring_params": false,
+      "id": "REQ-0271",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（9）被依法暂停或者取消投标资格；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（9）被依法暂停或者取消投标资格；",
+      "has_scoring_params": false,
+      "id": "REQ-0272",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（12）在最近三年内发生重大质量问题（以相关行业主管部门的行政处罚决定或司法机关出具的有关法律文书为准）；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（12）在最近三年内发生重大质量问题（以相关行业主管部门的行政处罚决定或司法机关出具的有关法律文书为准）；",
+      "has_scoring_params": false,
+      "id": "REQ-0273",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（13）被工商行政管理机关在全国企业信用信息公示系统中列入严重违法失信企业名单；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（13）被工商行政管理机关在全国企业信用信息公示系统中列入严重违法失信企业名单；",
+      "has_scoring_params": false,
+      "id": "REQ-0274",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "按照《中国联通供应商黑名单管理办法》相关规定进行处罚。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "按照《中国联通供应商黑名单管理办法》相关规定进行处罚。",
+      "has_scoring_params": false,
+      "id": "REQ-0275",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "注：已被中国联通集团或软研院列入黑名单并被处罚过的事项不再视为违反上述承诺书的情形。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "注：已被中国联通集团或软研院列入黑名单并被处罚过的事项不再视为违反上述承诺书的情形。",
+      "has_scoring_params": false,
+      "id": "REQ-0276",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "为深入推进反腐倡廉工作，建立健全防治商业贿赂的长效机制，我方愿与招标人携手，共同遵守国家法律法规以及廉洁从业方面的相关规定，坚决抵制不良风气，摒弃不良行为，共同构建公平公正、风清气正的营商环境，共同建立廉洁守纪、互利共赢的亲清关系。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "为深入推进反腐倡廉工作，建立健全防治商业贿赂的长效机制，我方愿与招标人携手，共同遵守国家法律法规以及廉洁从业方面的相关规定，坚决抵制不良风气，摒弃不良行为，共同构建公平公正、风清气正的营商环境，共同建立廉洁守纪、互利共赢的亲清关系。",
+      "has_scoring_params": false,
+      "id": "REQ-0277",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.不发生串标、围标、骗标等情况，自觉抵制失信、违规、违法行为。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "1.不发生串标、围标、骗标等情况，自觉抵制失信、违规、违法行为。",
+      "has_scoring_params": false,
+      "id": "REQ-0278",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "如我方违反以上承诺，贵公司有权终止与我方合作，并可将我方列入贵公司的供应商黑名单。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "如我方违反以上承诺，贵公司有权终止与我方合作，并可将我方列入贵公司的供应商黑名单。",
+      "has_scoring_params": false,
+      "id": "REQ-0279",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "我方参加    （项目名称）   的投标，根据法律法规维护投标公正性的相关规定，如我方申报不实，我方接受被否决投标，按照《中国联通供应商黑名单管理办法》相关规定进行处理并承担一切违反相关法律法规责任及由此给招标人造成的损失。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "我方参加    （项目名称）   的投标，根据法律法规维护投标公正性的相关规定，如我方申报不实，我方接受被否决投标，按照《中国联通供应商黑名单管理办法》相关规定进行处理并承担一切违反相关法律法规责任及由此给招标人造成的损失。",
+      "has_scoring_params": false,
+      "id": "REQ-0280",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "附件六-15: 供应商黑名单管理承诺书（彩色扫描件）"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "附件六-15: 供应商黑名单管理承诺书（彩色扫描件）",
+      "has_scoring_params": false,
+      "id": "REQ-0281",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "供应商黑名单管理承诺书"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "供应商黑名单管理承诺书",
+      "has_scoring_params": false,
+      "id": "REQ-0282",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "中国联通已实行供应商黑名单管理制度。根据《中国联通供应商黑名单管理办法》(以下简称：黑名单管理办法)的相关要求，供应商存在如下行为，经查实后列入黑名单："
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "中国联通已实行供应商黑名单管理制度。根据《中国联通供应商黑名单管理办法》(以下简称：黑名单管理办法)的相关要求，供应商存在如下行为，经查实后列入黑名单：",
+      "has_scoring_params": false,
+      "id": "REQ-0283",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "（1）通过商业贿赂及其他不正当手段谋取利益，致使中国联通干部员工违反党纪国法企规受到党纪政务重处分、行政处罚或被追究刑事责任的；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "（1）通过商业贿赂及其他不正当手段谋取利益，致使中国联通干部员工违反党纪国法企规受到党纪政务重处分、行政处罚或被追究刑事责任的；",
+      "has_scoring_params": false,
+      "id": "REQ-0284",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "在采购/招标过程中，如果被列入中国联通黑名单供应商，中国联通有权废止其参与资格、中选/中标资格、签订合同资格；在合同履行过程中，如果被列入中国联通黑名单供应商，中国联通有权立即终止合同执行，相关后果由供应商承担。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "在采购/招标过程中，如果被列入中国联通黑名单供应商，中国联通有权废止其参与资格、中选/中标资格、签订合同资格；在合同履行过程中，如果被列入中国联通黑名单供应商，中国联通有权立即终止合同执行，相关后果由供应商承担。",
+      "has_scoring_params": false,
+      "id": "REQ-0285",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "供应商如被列入黑名单，中国联通有权禁止其在中国联通的禁入范围内提供产品或服务，并视供应商不当行为根据行为情节对供应商设定1年、3年、5年的禁入期限。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "供应商如被列入黑名单，中国联通有权禁止其在中国联通的禁入范围内提供产品或服务，并视供应商不当行为根据行为情节对供应商设定1年、3年、5年的禁入期限。",
+      "has_scoring_params": false,
+      "id": "REQ-0286",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "1.1  供应商承诺遵守所有适用的法律法规、行业标准及一般通行商业准则，建立和不断提升自身治理体系，以确保合规和社会责任理念的贯彻执行。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "1.1",
+      "excerpt": "1.1  供应商承诺遵守所有适用的法律法规、行业标准及一般通行商业准则，建立和不断提升自身治理体系，以确保合规和社会责任理念的贯彻执行。",
+      "has_scoring_params": false,
+      "id": "REQ-0287",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.1 反腐败基本原则：供应商承诺遵守所适用的有关反腐败、反商业贿赂等方面的法律法规，包括供应商业务所在国法律法规和适用的外国法律。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.1",
+      "excerpt": "2.1 反腐败基本原则：供应商承诺遵守所适用的有关反腐败、反商业贿赂等方面的法律法规，包括供应商业务所在国法律法规和适用的外国法律。",
+      "has_scoring_params": false,
+      "id": "REQ-0288",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "2.2 公平竞争：供应商承诺遵守所有适用的关于公平交易和竞争的法律，不得在业务活动中制约或限制其他方的竞争。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "2.2",
+      "excerpt": "2.2 公平竞争：供应商承诺遵守所有适用的关于公平交易和竞争的法律，不得在业务活动中制约或限制其他方的竞争。",
+      "has_scoring_params": false,
+      "id": "REQ-0289",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.1 知识产权保护：供应商应尊重和保护联通及联通客户、合作方和其他第三方的知识产权和商业秘密，并按照合同约定的目的合理使用。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.1",
+      "excerpt": "3.1 知识产权保护：供应商应尊重和保护联通及联通客户、合作方和其他第三方的知识产权和商业秘密，并按照合同约定的目的合理使用。",
+      "has_scoring_params": false,
+      "id": "REQ-0290",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "3.2 数据安全与隐私保护：供应商应保护与之有业务往来的所有人员的个人信息，包括联通员工、客户、合作方等的联系方式、通信记录和其它非公开信息。当发生收集、储存、转移、分享或披露个人信息的情形时，供应商应采取有效措施确保遵守适用的数据安全和个人隐私法律法规要求。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "3.2",
+      "excerpt": "3.2 数据安全与隐私保护：供应商应保护与之有业务往来的所有人员的个人信息，包括联通员工、客户、合作方等的联系方式、通信记录和其它非公开信息。当发生收集、储存、转移、分享或披露个人信息的情形时，供应商应采取有效措施确保遵守适用的数据安全和个人隐私法律法规要求。",
+      "has_scoring_params": false,
+      "id": "REQ-0291",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.1 制裁和贸易合规：供应商知悉联通致力于确保其贸易、投资和其它业务活动不违反所适用的贸易管制和经济、金融制裁法律法规和行政令，以及相关的反制规定。供应商同意并承诺，供应商及其代理商、代表在履行与联通的协议的过程中将全面遵守所有适用的制裁规则。如果供应商自身及其控股母公司或实际控制人目前已被列入制裁名单，供应商承诺与联通的合作事宜并不违反该等贸易、经济或金融制裁要求；在本承诺对应的业务合同签署后"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.1",
+      "excerpt": "4.1 制裁和贸易合规：供应商知悉联通致力于确保其贸易、投资和其它业务活动不违反所适用的贸易管制和经济、金融制裁法律法规和行政令，以及相关的反制规定。供应商同意并承诺，供应商及其代理商、代表在履行与联通的协议的过程中将全面遵守所有适用的制裁规则。如果供应商自身及其控股母公司或实际控制人目前已被列入制裁名单，供应商承诺与联通的合作事宜并不违反该等贸易、经济或金融制裁要求；在本承诺对应的业务合同签署后",
+      "has_scoring_params": false,
+      "id": "REQ-0292",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.2 协助义务：供应商承诺配合提供或确认其依据本承诺对应的业务合同销售给联通的商品信息，以使联通将供应商销售给联通的商品转移给第三方的行为，符合贸易管制和经济、金融制裁法律法规和行政令。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.2",
+      "excerpt": "4.2 协助义务：供应商承诺配合提供或确认其依据本承诺对应的业务合同销售给联通的商品信息，以使联通将供应商销售给联通的商品转移给第三方的行为，符合贸易管制和经济、金融制裁法律法规和行政令。",
+      "has_scoring_params": false,
+      "id": "REQ-0293",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "4.3 供应商承诺严格遵守《中华人民共和国反外国制裁法》和配套法律法规的相关要求（合称“中国反制规则”）。若中国反制规则与相关国家适用的制裁法律发生冲突时，供应商应及时告知联通冲突事宜，与联通协商解决。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "4.3",
+      "excerpt": "4.3 供应商承诺严格遵守《中华人民共和国反外国制裁法》和配套法律法规的相关要求（合称“中国反制规则”）。若中国反制规则与相关国家适用的制裁法律发生冲突时，供应商应及时告知联通冲突事宜，与联通协商解决。",
+      "has_scoring_params": false,
+      "id": "REQ-0294",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "5.1 建立合规治理体系：供应商应建立自身合规治理体系，并制定公司的社会责任和合规政策，明确承诺遵守相关法律法规。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "5.1",
+      "excerpt": "5.1 建立合规治理体系：供应商应建立自身合规治理体系，并制定公司的社会责任和合规政策，明确承诺遵守相关法律法规。",
+      "has_scoring_params": false,
+      "id": "REQ-0295",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.1 联通有权要求限期整改，或降低采购份额，或限制业务合作机会，直至单方面中止或终止与供应商及其关联企业的合作；"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "6.1",
+      "excerpt": "6.1 联通有权要求限期整改，或降低采购份额，或限制业务合作机会，直至单方面中止或终止与供应商及其关联企业的合作；",
+      "has_scoring_params": false,
+      "id": "REQ-0296",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "6.2联通有权按照合同约定扣除供应商的保证金，和/或主张违约金，并保留追究进一步索赔的权利。",
+        "投标人名称：              （加盖公章）",
+        "法定代表人签字或盖章（或其授权代表签字）：",
+        "日    期：    年    月    日",
+        "附件六-17:绿色包装承诺书（如有）（彩色扫描件）",
+        "绿色包装承诺书",
+        "XXXX：",
+        "我公司承诺如下：",
+        "我司郑重承诺不使用来自松材线虫病疫区的松木及包装材料，所提供产品符合绿色包装的要求，不使用含有有毒、有害物质作为包装物材料，使用可循环使用、可降解或者可以无害化处理的包装物，避免过度包装；在满足需求的前提下，尽量减少包装物的材料消耗。若因我公司违反本承诺书内容，而给贵公司带来任何经济、名誉等损失，我公司承担全部赔偿责任。",
+        "根据相关要求，我司针对本项目所用包装材料为：（如有）"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "格式要求",
+      "clause_no": "6.2",
+      "excerpt": "6.2联通有权按照合同约定扣除供应商的保证金，和/或主张违约金，并保留追究进一步索赔的权利。",
+      "has_scoring_params": false,
+      "id": "REQ-0297",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "如违反上述承诺，我方自愿接受中国联通的处罚，包括但不限于扣罚全部约保证金、终止协议、禁止参加中国联通下一期相关产品集中采购、列入中国联通供应商黑名单等，并由我方赔偿由此造成的一切损失。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "如违反上述承诺，我方自愿接受中国联通的处罚，包括但不限于扣罚全部约保证金、终止协议、禁止参加中国联通下一期相关产品集中采购、列入中国联通供应商黑名单等，并由我方赔偿由此造成的一切损失。",
+      "has_scoring_params": false,
+      "id": "REQ-0298",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "如违反上述承诺，我方自愿接受中国联通及中国联通软件研究院的处罚，包括但不限于扣罚全部履约保证金、终止协议、禁止参加中国联通软件研究院下一期相关产品集中采购、列入中国联通或中国联通软件研究院供应商黑名单等，并由我方赔偿由此造成的一切损失。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "其他",
+      "clause_no": null,
+      "excerpt": "如违反上述承诺，我方自愿接受中国联通及中国联通软件研究院的处罚，包括但不限于扣罚全部履约保证金、终止协议、禁止参加中国联通软件研究院下一期相关产品集中采购、列入中国联通或中国联通软件研究院供应商黑名单等，并由我方赔偿由此造成的一切损失。",
+      "has_scoring_params": false,
+      "id": "REQ-0299",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "我公司承诺，在本项目中，不论何时如果我方被判定为无效投标，一经发现，可被取消中标资格；如已签订合同，相关合同无效，并恢复原状，不能恢复原状的我司赔偿因此造成的损失。"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "我公司承诺，在本项目中，不论何时如果我方被判定为无效投标，一经发现，可被取消中标资格；如已签订合同，相关合同无效，并恢复原状，不能恢复原状的我司赔偿因此造成的损失。",
+      "has_scoring_params": false,
+      "id": "REQ-0300",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "投标人应严格按照招标文件规定的格式和内容要求编制投标文件，带原文逐项逐条地回答招标文件，顺序和编号应与招标文件一致。可以增加说明或描述性文字。投标文件与招标文件若有差异之处，无论大小，均应给予说明。对招标文件各条目的逐条应答为“满足”、“不满足”，不得使用“明白”、“理解”等词语，对于“部分同意”、“部分接受”、“部分满足”等应答均视为“不满足”。对不满足的条款投标人可作出具体、详细的说明，凡采用"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "投标人应严格按照招标文件规定的格式和内容要求编制投标文件，带原文逐项逐条地回答招标文件，顺序和编号应与招标文件一致。可以增加说明或描述性文字。投标文件与招标文件若有差异之处，无论大小，均应给予说明。对招标文件各条目的逐条应答为“满足”、“不满足”，不得使用“明白”、“理解”等词语，对于“部分同意”、“部分接受”、“部分满足”等应答均视为“不满足”。对不满足的条款投标人可作出具体、详细的说明，凡采用",
+      "has_scoring_params": false,
+      "id": "REQ-0301",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    },
+    {
+      "anchor_excerpts": [
+        "投标人应严格按照招标文件规定的格式和内容要求编制投标文件，带原文逐项逐条地回答招标文件，顺序和编号应与招标文件一致。可以增加说明或描述性文字。投标文件与招标文件若有差异之处，无论大小，均应给予说明。对招标文件各条目的逐条应答为“满足”、“不满足”，不得使用“明白”、“理解”等词语，对于“部分同意”、“部分接受”、“部分满足”等应答均视为“不满足”。对不满足的条款投标人可作出具体、详细的说明，凡采用"
+      ],
+      "anchor_files": [
+        "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx"
+      ],
+      "category": "否决项",
+      "clause_no": null,
+      "excerpt": "投标人应严格按照招标文件规定的格式和内容要求编制投标文件，带原文逐项逐条地回答招标文件，顺序和编号应与招标文件一致。可以增加说明或描述性文字。投标文件与招标文件若有差异之处，无论大小，均应给予说明。对招标文件各条目的逐条应答为“满足”、“不满足”，不得使用“明白”、“理解”等词语，对于“部分同意”、“部分接受”、“部分满足”等应答均视为“不满足”。对不满足的条款投标人可作出具体、详细的说明，凡采用",
+      "has_scoring_params": false,
+      "id": "REQ-0302",
+      "score": null,
+      "source_file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "substantive": false
+    }
+  ],
+  "scoring_coverage": {
+    "criteria": [
+      {
+        "covered": 0,
+        "criteria_excerpt": "2.1 初步评审",
+        "criterion_id": "REQ-0209",
+        "mapped_sections": [
+          "SEC-0014"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "2.2详细评审",
+        "criterion_id": "REQ-0221",
+        "mapped_sections": [
+          "SEC-0014"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "2.2.2 技术部分评审标准 详见附件1：详细评审表\n注：根据中国联通集团关于供…",
+        "criterion_id": "REQ-0224",
+        "mapped_sections": [
+          "SEC-0021"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "2.1  初步评审标准",
+        "criterion_id": "REQ-0225",
+        "mapped_sections": [
+          "SEC-0014"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "2.2  详细评审标准",
+        "criterion_id": "REQ-0226",
+        "mapped_sections": [
+          "SEC-0014"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.1  初步评审",
+        "criterion_id": "REQ-0227",
+        "mapped_sections": [
+          "SEC-0026"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.2  详细评审",
+        "criterion_id": "REQ-0250",
+        "mapped_sections": [
+          "SEC-0022"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.2.1  评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计…",
+        "criterion_id": "REQ-0251",
+        "mapped_sections": [
+          "SEC-0035"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.2.2  评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另…",
+        "criterion_id": "REQ-0252",
+        "mapped_sections": [
+          "SEC-0035"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.3  投标文件的澄清",
+        "criterion_id": "REQ-0253",
+        "mapped_sections": [
+          "SEC-0037"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.3.2  细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项…",
+        "criterion_id": "REQ-0255",
+        "mapped_sections": [
+          "SEC-0023"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.3.3  澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外…",
+        "criterion_id": "REQ-0256",
+        "mapped_sections": [
+          "SEC-0037"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.4  中标候选人推荐原则",
+        "criterion_id": "REQ-0259",
+        "mapped_sections": [
+          "SEC-0022"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.4.1  除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委…",
+        "criterion_id": "REQ-0260",
+        "mapped_sections": [
+          "SEC-0017"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.4.2  中标候选人推荐原则见评标办法前附表。",
+        "criterion_id": "REQ-0261",
+        "mapped_sections": [
+          "SEC-0012"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.5  评标结果",
+        "criterion_id": "REQ-0262",
+        "mapped_sections": [
+          "SEC-0023"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.5.1  评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组…",
+        "criterion_id": "REQ-0263",
+        "mapped_sections": [
+          "SEC-0018"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "criteria_excerpt": "3.5.2  评标报告应当包括下列内容：",
+        "criterion_id": "REQ-0264",
+        "mapped_sections": [
+          "SEC-0023"
+        ],
+        "max_score": null,
+        "points": [],
+        "suggested_deduction": null,
+        "total": 0
+      }
+    ],
+    "next": "未拆出任何点（细则无枚举形态/未抽取评分表）——先 extract_requirements，细则原文进 score_rules 后再查",
+    "notes": [
+      "拆点 = 细则原文的字面枚举提取（触发词 + 顿号/连接词分隔——确定性、无语义理解）：语义等价表述（如「架构设计」vs「总体架构」）不识别，覆盖判定按字面子串命中。",
+      "建议扣分 = Σ(单项满分 × 未覆盖点占比)——启发式参考值，评标实际扣分以评委裁量为准。",
+      "18 条细则未拆出点（无枚举形态/拆点局限）——需人工读细则核对。",
+      "已排除 88 条否决项（is_hard_gate）——否决响应面由 readiness/门族检查，不计入评分覆盖；详见 summary.hard_gates_excluded"
+    ],
+    "project_id": "PRJ-0001",
+    "summary": {
+      "coverage_ratio": 0.0,
+      "criteria_total": 18,
+      "criteria_unmapped": 0,
+      "criteria_with_points": 0,
+      "hard_gates_excluded": 88,
+      "points_covered": 0,
+      "points_total": 0,
+      "suggested_deduction": 0.0
+    }
+  },
+  "scoring_mapping": {
+    "decisions": [
+      {
+        "criteria": "2.1 初步评审",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 2,
+        "req_id": "REQ-0209",
+        "section_id": "SEC-0014",
+        "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+        "unmapped_left_after": 17
+      },
+      {
+        "criteria": "2.2详细评审",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 2,
+        "req_id": "REQ-0221",
+        "section_id": "SEC-0014",
+        "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+        "unmapped_left_after": 16
+      },
+      {
+        "criteria": "2.2.2 技术部分评审标准 详见附件1：详细评审表\n注：根据中国联通集团关于供应商管理的相关规定，对因业务不可替代暂不",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0224",
+        "section_id": "SEC-0021",
+        "section_title": "第七章  其他（条款 2.1.2-2.3）",
+        "unmapped_left_after": 15
+      },
+      {
+        "criteria": "2.1  初步评审标准",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0225",
+        "section_id": "SEC-0014",
+        "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+        "unmapped_left_after": 14
+      },
+      {
+        "criteria": "2.2  详细评审标准",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0226",
+        "section_id": "SEC-0014",
+        "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+        "unmapped_left_after": 13
+      },
+      {
+        "criteria": "3.1  初步评审",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0227",
+        "section_id": "SEC-0026",
+        "section_title": "第七章  其他（条款 3.7.3-4.1.2）",
+        "unmapped_left_after": 12
+      },
+      {
+        "criteria": "3.2  详细评审",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0250",
+        "section_id": "SEC-0022",
+        "section_title": "第七章  其他（条款 2.4-3.2）",
+        "unmapped_left_after": 11
+      },
+      {
+        "criteria": "3.2.1  评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计算出综合评估得分。",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 6,
+        "req_id": "REQ-0251",
+        "section_id": "SEC-0035",
+        "section_title": "第三章  评标办法（综合评估法）",
+        "unmapped_left_after": 10
+      },
+      {
+        "criteria": "3.2.2  评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规定的，见评标办法前附表。",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 6,
+        "req_id": "REQ-0252",
+        "section_id": "SEC-0035",
+        "section_title": "第三章  评标办法（综合评估法）",
+        "unmapped_left_after": 9
+      },
+      {
+        "criteria": "3.3  投标文件的澄清",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 5,
+        "req_id": "REQ-0253",
+        "section_id": "SEC-0037",
+        "section_title": "第六章  投标文件格式",
+        "unmapped_left_after": 8
+      },
+      {
+        "criteria": "3.3.2  细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者提供了不完整的技术信息和数据等情况，",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 5,
+        "req_id": "REQ-0255",
+        "section_id": "SEC-0023",
+        "section_title": "第七章  其他（条款 3.2.2-3.3.5）",
+        "unmapped_left_after": 7
+      },
+      {
+        "criteria": "3.3.3  澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。投标人的书面澄清、说明和补正属于投标",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 4,
+        "req_id": "REQ-0256",
+        "section_id": "SEC-0037",
+        "section_title": "第六章  投标文件格式",
+        "unmapped_left_after": 6
+      },
+      {
+        "criteria": "3.4  中标候选人推荐原则",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0259",
+        "section_id": "SEC-0022",
+        "section_title": "第七章  其他（条款 2.4-3.2）",
+        "unmapped_left_after": 5
+      },
+      {
+        "criteria": "3.4.1  除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委员会按照综合评分由高到低的顺序推荐中标候",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 8,
+        "req_id": "REQ-0260",
+        "section_id": "SEC-0017",
+        "section_title": "第二章  投标人须知（条款 1.1-1.5）",
+        "unmapped_left_after": 4
+      },
+      {
+        "criteria": "3.4.2  中标候选人推荐原则见评标办法前附表。",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 4,
+        "req_id": "REQ-0261",
+        "section_id": "SEC-0012",
+        "section_title": "第一章  招标公告（条款 1-1.4.2）",
+        "unmapped_left_after": 3
+      },
+      {
+        "criteria": "3.5  评标结果",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 3,
+        "req_id": "REQ-0262",
+        "section_id": "SEC-0023",
+        "section_title": "第七章  其他（条款 3.2.2-3.3.5）",
+        "unmapped_left_after": 2
+      },
+      {
+        "criteria": "3.5.1  评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审的，应当形成统一、完整的评标报告。",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 5,
+        "req_id": "REQ-0263",
+        "section_id": "SEC-0018",
+        "section_title": "第二章  投标人须知（条款 1.5.1-1.9）",
+        "unmapped_left_after": 1
+      },
+      {
+        "criteria": "3.5.2  评标报告应当包括下列内容：",
+        "max_score": null,
+        "method": "bigram-overlap",
+        "overlap": 4,
+        "req_id": "REQ-0264",
+        "section_id": "SEC-0023",
+        "section_title": "第七章  其他（条款 3.2.2-3.3.5）",
+        "unmapped_left_after": 0
+      }
+    ],
+    "hard_gates_excluded": 88,
+    "scoring_items": 106,
+    "unmapped_after": 0,
+    "unmapped_before": 18
+  },
+  "section_tree": [
+    {
+      "id": "SEC-0010",
+      "level": 1,
+      "order": 1,
+      "parent_id": null,
+      "requirement_ids": 38,
+      "target_chars": 6377,
+      "title": "第一章  招标公告"
+    },
+    {
+      "id": "SEC-0011",
+      "level": 2,
+      "order": 2,
+      "parent_id": "SEC-0010",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第一章  招标公告（条款 1.1-1.4.1）"
+    },
+    {
+      "id": "SEC-0012",
+      "level": 2,
+      "order": 3,
+      "parent_id": "SEC-0010",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第一章  招标公告（条款 1-1.4.2）"
+    },
+    {
+      "id": "SEC-0013",
+      "level": 2,
+      "order": 4,
+      "parent_id": "SEC-0010",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第一章  招标公告（条款 1.4.3-4.2）"
+    },
+    {
+      "id": "SEC-0014",
+      "level": 2,
+      "order": 5,
+      "parent_id": "SEC-0010",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第一章  招标公告（条款 4.2.1-5.3）"
+    },
+    {
+      "id": "SEC-0015",
+      "level": 2,
+      "order": 6,
+      "parent_id": "SEC-0010",
+      "requirement_ids": 6,
+      "target_chars": 1005,
+      "title": "第一章  招标公告（条款 5.4-7.2）"
+    },
+    {
+      "id": "SEC-0016",
+      "level": 1,
+      "order": 7,
+      "parent_id": null,
+      "requirement_ids": 23,
+      "target_chars": 3860,
+      "title": "第二章  投标人须知"
+    },
+    {
+      "id": "SEC-0017",
+      "level": 2,
+      "order": 8,
+      "parent_id": "SEC-0016",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第二章  投标人须知（条款 1.1-1.5）"
+    },
+    {
+      "id": "SEC-0018",
+      "level": 2,
+      "order": 9,
+      "parent_id": "SEC-0016",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第二章  投标人须知（条款 1.5.1-1.9）"
+    },
+    {
+      "id": "SEC-0019",
+      "level": 2,
+      "order": 10,
+      "parent_id": "SEC-0016",
+      "requirement_ids": 7,
+      "target_chars": 1174,
+      "title": "第二章  投标人须知（条款 1.9.1-2.1.1）"
+    },
+    {
+      "id": "SEC-0020",
+      "level": 1,
+      "order": 11,
+      "parent_id": null,
+      "requirement_ids": 103,
+      "target_chars": 17290,
+      "title": "第七章  其他"
+    },
+    {
+      "id": "SEC-0021",
+      "level": 2,
+      "order": 12,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 2.1.2-2.3）"
+    },
+    {
+      "id": "SEC-0022",
+      "level": 2,
+      "order": 13,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 2.4-3.2）"
+    },
+    {
+      "id": "SEC-0023",
+      "level": 2,
+      "order": 14,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 3.2.2-3.3.5）"
+    },
+    {
+      "id": "SEC-0024",
+      "level": 2,
+      "order": 15,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（第4组 8条）"
+    },
+    {
+      "id": "SEC-0025",
+      "level": 2,
+      "order": 16,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 3.6-3.7.2）"
+    },
+    {
+      "id": "SEC-0026",
+      "level": 2,
+      "order": 17,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 3.7.3-4.1.2）"
+    },
+    {
+      "id": "SEC-0027",
+      "level": 2,
+      "order": 18,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 4.1.3-4.2.3）"
+    },
+    {
+      "id": "SEC-0028",
+      "level": 2,
+      "order": 19,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 4.2.4-5.3）"
+    },
+    {
+      "id": "SEC-0029",
+      "level": 2,
+      "order": 20,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 5.3.1-6.2）"
+    },
+    {
+      "id": "SEC-0030",
+      "level": 2,
+      "order": 21,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 6.2.1-6.5）"
+    },
+    {
+      "id": "SEC-0031",
+      "level": 2,
+      "order": 22,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 7.1-7.3）"
+    },
+    {
+      "id": "SEC-0032",
+      "level": 2,
+      "order": 23,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "第七章  其他（条款 7.3.1-8.2）"
+    },
+    {
+      "id": "SEC-0033",
+      "level": 2,
+      "order": 24,
+      "parent_id": "SEC-0020",
+      "requirement_ids": 7,
+      "target_chars": 1174,
+      "title": "第七章  其他（条款 8.2.1-10.5）"
+    },
+    {
+      "id": "SEC-0034",
+      "level": 1,
+      "order": 25,
+      "parent_id": null,
+      "requirement_ids": 4,
+      "target_chars": 667,
+      "title": "第三章  评标办法（综合评估法）"
+    },
+    {
+      "id": "SEC-0035",
+      "level": 2,
+      "order": 26,
+      "parent_id": "SEC-0034",
+      "requirement_ids": 4,
+      "target_chars": 667,
+      "title": "第三章  评标办法（综合评估法）"
+    },
+    {
+      "id": "SEC-0036",
+      "level": 1,
+      "order": 27,
+      "parent_id": null,
+      "requirement_ids": 1,
+      "target_chars": 500,
+      "title": "第六章  投标文件格式"
+    },
+    {
+      "id": "SEC-0037",
+      "level": 2,
+      "order": 28,
+      "parent_id": "SEC-0036",
+      "requirement_ids": 1,
+      "target_chars": 500,
+      "title": "第六章  投标文件格式"
+    },
+    {
+      "id": "SEC-0038",
+      "level": 1,
+      "order": 29,
+      "parent_id": null,
+      "requirement_ids": 104,
+      "target_chars": 17462,
+      "title": "资格与响应"
+    },
+    {
+      "id": "SEC-0039",
+      "level": 2,
+      "order": 30,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "资格证明材料响应（第1组 8条）"
+    },
+    {
+      "id": "SEC-0040",
+      "level": 2,
+      "order": 31,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "资格证明材料响应（第2组 8条）"
+    },
+    {
+      "id": "SEC-0041",
+      "level": 2,
+      "order": 32,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第1组 8条）"
+    },
+    {
+      "id": "SEC-0042",
+      "level": 2,
+      "order": 33,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第2组 8条）"
+    },
+    {
+      "id": "SEC-0043",
+      "level": 2,
+      "order": 34,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第3组 8条）"
+    },
+    {
+      "id": "SEC-0044",
+      "level": 2,
+      "order": 35,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第4组 8条）"
+    },
+    {
+      "id": "SEC-0045",
+      "level": 2,
+      "order": 36,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（条款 表-2-表-14）"
+    },
+    {
+      "id": "SEC-0046",
+      "level": 2,
+      "order": 37,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第6组 8条）"
+    },
+    {
+      "id": "SEC-0047",
+      "level": 2,
+      "order": 38,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第7组 8条）"
+    },
+    {
+      "id": "SEC-0048",
+      "level": 2,
+      "order": 39,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1343,
+      "title": "否决情形响应（第8组 8条）"
+    },
+    {
+      "id": "SEC-0049",
+      "level": 2,
+      "order": 40,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1344,
+      "title": "否决情形响应（第9组 8条）"
+    },
+    {
+      "id": "SEC-0050",
+      "level": 2,
+      "order": 41,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1344,
+      "title": "否决情形响应（第10组 8条）"
+    },
+    {
+      "id": "SEC-0051",
+      "level": 2,
+      "order": 42,
+      "parent_id": "SEC-0038",
+      "requirement_ids": 8,
+      "target_chars": 1344,
+      "title": "否决情形响应（第11组 8条）"
+    },
+    {
+      "id": "SEC-0052",
+      "level": 1,
+      "order": 43,
+      "parent_id": null,
+      "requirement_ids": 11,
+      "target_chars": 1844,
+      "title": "格式要求"
+    },
+    {
+      "id": "SEC-0053",
+      "level": 2,
+      "order": 44,
+      "parent_id": "SEC-0052",
+      "requirement_ids": 8,
+      "target_chars": 1344,
+      "title": "格式要求（条款 1.1-4.3）"
+    },
+    {
+      "id": "SEC-0054",
+      "level": 2,
+      "order": 45,
+      "parent_id": "SEC-0052",
+      "requirement_ids": 3,
+      "target_chars": 500,
+      "title": "格式要求（条款 5.1-6.2）"
+    }
+  ],
+  "validate": {
+    "counts": {
+      "blocker": 0,
+      "deterministic": 1,
+      "major": 0,
+      "minor": 1,
+      "model": 0
+    },
+    "global_conflicts": null,
+    "ok": true,
+    "project_status": "VALIDATING"
+  },
+  "validity_flip_probe": [],
+  "waived_failed_files": [
+    {
+      "file_id": "TF-0004",
+      "name": "B-unicom-ry-详细评审表.xlsx",
+      "reason_source": "B-unicom-ry-详细评审表.xlsx: engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF",
+      "recorded": {
+        "actor": {
+          "actor_id": "m114-lead",
+          "actor_type": "human",
+          "authentication_method": "hmac_receipt_v2"
+        },
+        "at": 1795009495,
+        "file_id": "TF-0004",
+        "human_confirmed": true,
+        "method": "human_receipt",
+        "principal": "human:m114-lead",
+        "reason": "#114 多件矩阵：真件引擎解析失败，人工确认后受限放行（不伪造修复）——B-unicom-ry-详细评审表.xlsx: engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+      }
+    }
+  ],
+  "ws": "/home/z/my-project/repo/artifacts/multifile-acceptance-20261118/unicom-ry"
+}

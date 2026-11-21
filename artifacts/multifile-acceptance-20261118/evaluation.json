@@ -1,0 +1,1294 @@
+{
+ "generated_at": "2026-11-18T13:43:07.117969+00:00",
+ "issue": 114,
+ "inventory_summary": {
+  "total": 31,
+  "real": 12,
+  "synthetic": 19,
+  "hash_anchor_match": 31,
+  "hash_anchor_drift": 0,
+  "hash_anchor_no_record": 0
+ },
+ "corpus_a_gt": {
+  "gt_total": 25,
+  "clause_recall": 25,
+  "excerpt_recall": 22,
+  "category_hit": 25,
+  "hits_detail": [
+   {
+    "gt_id": "GT-01",
+    "clause_no": "3.2.1",
+    "category": "资格条件",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "资格条件",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-02",
+    "clause_no": "3.2.2",
+    "category": "资格条件",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "资格条件",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-03",
+    "clause_no": "3.2.3",
+    "category": "资格条件",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "资格条件",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-04",
+    "clause_no": "3.2.4",
+    "category": "资格条件",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "资格条件",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-05",
+    "clause_no": "3.2.5",
+    "category": "资格条件",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "资格条件",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-06",
+    "clause_no": "3.2.6",
+    "category": "资格条件",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "资格条件",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-07",
+    "clause_no": "3.7.2.1",
+    "category": "否决项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "否决项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-08",
+    "clause_no": "3.7.2.2",
+    "category": "否决项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "否决项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-09",
+    "clause_no": "3.7.2.3",
+    "category": "否决项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "否决项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-10",
+    "clause_no": "3.7.2.4",
+    "category": "否决项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "否决项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-11",
+    "clause_no": "前附表-10",
+    "category": "否决项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "否决项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-12",
+    "clause_no": "4.1",
+    "category": "评分项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "评分项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-13",
+    "clause_no": "4.2",
+    "category": "评分项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "评分项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-14",
+    "clause_no": "4.3",
+    "category": "评分项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "评分项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-15",
+    "clause_no": "4.4",
+    "category": "评分项",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "评分项",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-16",
+    "clause_no": "5.1",
+    "category": "技术参数",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "技术参数",
+    "excerpt_hit": false
+   },
+   {
+    "gt_id": "GT-17",
+    "clause_no": "5.2",
+    "category": "技术参数",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "技术参数",
+    "excerpt_hit": false
+   },
+   {
+    "gt_id": "GT-18",
+    "clause_no": "5.3",
+    "category": "技术参数",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "技术参数",
+    "excerpt_hit": false
+   },
+   {
+    "gt_id": "GT-19",
+    "clause_no": "5.0",
+    "category": "技术参数",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "技术参数",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-20",
+    "clause_no": "5.6",
+    "category": "技术参数",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "技术参数",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-21",
+    "clause_no": "6.1",
+    "category": "商务要求",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "商务要求",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-22",
+    "clause_no": "6.2",
+    "category": "商务要求",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "商务要求",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-23",
+    "clause_no": "6.3",
+    "category": "商务要求",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "商务要求",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-24",
+    "clause_no": "3.3.3",
+    "category": "格式要求",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "格式要求",
+    "excerpt_hit": true
+   },
+   {
+    "gt_id": "GT-25",
+    "clause_no": "3.3.4",
+    "category": "格式要求",
+    "anchor_file": "A-招标文件.docx",
+    "hit": true,
+    "match_kind": "exact",
+    "req_category": "格式要求",
+    "excerpt_hit": true
+   }
+  ],
+  "conflicts_total": 2,
+  "clarifying_conflicts_detected": 2,
+  "control_price_conflict_detected": 0,
+  "control_price_versions": {
+   "A_480": true,
+   "C_465": true,
+   "rows": [
+    {
+     "clause_no": null,
+     "excerpt": "本项目预算金额：设备采购预算 350 万元（含税）；最高限价（招标控制价）：人民币 480 万元（含税），投标报价超过最",
+     "id": "REQ-0001",
+     "source_file": "A-招标文件.docx"
+    },
+    {
+     "clause_no": "3.4.2",
+     "excerpt": "3.4.2 投标报价超过本章及商务要求所列招标控制价的，作否决投标处理。",
+     "id": "REQ-0016",
+     "source_file": "A-招标文件.docx"
+    },
+    {
+     "clause_no": "3.7.2.2",
+     "excerpt": "3.7.2.2 投标报价超过招标控制价（最高限价）的，作否决投标处理。",
+     "id": "REQ-0021",
+     "source_file": "A-招标文件.docx"
+    },
+    {
+     "clause_no": "6.1",
+     "excerpt": "6.1 招标控制价：本项目招标控制价为人民币 480 万元（含税）。",
+     "id": "REQ-0045",
+     "source_file": "A-招标文件.docx"
+    },
+    {
+     "clause_no": null,
+     "excerpt": "原招标文件第一章、第六章所列招标控制价\"人民币 480 万元（含税）\"调整为\"人民币 465 万元（含税）\"，投标报价超",
+     "id": "REQ-0121",
+     "source_file": "C-补遗文件01.docx"
+    }
+   ]
+  },
+  "ev02_flip": {
+   "pre": {
+    "idempotent_replay": false,
+    "open_date": "2026-11-15",
+    "outcome": "ok"
+   },
+   "post": {
+    "error": "EUnprocessable { reason: \"证据 EV-0049 状态 EXPIRED 禁止绑定（R-03：EXPIRED/SUPERSEDED 禁绑；续期请重新登记新版本）\" }",
+    "open_date": "2026-11-27",
+    "outcome": "rejected"
+   }
+  },
+  "addendum_probe": {
+   "dirty_sections": 1,
+   "directives": 1,
+   "raw_skipped": false
+  },
+  "merge_stats": {
+   "agent_requirements": 0,
+   "coverage_complete": false,
+   "regex_dropped_covered": 0,
+   "regex_kept_unbacked_requirement": 0,
+   "regex_total": 123,
+   "uncovered_blocks": 196
+  }
+ },
+ "real_projects": {
+  "unicom-ry": {
+   "pid": "unicom-ry",
+   "import": {
+    "files": {
+     "chunks": 1361,
+     "files": 7,
+     "parse_failed": 1,
+     "partial": 1
+    },
+    "per_file": [
+     {
+      "name": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "kind": "招标文件",
+      "parse_status": "Ok",
+      "chunks": 984,
+      "tables": 15,
+      "pages": 0
+     },
+     {
+      "name": "B-unicom-ry-技术规范书.docx",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 323,
+      "tables": 2,
+      "pages": 0
+     },
+     {
+      "name": "B-unicom-ry-详细评审表.xlsx",
+      "kind": "评分办法",
+      "parse_status": "Failed",
+      "chunks": 0,
+      "tables": 0,
+      "pages": 0
+     },
+     {
+      "name": "B-unicom-ry-投标一览表.xlsx",
+      "kind": "格式模板",
+      "parse_status": "Ok",
+      "chunks": 33,
+      "tables": 4,
+      "pages": 4
+     },
+     {
+      "name": "EV-01-营业执照.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 8,
+      "tables": 0,
+      "pages": 1
+     },
+     {
+      "name": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 7,
+      "tables": 0,
+      "pages": 1
+     },
+     {
+      "name": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 6,
+      "tables": 0,
+      "pages": 1
+     }
+    ],
+    "partial": true,
+    "item_errors": [
+     "B-unicom-ry-详细评审表.xlsx: engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+    ],
+    "waived_failed_files": [
+     {
+      "file_id": "TF-0004",
+      "name": "B-unicom-ry-详细评审表.xlsx",
+      "reason_source": "B-unicom-ry-详细评审表.xlsx: engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF",
+      "recorded": {
+       "actor": {
+        "actor_id": "m114-lead",
+        "actor_type": "human",
+        "authentication_method": "hmac_receipt_v2"
+       },
+       "at": 1795009365,
+       "file_id": "TF-0004",
+       "human_confirmed": true,
+       "method": "human_receipt",
+       "principal": "human:m114-lead",
+       "reason": "#114 多件矩阵：真件引擎解析失败，人工确认后受限放行（不伪造修复）——B-unicom-ry-详细评审表.xlsx: engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+      }
+     }
+    ],
+    "draft_input_integrity": {
+     "status": "RESTRICTED",
+     "waived_files": [
+      {
+       "file_id": "TF-0004",
+       "name": "B-unicom-ry-详细评审表.xlsx",
+       "readiness": "FAILED",
+       "reason": "engine rejected: invalid part customXml/item1.xml: truncated: 16 unclosed element(s) at EOF"
+      }
+     ]
+    }
+   },
+   "extract": {
+    "total": 302,
+    "by_category": {
+     "format": 11,
+     "other": 169,
+     "qualification": 16,
+     "scoring": 18,
+     "veto": 88
+    },
+    "by_file": {
+     "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx": 302
+    },
+    "scoring_reqs_134_baseline": 18,
+    "scoring_reqs_now": 18,
+    "conflicts": 0,
+    "missing_sequence": 0
+   },
+   "scoring_mapping": {
+    "items": 106,
+    "unmapped_before": 18,
+    "unmapped_after": 0,
+    "decisions": [
+     {
+      "criteria": "2.1 初步评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0209",
+      "section_id": "SEC-0014",
+      "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+      "unmapped_left_after": 17
+     },
+     {
+      "criteria": "2.2详细评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0221",
+      "section_id": "SEC-0014",
+      "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+      "unmapped_left_after": 16
+     },
+     {
+      "criteria": "2.2.2 技术部分评审标准 详见附件1：详细评审表\n注：根据中国联通集团关于供应商管理的相关规定，对因业务不可替代暂不",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0224",
+      "section_id": "SEC-0021",
+      "section_title": "第七章  其他（条款 2.1.2-2.3）",
+      "unmapped_left_after": 15
+     },
+     {
+      "criteria": "2.1  初步评审标准",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0225",
+      "section_id": "SEC-0014",
+      "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+      "unmapped_left_after": 14
+     },
+     {
+      "criteria": "2.2  详细评审标准",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0226",
+      "section_id": "SEC-0014",
+      "section_title": "第一章  招标公告（条款 4.2.1-5.3）",
+      "unmapped_left_after": 13
+     },
+     {
+      "criteria": "3.1  初步评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0227",
+      "section_id": "SEC-0026",
+      "section_title": "第七章  其他（条款 3.7.3-4.1.2）",
+      "unmapped_left_after": 12
+     },
+     {
+      "criteria": "3.2  详细评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0250",
+      "section_id": "SEC-0022",
+      "section_title": "第七章  其他（条款 2.4-3.2）",
+      "unmapped_left_after": 11
+     },
+     {
+      "criteria": "3.2.1  评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计算出综合评估得分。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 6,
+      "req_id": "REQ-0251",
+      "section_id": "SEC-0035",
+      "section_title": "第三章  评标办法（综合评估法）",
+      "unmapped_left_after": 10
+     },
+     {
+      "criteria": "3.2.2  评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规定的，见评标办法前附表。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 6,
+      "req_id": "REQ-0252",
+      "section_id": "SEC-0035",
+      "section_title": "第三章  评标办法（综合评估法）",
+      "unmapped_left_after": 9
+     },
+     {
+      "criteria": "3.3  投标文件的澄清",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 5,
+      "req_id": "REQ-0253",
+      "section_id": "SEC-0037",
+      "section_title": "第六章  投标文件格式",
+      "unmapped_left_after": 8
+     },
+     {
+      "criteria": "3.3.2  细微偏差：是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者提供了不完整的技术信息和数据等情况，",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 5,
+      "req_id": "REQ-0255",
+      "section_id": "SEC-0023",
+      "section_title": "第七章  其他（条款 3.2.2-3.3.5）",
+      "unmapped_left_after": 7
+     },
+     {
+      "criteria": "3.3.3  澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。投标人的书面澄清、说明和补正属于投标",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 4,
+      "req_id": "REQ-0256",
+      "section_id": "SEC-0037",
+      "section_title": "第六章  投标文件格式",
+      "unmapped_left_after": 6
+     },
+     {
+      "criteria": "3.4  中标候选人推荐原则",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0259",
+      "section_id": "SEC-0022",
+      "section_title": "第七章  其他（条款 2.4-3.2）",
+      "unmapped_left_after": 5
+     },
+     {
+      "criteria": "3.4.1  除第二章“投标人须知”前附表授权评标委员会直接确定中标人外，评标委员会按照综合评分由高到低的顺序推荐中标候",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 8,
+      "req_id": "REQ-0260",
+      "section_id": "SEC-0017",
+      "section_title": "第二章  投标人须知（条款 1.1-1.5）",
+      "unmapped_left_after": 4
+     },
+     {
+      "criteria": "3.4.2  中标候选人推荐原则见评标办法前附表。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 4,
+      "req_id": "REQ-0261",
+      "section_id": "SEC-0012",
+      "section_title": "第一章  招标公告（条款 1-1.4.2）",
+      "unmapped_left_after": 3
+     },
+     {
+      "criteria": "3.5  评标结果",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0262",
+      "section_id": "SEC-0023",
+      "section_title": "第七章  其他（条款 3.2.2-3.3.5）",
+      "unmapped_left_after": 2
+     },
+     {
+      "criteria": "3.5.1  评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审的，应当形成统一、完整的评标报告。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 5,
+      "req_id": "REQ-0263",
+      "section_id": "SEC-0018",
+      "section_title": "第二章  投标人须知（条款 1.5.1-1.9）",
+      "unmapped_left_after": 1
+     },
+     {
+      "criteria": "3.5.2  评标报告应当包括下列内容：",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 4,
+      "req_id": "REQ-0264",
+      "section_id": "SEC-0023",
+      "section_title": "第七章  其他（条款 3.2.2-3.3.5）",
+      "unmapped_left_after": 0
+     }
+    ]
+   },
+   "quota": {
+    "leaves": 38,
+    "leaf_quota_sum": 48000,
+    "target": 48000,
+    "top5_share": 0.13997916666666665,
+    "mapped_scoring_leaf_quota_sum": 11911,
+    "mapped_scoring_leaf_quota_share": 0.24814583333333334
+   },
+   "coverage": {
+    "coverage_ratio": 0.0,
+    "criteria_total": 18,
+    "criteria_unmapped": 0,
+    "criteria_with_points": 0,
+    "hard_gates_excluded": 88,
+    "points_covered": 0,
+    "points_total": 0,
+    "suggested_deduction": 0.0
+   },
+   "validate": {
+    "counts": {
+     "blocker": 0,
+     "deterministic": 1,
+     "major": 0,
+     "minor": 1,
+     "model": 0
+    },
+    "global_conflicts": null,
+    "ok": true,
+    "project_status": "VALIDATING"
+   }
+  },
+  "huaian": {
+   "pid": "huaian",
+   "import": {
+    "files": {
+     "chunks": 2184,
+     "files": 7,
+     "parse_failed": 0,
+     "partial": 0
+    },
+    "per_file": [
+     {
+      "name": "A-telecom-huaian-主文件.docx",
+      "kind": "招标文件",
+      "parse_status": "Ok",
+      "chunks": 1272,
+      "tables": 21,
+      "pages": 0
+     },
+     {
+      "name": "B-telecom-huaian-技术规范书.docx",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 174,
+      "tables": 6,
+      "pages": 0
+     },
+     {
+      "name": "B-telecom-huaian-报价文件.xlsx",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 21,
+      "tables": 2,
+      "pages": 2
+     },
+     {
+      "name": "B-telecom-huaian-合同.docx",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 696,
+      "tables": 1,
+      "pages": 0
+     },
+     {
+      "name": "EV-01-营业执照.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 8,
+      "tables": 0,
+      "pages": 1
+     },
+     {
+      "name": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 7,
+      "tables": 0,
+      "pages": 1
+     },
+     {
+      "name": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 6,
+      "tables": 0,
+      "pages": 1
+     }
+    ],
+    "partial": false,
+    "item_errors": [],
+    "waived_failed_files": [],
+    "draft_input_integrity": {
+     "status": "COMPLETE",
+     "waived_files": []
+    }
+   },
+   "extract": {
+    "total": 371,
+    "by_category": {
+     "format": 7,
+     "other": 178,
+     "qualification": 36,
+     "scoring": 28,
+     "veto": 122
+    },
+    "by_file": {
+     "A-telecom-huaian-主文件.docx": 371
+    },
+    "scoring_reqs_134_baseline": 28,
+    "scoring_reqs_now": 28,
+    "conflicts": 0,
+    "missing_sequence": 1
+   },
+   "scoring_mapping": {
+    "items": 150,
+    "unmapped_before": 28,
+    "unmapped_after": 0,
+    "decisions": [
+     {
+      "criteria": "2.1初步评审标准",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0046",
+      "section_id": "SEC-0012",
+      "section_title": "资格证明材料响应（条款 4.2.1-1.7.1）",
+      "unmapped_left_after": 27
+     },
+     {
+      "criteria": "2.2详细评审标准",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0047",
+      "section_id": "SEC-0012",
+      "section_title": "资格证明材料响应（条款 4.2.1-1.7.1）",
+      "unmapped_left_after": 26
+     },
+     {
+      "criteria": "3.1初步评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0048",
+      "section_id": "SEC-0024",
+      "section_title": "否决情形响应（条款 表-24-3.1.1）",
+      "unmapped_left_after": 25
+     },
+     {
+      "criteria": "3.2详细评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0049",
+      "section_id": "SEC-0033",
+      "section_title": "第二章 投标人须知（条款 1.10-3.2）",
+      "unmapped_left_after": 24
+     },
+     {
+      "criteria": "3.3投标文件的澄清",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0050",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 23
+     },
+     {
+      "criteria": "3.4中标候选人推荐原则",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0051",
+      "section_id": "SEC-0045",
+      "section_title": "第七章 其他（条款 2.4-3.2）",
+      "unmapped_left_after": 22
+     },
+     {
+      "criteria": "3.5评标结果",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0052",
+      "section_id": "SEC-0046",
+      "section_title": "第七章 其他（条款 3.2.2-3.3.5）",
+      "unmapped_left_after": 21
+     },
+     {
+      "criteria": "商务\n（12分） 类似业绩 6 投标人在满足“本项目要求投标人自2023年10月1日（含）至本公告发布之日（不含）止，承",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 5,
+      "req_id": "REQ-0285",
+      "section_id": "SEC-0036",
+      "section_title": "第二章 投标人须知（条款 6.5-10.2）",
+      "unmapped_left_after": 20
+     },
+     {
+      "criteria": "空间压降 2 根据投标人针对技术规范书中视频数据承载能力平台以下功能的应答进行打分：\n1、对象重删：支持基于对象的重复数",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0287",
+      "section_id": "SEC-0040",
+      "section_title": "第二章 投标人须知（条款 2.1-2.1.1）",
+      "unmapped_left_after": 19
+     },
+     {
+      "criteria": "高可用 3 根据投标人针对技术规范书中视频数据承载能力平台以下功能的应答进行打分：\t\n1、自定义匹配条件：系统可以配置桶",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0288",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 18
+     },
+     {
+      "criteria": "免重构整池扩容 2 根据投标人针对技术规范书中视频数据承载能力平台以下功能的应答进行打分：\n1、跨池承载：一个桶中的数据",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0289",
+      "section_id": "SEC-0040",
+      "section_title": "第二章 投标人须知（条款 2.1-2.1.1）",
+      "unmapped_left_after": 17
+     },
+     {
+      "criteria": "数据分级写入 3 根据投标人针对技术规范书中视频数据承载能力平台以下功能的应答进行打分：\n1、数据分级：系统可以按相关条",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0290",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 16
+     },
+     {
+      "criteria": "数据重构/重平衡 3 根据投标人针对技术规范书中视频数据承载能力平台以下功能的应答进行打分：\n1、设置恢复QoS：可以在",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0291",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 15
+     },
+     {
+      "criteria": "技术负责人 3 投标人拟为本项目配备的技术负责人须具备行政主管部门颁发的有效的信息系统管理师证书。本项满分3分，未提供或",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 6,
+      "req_id": "REQ-0292",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 14
+     },
+     {
+      "criteria": "2.1初步评审标准",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0295",
+      "section_id": "SEC-0012",
+      "section_title": "资格证明材料响应（条款 4.2.1-1.7.1）",
+      "unmapped_left_after": 13
+     },
+     {
+      "criteria": "2.2详细评审标准",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0296",
+      "section_id": "SEC-0012",
+      "section_title": "资格证明材料响应（条款 4.2.1-1.7.1）",
+      "unmapped_left_after": 12
+     },
+     {
+      "criteria": "3.1初步评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0297",
+      "section_id": "SEC-0024",
+      "section_title": "否决情形响应（条款 表-24-3.1.1）",
+      "unmapped_left_after": 11
+     },
+     {
+      "criteria": "3.2详细评审",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0320",
+      "section_id": "SEC-0033",
+      "section_title": "第二章 投标人须知（条款 1.10-3.2）",
+      "unmapped_left_after": 10
+     },
+     {
+      "criteria": "3.2.1评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计算出综合评估得分。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 4,
+      "req_id": "REQ-0321",
+      "section_id": "SEC-0058",
+      "section_title": "第三章 评标办法（综合评估法）",
+      "unmapped_left_after": 9
+     },
+     {
+      "criteria": "3.2.2评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规定的，见评标办法前附表。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 4,
+      "req_id": "REQ-0322",
+      "section_id": "SEC-0058",
+      "section_title": "第三章 评标办法（综合评估法）",
+      "unmapped_left_after": 8
+     },
+     {
+      "criteria": "3.3投标文件的澄清",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0323",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 7
+     },
+     {
+      "criteria": "3.3.2细微偏差是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者提供了不完整的技术信息和数据等情况，并且补",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 5,
+      "req_id": "REQ-0325",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 6
+     },
+     {
+      "criteria": "3.3.3澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。投标人的书面澄清、说明和补正属于投标文件",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 4,
+      "req_id": "REQ-0326",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 5
+     },
+     {
+      "criteria": "3.4中标候选人推荐原则",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0329",
+      "section_id": "SEC-0045",
+      "section_title": "第七章 其他（条款 2.4-3.2）",
+      "unmapped_left_after": 4
+     },
+     {
+      "criteria": "3.4.1除第二章投标人须知前附表授权直接确定中标人外，评标委员会按照综合评分由高到低的顺序推荐中标候选人。综合评分相同",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 8,
+      "req_id": "REQ-0330",
+      "section_id": "SEC-0033",
+      "section_title": "第二章 投标人须知（条款 1.10-3.2）",
+      "unmapped_left_after": 3
+     },
+     {
+      "criteria": "3.4.2中标候选人推荐原则见评标办法前附表。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0331",
+      "section_id": "SEC-0034",
+      "section_title": "第二章 投标人须知（条款 3.3-4.2）",
+      "unmapped_left_after": 2
+     },
+     {
+      "criteria": "3.5评标结果",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 2,
+      "req_id": "REQ-0332",
+      "section_id": "SEC-0046",
+      "section_title": "第七章 其他（条款 3.2.2-3.3.5）",
+      "unmapped_left_after": 1
+     },
+     {
+      "criteria": "3.5.1评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审的，应当形成统一、完整的评标报告。",
+      "max_score": null,
+      "method": "bigram-overlap",
+      "overlap": 3,
+      "req_id": "REQ-0333",
+      "section_id": "SEC-0033",
+      "section_title": "第二章 投标人须知（条款 1.10-3.2）",
+      "unmapped_left_after": 0
+     }
+    ]
+   },
+   "quota": {
+    "leaves": 47,
+    "leaf_quota_sum": 48000,
+    "target": 48000,
+    "top5_share": 0.11447916666666667,
+    "mapped_scoring_leaf_quota_sum": 8873,
+    "mapped_scoring_leaf_quota_share": 0.18485416666666668
+   },
+   "coverage": {
+    "coverage_ratio": 0.0,
+    "criteria_total": 28,
+    "criteria_unmapped": 0,
+    "criteria_with_points": 6,
+    "hard_gates_excluded": 122,
+    "points_covered": 0,
+    "points_total": 22,
+    "suggested_deduction": 0.0
+   },
+   "validate": {
+    "counts": {
+     "blocker": 0,
+     "deterministic": 20,
+     "major": 0,
+     "minor": 20,
+     "model": 0
+    },
+    "global_conflicts": null,
+    "ok": true,
+    "project_status": "VALIDATING"
+   }
+  },
+  "cqyd": {
+   "pid": "cqyd",
+   "import": {
+    "files": {
+     "chunks": 1264,
+     "files": 2,
+     "parse_failed": 0,
+     "partial": 0
+    },
+    "per_file": [
+     {
+      "name": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "kind": "招标文件",
+      "parse_status": "Ok",
+      "chunks": 1090,
+      "tables": 297,
+      "pages": 32
+     },
+     {
+      "name": "B-cqyd-招标公告.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 174,
+      "tables": 24,
+      "pages": 4
+     }
+    ],
+    "partial": false,
+    "item_errors": [],
+    "waived_failed_files": [],
+    "draft_input_integrity": null
+   },
+   "extract": {
+    "total": 339,
+    "by_category": {
+     "commercial": 1,
+     "format": 65,
+     "other": 163,
+     "qualification": 13,
+     "scoring": 29,
+     "veto": 68
+    },
+    "by_file": {
+     "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf": 339
+    },
+    "scoring_reqs_134_baseline": null,
+    "scoring_reqs_now": 29,
+    "conflicts": 0,
+    "missing_sequence": 0
+   },
+   "scoring_mapping": {
+    "items": null,
+    "unmapped_before": null,
+    "unmapped_after": null,
+    "decisions": []
+   },
+   "quota": {
+    "leaves": 0,
+    "leaf_quota_sum": 0,
+    "target": null,
+    "top5_share": 0,
+    "mapped_scoring_leaf_quota_sum": 0,
+    "mapped_scoring_leaf_quota_share": 0
+   },
+   "coverage": {},
+   "validate": null
+  },
+  "zjyd": {
+   "pid": "zjyd",
+   "import": {
+    "files": {
+     "chunks": 323,
+     "files": 2,
+     "parse_failed": 0,
+     "partial": 0
+    },
+    "per_file": [
+     {
+      "name": "C-zjyd-20260500552-数据库服务器-变更公告.pdf",
+      "kind": "补遗",
+      "parse_status": "Ok",
+      "chunks": 139,
+      "tables": 7,
+      "pages": 4
+     },
+     {
+      "name": "B-zjyd-立项批复.pdf",
+      "kind": "附件",
+      "parse_status": "Ok",
+      "chunks": 184,
+      "tables": 102,
+      "pages": 1
+     }
+    ],
+    "partial": false,
+    "item_errors": [],
+    "waived_failed_files": [],
+    "draft_input_integrity": null
+   },
+   "extract": {
+    "total": 37,
+    "by_category": {
+     "other": 29,
+     "qualification": 4,
+     "veto": 4
+    },
+    "by_file": {
+     "C-zjyd-20260500552-数据库服务器-变更公告.pdf": 37
+    },
+    "scoring_reqs_134_baseline": null,
+    "scoring_reqs_now": null,
+    "conflicts": 0,
+    "missing_sequence": 0
+   },
+   "scoring_mapping": {
+    "items": null,
+    "unmapped_before": null,
+    "unmapped_after": null,
+    "decisions": []
+   },
+   "quota": {
+    "leaves": 0,
+    "leaf_quota_sum": 0,
+    "target": null,
+    "top5_share": 0,
+    "mapped_scoring_leaf_quota_sum": 0,
+    "mapped_scoring_leaf_quota_share": 0
+   },
+   "coverage": {},
+   "validate": null
+  },
+  "unicom-ry-alt": {
+   "pid": "unicom-ry-alt",
+   "import": {
+    "files": {
+     "chunks": 1340,
+     "files": 3,
+     "parse_failed": 0,
+     "partial": 0
+    },
+    "per_file": [
+     {
+      "name": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "kind": "招标文件",
+      "parse_status": "Ok",
+      "chunks": 984,
+      "tables": 15,
+      "pages": 0
+     },
+     {
+      "name": "B-unicom-ry-技术规范书.docx",
+      "kind": "招标文件",
+      "parse_status": "Ok",
+      "chunks": 323,
+      "tables": 2,
+      "pages": 0
+     },
+     {
+      "name": "B-unicom-ry-投标一览表.xlsx",
+      "kind": "格式模板",
+      "parse_status": "Ok",
+      "chunks": 33,
+      "tables": 4,
+      "pages": 4
+     }
+    ],
+    "partial": false,
+    "item_errors": [],
+    "waived_failed_files": [],
+    "draft_input_integrity": null
+   },
+   "extract": {
+    "total": 323,
+    "by_category": {
+     "format": 11,
+     "other": 186,
+     "qualification": 19,
+     "scoring": 18,
+     "veto": 89
+    },
+    "by_file": {
+     "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx": 302,
+     "B-unicom-ry-技术规范书.docx": 21
+    },
+    "scoring_reqs_134_baseline": null,
+    "scoring_reqs_now": 18,
+    "conflicts": 0,
+    "missing_sequence": 0
+   },
+   "scoring_mapping": {
+    "items": null,
+    "unmapped_before": null,
+    "unmapped_after": null,
+    "decisions": []
+   },
+   "quota": {
+    "leaves": 0,
+    "leaf_quota_sum": 0,
+    "target": null,
+    "top5_share": 0,
+    "mapped_scoring_leaf_quota_sum": 0,
+    "mapped_scoring_leaf_quota_share": 0
+   },
+   "coverage": {},
+   "validate": null
+  }
+ },
+ "notes": [
+  "评审器独立于被测面（GT 判分在 Python——Rust 只落事实与结构不变量断言）",
+  "soft 命中口径：同文件同号未中时按锚文包含兜底（命中即记，口径列明）"
+ ]
+}
