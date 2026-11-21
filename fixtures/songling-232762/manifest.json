@@ -151,7 +151,7 @@
   ]
  },
  "layer1_pdf_baseline": {
-  "note": "2026-11-05 本机实测（Linux，poppler 通道）首次固化；2026-11-13 #112 复验刷新（main@f2ea3c2）：#266 PDF 语义表落地商务 0→13、#132 评审程序条款排除评分 16→14（2 条移其他 115→117）、#267 归一面既有——可检索 5/16→15/16。余 1 MISS=GR-004「360分钟」：解析块 614-616 在位、抽取层丢弃（圈号子项（2）未开REQ——同型（1）（5）均开 REQ 的行为不一致），登记于 #112 复验报告，修复另立 issue。 2026-11-13 #145 收口（同日）：圈号子项（2）头/内容分行形态修复（circled_head_absorb）——GR-004「360分钟」召回，15/16→16/16 全中；技术参数 11→12（+1 即 GR-004 本体），req_total 317→318。",
+  "note": "2026-11-05 本机实测（Linux，poppler 通道）首次固化；2026-11-13 #112 复验刷新（main@f2ea3c2）：#266 PDF 语义表落地商务 0→13、#132 评审程序条款排除评分 16→14（2 条移其他 115→117）、#267 归一面既有——可检索 5/16→15/16。余 1 MISS=GR-004「360分钟」：解析块 614-616 在位、抽取层丢弃（圈号子项（2）未开REQ——同型（1）（5）均开 REQ 的行为不一致），登记于 #112 复验报告，修复另立 issue。 2026-11-13 #145 收口（同日）：圈号子项（2）头/内容分行形态修复（circled_head_absorb）——GR-004「360分钟」召回，15/16→16/16 全中；技术参数 11→12（+1 即 GR-004 本体），req_total 317→318。 2026-11-21 #185 补刷（AUD2-3 接源后抓到）：scoring_* 姊妹键在 11-13 刷新时漏带——#132 评审程序条款移面使评分项 REQ 16→14（2 条移其他，与 category_counts.评分项 同批），scoring_items 61→59、non_hard 16→14、带分 9→8（评分表 8 行真值对齐）；hard 45 不变。非下调放水：对齐已知行为变化，门此后接 manifest 真源（再漂移即红灯）。",
   "measured_at": "2026-11-13",
   "req_total": 318,
   "category_counts": {
@@ -187,9 +187,9 @@
   "outline_nodes": 68,
   "outline_leaves": 43,
   "outline_block_titles": 0,
-  "scoring_items_total": 61,
+  "scoring_items_total": 59,
   "scoring_hard_gate": 45,
-  "scoring_with_weight": 9,
+  "scoring_with_weight": 8,
   "scoring_mappings": 8,
   "findings": [
    "2026-11-05 #252 第二步刷新：综合评分表专路（bid-parse scoring_table）把评分表 8 行结构化为评分项 REQ——REQ 297→304（-1 符合性审查表吞表行 +8 评分表行），评分项 9→16（原 9 条报价修正规则 + 8 条评分表行），带分值 1→9",
@@ -198,7 +198,7 @@
    "技术参数 11 条不变（防回归门绿）；商务要求 0 不变（#250 遗留面）；retrievable 4/16 不变（95%/360分钟 等数值缺失是抽取面缺陷，传导到 #252 coverage 门——预期红）",
    "纯 Rust 兜底通道（rust_fallback）对本件输出乱码（实测 63 页 3144 行 cjk=0）——层1 引擎面在无 poppler 环境（Windows CI）按 issue #9 纪律 SKIP，层0 静态面永远跑"
   ],
-  "scoring_non_hard": 16
+  "scoring_non_hard": 14
  },
  "scoring_outline_baseline": {
   "note": "#252 评分驱动大纲断言面的固化基线（三态门：实测==基线 → FAIL 横幅锁定现状；更差 → 红灯；达成 → IMPROVED 要求更新+PR 说明）。预期形态锚 = expected/outline.expected.json（6 L1 + 20 L2 + 业绩/价格位）。实测环境：Linux poppler 通道，derive_and_set_outline 默认 spec（target 844,000）。2026-11-05 #252 第二步落地 + main 并入（#253 三轨分层计价与 #252 结构融合——统一账：legacy 叶 Admin/Body + 评分 L2 Scoring + 槽位固定）后全门刷新——唯一预期红 = coverage_key_params（抽取面 95%/360分钟 数值缺失传导，见 findings）。｜#287 刷新（2026-11-06）：默认目标 844,000 → 1,200,000（用户裁定：120 万字 ≈ 1422 页，四档 400k/800k/1.2M/2.5M，档位详见 outline.rs LengthProfile）——行政轨 300 字/条计价不变、绝对值不变（84,300），分母增大 → admin_share 0.095→0.070；评分轨底价 10,000/细则 + 剩余让渡随分值权重 → scoring_share 0.824→0.873（实测 1,047,700/1,200,000）。Linux poppler 通道实测。｜#132 刷新（2026-11-13）：AUD2-HIS-B1 评审程序条款排除面落地（REQ-0179/0180/0289 评分项→其他，评分总分 130→100 真值）——计价面微调：行政轨 84,300→84,900（+600 字，改判 REQ 进实质轨计价）→ quota_admin_share 0.070→0.071；评分轨 1,047,700→1,047,100 → share 0.873 不变（四舍五入）；admin_bound_reqs=272 绑定面零漂移（三键实测==新基线，Linux poppler 通道）",

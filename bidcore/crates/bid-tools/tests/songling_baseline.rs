@@ -268,6 +268,15 @@ fn baseline_u64(key: &str) -> u64 {
         .unwrap_or_else(|| panic!("manifest.layer1_pdf_baseline.{key} 缺失"))
 }
 
+/// #185（AUD2-3）：类别计数基线单一真源——固化门 known/target 此前硬编码
+/// 与 manifest 脱钩两个刷新周期（商务 13→0 不红灯、技术 12→11、评分 14→9
+/// 同病），改走 manifest.category_counts（嵌套键，与顶层 baseline_u64 同族）。
+fn baseline_category(cat: &str) -> u64 {
+    load_json("manifest.json")["layer1_pdf_baseline"]["category_counts"][cat]
+        .as_u64()
+        .unwrap_or_else(|| panic!("manifest.layer1_pdf_baseline.category_counts.{cat} 缺失"))
+}
+
 /// 防回归门 + 失败基线固化的统一裁决。
 ///
 /// 返回 (actual, improved)。裁决输出三种横幅：
@@ -313,17 +322,20 @@ fn pdf_engine_req_counts_and_categories() {
     }
     eprintln!("[songling-layer1] 类别计数: {cats:?}");
 
-    // 技术参数（PDF 路径已达 issue 目标 11——防回归 + 改善检测）
+    // 技术参数（manifest 真源 12——#145 GR-004 收口后；防回归 + 改善检测）
     let tech = *cats.get("技术参数").unwrap_or(&0);
-    gate_count("tech_req_count", "技术参数类 REQ", tech, 11, 11);
+    gate_count("tech_req_count", "技术参数类 REQ", tech,
+               baseline_category("技术参数"), baseline_category("技术参数"));
 
-    // 商务要求（两路径一致为 0——整表丢失，固化失败）
+    // 商务要求（manifest 真源 13——#266 PDF 语义表落地 0→13；回归到 0 即红灯）
     let biz = *cats.get("商务要求").unwrap_or(&0);
-    gate_count("biz_req_count", "商务要求类 REQ", biz, 0, 13);
+    gate_count("biz_req_count", "商务要求类 REQ", biz,
+               baseline_category("商务要求"), baseline_category("商务要求"));
 
-    // 评分项（PDF 基线 9：对应评分表 6 技术项 + 业绩 + 价格 + 1 细则子项）
+    // 评分项（manifest 真源 14——#132 评审程序条款排除后；防回归 + 改善检测）
     let scoring_req = *cats.get("评分项").unwrap_or(&0);
-    gate_count("scoring_req_count", "评分项类 REQ", scoring_req, 9, 8);
+    gate_count("scoring_req_count", "评分项类 REQ", scoring_req,
+               baseline_category("评分项"), baseline_category("评分项"));
 }
 
 #[test]
@@ -459,11 +471,14 @@ fn pdf_engine_scoring_items_and_mapping() {
     let hard = scoring.iter().filter(|i| i.is_hard_gate).count() as u64;
     eprintln!("[songling-layer1] scoring_items: total={} hard={} non_hard={} weighted={}", scoring.len(), hard, non_hard, with_weight);
 
-    // 评分项条数（PDF 基线 9：评分表真值 8 项 + 引擎多 1 条——待层2 对账）
-    gate_count("scoring_req_count", "评分项条数（非硬门）", non_hard, 9, 8);
-    // 带分值评分项（PDF 基线 1：9 条评分项仅 1 条带 weight——分值大量丢失是
-    // 独立于条数计数的缺陷面，与评分表真值 8 项带分对照）
-    gate_count("scoring_weighted", "带分值评分项", with_weight, 1, 8);
+    // 评分项条数（manifest 真源 scoring_non_hard=16——#252 评分表专路 8 行
+    // + 报价修正规则 8 条；非硬门面，与 REQ 类别计数（:326）不同口径）
+    gate_count("scoring_req_count", "评分项条数（非硬门）", non_hard,
+               baseline_u64("scoring_non_hard"), baseline_u64("scoring_non_hard"));
+    // 带分值评分项（manifest 真源 scoring_with_weight=9——#252 后 9 条带分；
+    // 与评分表真值 8 项带分对照，分值丢失面已收口）
+    gate_count("scoring_weighted", "带分值评分项", with_weight,
+               baseline_u64("scoring_with_weight"), baseline_u64("scoring_with_weight"));
 
     // 评分项 → 章节映射（issue #252 验收 4：scoring_mappings 评分项全部有 section_id）
     let mappings = store.scoring_mappings().len() as u64;
