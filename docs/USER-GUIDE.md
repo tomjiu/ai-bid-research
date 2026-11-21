@@ -199,7 +199,7 @@ cargo run -p mang-app
 |---|---|---|
 | `record_review_gate` | 按门窗口 | 三门记审（matrix/outline/pre_export；receipt 验签，agent 声明留痕） |
 | `record_addendum_waiver` | 导入后任意时刻 | 补遗逐件人工确认（分级阻塞的免责面） |
-| `recover_validating_state` | 仅 VALIDATING 态 | 历史异常态恢复（缺章回 DRAFTING，审计账） |
+| `recover_validating_state` | 仅 VALIDATING 态 | 历史异常态恢复（缺章回 DRAFTING，审计账；#152 后扩第二基础：门1i 冲突在案 → 回修正面，VALIDATING 死锁受支持出口） |
 
 **评分（只读试算）**
 
@@ -360,6 +360,19 @@ BID_LLM_MODEL      覆盖 model
 两层防线：draft 时引用回查（未知 REQ/EV 剔除 + 告警）；validate 时
 `E_CITATION_GHOST` 规则（BLOCKER——评标查证无此件是废标级）。
 
+**Q：工作台显示「人工复核完成」但没人审过？**
+#170 后口径：审批账本为空 / 仅 agent 声明时**不再显示人工复核完成**
+（agent 声明与人工批准是两个面——`record_review_gate` 的 agent 痕迹
+只留痕不代替人工批准）；空 / 缺失 / 待追认字段各自如实显示。
+
+**Q：收官验收（scripts/acceptance_closeout.py）跳过的面算过吗？**
+不算。#168 后严格模式（默认）：任一必需分栏 SKIP/BLOCKED/NOT_RUN
+→ 整体 FAIL（退出码非零）——缺料 / 未执行真实 LLM / 未人工审校都不
+能因「其它面绿」而宣称收官；`--allow-skip` 宽松模式可 PASS_WITH_SKIPS
+但豁免面逐条注明。四分栏：baseline（工程链真测）/ songling67（金标准
+召回 + 缺料如实 BLOCKED）/ multifile（多件齐套盘点）/ realagent（真实
+LLM 面登记）。
+
 **Q：想看每一步耗时？**
 `cargo test -p bid-mcp --test scale_1330 -- --nocapture`——50 万字 252 章
 全链逐步计时（实测全链 19s：起草 18s + 导出 0.3s）。
@@ -377,6 +390,10 @@ docx 是真源（PDF 由 docx 转换）。PDF 需要 LibreOffice（`soffice`）�
   字形编号，与 Unicode 无恒等关系；
 - **/ObjStm（PDF 1.5+ 对象流）**——字体字典被压缩，兜底扫描不到编码
   声明。
+
+#171 后该面加固为「拒收并保留原因」：不支持的兜底映射形态直接
+parse FAILED（不再产出静默乱码文本），导入失败原因逐件落账
+（`import_item_errors` / 失败清单可见）——修复该件后重导即可。
 
 三条绕过（任选其一）：① 安装 pdfium（首选路自带 CMap）；② 安装带
 poppler-data（CMap 资源包）的 poppler；③ 用 Word/WPS 打开该 PDF 另存为
