@@ -791,9 +791,18 @@ fn extract_main_pdf(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usize
         let mut body_end = i;
         let mut k = i + 1;
         while let Some(nb) = blocks.get(k) {
-            if !matches!(nb.kind, BlockKind::PdfLine | BlockKind::OcrLine)
-                || page_noisy.contains(&k)
-            {
+            // #173（#145 残留收口）：页界噪声透明穿越（#450 B-18 同款纪律
+            // ——不吞不截不混）：头行在页尾、量化内容在次页的形态，吸收
+            // 不被噪声截断（原实现噪声与表格/空行同作吸收终点 → 整条子项
+            // 丢 REQ——#145 残留登记的合成四块形态）。噪声不入文本（内层
+            // m 循环已滤）、不产锚（para_anchors 同滤）；边界判据作用于
+            // 穿越后的**首个真行**——结构边界（新子节/章头/同级新子项/
+            // 已结束段落）仍挡，不因穿越而跨节吸收。
+            if page_noisy.contains(&k) {
+                k += 1;
+                continue;
+            }
+            if !matches!(nb.kind, BlockKind::PdfLine | BlockKind::OcrLine) {
                 break;
             }
             let nt = nb.text.trim();
