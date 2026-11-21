@@ -43,7 +43,7 @@ pub use transport::Transport;
 
 use serde_json::Value;
 
-/// 33 个工具名（单一真源；schema 声明与分发都从这里取）。
+/// 51 个工具名（单一真源；schema 声明与分发都从这里取。#191 校准：原注释计数 33 过期）。
 
 ///
 /// V3-5（S-4 游标分页）新增 `list_evidence` / `list_tasks` 两个只读列表工具
@@ -73,7 +73,9 @@ use serde_json::Value;
 /// #316 增 1 个：`list_packages`（分包清单只读——多标段/多包）
 /// #318 增 1 个：`check_scoring_coverage`（评分细则逐条响应覆盖检查——只读诊断）
 /// #315 增 4 个：业绩材料库四工具（register_performance / list_performance /
-/// recommend_performance / write_performance_section）= 50。
+/// recommend_performance / write_performance_section）小计 50；#153 增 1 个：
+/// `map_scoring_item`（评分项→章节显式映射——commit 432b47a 工具面 50→51，
+/// 本注释小计当时漏更）= 51（#191 校准）。
 
 pub const TOOL_NAMES: [&str; 51] = [
     "create_bid_project",
