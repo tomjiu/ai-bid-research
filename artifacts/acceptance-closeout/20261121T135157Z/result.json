@@ -1,0 +1,178 @@
+{
+ "schema_version": 1,
+ "generated_at": "2026-11-21T13:52:01+00:00",
+ "mode": "allow-skip",
+ "repo_head": {
+  "head": "10ec81b25185242f72aafa8824234660f9914538",
+  "branch": "main",
+  "dirty_files": 46
+ },
+ "host_facts": {
+  "platform": "Linux-5.10.134-013.15.kangaroo.al8.x86_64-x86_64-with-glibc2.41",
+  "python": "3.12.16",
+  "machine": "x86_64",
+  "cargo": "cargo 1.100.0 (3acc79c0c 2026-11-05)",
+  "env_keys": [
+   "BUN_INSTALL",
+   "BUN_INSTALL_BIN",
+   "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
+   "CLAWHUB_DISABLE_TELEMETRY",
+   "CLAWHUB_WORKDIR",
+   "CLICOLOR",
+   "CLICOLOR_FORCE",
+   "DATABASE_URL",
+   "DEBIAN_FRONTEND",
+   "FC_ACCOUNT_ID",
+   "FC_CONTAINER_ID",
+   "FC_CUSTOM_LISTEN_PORT",
+   "FC_FUNCTION_HANDLER",
+   "FC_FUNCTION_MEMORY_SIZE",
+   "FC_FUNCTION_NAME",
+   "FC_INSTANCE_ID",
+   "FC_REGION",
+   "HOME",
+   "KATA_CONTAINER",
+   "LC_CTYPE",
+   "LOGNAME",
+   "MAIL",
+   "NO_COLOR",
+   "OLDPWD",
+   "PATH",
+   "PWD",
+   "PYTEST_CURRENT_TEST",
+   "PYTEST_VERSION",
+   "PYTHONDONTWRITEBYTECODE",
+   "PYTHONUNBUFFERED",
+   "SHELL",
+   "SHLVL",
+   "SIGMA_APP_NAME",
+   "STEP_START_TIME",
+   "SUPERVISE_MAIN_PID",
+   "TERM",
+   "USER",
+   "UV",
+   "UV_CACHE_DIR",
+   "UV_PYTHON",
+   "UV_RUN_RECURSION_DEPTH",
+   "VIRTUAL_ENV"
+  ]
+ },
+ "four_panels": [
+  {
+   "panel": "songling67",
+   "verdict": "BLOCKED",
+   "materials": {
+    "present": [
+     "tender_pdf"
+    ],
+    "missing": [
+     {
+      "key": "tender_docx_repaired",
+      "expected": "1418 块 / 26 表（= TF-0003，真实运行导入件）"
+     },
+     {
+      "key": "agent_submitted",
+      "expected": "67 条（资格9/否决13/评分9/技术11/商务13/格式9/其他3——issue #251 素材表）"
+     },
+     {
+      "key": "agent_block_marks",
+      "expected": "76 个区间（verdict：requirement 26 / rule 40 / noise 10）"
+     },
+     {
+      "key": "engine_requirements_snapshot",
+      "expected": "295 条引擎抽取（db.json → domain.requirements；技术参数仅 1 条）"
+     },
+     {
+      "key": "baseline_output_pdf",
+      "expected": "97 页 / 81,850 字符（4.5 版产物——回归对比用，非金标准）"
+     }
+    ],
+    "n_missing": 5
+   },
+   "gold_n": 16,
+   "needle_recall": {
+    "hit": 16,
+    "miss": 0,
+    "total": 16,
+    "pdf_extract_s": 4.0
+   },
+   "misses": [],
+   "reason": "层2素材 5 项 MISSING（67 条本体面缺料——#112 如实口径）"
+  },
+  {
+   "panel": "multifile",
+   "verdict": "PASS",
+   "huaian_project_files": [
+    {
+     "role": "招标文件",
+     "file": "A-telecom-huaian-主文件.docx",
+     "present": true,
+     "sha256_12": "95b62593bced",
+     "bytes": 270472
+    },
+    {
+     "role": "技术规范",
+     "file": "B-telecom-huaian-技术规范书.docx",
+     "present": true,
+     "sha256_12": "d2d58a0a7adf",
+     "bytes": 37486
+    },
+    {
+     "role": "报价表",
+     "file": "B-telecom-huaian-报价文件.xlsx",
+     "present": true,
+     "sha256_12": "bfcf13bfe04c",
+     "bytes": 15640
+    },
+    {
+     "role": "合同",
+     "file": "B-telecom-huaian-合同.docx",
+     "present": true,
+     "sha256_12": "2a72910d5e59",
+     "bytes": 80940
+    }
+   ],
+   "addendum_material": {
+    "found": false,
+    "note": "仓内无淮安项目补遗件（其余补遗形态见 gov-procurement 更正公告——属 B 面链路非矩阵件）"
+   },
+   "note": "素材齐套性 PASS（矩阵/评分映射正确性本体归 #114 执行面——本栏只固化素材验收基线）"
+  },
+  {
+   "panel": "realagent",
+   "verdict": "NOT_RUN",
+   "driver_exists": true,
+   "env_gate": {
+    "BID_REAL_PATH_WS": "unset",
+    "BID_REAL_PATH_PHASE": "unset"
+   },
+   "human_relay_marker": null,
+   "reason": "真实 LLM 通路未执行（BID_REAL_PATH_WS/PHASE 未设；run_real_llm_path.sh 两相位人工中继是 #113 的登记边界）"
+  },
+  {
+   "panel": "baseline",
+   "verdict": "SKIP",
+   "reason": "--skip-baseline"
+  }
+ ],
+ "overall": {
+  "verdict": "PASS_WITH_SKIPS",
+  "blocking_reasons": [
+   "[allow-skip 豁免] songling67: BLOCKED —— 层2素材 5 项 MISSING（67 条本体面缺料——#112 如实口径）",
+   "[allow-skip 豁免] realagent: NOT_RUN —— 真实 LLM 通路未执行（BID_REAL_PATH_WS/PHASE 未设；run_real_llm_path.sh 两相位人工中继是 #113 的登记边界）",
+   "[allow-skip 豁免] baseline: SKIP —— --skip-baseline"
+  ]
+ },
+ "replay": {
+  "commands": [
+   "git -C /home/z/my-project/ai-bid-research rev-parse HEAD  # 20261121T135157Z",
+   "/home/z/.venv/bin/python3 scripts/acceptance_closeout.py --skip-baseline --allow-skip"
+  ],
+  "exit_codes": {},
+  "result_file": "/home/z/my-project/ai-bid-research/artifacts/acceptance-closeout/20261121T135157Z/result.json",
+  "log_file": "/home/z/my-project/ai-bid-research/artifacts/acceptance-closeout/20261121T135157Z/run.log"
+ },
+ "redaction": {
+  "applied": "token/password/secret/api-key 形 + URL basic-auth"
+ }
+}

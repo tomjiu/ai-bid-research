@@ -2851,10 +2851,10 @@ fn convert_to_pdf_word(docx: &std::path::Path, out_pdf: &std::path::Path) -> Res
 
     let outdir = out_pdf.parent().unwrap_or(std::path::Path::new("."));
     std::fs::create_dir_all(outdir).map_err(|e| format!("输出目录创建失败: {e}"))?;
-    // PowerShell 单引号字符串：内部的 ' 要双写
-    let esc = |p: &std::path::Path| p.display().to_string().replace('\'', "''");
-    let docx_s = esc(docx);
-    let pdf_s = esc(out_pdf);
+    // #187（AUD2-4）：ps_single_quoted_literal 单一真源——原仅转义 ASCII
+    // 单引号，智能引号（PS 单引号同义词）裸进字面量会断裂字符串（注入面）
+    let docx_s = ps_single_quoted_literal(&docx.display().to_string());
+    let pdf_s = ps_single_quoted_literal(&out_pdf.display().to_string());
     let script = format!(
         "$ErrorActionPreference = 'Stop'\r\n\
          $word = $null\r\n\
@@ -2911,13 +2911,15 @@ fn convert_to_pdf_word(docx: &std::path::Path, out_pdf: &std::path::Path) -> Res
     if timed_out {
         let _ = child.kill();
         let _ = child.wait();
-        // 清理本次可能残留的 Word（单实例串行前提下不会误杀用户文档）
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "WINWORD.EXE"])
-            .output();
+        // #187（AUD2-6）：不再 taskkill /F /IM WINWORD.EXE 强杀——该命令杀
+        // 的是用户**全部** Word 进程（未保存文档直接丢失）；「单实例串行
+        // 前提下不会误杀」是假设不是保证，且与 doc2docx 面「归属无法确认
+        // 时不强杀」（doc_conversion.rs word_com_timeout_message）策略直接
+        // 矛盾。对齐：仅终止本次 PowerShell 子进程，Word 可能残留——错误
+        // 信息如实告知（残留由用户自行处置，不替用户做 destructive 决定）。
         let _ = std::fs::remove_file(&script_path);
         return Err(format!(
-            "Word COM 超时（{WORD_COM_TIMEOUT_SECS}s）——Word 可能被其他文档占用或弹出了对话框；已清理残留"
+            "Word COM 超时（{WORD_COM_TIMEOUT_SECS}s）——仅终止本次 PowerShell 子进程；Word 归属无法确认时不强杀（用户其他未保存文档不受波及），Word 进程可能残留；Word 可能被其他文档占用或弹出了对话框"
         ));
     }
     let output = child
@@ -3176,6 +3178,23 @@ fn convert_doc_to_docx(doc: &std::path::Path, out_docx: &std::path::Path) -> Res
     convert_doc_to_docx_lo(doc, out_docx)
 }
 
+/// #187（AUD2-4）：PowerShell 单引号字符串字面量构造——单一真源。
+///
+/// 智能引号（U+2018/U+2019/U+201A/U+201B）是 PowerShell 单引号**同义词**
+/// （#165 实测：裸放进 '…' 字面量会断裂字符串 → 注入面/DoS）——含智能
+/// 引号的路径编码为 UTF-16 码位拼接（`[char]N` 形态），杜绝任何 Unicode
+/// 分隔符进脚本字面量；纯 ASCII 路径走单引号双写（`'` → `''`）。
+/// doc2docx 面（#165 先行）与 convert_to_pdf_word 面（AUD2-4 漏修面——
+/// 原仅转义 ASCII 单引号）共用本函数。
+pub fn ps_single_quoted_literal(s: &str) -> String {
+    if s.chars().any(|c| matches!(c, '‘' | '’' | '‚' | '‛')) {
+        let chars = s.encode_utf16().map(|c| format!("[char]{c}")).collect::<Vec<_>>();
+        format!("(-join @({}))", chars.join(","))
+    } else {
+        format!("'{}'", s.replace('\'', "''"))
+    }
+}
+
 /// #165：.doc→.docx Word COM PowerShell 脚本源生成（纯函数——非 Windows
 /// 平台测试可直接断言脚本形状，真实执行面见 [`convert_doc_to_docx_word`]）。
 ///
@@ -3190,16 +3209,8 @@ fn convert_doc_to_docx(doc: &std::path::Path, out_docx: &std::path::Path) -> Res
 pub fn build_doc2docx_script(doc_path: &str, out_docx_path: &str) -> String {
     // PowerShell recognizes smart quotes too. Encode those paths as UTF-16 code
     // units rather than putting any Unicode delimiter in a script literal.
-    let literal = |s: &str| {
-        if s.chars().any(|c| matches!(c, '‘' | '’' | '‚' | '‛')) {
-            let chars = s.encode_utf16().map(|c| format!("[char]{c}")).collect::<Vec<_>>();
-            format!("(-join @({}))", chars.join(","))
-        } else {
-            format!("'{}'", s.replace('\'', "''"))
-        }
-    };
-    let doc_s = literal(doc_path);
-    let out_s = literal(out_docx_path);
+    let doc_s = ps_single_quoted_literal(doc_path);
+    let out_s = ps_single_quoted_literal(out_docx_path);
     format!(
         r#"$ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -3364,7 +3375,23 @@ fn import_doc_converted(
     }
     let dir = convert_dir
         .map(|d| d.to_path_buf())
-        .unwrap_or_else(|| std::env::temp_dir().join("bid-doc-convert"));
+        .unwrap_or_else(|| {
+            // #187（AUD2-5）：BID_FS_ROOT-only 降级面——原固定名
+            // temp/bid-doc-convert 是共享投毒面：公开招标文件 sha 可预计算
+            // → 预置 {sha16}.docx（伪 PK 头）经 docx_artifact_valid 魔数
+            // 校验即入库且真 sha 覆写挂毒身份；预置 symlink → 任意路径写。
+            // 对齐 TmpGuard 纪律：pid+nanos 唯一名。代价：降级路径跨调用
+            // 缓存失效（同件重导重转）——安全优先；正常部署（convert_dir
+            // 由工作区派生）不受影响。
+            std::env::temp_dir().join(format!(
+                "bid-doc-convert-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            ))
+        });
     let target = dir.join(format!("{}.docx", &orig_sha[..16.min(orig_sha.len())]));
     if !docx_artifact_valid(&target) {
         convert_doc_to_docx(doc, &target)?;
