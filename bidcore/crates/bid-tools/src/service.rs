@@ -2609,7 +2609,7 @@ impl Default for BidService {
 }
 
 /// #88 审计 F-01/F-02：致命项门（导出门 1e/1f）的显式豁免面；批次 4
-/// 增补 F-06/F-09 两门（1k/1j）与 1j 的阈值配置。
+/// 增补 F-06/F-09 两门（1l/1m）与 1m 的阈值配置。
 ///
 /// 设计纪律（与 `bid_open_date` 的 opt-in 取舍同族，但方向相反——门是
 /// 默认 fail-closed，豁免是显式 opt-out）：
@@ -2619,9 +2619,9 @@ impl Default for BidService {
 /// - **粒度对齐门**：`star_missing` 只豁免漏标子面 b；子面 a
 ///   （E_STAR_UNRESPONDED 已抽取未响应）与暗标门（mode=暗标 未启用）
 ///   无参数豁免——修复通道是补响应/开暗标，不是绕过；
-/// - **决策对账门（1i）无豁免**：金额/工期/术语/承诺冲突是客观事实
-///   不一致（评标否决点），修复通道是改一致，不是绕过（与 1c 写作
-///   验收门同款无豁免纪律）。
+/// - **全局一致性冲突门（1i）与决策对账门（1j/1j-2）无豁免**：金额/
+///   工期/术语/承诺冲突是客观事实不一致（评标否决点），修复通道是
+///   改一致，不是绕过（与 1c 写作验收门同款无豁免纪律）。
 #[derive(Debug, Clone)]
 pub struct FatalGapWaivers {
     /// ★漏标面（E_STAR_MISSING）人工确认豁免——非空理由生效。
@@ -2630,17 +2630,17 @@ pub struct FatalGapWaivers {
     ///（#88 门 1h：无评分项语料误抽确认等场景；映射通道 map_scoring_item（MCP
     /// 写面，#153）/ upsert_scoring_mapping（域层）仍开放）。
     pub unmapped_scoring: Option<String>,
-    /// 三件套数据缺位面（E_FORMAT_PLACEHOLDER，#88 门 1k/F-06）人工确认
+    /// 三件套数据缺位面（E_FORMAT_PLACEHOLDER，#88 门 1l/F-06）人工确认
     /// 豁免——非空理由生效（无法定授权委托、确认带【待填】导出等场景）。
     pub format_placeholder: Option<String>,
-    /// 超篇幅面（E_CHARS_OVER_LIMIT，#88 门 1j/F-09）人工确认豁免——
+    /// 超篇幅面（E_CHARS_OVER_LIMIT，#88 门 1m/F-09）人工确认豁免——
     /// 非空理由生效（评标办法不设页数限制等场景）。
     pub length_overrun: Option<String>,
     /// 评分叶生成器面（E_SCORING_LEAF_GENERATOR，AUD2-CHN-01/#130 门 1n）
     /// 人工确认豁免——非空理由生效（mock 链收官测试/外部手稿经人工确认
     /// 等场景；正式投标前应重起草为 real 或 external 有审校背书）。
     pub scoring_leaf_generator: Option<String>,
-    /// 超篇幅阈值（%——门 1j 判据 `chars×100 > target×(100+pct)`，
+    /// 超篇幅阈值（%——门 1m 判据 `chars×100 > target×(100+pct)`，
     /// 审计建议默认 50；调用方可配 1..=10000）。
     pub max_overrun_pct: u32,
 }
