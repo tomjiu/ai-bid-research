@@ -78,7 +78,13 @@ fn grade_one(run_dir: &Path, fixtures_dir: &Path) -> std::process::ExitCode {
     };
     let report = grade::grade_run(&db, &fx);
     let out = run_dir.join("report.json");
-    std::fs::write(&out, serde_json::to_vec_pretty(&report).unwrap()).ok();
+    // #193（AUD2-16）：report 写失败不得 .ok() 吞没后照常定退出码——评测
+    // 门以 report.json 为产物（下游消费），写失败 = 评测未产出，必须非零
+    // 退出 + 响亮告警（与夹具装载失败同款 #481 纪律）。
+    if let Err(e) = std::fs::write(&out, serde_json::to_vec_pretty(&report).unwrap()) {
+        eprintln!("[grade] report.json 写失败（{}）：{}——评测产物未落盘，判 FAILURE", out.display(), e);
+        return std::process::ExitCode::FAILURE;
+    }
     for (name, d) in report["dimensions"].as_object().unwrap() {
         println!("  {} {:>13} {}", if d["pass"].as_bool() == Some(true) { "✓" } else { "✗" },
                  d["status"].as_str().unwrap_or("?"), name);

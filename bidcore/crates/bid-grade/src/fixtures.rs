@@ -57,28 +57,49 @@ pub struct Fixtures {
 impl Fixtures {
     pub fn load(root: &Path) -> Result<Self, String> {
         let gt_path = root.join("corpus-A/ground-truth/requirements.jsonl");
-        let mut gts = vec![];
+        /// #193（AUD2-16）：夹具必填字段校验——字段名/类型漂移时原 unwrap_or_default
+/// 静默变空串，下游评分比对拿空串比较（metric_honest_gate 把着的门，夹具侧
+/// 漏水）。必填字段缺失/非字符串 → 响亮报错（fail-fast），可选字段（本来就
+/// Option 的 clause_no/params/op/note 等）保持宽松。
+fn require_str(v: &Value, key: &str, ctx: &str) -> Result<String, String> {
+    let s = v[key].as_str().ok_or_else(|| {
+        format!(
+            "夹具必填字段缺失或非字符串：{ctx} 的 `{key}`（值: {}）——空串比对 = 假比对，拒绝装载",
+            v[key]
+        )
+    })?;
+    if s.is_empty() {
+        return Err(format!("夹具必填字段为空串：{ctx} 的 `{key}`——空串比对 = 假比对，拒绝装载"));
+    }
+    Ok(s.to_string())
+}
+
+let mut gts = vec![];
         for line in std::fs::read_to_string(&gt_path).map_err(|e| e.to_string())?.lines() {
             if line.trim().is_empty() {
                 continue;
             }
             let v: Value = serde_json::from_str(line).map_err(|e| e.to_string())?;
+            let ctx = format!("GT 行 {}", gt_path.display());
             gts.push(GtRequirement {
-                gt_id: v["gt_id"].as_str().unwrap_or_default().to_string(),
+                gt_id: require_str(&v, "gt_id", &ctx)?,
                 clause_no: v.get("clause_no").cloned(),
-                category: v["category"].as_str().unwrap_or_default().to_string(),
+                category: require_str(&v, "category", &ctx)?,
                 anchors: v["anchors"]
                     .as_array()
                     .map(|arr| {
                         arr.iter()
-                            .map(|a| GtAnchor {
-                                file: a["file"].as_str().unwrap_or_default().into(),
-                                kind: a["kind"].as_str().unwrap_or_default().into(),
-                                locator: a["locator"].as_str().unwrap_or_default().into(),
-                                excerpt: a["excerpt"].as_str().unwrap_or_default().into(),
+                            .map(|a| -> Result<GtAnchor, String> {
+                                Ok(GtAnchor {
+                                    file: require_str(a, "file", &format!("{ctx} anchor"))?,
+                                    kind: require_str(a, "kind", &format!("{ctx} anchor"))?,
+                                    locator: require_str(a, "locator", &format!("{ctx} anchor"))?,
+                                    excerpt: require_str(a, "excerpt", &format!("{ctx} anchor"))?,
+                                })
                             })
-                            .collect()
+                            .collect::<Result<Vec<_>, _>>()
                     })
+                    .transpose()?
                     .unwrap_or_default(),
                 params: v.get("params").cloned().unwrap_or(Value::Null),
                 expected_policy: v.get("expected_policy").and_then(|x| x.as_str()).map(String::from),
@@ -100,22 +121,40 @@ impl Fixtures {
                 continue;
             }
             let v: Value = serde_json::from_str(&std::fs::read_to_string(&p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            let et_ctx = format!("ET {}", v["tc_id"].as_str().unwrap_or(""));
             let asserts = v["asserts"]
                 .as_array()
                 .map(|arr| {
                     arr.iter()
-                        .map(|a| EtAssert {
-                            kind: a["kind"].as_str().unwrap_or_default().into(),
-                            path: a["path"].as_str().unwrap_or_default().into(),
-                            op: a.get("op").and_then(|x| x.as_str()).map(String::from),
-                            value: a.get("value").cloned().unwrap_or(Value::Null),
-                            note: a.get("note").and_then(|x| x.as_str()).unwrap_or_default().into(),
+                        .map(|a| -> Result<EtAssert, String> {
+                            // path 必填面：数据面断言（count/state/metric…）
+                            // 按路径取值比对，path 缺失 = 空串假比对；
+                            // 无路径合法面（全量清点实证）：engine_gap
+                            // （降级人工检查单，只携带 value/note——TC-12）
+                            // 与 rules_hit（按 kind 语义消费规则清单——
+                            // TC-05）；其余 kind 的 path 缺失即拒。
+                            let needs_path = a["kind"]
+                                .as_str()
+                                .map(|k| !matches!(k, "engine_gap" | "rules_hit"))
+                                .unwrap_or(false);
+                            Ok(EtAssert {
+                                kind: require_str(a, "kind", &et_ctx)?,
+                                path: if needs_path {
+                                    require_str(a, "path", &et_ctx)?
+                                } else {
+                                    a["path"].as_str().unwrap_or_default().to_string()
+                                },
+                                op: a.get("op").and_then(|x| x.as_str()).map(String::from),
+                                value: a.get("value").cloned().unwrap_or(Value::Null),
+                                note: a.get("note").and_then(|x| x.as_str()).unwrap_or_default().into(),
+                            })
                         })
-                        .collect()
+                        .collect::<Result<Vec<_>, _>>()
                 })
+                .transpose()?
                 .unwrap_or_default();
             scenarios.push(EtScenario {
-                tc_id: v["tc_id"].as_str().unwrap_or_default().to_string(),
+                tc_id: require_str(&v, "tc_id", &format!("ET 文件 {}", p.display()))?,
                 asserts,
             });
         }
