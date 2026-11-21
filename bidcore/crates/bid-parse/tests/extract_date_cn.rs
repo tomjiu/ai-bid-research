@@ -89,6 +89,31 @@ fn bare_day_count_without_anchors_does_not_match() {
     );
 }
 
+/// 主文件 PDF 面（extract_main_pdf 编号行 → fill_params 第 5 实参）：
+/// 编号条款行含中文大写日期时 params.date_cn 有值。
+/// AUD2-1（#184）：extract.rs fill_params 第 5 实参（re_date_cn 槽位）
+/// 误传 re_date——ISO 正则跑两遍，中文大写日期在 PDF 主路径永不产出
+/// date_cn 参数；DOCX 面（1691/1891）与 B1 面（1916）均正确——跨格式
+/// 参数面静默分叉。本测试锁主路径对称面（修复前红）。
+#[test]
+fn main_pdf_numbered_clause_params_date_cn() {
+    let f = pf(
+        "A-招标文件.pdf",
+        vec![line(0, "4.2 到货日期：二〇二六年十月十五日")],
+    );
+    let reqs = extract_requirements_with_kind(&[f], |_| Some("招标文件".to_string()));
+    assert!(!reqs.is_empty(), "编号条款行应产出 REQ（re_clause 分支）");
+    let date_cn = reqs[0]
+        .params
+        .get("date_cn")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert_eq!(
+        date_cn, "二〇二六年十月十五日",
+        "PDF 主路径编号行 date_cn 参数须产出（AUD2-1：修复前第 5 实参误传 re_date 恒空）"
+    );
+}
+
 /// 主文件面（extract_main_docx → fill_params 的 date_cn 参数）：
 /// 含十字日期的段落 params.date_cn 有值（修复前恒空）。
 #[test]
