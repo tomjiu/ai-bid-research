@@ -43,7 +43,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 PANELS = ("baseline", "songling67", "multifile", "realagent")
-VERDICTS = ("PASS", "FAIL", "SKIP", "BLOCKED", "NOT_RUN")
+# 六态词表（#115 条件 5 接线新增 EVIDENCE_UNCONFIRMED：真跑原始来源在案、
+# 人工确认缺位——严格/宽松处置与 NOT_RUN 同构，报告渲染区分）
+VERDICTS = ("PASS", "FAIL", "SKIP", "BLOCKED", "NOT_RUN", "EVIDENCE_UNCONFIRMED")
 
 # 密钥形正则（日志/结果文件里出现的都替换为 <redacted>）
 SECRET_PATTERNS = [
@@ -339,11 +341,16 @@ def panel_multifile(log) -> dict:
 # ---------------------------------------------------------------- 分栏 4: realagent
 
 def panel_realagent(log) -> dict:
-    """#113 真实 LLM 面登记：环境变量门（BID_REAL_PATH_WS/PHASE）未设 = NOT_RUN。
+    """#113 真实 LLM 面登记（#115 条件 5 接线：证据识别半边）。
 
-    真跑入口 scripts/e2e_bid/run_real_llm_path.sh 存在性 + 最近一次人工中继
-    记录（.mang/human-chapter.md 痕迹）只做登记；**模型审校 ≠ 人工批准**（issue
-    红线）——本栏 NOT_RUN 不阻断其它分栏，但在严格模式下整体不可 PASS。
+    三态：
+    - **NOT_RUN**：无环境门也无已完成跑证据（旧行为）；
+    - **EVIDENCE_UNCONFIRMED**（新）：artifacts/realagent-113-*/ 内在场
+      已完成真跑证据（generator real>0 / mock=0 / llm-usage 在案）——
+      原始来源半边成立，人工确认缺位（#169 口径：模型审校/自动跑
+      ≠ 人工批准）；严格模式仍阻断整体 PASS（与 NOT_RUN 同处置）；
+    - PASS：**人工确认在案后**才可达（审校 receipt 追认——不在本面板
+      自动驱动，冒充即假绿）。
     """
     entry = {"panel": "realagent", "verdict": None}
     driver = REPO / "scripts/e2e_bid/run_real_llm_path.sh"
@@ -359,6 +366,43 @@ def panel_realagent(log) -> dict:
         if marker.exists():
             relay_marker = str(marker)
     entry["human_relay_marker"] = relay_marker
+    # ---- 已完成真跑证据识别（原始来源半边）----
+    evidence = None
+    ev_dirs = sorted((REPO / "artifacts").glob("realagent-113-*/realagent-metrics.json")) \
+        if (REPO / "artifacts").is_dir() else []
+    for mf in reversed(ev_dirs):  # 最新优先
+        try:
+            m = json.loads(mf.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        gs = (m.get("export") or {}).get("generator_summary") or {}
+        usage = m.get("llm_usage") or {}
+        if gs.get("real", 0) > 0 and gs.get("mock", 0) == 0 and usage.get("calls", 0) > 0:
+            evidence = {
+                "dir": mf.parent.name,
+                "leaves_real": gs.get("real"),
+                "mock": gs.get("mock"),
+                "llm_calls": usage.get("calls"),
+                "llm_tokens": usage.get("total_tokens"),
+                "model": next(iter((usage.get("by_model") or {"unknown": {}}).keys())),
+                "coverage_points": (m.get("scoring_coverage") or {}).get("points_covered"),
+                "export_sha256": ((m.get("export") or {}).get("sha256") or "")[:16],
+                "docx_present": (mf.parent / "投标文件-realagent-113.docx").exists(),
+            }
+            break
+    entry["evidence"] = evidence
+    if evidence:
+        # 原始来源在案；人工确认未在（审校 receipt）——诚实中间态
+        entry["verdict"] = "EVIDENCE_UNCONFIRMED"
+        entry["reason"] = (
+            f"真跑证据在案（{evidence['leaves_real']} 叶 real/mock=0、"
+            f"{evidence['llm_calls']} 次调用 {evidence['llm_tokens']} tokens、"
+            f"成品 {evidence['export_sha256']}…）——待人工审校追认后转 PASS"
+            f"（模型审校≠人工批准，#169）"
+        )
+        log(f"[realagent] EVIDENCE_UNCONFIRMED（{evidence['dir']}："
+            f"real={evidence['leaves_real']} tokens={evidence['llm_tokens']}）——待人工追认")
+        return entry
     if ws and phase and driver.exists():
         # 真跑归 #113 本体执行；本栏对已设环境的情况返回 NOT_RUN+提示（不重复
         # 驱动两相位中继——那是 #113 的人工步骤，自动化冒充即假绿）
@@ -386,13 +430,13 @@ def overall_verdict(panels: list[dict], strict: bool) -> tuple[str, list]:
         v = p["verdict"]
         if v == "FAIL":
             reasons.append(f"{p['panel']}: FAIL —— {p.get('reason', '')}")
-        elif strict and v in ("SKIP", "BLOCKED", "NOT_RUN"):
+        elif strict and v in ("SKIP", "BLOCKED", "NOT_RUN", "EVIDENCE_UNCONFIRMED"):
             reasons.append(f"{p['panel']}: {v} —— {p.get('reason', '')}")
-        elif not strict and v in ("SKIP", "BLOCKED", "NOT_RUN"):
+        elif not strict and v in ("SKIP", "BLOCKED", "NOT_RUN", "EVIDENCE_UNCONFIRMED"):
             reasons.append(f"[allow-skip 豁免] {p['panel']}: {v} —— {p.get('reason', '')}")
     if any(p["verdict"] == "FAIL" for p in panels) or (strict and reasons):
         verdict = "FAIL"
-    elif not strict and any(p["verdict"] in ("SKIP", "BLOCKED", "NOT_RUN") for p in panels):
+    elif not strict and any(p["verdict"] in ("SKIP", "BLOCKED", "NOT_RUN", "EVIDENCE_UNCONFIRMED") for p in panels):
         verdict = "PASS_WITH_SKIPS" if verdict == "PASS" else verdict
     return verdict, reasons
 
@@ -415,6 +459,11 @@ def render_md(result: dict) -> str:
             fact = f"淮安项目 {n}/4 件在位；补遗件={p.get('addendum_material', {}).get('found')}"
         elif p["panel"] == "realagent":
             fact = f"env 门 ws={p['env_gate']['BID_REAL_PATH_WS']} phase={p['env_gate']['BID_REAL_PATH_PHASE']}"
+            ev = p.get("evidence")
+            if ev:
+                fact += f"；证据 {ev['dir']}（real={ev['leaves_real']} tokens={ev['llm_tokens']}）"
+            if p.get("human_relay_marker"):
+                fact += "；人工中继痕迹在案"
         lines.append(f"| {p['panel']} | **{p['verdict']}** | {fact} |")
     v = result["overall"]
     lines += ["", f"## 总裁定：{v['verdict']}", ""]
@@ -484,7 +533,7 @@ def main() -> int:
         "redaction": {"applied": "token/password/secret/api-key 形 + URL basic-auth"},
     }
     # 验证五态词表自洽（结果协议自检第一面）
-    assert all(p["verdict"] in VERDICTS for p in panels), "协议违规：分栏裁定不在五态词表"
+    assert all(p["verdict"] in VERDICTS for p in panels), "协议违规：分栏裁定不在六态词表"
     assert verdict in (*VERDICTS, "PASS_WITH_SKIPS"), "协议违规：总裁定非法"
 
     (outdir / "result.json").write_text(
