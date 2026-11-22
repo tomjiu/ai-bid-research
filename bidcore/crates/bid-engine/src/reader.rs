@@ -202,6 +202,12 @@ fn convert_warning(w: &io::CompatibilityWarning) -> EngineWarning {
         // 语义与 code 字符串一一对应，消费面（mapping 的 RevisionDelete 计数）
         // 按字符串过滤不受影响。
         io::WarningKind::SkippedElement => "SkippedElement",
+        // 引擎 #233 新增（rev dc8c647 bump 带入）：高压缩比观察面（警告
+        // 口径不拒——门 1/2 已钉膨胀上界）与不安全链接消毒降级。只透传。
+        //（UTF-16/customXml 容错面（mdcore #242）复用 MalformedXml——
+        // detail 文案区分，不新增变体。）
+        io::WarningKind::HighCompressionRatio => "HighCompressionRatio",
+        io::WarningKind::UnsafeLink => "UnsafeLink",
     };
     EngineWarning {
         code: code.to_string(),
