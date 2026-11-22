@@ -299,7 +299,10 @@ fn style_template_without_theme_part() {
         zw.finish().expect("zip finish");
     }
     let tpl = StyleTemplate::from_bytes(&buf.into_inner()).expect("无 theme 包读取成功");
-    assert_eq!(tpl.theme_color("accent1"), None, "空主题表");
+    // rev dc8c647 bump（mdcore #269）：theme 部件缺席时主题色**降级 Office
+    // 默认调色板**（accent1 = 4472C4）——此前返回 None。语义方向 = 查询
+    // 恒有答案（模板渲染不再因缺 theme 而空色），本测试随 bump 重钉。
+    assert_eq!(tpl.theme_color("accent1"), Some("4472C4".to_string()), "缺 theme → Office 默认调色板降级（mdcore #269）");
     assert_eq!(
         tpl.effective("Normal").map(|f| f.size_pt),
         Some(Some(12.0)),

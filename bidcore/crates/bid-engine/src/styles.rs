@@ -139,6 +139,10 @@ impl StyleTemplate {
                     mdc_office_io::io::WarningKind::BrokenReference => "BrokenReference",
                     mdc_office_io::io::WarningKind::RevisionDelete => "RevisionDelete",
                     mdc_office_io::io::WarningKind::SkippedElement => "SkippedElement",
+                    // rev dc8c647 bump 带入（引擎 #233）：观察/消毒警告面。
+                    //（UTF-16/customXml 容错（mdcore #242）复用 MalformedXml。）
+                    mdc_office_io::io::WarningKind::HighCompressionRatio => "HighCompressionRatio",
+                    mdc_office_io::io::WarningKind::UnsafeLink => "UnsafeLink",
                 };
                 crate::types::EngineWarning {
                     code: code.to_string(),
