@@ -49,7 +49,7 @@ in : { project_id, files:[{upload_ref, filename, kind(招标文件|附件|图纸
       upload_ref（#183/#189 文件围栏）: 必须落在受信根内——BID_FS_ROOT 声明的
       导入根，或 BID_WS 工作区（二者的并集）；相对路径按受信根锚定（不再按
       进程 CWD 解析）；词法 `..` 分量预拒（先于一切磁盘操作，零副作用）。
-out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), upload_ref(R24 回显——调用方归一形态；深层件与 filename 解耦的定位键), sha256, pages, tables, chunks, ocr_tier, parse_status, deduplicated, errors?, warnings?(#188 METADATA_CONFLICT | #270 CONVERTED_FROM_DOC)}],
+out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), upload_ref(R24 回显——调用方归一形态；深层件与 filename 解耦的定位键), sha256, pages, tables, chunks, ocr_tier, parse_status, deduplicated, errors?, warnings?(#188 METADATA_CONFLICT | #270 CONVERTED_FROM_DOC | #177 ATTACHMENT_CLAUSE_DENSE)}],
        totals:{files, chunks, parse_failed, partial},
        forms_manifest?:{ count, items:[{file_id, name, parse_status, pages, tables}] }
          ← #271 格式件清单（kind=格式模板 的库内登记逐件可见；无格式件时键省略）。
@@ -72,6 +72,14 @@ out: { file_ids:[TF-*], per_file:[{file_id, kind(#271 回显), upload_ref(R24 �
       「ADDENDUM_NOT_READY: 补遗 <名> 未就绪（<原因>）——补遗可能改控制价/
       截止时间/评分办法，请修复重传或人工确认后放行（record_addendum_waiver）」
       （#184——import 是 Agent 看到坏补遗的第一现场；已确认件不重复告警）
+      #177（audit F-3）: kind=附件 且块面条款形态句 ≥8 → per_file.warnings
+      携带「ATTACHMENT_CLAUSE_DENSE: …」——附件无条款抽取面（对矩阵不可见），
+      点名疑似条款密集辅件（技术规范书典型）并指路以正确 kind 重导；
+      不自动改 kind（语义决策留人）；幂等重导同提示；档内任一身份已有
+      条款面时豁免（可见性不失真）。判据 = 编号头（多级/顿号/括号/中文
+      序号/第N条/圈号）+ 句子性（句末标点）双要件——目录条目/表头/章节
+      名（标题形态）不计入；格式模板/图纸/证据 kind 不提示（显式语义
+      决策 + 负例集）。
 错误: E_PARTIAL（部分文件 parse FAILED；失败件内容全程禁引；data 携带成功面含
       addendum_readiness 块）；E_STATE（project 已过 IMPORTED 阶段追加新文件 → 允许，但标 dirty 波及）；
       E_UNPROCESSABLE（#183 围栏：路径越界/词法 `..`/symlink 段逃逸/超限额——
