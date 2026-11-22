@@ -105,7 +105,16 @@ out: { counts:{total, added(可为负——整集替换语义下的诚实增量)
          number, sources["filename:…"|"chapter:…"|"table:…"|"text:…"], req_count}],
          shared_req_count }（#316 分包识别——无分包时 detected=0/items 空，
          既有行为零位移；共用条款无 package_id，选任何包建纲都进纲），
-       conflicts:[{a:REQ-*,b:REQ-*,reason}], missing_sequence:[{file_id,expected_clause_nos,found}], warnings[] }
+       conflicts:[{a:REQ-*,b:REQ-*,reason, #179 语义级条目另携带 semantic:true, topic(控制价|工期|保证金), value_unit(万元|天), main_value, addendum_value, resolution:{rule,channel,change_type,req_id,new_requirement_hint,note}}], missing_sequence:[{file_id,expected_clause_nos,found}], warnings[] }
+       ← #179（audit F-5）：同号异文（既有最小面）之外，语义级冲突（同主题
+         异号——条款号不同的两版本 REQ）对高价值三主题（控制价/工期/保证金）
+         配对登记：补遗侧 × 主件侧同主题（控制价/最高限价同族等价、预算∉
+         该主题；工期/保证金字面关键字须两侧一致——工期≠服务期、投标保证金
+         ≠履约保证金）且值不同（调整语感知：调整为/改为/变更为/修改为/更正为
+         标记后的新值——「原 480 万调整为 465 万」取 465）。同号对子归同号面
+         （防双报）；主件同值多 REQ 折叠为一条（带条款号者优先——终裁可定位）。
+         resolution 指路终裁通道：register_addendum_changes 的 value_changed
+         人工显式登记（补遗优先，人工确认后生效，**不自动改写**）。
 执行: 确定性先行（条款编号序列解析、表格结构化槽位抽取）→ #219 二步抽取通路合并
       （Agent 块标记优先 + 正则兜底，#422 按 verdict 分流）：被区间标记覆盖的块，
       noise/rule/review_table 裁决下正则产物丢弃（Agent 显式拒绝）；requirement
