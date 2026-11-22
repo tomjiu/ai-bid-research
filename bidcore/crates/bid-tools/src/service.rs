@@ -157,6 +157,103 @@ fn ocr_blank_scan_warning(status: ParseStatus, chunks: usize, pages: usize) -> O
     }
 }
 
+/// #177（audit F-3）：附件 kind 条款密集提示的行数门槛。
+///
+/// 实测校准（real-corpus + batch2 格式模板全量探针，见 PR 描述）：正例
+/// B-unicom-ry-技术规范书.docx（audit 0/21 对照件）块面 17 行条款形态句；
+/// 纯附件负例全部 0（格式模板 22 件、目录.docx——目录条目「一、投标承诺书」
+/// 无句末标点被句子性过滤、B3-图纸目录.xlsx、EV 合同/证照 PDF）；最大
+/// 中间态 = 投标一览表.xlsx 5 行（表行形态句）。8 = 正负两侧均留余量的
+/// 门槛：≥8 判「疑似条款密集」，5 及以下静默。
+const ATTACHMENT_CLAUSE_DENSE_MIN: usize = 8;
+
+/// #177：行文本是否为「条款形态句」——编号头 + 句子性双要件。
+///
+/// - **编号头**（与 extract.rs 条款族同源形态）：多级编号 `3.1.1` /
+///   顿号编号 `12、` / 括号编号 `（1）` / 中文序号 `三、` / `第N条` /
+///   圈号 `①`；
+/// - **句子性**（负例分流的关键要件）：行内含句末标点（。；！？；!?）。
+///   目录条目与表头行（「一、投标承诺书」「7.2.1 应用软件设计要点」）
+///   是标题形态、无句末标点——纯计数判据下目录.docx 达 21 行与正例
+///   （23 行）不可分，句子性过滤后正例 17 / 负例 0，判据才成立。
+fn is_clause_sentence(text: &str) -> bool {
+    use std::sync::OnceLock;
+    let t = text.trim_start();
+    if t.is_empty() {
+        return false;
+    }
+    if !t
+        .chars()
+        .any(|c| matches!(c, '。' | '；' | '！' | '？' | ';' | '!' | '?'))
+    {
+        return false; // 标题形态（目录条目/表头/章节名）不是条款句
+    }
+    static RES: OnceLock<Vec<regex::Regex>> = OnceLock::new();
+    let res = RES.get_or_init(|| {
+        vec![
+            // 多级编号 3.1.1（≥2 数字段——纯数字单段不算）
+            regex::Regex::new(r"^\d+(?:[.．]\d+)+").unwrap(),
+            // 顿号编号 12、
+            regex::Regex::new(r"^\d{1,3}、").unwrap(),
+            // 括号编号 （1）(2)
+            regex::Regex::new(r"^[（(]\s*\d{1,3}\s*[）)]").unwrap(),
+            // 中文序号 三、
+            regex::Regex::new(r"^[一二三四五六七八九十]+、").unwrap(),
+            // 第N条
+            regex::Regex::new(r"^第\s*[0-9一二三四五六七八九十百]+\s*条").unwrap(),
+        ]
+    });
+    if res.iter().any(|re| re.is_match(t)) {
+        return true;
+    }
+    // 圈号 ①-⑳
+    t.chars().next().is_some_and(|c| ('①'..='⑳').contains(&c))
+}
+
+/// #177（audit F-3 / PR #172 §3）：附件 kind 条款密集件的导入回执提示。
+///
+/// 现象：含条款辅件（技术规范书典型）按缺省语义导入 kind=附件 时对
+/// 合规矩阵完全不可见（附件无条款抽取面——unicom-ry 0/21 对照）。
+/// kind 指派是语义决策、直接决定条款可见性，且**不自动改 kind**
+/// （语义决策留人——本提示只点名 + 指路，不改任何登记面）。
+///
+/// 触发：`kind = 附件` 且块面条款形态句 ≥
+/// [`ATTACHMENT_CLAUSE_DENSE_MIN`]（抽取 0 条由 kind=附件 结构性注定，
+/// 无需另行验算）。其余无面 kind（图纸/证据/格式模板）**不提示**——
+/// 那些是显式语义决策且格式模板/图纸正是本判据的负例集（issue #177
+/// 验收 2）；有面 kind（招标文件/补遗/答疑/评分办法/报价文件/扫描件）
+/// 不存在不可见问题，同样不适用。
+///
+/// 诚实边界：形态判据只覆盖「编号条款句」形态——需求以非编号散文/
+/// 表格形态存在的辅件（如 huaian 技术规范书，实测 4 行）检不出，
+/// 如实登记为判据边界（提升面 = 语义覆盖工具，另行立项）。
+fn attachment_clause_dense_hint(kind: &str, parsed: Option<&ParsedFile>) -> Option<String> {
+    if kind != "附件" {
+        return None;
+    }
+    let p = parsed?;
+    let total = p.blocks.len();
+    if total == 0 {
+        return None;
+    }
+    let dense = p
+        .blocks
+        .iter()
+        .filter(|b| is_clause_sentence(&b.text))
+        .count();
+    if dense < ATTACHMENT_CLAUSE_DENSE_MIN {
+        return None;
+    }
+    Some(format!(
+        "ATTACHMENT_CLAUSE_DENSE: 本件按 kind=附件 导入——附件无条款抽取面，{} 行条款形态句\
+         （共 {total} 块）将不进合规矩阵（对条款面完全不可见）。若本件实为技术规范/需求来源\
+         （如技术规范书），请以 kind=招标文件（或补遗/答疑/评分办法）导入：sha 幂等下重导不改\
+         原档 kind，需以正确 kind 首次导入（新项目或未导入过本件的批次）。本提示不自动改 kind\
+         （语义决策留人）；若本件确为纯附件可忽略本提示。",
+        dense
+    ))
+}
+
 /// 定位内容（#185 缺口 1 对账 + #217 缺口 2 抽取一体）。
 ///
 /// 验证基准 = 本仓解析产物（`ParsedFile.blocks`——服务态唯一的内容真源）：
@@ -406,6 +503,23 @@ fn import_files_with_pdf_parser(
             if f.parse_summary.starts_with("PDF_IMPORT_DEGRADED:") {
                 warnings.push(f.parse_summary.clone());
             }
+            // #177（audit F-3）：附件 kind 条款密集提示——去重路径同样可见
+            // （幂等回执一致性）。豁免：档内任一身份已有条款抽取面（原 kind
+            // 或任一 FileRole kind 有面）→ 件对矩阵可见，提示即失真，跳过。
+            let face_already =
+                bid_parse::merge::has_extraction_face(Some(f.kind.as_str()), &f.name)
+                    || store.file_roles(&f.id).iter().any(|r| {
+                        bid_parse::merge::has_extraction_face(
+                            Some(r.kind.as_str()),
+                            &r.declared_name,
+                        )
+                    });
+            if !face_already {
+                let parsed_hit = parsed.iter().find(|p| p.sha256 == f.sha256);
+                if let Some(w) = attachment_clause_dense_hint(&spec.kind, parsed_hit) {
+                    warnings.push(w);
+                }
+            }
             if !identity_known {
                 match store.register_file_role(&f.id, &spec.kind, &spec.filename, now_secs()) {
                     Ok(_) => warnings.push(format!(
@@ -511,6 +625,8 @@ fn import_files_with_pdf_parser(
                     }
                 };
                 // 解析失败禁引（R-01）：failed 件不进 parsed 累积（不入抽取/索引面）
+                // #177 提示先于 move 计算（同块面——回执与解析产物同源）
+                let clause_dense_hint = attachment_clause_dense_hint(&spec.kind, Some(&p));
                 parsed.push(p);
                 let mut warnings = Vec::new();
                 if summary.starts_with("PDF_IMPORT_DEGRADED:") {
@@ -538,6 +654,12 @@ fn import_files_with_pdf_parser(
                 // 那是「OCR 失败页」的截断可见，这是「全页成功 0 块」
                 // 的空产出可分。
                 if let Some(w) = ocr_blank_scan_warning(status, chunks, pages) {
+                    warnings.push(w);
+                }
+                // #177（audit F-3）：附件 kind 条款密集提示——含条款辅件
+                // （技术规范书典型）按缺省 kind=附件 导入对矩阵完全不可见，
+                // 回执点名 + 指路重导，不自动改 kind（提示面纪律）。
+                if let Some(w) = clause_dense_hint {
                     warnings.push(w);
                 }
                 report.new_records += 1;
@@ -3458,5 +3580,127 @@ mod b13_tests {
             ocr_blank_scan_warning(ParseStatus::Failed, 0, 3).is_none(),
             "失败件走 errors 面，不走 warnings"
         );
+    }
+}
+
+#[cfg(test)]
+mod i177_tests {
+    use super::*;
+    use bid_parse::{Block, BlockKind};
+
+    fn block(idx: usize, text: &str) -> Block {
+        Block {
+            idx,
+            kind: BlockKind::Para,
+            locator: format!("测试章/块{idx}"),
+            text: text.to_string(),
+            cells: vec![],
+        }
+    }
+
+    fn parsed_with(texts: &[&str]) -> ParsedFile {
+        ParsedFile {
+            name: "B-技术规范书-177.docx".into(),
+            sha256: "sha-test-177".into(),
+            pages: 1,
+            tables: 0,
+            has_text_layer: true,
+            ocr_blocks: 0,
+            blocks: texts.iter().enumerate().map(|(i, t)| block(i, t)).collect(),
+            parse_summary: String::new(),
+            components: vec![],
+        }
+    }
+
+    fn clause_lines(n: usize) -> Vec<String> {
+        (1..=n)
+            .map(|i| format!("{i}、第{i}项业务要求应当支持在线办理并全程留痕。"))
+            .collect()
+    }
+
+    /// #177 判据双要件正反钉子：编号头 + 句子性缺一不可。
+    #[test]
+    fn clause_sentence_requires_numbering_head_and_sentence_punct() {
+        // 条款形态句（正——全部编号族 + 句末标点）
+        assert!(is_clause_sentence("1、根据集团公司的统一规划，实现监管业务一站式处理。"));
+        assert!(is_clause_sentence("（3）制定维护方案。"));
+        assert!(is_clause_sentence("3.1.1 系统应支持分布式部署与水平扩容。"));
+        assert!(is_clause_sentence("第一条 双方应按本合同约定履行各自义务。"));
+        assert!(is_clause_sentence("①及时响应故障申告。"));
+        assert!(is_clause_sentence("三、投标人应当具备下列条件。"));
+        // 半角分号同计句末标点
+        assert!(is_clause_sentence("3.1.2 系统应当留存操作日志;"));
+
+        // 标题形态（负——目录条目/章节名/表头：无句末标点）
+        // （实测负例：nm-health-terminal 附件/目录.docx 全 23 行此形态，
+        //  纯计数判据下 21 行编号头与正例不可分——句子性是分流关键）
+        assert!(!is_clause_sentence("一、投标承诺书"), "目录条目不得计入");
+        assert!(!is_clause_sentence("7.2.1 应用软件开发和运行环境"), "章节名不得计入");
+        assert!(!is_clause_sentence("序号 1级类别 评分项 分值"), "表头不得计入");
+        assert!(!is_clause_sentence("投标人基本情况表"));
+        assert!(!is_clause_sentence("12"), "裸编号不是条款句");
+        // 单段 + 半角点（「2.如我方中标：」）不在条款头族——与 extract.rs
+        // re_clause（多级/顿号）同源口径，格式件的「N.」列举形态不计入
+        assert!(!is_clause_sentence("2.投标人中标后应履约。"));
+
+        // 有句末标点但无编号头（负——普通散文句）
+        assert!(!is_clause_sentence("本合同一式两份，双方各执一份。"));
+
+        // 空白
+        assert!(!is_clause_sentence("   "));
+    }
+
+    /// #177 提示的 kind 门控 + 门槛边界（ATTACHMENT_CLAUSE_DENSE_MIN=8）。
+    #[test]
+    fn attachment_hint_kind_gating_and_threshold() {
+        let eight = clause_lines(8);
+        let texts: Vec<&str> = eight.iter().map(|s| s.as_str()).collect();
+        let p8 = parsed_with(&texts);
+        let w = attachment_clause_dense_hint("附件", Some(&p8))
+            .expect("8 行条款句达门槛必须提示");
+        assert!(w.contains("ATTACHMENT_CLAUSE_DENSE"), "告警码可机判: {w}");
+        assert!(w.contains("8 行"), "行数入提示定位: {w}");
+        assert!(w.contains("kind=招标文件"), "重导指路在提示面: {w}");
+        assert!(w.contains("不自动改 kind"), "语义决策留人声明: {w}");
+        assert!(w.contains("纯附件可忽略"), "负向安抚在提示面: {w}");
+
+        // 边界负侧：7 行 = 门槛下静默
+        let seven = clause_lines(7);
+        let texts7: Vec<&str> = seven.iter().map(|s| s.as_str()).collect();
+        assert!(
+            attachment_clause_dense_hint("附件", Some(&parsed_with(&texts7))).is_none(),
+            "门槛下（7 < 8）静默——中间态负例（投标一览表.xlsx 实测 5 行）不误报"
+        );
+
+        // 标题密集不计数：3 条款句 + 25 目录条目 → 计数 3 < 8 静默
+        let titles: Vec<String> = (1..=25)
+            .map(|i| format!("{i}、附件目录第{i}项材料名称"))
+            .collect();
+        let mut sparse = clause_lines(3);
+        sparse.extend(titles);
+        let sparse_texts: Vec<&str> = sparse.iter().map(|s| s.as_str()).collect();
+        assert!(
+            attachment_clause_dense_hint("附件", Some(&parsed_with(&sparse_texts))).is_none(),
+            "目录/标题密集件（编号头无句子性）不得触发"
+        );
+
+        // 有面 kind 不提示（不存在不可见问题）
+        for kind in ["招标文件", "补遗", "答疑", "评分办法", "报价文件", "扫描件"] {
+            assert!(
+                attachment_clause_dense_hint(kind, Some(&p8)).is_none(),
+                "有面 kind 不提示: {kind}"
+            );
+        }
+        // 显式无面 kind 不提示（issue #177 验收 2 负例集——格式模板/图纸是
+        // 显式语义决策，不在本提示面）
+        for kind in ["格式模板", "图纸", "证据"] {
+            assert!(
+                attachment_clause_dense_hint(kind, Some(&p8)).is_none(),
+                "显式无面 kind 不提示: {kind}"
+            );
+        }
+        // 无解析产物 / 空块面 → 静默
+        assert!(attachment_clause_dense_hint("附件", None).is_none());
+        assert!(attachment_clause_dense_hint("附件", Some(&parsed_with(&[]))).is_none());
     }
 }
