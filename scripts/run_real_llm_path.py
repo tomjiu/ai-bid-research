@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """run_real_llm_path.py —— #113 真实 Agent 标书起草验收的机器面（真实 LLM 通路）。
 
-口径（issue #113 验收原文）：
+口径（issue #113 验收原文 + Lead 闭门五条件）：
   - 按 sdk/skill/bid-response-pipeline 的实际 MCP tools 调用（纯 MCP 面）
   - 真实模型起草：draft_response_section generator="real"（RealGenerator →
     OpenAI 兼容 HTTP → 本地桥 scripts/zai-llm-bridge.mjs → z-ai glm-4-plus；
@@ -9,7 +9,10 @@
   - 证据 = 仓内 corpus-A 合成 fixture（FILE_EXISTS 文件级锚 + 主体名标注合成）
   - 审核门 = #277 agent 声明过门（require_human_receipt=false 显式开，
     human_confirmed=false——不冒充人工批准；人工追认 = NOT_RUN）
-  - 评分项显式映射 MCP 写面未提供 → waive_unmapped_scoring 豁免（如实登记）
+  - 评分项映射 = #153 map_scoring_item MCP 正门逐项映射（bigram 重合度选叶
+    + 决策留痕——multifile_matrix 同款口径；#178 分值面解锁后 huaian 真件
+    携 14 条带分值评分项）——门 1h 零豁免目标；映射后仍有 unmapped 才豁免
+  - P9 = check_scoring_coverage 细则点命中（闭门条件 2：命中 > 0）
   - ★漏标 2 块（章标题装饰）→ 零标记正则兜底 + 导出豁免（收官 R27 判读同款）
   - 断点续跑：OUT/driver-state.json 在场 → 跳过 P1-P4 直入未完成叶起草
     （沙箱限流窗口 ~5 分钟/轮——多轮跑齐 47 叶）
@@ -23,6 +26,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -139,6 +143,9 @@ def save_state(extra=None):
                       "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"}
                      for e, k, t in ev_ids],
         "req_total": req_total,
+        # draft 恒入 state（resume 后任何保存点不丢已起草进度——P4.6 等中段
+        # 保存面曾在 resume 轮把 draft_stats 洗掉的隐患收口）
+        "draft": {"stats": draft_stats},
     }
     if extra:
         st.update(extra)
@@ -262,9 +269,49 @@ try:
     # ---- 叶清单（resume 与首跑同口径：PENDING 者待起草）----
     q = must("check_bid_quality", {"project_id": PID, "project_version": "latest"}, "leaves")
     leaves = [s["section_id"] for s in q["sections"]]
+    leaf_titles = {s["section_id"]: s.get("title") or "" for s in q["sections"]}
     done = {s["section_id"] for s in q["sections"] if s.get("status") not in (None, "PENDING")}
     pending = [s for s in leaves if s not in done]
     print(f"[P3] 起草叶 {len(leaves)}（已完成 {len(done)}，待起草 {len(pending)}）")
+
+    # ---- P4.6 评分项映射（#153 正门——闭门条件：门 1h 零豁免）----
+    # 多件矩阵同款口径：check_scoring_coverage 拿未映射评分面（工具层已滤
+    # 否决项 hard gate）→ bigram 重合度选叶 + 决策留痕；幂等键重提更新
+    #（resume 轮重跑安全）。
+    def bigrams(s):
+        cs = [c for c in s if not c.isspace()]
+        return {"".join(p) for p in zip(cs, cs[1:])}
+
+    cov0 = must("check_scoring_coverage", {"project_id": PID}, "cov0")
+    unmapped = [c for c in cov0["criteria"] if not c["mapped_sections"]]
+    mapping_log = []
+    for c in unmapped:
+        excerpt = (c["criteria_excerpt"] or "")[:60]
+        ba = bigrams(c["criteria_excerpt"] or "")
+        best_sid, best_score = None, -1
+        for sid in leaves:
+            sc = len(ba & bigrams(leaf_titles[sid]))
+            if sc > best_score:
+                best_sid, best_score = sid, sc
+        method = f"bigram-overlap:{best_score}" if best_score > 0 else "fallback-last-leaf"
+        if best_score <= 0:
+            best_sid = leaves[-1]
+        must("map_scoring_item", {
+            "project_id": PID, "req_id": c["criterion_id"], "section_id": best_sid,
+            "weight_share": 1.0,
+            "anchor": {
+                "excerpt": f"#113 真实验收映射（{method}）：{excerpt}",
+                "locator": "run_real_llm_path P4.6——评分项→章节映射",
+            },
+        }, f"map:{c['criterion_id']}")
+        mapping_log.append({"req_id": c["criterion_id"], "section_id": best_sid,
+                            "method": method})
+    cov1 = must("check_scoring_coverage", {"project_id": PID}, "cov1")
+    print(f"[P4.6] 评分映射: {len(unmapped)} 未映射 → 逐项映射（bigram {sum(1 for m in mapping_log if m['method'].startswith('bigram-overlap:') and not m['method'].endswith(':0'))}）"
+          f"；映射后 criteria_unmapped={cov1['summary']['criteria_unmapped']}")
+    save_state({"scoring_mapping": {"unmapped_before": len(unmapped),
+                                    "unmapped_after": cov1["summary"]["criteria_unmapped"],
+                                    "decisions": mapping_log}})
 
     # ---- P5b 逐叶真实起草（限速 + 429 优雅退出）----
     t_draft = time.time()
@@ -303,6 +350,141 @@ try:
                                        "project_version": "latest"}, "validate")
     print(f"[P6] 校验: ok={d.get('ok')} counts={d.get('counts')}")
 
+    # ---- P6.5 BLOCKER 修复轮（真实 LLM 面的诚实修复——不豁免不绕门）----
+    # blocker 形态（huaian 真跑实锚）：E_CHARS_BELOW_MIN（评分章节篇幅门
+    # ——无豁免硬门）与 E_AMOUNT_CONFLICT/E_SCHEDULE_CONFLICT（LLM 跨节
+    # 金额/工期口径漂移——#113 验收点名的「虚构参数」面）。处置 = 定向
+    # 重起草（统一 PROFILE 口径 + 篇幅下限指令），重校直至零 blocker 或
+    # 轮次耗尽（耗尽 = 如实报红退出，不豁免）。
+    repair_log = []
+    # 规范值（huaian 真件正源：投标总报价=PROFILE、保证金=须知前附表
+    # 3.5.1「人民币肆万陆仟圆整￥46000」、工期=PROFILE 37 天）
+    CANON = {"投标总报价": 4800000, "投标保证金": 46000, "工期": 37}
+    MONEY_BAN = ("本节为资格/合规响应面：全文不得出现「投标总报价」「投标保证金」"
+                 "「报价」等金额表述与任何金额数字（金额口径只在投标函/报价节"
+                 "统一表述）；工期如需表述用「自合同签订之日起三十七个日历日内"
+                 "完成」的文字形态，不出现阿拉伯数字。")
+
+    def repair_instruction(floor, ban_money):
+        instr = ("按招标文件逐项响应，引用只准用列出的 REQ/EV 编号。"
+                 f"正文不少于 {floor} 字（当前版本未达篇幅门——逐条展开写足）。")
+        if ban_money:
+            instr += MONEY_BAN
+        else:
+            instr += ("全文金额与工期口径统一：投标总报价 4,800,000 元"
+                      "（肆佰捌拾万元整）；投标保证金 46,000 元（肆万陆仟圆整）；"
+                      "工期 37 天；投标有效期 90 天。")
+        return instr
+
+    for round_no in range(1, 16):
+        d = must("validate_bid_document", {"project_id": PID, "scope": "all",
+                                           "project_version": "latest"}, f"validate:{round_no}")
+        blockers = [f for f in d.get("findings", [])
+                    if str(f.get("severity", "")).upper() == "BLOCKER"]
+        if not blockers:
+            break
+        print(f"[P6.5] 修复轮 {round_no}: {len(blockers)} blocker 待处置")
+        # 目标计划：sid → {floor, ban}（同节多问题合并——floor 取最大）
+        plan = {}
+        unrepairable = []
+        for f in blockers:
+            msg = f.get("message") or ""
+            code = f.get("rule_code")
+            if code == "E_TOTAL_CHARS_BELOW_MIN":
+                # 总篇幅缺口 → 定向重起草最短的已起草节（真实 LLM 补写，
+                # 不用 runner 自拟段——#113 真实性口径）
+                m = re.search(r"正文字数 (\d+) 低于总篇幅目标 (\d+)", msg)
+                if not m:
+                    unrepairable.append(f"{code}: {msg}")
+                    continue
+                gap = int(m.group(2)) - int(m.group(1)) + 600
+                by_words = sorted((x for x in draft_stats if x.get("words")),
+                                  key=lambda x: x["words"])
+                for x in by_words:
+                    if gap <= 0:
+                        break
+                    add = 1250 - x["words"]
+                    if add <= 0:
+                        continue
+                    e = plan.setdefault(x["sid"], {"floor": 0, "ban": False, "why": []})
+                    e["floor"] = max(e["floor"], 1250)
+                    e["why"].append(f"总篇幅缺口 {gap}（本节 {x['words']} 字→扩写）")
+                    gap -= add
+                if gap > 0:
+                    unrepairable.append(f"{code}: 短节扩写计划后仍缺 {gap} 字")
+            elif code == "E_CHARS_BELOW_MIN":
+                sid = f.get("section_id")
+                m = re.search(r"最低篇幅 (\d+)", msg)
+                floor = (int(m.group(1)) if m else 450) + 250
+                e = plan.setdefault(sid, {"floor": 0, "ban": False, "why": []})
+                e["floor"] = max(e["floor"], floor)
+                e["why"].append(f"{code}: {msg[:80]}")
+            elif code in ("E_AMOUNT_CONFLICT", "E_SCHEDULE_CONFLICT"):
+                kind = next((k for k in CANON if k in msg), None)
+                pairs = re.findall(r"(SEC-\d+)=(\d+)", msg)
+                if not kind or not pairs:
+                    unrepairable.append(f"{code}: {msg}")
+                    continue
+                wrong = {s for s, v in pairs if int(v) != CANON[kind]}
+                right = {s for s, v in pairs if int(v) == CANON[kind]}
+                targets = wrong if right else {s for s, _ in pairs}
+                for s in sorted(targets):
+                    e = plan.setdefault(s, {"floor": 0, "ban": False, "why": []})
+                    e["floor"] = max(e["floor"], 600)
+                    e["ban"] = True
+                    e["why"].append(f"{code}: {msg[:80]}（规范 {kind}={CANON[kind]:,}）")
+            else:
+                if f.get("section_id"):
+                    e = plan.setdefault(f["section_id"], {"floor": 0, "ban": False, "why": []})
+                    e["floor"] = max(e["floor"], 500)
+                    e["why"].append(f"{code}: {msg[:80]}")
+                else:
+                    unrepairable.append(f"{code}: {msg}")
+        if unrepairable:
+            print(f"[P6.5] {len(unrepairable)} 条不可定向修复——登记: "
+                  f"{[u[:60] for u in unrepairable]}")
+        for sid, e in sorted(plan.items()):
+            r = call("draft_response_section", {
+                "project_id": PID, "section_id": sid,
+                "instructions": repair_instruction(e["floor"], e["ban"]),
+                "generator": "real", "project_version": "latest",
+            }, timeout=620)
+            if not r.get("ok"):
+                err = json.dumps(r.get("error", {}), ensure_ascii=False)
+                if "429" in err or "Too many requests" in err or "LLM" in err:
+                    print(f"[P6.5] {sid} 修复生成失败（限流）——保存进度优雅退出: {err[:160]}")
+                    exit_code = 2
+                    break
+                raise AssertionError(f"[repair:{sid}] {err[:400]}")
+            st = r["data"].get("stats", {})
+            draft_stats = [x for x in draft_stats if x["sid"] != sid]
+            draft_stats.append({"sid": sid, "words": st.get("words"),
+                                "citations": st.get("citations")})
+            repair_log.append({"round": round_no, "sid": sid, "why": e["why"],
+                               "floor": e["floor"], "ban": e["ban"],
+                               "words": st.get("words"), "citations": st.get("citations")})
+            print(f"[P6.5] {sid} 重起草 floor={e['floor']} ban={e['ban']} "
+                  f"words={st.get('words')} cites={st.get('citations')}", flush=True)
+            save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
+            time.sleep(DRAFT_GAP_S)
+        if exit_code == 2:
+            sys.exit(2)
+        if unrepairable and not plan:
+            break  # 无可修复面——轮次无意义，提前收口报红
+    d = must("validate_bid_document", {"project_id": PID, "scope": "all",
+                                       "project_version": "latest"}, "validate:final")
+    if d.get("counts", {}).get("blocker", 0) > 0:
+        print(f"[P6.5] 修复轮耗尽仍有 {d['counts']['blocker']} blocker——如实报红退出（不豁免）")
+        for f in d.get("findings", []):
+            if str(f.get("severity", "")).upper() == "BLOCKER":
+                print(f"    {f.get('rule_code')}@{f.get('section_id')}: {f.get('message')}")
+        json.dump({"validate_final": d.get("counts"), "blockers": [
+            f for f in d.get("findings", []) if str(f.get("severity", "")).upper() == "BLOCKER"],
+            "repair_log": repair_log},
+            open(os.path.join(OUT, "blockers-unresolved.json"), "w"), ensure_ascii=False, indent=1)
+        sys.exit(1)
+    print(f"[P6.5] 零 blocker（修复 {len(repair_log)} 节次）")
+
     # ---- P7' 导出前门 ----
     pass_gate("pre_export_confirm", "#113 验收跑批：定稿内容过门（agent 声明——留痕待人工追认）")
 
@@ -311,11 +493,25 @@ try:
     export_args = {
         "project_id": PID, "format": "docx", "output_path": rel_out,
         "profile": PROFILE, "max_overrun_pct": 10000,
-        "waive_unmapped_scoring": "#113 验收如实登记：评分项显式映射的 MCP 写面未提供"
-                                  "（契约门1h 注记『后续 issue』）——按最小改动豁免，"
-                                  "映射面缺口在验收报告登记",
         "project_version": "latest",
     }
+    # 门 1h：P4.6 已逐项映射（#153 正门）；若仍有 unmapped（理论不应——
+    # 映射覆盖 check_scoring_coverage 全部未映射面）才豁免并如实登记。
+    cov_pre = must("check_scoring_coverage", {"project_id": PID}, "cov-pre-export")
+    if cov_pre["summary"]["criteria_unmapped"] > 0:
+        export_args["waive_unmapped_scoring"] = (
+            f"#113 验收如实登记：P4.6 映射后仍有 "
+            f"{cov_pre['summary']['criteria_unmapped']} 条未映射评分项（映射面兜底后残留）"
+        )
+    # 格式件三件套（投标函抬头/法定代表人身份证明/授权委托书）企业身份
+    # 数据缺位：合成素材面无真实企业材料——issue 红线「不造企业材料」，
+    # 走显式豁免通道（成品定位 = 可交付审阅稿，格式件【待填】位人工补齐）。
+    export_args["waive_format_placeholder"] = (
+        "#113 验收如实登记：格式件三件套（投标函抬头/法定代表人身份证明/"
+        "授权委托书）企业身份字段缺位——验收用合成素材无真实企业身份材料"
+        "（issue 红线：不造企业材料）；成品按可交付审阅稿定位（不等正式"
+        "可投标），格式件【待填】位由投标人人工补齐"
+    )
     if star_missing_n:
         export_args["waive_star_missing"] = (
             f"#113 验收如实登记：★漏标 {star_missing_n} 块为章节标题装饰"
@@ -339,6 +535,14 @@ try:
           f"sha256={export_meta['sha256'][:16]}…")
     print(f"[P8] generator_summary: {export_meta['generator_summary']}")
 
+    # ---- P9 细则点覆盖（闭门条件 2：命中 > 0）----
+    cov = must("check_scoring_coverage", {"project_id": PID}, "cov-final")
+    coverage_summary = cov["summary"]
+    print(f"[P9] 细则覆盖: criteria={coverage_summary['criteria_total']} "
+          f"points={coverage_summary['points_total']} covered={coverage_summary['points_covered']} "
+          f"ratio={coverage_summary['coverage_ratio']:.3f} "
+          f"deduction={coverage_summary['suggested_deduction']:.1f}")
+
     # ---- 质量面 + 台账 ----
     d = must("check_bid_quality", {"project_id": PID, "project_version": "latest"}, "quality")
     llm_usage = None
@@ -355,6 +559,7 @@ try:
                   "stats": draft_stats},
         "validate": d.get("summary", {}),
         "export": export_meta,
+        "scoring_coverage": coverage_summary,
         "llm_usage": llm_usage,
         "elapsed_s": int(time.time() - t_all),
     }
