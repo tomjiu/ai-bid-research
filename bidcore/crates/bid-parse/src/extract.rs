@@ -1825,10 +1825,11 @@ fn extract_main_docx(f: &ParsedFile, reqs: &mut Vec<Requirement>, seq: &mut usiz
             // （kind=招标文件/补遗的 .xlsx）此前整份数据落入 `_ => {}` 黑洞
             // （0 REQ 零告警，audit B-08）。XlsxRow 的 text/cells 形态与
             // TableRow 同构（非空单元格空格 join / 原始行），通用分支
-            // （否决/资格/参数/审查语境）直接适用；review_map/semantic
-            // 两套结构感知 map 只按 TableRow 建（review_table.rs:220/
-            // table_semantics.rs:226），XlsxRow 自然 miss → 走通用分支，
-            // 无双抽风险。
+            // （否决/资格/参数/审查语境）直接适用；#178 xlsx 面起 review_map
+            // 对 XlsxRow 开放（review_table.rs extract_docx_tables——评分表
+            // 结构化：unicom 详细评审表「评分项|评分细则|分值」六列），
+            // 被专路接管的块位先于通用分支消费（无双抽）；semantic 参数表
+            // 专路仍只按 TableRow 建（table_semantics.rs:226），XlsxRow 不触。
             BlockKind::TableRow | BlockKind::XlsxRow => {
                 // #144 审查表接管：数据行 → 结构化 REQ（旧链不走——防双抽）；
                 // 表头形状行只消费（防旧链误开语境/误产 REQ）。

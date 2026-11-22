@@ -106,10 +106,13 @@ fn cell_has(cell: &str, key: &str) -> bool {
 /// 仅数据行在场），列位取数会把组名当评审项、拿细则文本当分值格——
 /// 错位形态另立，不硬吃。
 pub fn recognize_header(cells: &[String]) -> Option<HeaderShape> {
-    // ── 表9 形态：评审项目/评分因素 + 标准分/分值 ──
+    // ── 表9 形态：评审项目/评分因素/评分项 + 标准分/分值 ──
+    // #178 xlsx 面：「评分项」列名变体（unicom 详细评审表.xlsx
+    // 「序号|1级类别|2级类别|评分项|评分细则|分值」六列，带全角空格
+    // 「评  分  项」——norm_n1 去空白后匹配）。
     let item9 = cells.iter().position(|c| {
         let n = crate::norm_n1(c);
-        n.contains("评审项目") || n.contains("评分因素")
+        n.contains("评审项目") || n.contains("评分因素") || n.contains("评分项")
     });
     let score9 = cells
         .iter()
@@ -198,13 +201,16 @@ fn strip_decorative_prefix(s: &str) -> Option<String> {
 /// 从 `ParsedFile` 识别并抽取三张审查表（#144 任务书 API）。
 ///
 /// M1 纪律：零模型、零 I/O——纯块面识别与行装配。DOCX 表格侧（TableRow
-/// 块）与 PDF 线性化附表侧（PdfLine 块）双形态自动路由；非审查表面
-/// （前附表/参数表/格式模板）返回空。
+/// 块）与 PDF 线性化附表侧（PdfLine 块）双形态自动路由（#178 xlsx 面起
+/// XlsxRow 并入 DOCX 表格侧路由）；非审查表面（前附表/参数表/格式模板）
+/// 返回空。
 pub fn extract_review_tables(f: &ParsedFile) -> Vec<ReviewItem> {
+    // #178 xlsx 面：XlsxRow 同路由（评分表结构化——unicom 详细评审表）。
+    // PDF 线性化侧（纯 PdfLine/OcrLine）仍走 extract_pdf_linearized。
     let has_table_rows = f
         .blocks
         .iter()
-        .any(|b| matches!(b.kind, BlockKind::TableRow));
+        .any(|b| matches!(b.kind, BlockKind::TableRow | BlockKind::XlsxRow));
     if has_table_rows {
         extract_docx_tables(f)
     } else {
@@ -214,6 +220,11 @@ pub fn extract_review_tables(f: &ParsedFile) -> Vec<ReviewItem> {
 
 /// DOCX 表格侧：按 locator 表键分组（表键变化或表头形行出现即分界）→
 /// 首行表头识别 → 数据行装配。
+///
+/// #178 xlsx 面：XlsxRow 并入（unicom 详细评审表.xlsx 六列评分表）
+/// ——#472 曾让 XlsxRow 只走通用分支（当时无结构化面），评分表
+/// 结构化后此设计边界更新：审查表专路对 XlsxRow 开放，被接管的
+/// 块位不走旧链（extract.rs 同分支先查 review_map——无双抽）。
 pub fn extract_docx_tables(f: &ParsedFile) -> Vec<ReviewItem> {
     let mut items = Vec::new();
     let mut group: Vec<&Block> = Vec::new();
@@ -227,7 +238,7 @@ pub fn extract_docx_tables(f: &ParsedFile) -> Vec<ReviewItem> {
         }
     };
     for b in &f.blocks {
-        if b.kind != BlockKind::TableRow {
+        if !matches!(b.kind, BlockKind::TableRow | BlockKind::XlsxRow) {
             flush(&mut group, &mut items); // 表格流结束（段落出现）
             cur_key = None;
             continue;
@@ -326,6 +337,14 @@ fn assemble_docx_group(f: &ParsedFile, rows: &[&Block]) -> Option<Vec<ReviewItem
         if item_text.is_empty() && criteria.is_empty() && score.is_none() {
             continue; // 无有效内容的排版行
         }
+        // #178 xlsx 面：汇总行过滤——Detailed 形态下 item 空（无评审项
+        // 名称）而分值在场的行是「合计：60」类小计排版面，不是评审项
+        //（unicom 详细评审表尾行实锚：误入会产伪评分项 + 与序号行
+        // clause_no 碰撞）。QualConf 面不受影响（criteria 承载内容，
+        // item 空而 criteria 在场的合并格行是既有形态）。
+        if matches!(shape, HeaderShape::Detailed { .. }) && item_text.is_empty() {
+            continue;
+        }
         data_row_no += 1;
         let row_no = seq_no.unwrap_or(data_row_no);
         items.push(ReviewItem {
@@ -389,11 +408,14 @@ fn default_table_name(kind: ReviewTableKind) -> String {
 }
 
 /// 表键：locator 去「 行N」后缀（extract.rs table_key_of 同款口径）。
+/// #178 xlsx 面：XlsxRow locator 是「Sheet!行N」（引擎 xlsx 面——
+/// sheet 名即表键），追加「!行」分隔符——不同 sheet 不同键。
 fn table_key(locator: &str) -> String {
-    match locator.find(" 行") {
-        Some(i) => locator[..i].to_string(),
-        None => locator.to_string(),
-    }
+    let cut = locator
+        .find(" 行")
+        .or_else(|| locator.find("!行"))
+        .unwrap_or(locator.len());
+    locator[..cut].to_string()
 }
 
 /// 标准分解析：纯数字格（「30」「3.5」）或「30 分」形态。
@@ -986,6 +1008,90 @@ mod tests {
             items[0].table_name, "详细评审表",
             "长句不作表名——Detailed 规范默认名"
         );
+    }
+
+    /// #178 xlsx 面：unicom 详细评审表.xlsx 形态——「评分项」列名变体
+    ///（全角空格「评  分  项」/「分 值」——norm_n1 去空白匹配）+
+    /// XlsxRow 块（locator「Sheet!行N」）。
+    #[test]
+    fn recognize_and_assemble_unicom_xlsx_form() {
+        let shape = recognize_header(&cells(&[
+            "序号", "1级类别", "2级类别", "评  分  项", "评  分  细  则", "分 值",
+        ]));
+        assert_eq!(
+            shape,
+            Some(HeaderShape::Detailed {
+                seq_col: Some(0),
+                item_col: 3,
+                score_col: 5,
+                rules_col: Some(4),
+            })
+        );
+        // 组装：XlsxRow 块 +「!行N」locator（sheet 表键）
+        let blocks: Vec<Block> = vec![
+            Block {
+                idx: 0,
+                kind: BlockKind::XlsxRow,
+                locator: "详细评审表!行1".into(),
+                text: "2026年…详细评审表".into(),
+                cells: cells(&["2026年…研发项目\n详细评审表", "", "", "", "", ""]),
+            },
+            Block {
+                idx: 1,
+                kind: BlockKind::XlsxRow,
+                locator: "详细评审表!行2".into(),
+                text: "序号 1级类别 2级类别 评分项 评分细则 分值".into(),
+                cells: cells(&["序号", "1级类别", "2级类别", "评  分  项", "评  分  细  则", "分 值"]),
+            },
+            Block {
+                idx: 2,
+                kind: BlockKind::XlsxRow,
+                locator: "详细评审表!行3".into(),
+                text: "1 企业综合实力 质量管理体系认证 ISO9001…".into(),
+                cells: cells(&[
+                    "1",
+                    "企业综合实力",
+                    "质量管理体系认证",
+                    "ISO9001质量管理体系认证证书。",
+                    "提供上述3项合格有效的相关认证证书的得3分。",
+                    "3",
+                ]),
+            },
+            Block {
+                idx: 3,
+                kind: BlockKind::XlsxRow,
+                locator: "详细评审表!行4".into(),
+                text: "2 CMMI级软件能力成熟度 …".into(),
+                cells: cells(&[
+                    "2",
+                    "",
+                    "CMMI级软件能力成熟度",
+                    "投标人具有合格有效的CMMI级评估。",
+                    "1、提供CMMI5级的得3分。",
+                    "3",
+                ]),
+            },
+        ];
+        let f = ParsedFile {
+            name: "B-详细评审表.xlsx".into(),
+            sha256: String::new(),
+            pages: 1,
+            tables: 1,
+            has_text_layer: true,
+            ocr_blocks: 0,
+            blocks,
+            parse_summary: String::new(),
+            components: vec![],
+        };
+        let items = extract_review_tables(&f);
+        assert_eq!(items.len(), 2, "标题行（无 item/分值）跳过：{items:#?}");
+        assert_eq!(items[0].kind, ReviewTableKind::Detailed);
+        assert_eq!(items[0].score, Some(3.0), "分值独立列取数");
+        assert_eq!(items[0].row, 1, "序号列为准");
+        assert!(items[0].item.contains("ISO9001"));
+        assert!(items[0].score_rules.as_deref().unwrap().contains("得3分"));
+        assert_eq!(items[0].table_name, "详细评审表", "xlsx 无段落可回溯——规范默认名");
+        assert_eq!(items[1].row, 2);
     }
 
     #[test]
