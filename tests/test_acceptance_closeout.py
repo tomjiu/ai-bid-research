@@ -28,9 +28,12 @@ _spec.loader.exec_module(ac)
 # ---------------------------------------------------------------- 协议词表
 
 class TestVocabulary:
-    def test_five_states_defined(self):
-        assert set(ac.VERDICTS) == {"PASS", "FAIL", "SKIP", "BLOCKED", "NOT_RUN"}
-        assert len(ac.VERDICTS) == 5
+    def test_six_states_defined(self):
+        """六态词表（#115 条件 5：EVIDENCE_UNCONFIRMED——真跑证据在案、
+        人工确认缺位的诚实中间态）。"""
+        assert set(ac.VERDICTS) == {
+            "PASS", "FAIL", "SKIP", "BLOCKED", "NOT_RUN", "EVIDENCE_UNCONFIRMED"}
+        assert len(ac.VERDICTS) == 6
 
     def test_four_panels_defined(self):
         assert set(ac.PANELS) == {"baseline", "songling67", "multifile", "realagent"}
@@ -146,12 +149,64 @@ class TestPanelVerdicts:
         assert entry["verdict"] == "BLOCKED"
         assert entry["materials"]["n_missing"] == 1
 
-    def test_realagent_always_not_run_without_env(self, monkeypatch):
+    def test_realagent_not_run_without_env_or_evidence(self, monkeypatch, tmp_path):
+        """无环境门且无证据（tmp REPO）→ NOT_RUN（旧行为不变）。"""
         monkeypatch.delenv("BID_REAL_PATH_WS", raising=False)
         monkeypatch.delenv("BID_REAL_PATH_PHASE", raising=False)
-        entry = ac.panel_realagent(lambda *_: None)
+        old = ac.REPO
+        ac.REPO = tmp_path  # 空 REPO——无 artifacts 证据
+        try:
+            entry = ac.panel_realagent(lambda *_: None)
+        finally:
+            ac.REPO = old
         assert entry["verdict"] == "NOT_RUN"
         assert entry["env_gate"]["BID_REAL_PATH_WS"] == "unset"
+        assert entry["evidence"] is None
+
+    def test_realagent_evidence_unconfirmed_with_run_artifacts(self, monkeypatch, tmp_path):
+        """#115 条件 5 接线：已完成真跑证据在场 → EVIDENCE_UNCONFIRMED
+        （原始来源半边成立；人工确认缺位——严格模式仍阻断整体 PASS）。"""
+        monkeypatch.delenv("BID_REAL_PATH_WS", raising=False)
+        monkeypatch.delenv("BID_REAL_PATH_PHASE", raising=False)
+        ev_dir = tmp_path / "artifacts" / "realagent-113-test"
+        ev_dir.mkdir(parents=True)
+        (ev_dir / "realagent-metrics.json").write_text(json.dumps({
+            "export": {"generator_summary": {"real": 48, "mock": 0, "external": 0},
+                       "sha256": "f4af0262d938bf6e" + "0" * 24},
+            "llm_usage": {"calls": 87, "total_tokens": 117194,
+                          "by_model": {"glm-4-plus": {}}},
+            "scoring_coverage": {"points_covered": 1},
+        }), encoding="utf-8")
+        old = ac.REPO
+        ac.REPO = tmp_path
+        try:
+            entry = ac.panel_realagent(lambda *_: None)
+        finally:
+            ac.REPO = old
+        assert entry["verdict"] == "EVIDENCE_UNCONFIRMED"
+        assert entry["evidence"]["leaves_real"] == 48
+        assert entry["evidence"]["mock"] == 0
+        assert entry["evidence"]["llm_calls"] == 87
+        assert "人工审校" in entry["reason"]
+
+    def test_realagent_evidence_mock_runs_do_not_count(self, monkeypatch, tmp_path):
+        """mock 跑不构成证据（real=0）——NOT_RUN 保持（防 mock 冒充真跑）。"""
+        monkeypatch.delenv("BID_REAL_PATH_WS", raising=False)
+        monkeypatch.delenv("BID_REAL_PATH_PHASE", raising=False)
+        ev_dir = tmp_path / "artifacts" / "realagent-113-mock"
+        ev_dir.mkdir(parents=True)
+        (ev_dir / "realagent-metrics.json").write_text(json.dumps({
+            "export": {"generator_summary": {"real": 0, "mock": 48}},
+            "llm_usage": {"calls": 0, "total_tokens": 0, "by_model": {}},
+        }), encoding="utf-8")
+        old = ac.REPO
+        ac.REPO = tmp_path
+        try:
+            entry = ac.panel_realagent(lambda *_: None)
+        finally:
+            ac.REPO = old
+        assert entry["verdict"] == "NOT_RUN"
+        assert entry["evidence"] is None
 
 
 # ---------------------------------------------------------------- CLI 烟雾
