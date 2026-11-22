@@ -214,3 +214,62 @@ fn unicom_real_scoring_unchanged_pending_xlsx() {
         "unicom DOCX 面仍零分值——分值解锁依赖 #176（xlsx 引擎容错）"
     );
 }
+
+/// #178 xlsx 面收口：unicom 附件「详细评审表.xlsx」（#176 修复后恢复
+/// 导入——mdcore af27043）——「序号|1级类别|2级类别|评分项|评分细则|
+/// 分值」六列评分表经 review_table 专路结构化：21 条评分项全部带独立
+/// 列分值（合计 = 60，与件内「合计：60」自证一致）+ 细则随行；「合计：」
+/// 汇总行（item 空而分值在场）不产伪评分项；序号跳行（14/18——文件
+/// 自身跳号）按原样保留。#178 验收：unicom-ry 分值覆盖率 0/18 →
+/// 21/21（xlsx 面）。
+#[test]
+fn unicom_xlsx_scoring_table_carries_scores() {
+    let path = telecom_dir().join("B-unicom-ry-详细评审表.xlsx");
+    assert!(
+        path.exists(),
+        "缺少真件夹具 {}（不能静默通过）",
+        path.display()
+    );
+    let pf = bid_engine::parse_xlsx_via_engine(&path)
+        .unwrap_or_else(|e| panic!("#176 修复后应可导入（mdcore af27043）：{e:?}"));
+    let reqs = extract_requirements(&[pf]);
+    let table_rows: Vec<&bid_domain::Requirement> = reqs
+        .iter()
+        .filter(|r| {
+            r.category == "评分项"
+                && r.clause_no
+                    .as_deref()
+                    .is_some_and(|c| c.starts_with("详细评审表-"))
+        })
+        .collect();
+    assert_eq!(
+        table_rows.len(),
+        21,
+        "21 条评分项（序号 1-13/15-17/19-23；「合计」汇总行不入）：{:?}",
+        table_rows.iter().map(|r| &r.clause_no).collect::<Vec<_>>()
+    );
+    // 全带独立列分值（含黑名单管理行明示 0 分）+ 全带细则
+    let scored: Vec<i64> = table_rows
+        .iter()
+        .filter_map(|r| r.params.get("score").and_then(|v| v.as_i64()))
+        .collect();
+    assert_eq!(scored.len(), 21, "分值覆盖率 21/21（#178 验收面）");
+    assert!(
+        table_rows
+            .iter()
+            .all(|r| r.params.contains_key("score_rules")),
+        "评分细则列随行入 params.score_rules"
+    );
+    // 分值合计 = 60——与件内「合计：60」小计行互证（数值自证）
+    assert_eq!(scored.iter().sum::<i64>(), 60, "分值列合计 = 件内小计");
+    // clause_no 唯一（汇总行滤除后无碰撞）
+    let mut clauses: Vec<&str> = table_rows
+        .iter()
+        .map(|r| r.clause_no.as_deref().unwrap())
+        .collect();
+    clauses.sort();
+    clauses.dedup();
+    assert_eq!(clauses.len(), 21, "clause_no 无碰撞（「合计」行曾与序号 22 碰撞）");
+    // 黑名单管理行（明示 0 分——扣减规则面，不编造缺失）
+    assert!(scored.contains(&0), "黑名单管理行 0 分在场");
+}
