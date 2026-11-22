@@ -1039,6 +1039,48 @@ fn extract_requirements(svc: &mut BidService, args: Value) -> ToolResult {
         }
     }
 
+    // ---- #179（audit F-5）：语义级冲突（同主题异号）——最小面（上）检不出
+    //      「A 件 6.1 控制价 480 万 vs C 补遗『三、控制价调整』465 万」：
+    //      条款号不同的两版本 REQ 共在但无语义归并。本面补高价值三主题
+    //      （控制价/工期/保证金）的补遗×主件配对（纯函数
+    //      bid-tools::semantic_conflicts——同号对子已归上面，防双报）。
+    //      终裁纪律：**不自动改写**——conflicts[] 只登记可见 + resolution
+    //      指路 register_addendum_changes 的 value_changed 人工显式登记
+    //      通道（补遗优先，人工确认后生效）。
+    {
+        let addenda_set: Vec<String> = addenda_names.clone();
+        let is_addendum = move |name: &str| addenda_set.iter().any(|a| a == name);
+        for c in bid_tools::semantic_conflicts::semantic_conflicts(&reqs, &is_addendum) {
+            conflicts.push(json!({
+                "a": c.main_req_id, "b": c.addendum_req_id,
+                "reason": format!(
+                    "语义冲突（主题={}）：{} 条款{} = {}（{}）vs 补遗 {} 条款{} = {}（{}）——同主题异号，同号检测不覆盖",
+                    c.topic,
+                    c.main_source, c.main_clause_no.clone().unwrap_or_else(|| "无条款号".into()),
+                    c.main_value,
+                    truncate(&c.main_excerpt, 40),
+                    c.addendum_source, c.addendum_clause_no.clone().unwrap_or_else(|| "无条款号".into()),
+                    c.addendum_value,
+                    truncate(&c.addendum_excerpt, 40),
+                ),
+                "semantic": true,
+                "topic": c.topic,
+                // 比较口径单位（非改写口径）：控制价/保证金=万元、工期=归一天数
+                "value_unit": if c.topic == "工期" { "天" } else { "万元" },
+                "main_value": c.main_value,
+                "addendum_value": c.addendum_value,
+                "resolution": {
+                    "rule": "补遗优先（后到有效版本）",
+                    "channel": "register_addendum_changes",
+                    "change_type": "value_changed",
+                    "req_id": c.main_req_id,
+                    "new_requirement_hint": c.addendum_excerpt,
+                    "note": "人工确认后显式登记生效，不自动改写（#179 终裁面纪律）",
+                },
+            }));
+        }
+    }
+
     // ---- #271：格式件与 REQ 关联（尽力而为）——格式件名（去扩展名、≥4 字
     // 守卫）出现在 REQ 锚文里 → params.form_file_id / form_name。条款真源
     // 始终是主件格式章 REQ（「按格式N填写技术偏离表」），关联让起草面能

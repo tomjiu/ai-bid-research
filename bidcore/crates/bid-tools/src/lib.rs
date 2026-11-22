@@ -26,6 +26,7 @@ pub mod review_wire;
 pub mod runner;
 pub mod schema;
 pub mod scoring_wire;
+pub mod semantic_conflicts;
 pub mod segments;
 pub mod service;
 pub mod store_io;
