@@ -93,14 +93,24 @@ fn cell_has(cell: &str, key: &str) -> bool {
 
 /// 表头识别（纯函数）：表格首行 cells → 形状。
 ///
-/// 规则（issue #144 原文）：
+/// 规则（issue #144 原文 + #178 扩展）：
 /// - 含「评审内容」+「合格条件」→ [`HeaderShape::QualConf`]；
-/// - 含「评审项目」+「标准分」（或「分值」）→ [`HeaderShape::Detailed`]
-///   （评分细则列名容差：评分细则/评分标准；序号列可选）；
+/// - 含「评审项目」或「评分因素」（#178 真实件变体）+「标准分」（或
+///   「分值」）→ [`HeaderShape::Detailed`]（评分细则列名容差：评分细则/
+///   评分标准；序号列可选）；
 /// - 其余（前附表「条款名|内容」、参数表、格式模板表头等）→ None。
+///
+/// #178 列名变体证据边界：「评分因素」收录（huaian「评审内容|评分因素|
+/// 分值|评分标准」六列对齐形态）；「评审因素」**不收录**——songjiang
+/// 「条款号|评审因素|评审标准|分值」表头 4 列而数据行 5 列（分组列
+/// 仅数据行在场），列位取数会把组名当评审项、拿细则文本当分值格——
+/// 错位形态另立，不硬吃。
 pub fn recognize_header(cells: &[String]) -> Option<HeaderShape> {
-    // ── 表9 形态：评审项目 + 标准分/分值 ──
-    let item9 = cells.iter().position(|c| cell_has(c, "评审项目"));
+    // ── 表9 形态：评审项目/评分因素 + 标准分/分值 ──
+    let item9 = cells.iter().position(|c| {
+        let n = crate::norm_n1(c);
+        n.contains("评审项目") || n.contains("评分因素")
+    });
     let score9 = cells
         .iter()
         .position(|c| cell_has(c, "标准分") || cell_has(c, "分值"));
@@ -285,10 +295,25 @@ fn assemble_docx_group(f: &ParsedFile, rows: &[&Block]) -> Option<Vec<ReviewItem
                 rules_col,
             } => {
                 let item = cells.get(*item_col).copied().unwrap_or("");
+                // #178：分值格**明示无分值**（“-”等非数值 token）不扫全行
+                // ——huaian 不良行为行分值格“-”，全行扫描会把组名列
+                // 「商务（12分）」的小计误读为行分值。仅合并格空串（或缺
+                // 列——行比表头短）才兜底扫描（原 fallback 语义保留：
+                // corpus-A 表9 全数值格不受影响）。
                 let score = cells
                     .get(*score_col)
                     .and_then(|v| parse_score(v))
-                    .or_else(|| cells.iter().find_map(|c| parse_score(c)));
+                    .or_else(|| {
+                        if cells
+                            .get(*score_col)
+                            .map(|v| v.is_empty())
+                            .unwrap_or(true)
+                        {
+                            cells.iter().find_map(|c| parse_score(c))
+                        } else {
+                            None
+                        }
+                    });
                 let rules = rules_col
                     .and_then(|ci| cells.get(ci))
                     .map(|s| s.to_string());
@@ -324,6 +349,12 @@ fn assemble_docx_group(f: &ParsedFile, rows: &[&Block]) -> Option<Vec<ReviewItem
 
 /// 表首行向前回溯表名（最近 ≤3 个非空段落；含「审查表/评审表」字样优先，
 /// 否则取最近一段——空表名走 [`default_table_name`]）。
+///
+/// #178：回溯兜底只收**短段**（≤20 字）——真实表名是短标题（「评标办法
+/// 前附表」「形式评审表」）；长句（huaian「本项目采用综合评估法，总分
+/// 共100分，其中商务12分…」评分办法说明段）是正文不是表名，收了会把
+/// 整句灌进条款号前缀（clause_no 可读性事故）。长句回溯全部落空 →
+/// [`default_table_name`] 按表类型给规范名。
 fn lookback_title(f: &ParsedFile, header_idx: usize) -> String {
     let mut seen = 0;
     let mut fallback = String::new();
@@ -342,7 +373,7 @@ fn lookback_title(f: &ParsedFile, header_idx: usize) -> String {
         if t.contains("审查表") || t.contains("评审表") {
             return t.to_string();
         }
-        if fallback.is_empty() {
+        if fallback.is_empty() && t.chars().count() <= 20 {
             fallback = t.to_string();
         }
     }
@@ -798,6 +829,163 @@ mod tests {
             shape2,
             Some(HeaderShape::Detailed { score_col: 1, .. })
         ));
+    }
+
+    /// #178：huaian 真实件详细评审区表头（六列对齐形态）——「评分因素」
+    /// 列名变体 + 分值独立列。
+    #[test]
+    fn recognize_t9_huaian_variant() {
+        let shape = recognize_header(&cells(&[
+            "2.2", "详细评审", "评审内容", "评分因素", "分值", "评分标准",
+        ]));
+        assert_eq!(
+            shape,
+            Some(HeaderShape::Detailed {
+                seq_col: None,
+                item_col: 3,
+                score_col: 4,
+                rules_col: Some(5),
+            })
+        );
+        // 初步评审区表头（同表前段）：无分值列 → 不触 Detailed（防误吞）
+        assert_eq!(
+            recognize_header(&cells(&["条款号", "评审内容", "评审因素", "评审标准"])),
+            None
+        );
+        // unicom「条款内容|评分因素」：无分值列 → None（分值在附件 xlsx）
+        assert_eq!(recognize_header(&cells(&["条款内容", "评分因素"])), None);
+        // songjiang「条款号|评审因素|评审标准|分值」：评审因素 ≠ 评分因素
+        //（列错位形态——组名列仅数据行在场，见 recognize_header 文档）
+        assert_eq!(
+            recognize_header(&cells(&["条款号", "评审因素", "评审标准", "分值"])),
+            None
+        );
+    }
+
+    /// #178：分值格明示「-」（无分值）不触发全行扫描——组名列
+    /// 「商务（12分）」的小计不得误读为行分值。
+    #[test]
+    fn detailed_dash_score_cell_no_fallback_scan() {
+        let blocks: Vec<Block> = vec![
+            Block {
+                idx: 0,
+                kind: BlockKind::Para,
+                locator: "第三章 评标办法".into(),
+                text: "本项目采用综合评估法，总分共100分，其中商务12分，技术服务28分，价格60分。评标时按照招标文件规定的量化因素进行评分。".into(),
+                cells: vec![],
+            },
+            Block {
+                idx: 1,
+                kind: BlockKind::Para,
+                locator: "第三章 评标办法".into(),
+                text: "评标办法前附表".into(),
+                cells: vec![],
+            },
+            Block {
+                idx: 2,
+                kind: BlockKind::TableRow,
+                locator: "第三章 评标办法 表3 行28".into(),
+                text: "2.2 详细评审 评审内容 评分因素 分值 评分标准".into(),
+                cells: cells(&["2.2", "详细评审", "评审内容", "评分因素", "分值", "评分标准"]),
+            },
+            // 组名行 + 明示「-」分值：不良行为扣减规则行（非评分项）
+            Block {
+                idx: 3,
+                kind: BlockKind::TableRow,
+                locator: "第三章 评标办法 表3 行43".into(),
+                text: "【投标人不良行为】【规则执行】- 按规则扣减相应分值".into(),
+                cells: cells(&[
+                    "",
+                    "",
+                    "【投标人不良行为】",
+                    "【《供应商不良行为管理规则》执行】",
+                    "-",
+                    "按处理结果及规则扣减相应分值。",
+                ]),
+            },
+            // 正常评分行：组名（12分小计）+ 评审项 + 独立分值列「6」
+            Block {
+                idx: 4,
+                kind: BlockKind::TableRow,
+                locator: "第三章 评标办法 表3 行29".into(),
+                text: "商务（12分） 类似业绩 6 业绩要求".into(),
+                cells: cells(&[
+                    "",
+                    "",
+                    "商务\n（12分）",
+                    "类似业绩",
+                    "6",
+                    "投标人在满足业绩要求的基础上…",
+                ]),
+            },
+        ];
+        let f = ParsedFile {
+            name: "A-huaian形.docx".into(),
+            sha256: String::new(),
+            pages: 1,
+            tables: 1,
+            has_text_layer: true,
+            ocr_blocks: 0,
+            blocks,
+            parse_summary: String::new(),
+            components: vec![],
+        };
+        let items = extract_review_tables(&f);
+        assert_eq!(items.len(), 2, "「-」行保条目（item 非空）、组名行不炸：{items:#?}");
+        // 「-」行：score 必须为 None（不得从组名/细则扫出小计）
+        assert_eq!(items[0].score, None, "明示「-」不扫全行：{:?}", items[0]);
+        assert!(items[0].item.contains("不良行为"));
+        // 正常行：分值 6 从独立列取（非 12——组名小计不干扰）
+        assert_eq!(items[1].score, Some(6.0));
+        assert_eq!(items[1].item, "类似业绩");
+        assert_eq!(items[1].row, 2, "无序号列按数据行计数");
+        // #178 表名守卫：长句说明段不作表名——短段「评标办法前附表」胜出
+        assert_eq!(items[0].table_name, "评标办法前附表");
+    }
+
+    /// #178：lookback 全长句（无短表名段）→ 规范默认名（不灌整句进条款号前缀）。
+    #[test]
+    fn lookback_long_sentence_falls_to_default_name() {
+        let blocks: Vec<Block> = vec![
+            Block {
+                idx: 0,
+                kind: BlockKind::Para,
+                locator: "第三章 评标办法".into(),
+                text: "本项目采用综合评估法，总分共100分，其中商务12分，技术服务28分，价格60分。评标时，评标委员会按照招标文件规定的量化因素进行评分。".into(),
+                cells: vec![],
+            },
+            Block {
+                idx: 1,
+                kind: BlockKind::TableRow,
+                locator: "第三章 评标办法 表3 行28".into(),
+                text: "2.2 详细评审 评审内容 评分因素 分值 评分标准".into(),
+                cells: cells(&["2.2", "详细评审", "评审内容", "评分因素", "分值", "评分标准"]),
+            },
+            Block {
+                idx: 2,
+                kind: BlockKind::TableRow,
+                locator: "第三章 评标办法 表3 行29".into(),
+                text: "总体实施方案 3 方案内容".into(),
+                cells: cells(&["", "", "技术、服务（28分）", "总体实施方案", "3", "方案内容…"]),
+            },
+        ];
+        let f = ParsedFile {
+            name: "A-x.docx".into(),
+            sha256: String::new(),
+            pages: 1,
+            tables: 1,
+            has_text_layer: true,
+            ocr_blocks: 0,
+            blocks,
+            parse_summary: String::new(),
+            components: vec![],
+        };
+        let items = extract_review_tables(&f);
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].table_name, "详细评审表",
+            "长句不作表名——Detailed 规范默认名"
+        );
     }
 
     #[test]
