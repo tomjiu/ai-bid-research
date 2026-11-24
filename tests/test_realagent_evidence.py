@@ -214,3 +214,71 @@ class TestBuildReportMd:
         empty_dir = tmp_path / "fresh"
         empty_dir.mkdir()
         assert realagent_evidence.report_target(str(empty_dir)).endswith("REPORT.md")
+
+
+# ---------------------------------------------------------------- 批三
+
+
+class TestEvidenceCitationHint:
+    """P5b 证据引用指令（EV-0064 未引用根治面）。"""
+
+    def test_列全证据编号与名称_指令可执行(self):
+        hint = realagent_evidence.evidence_citation_hint([
+            ("EV-0063", "qualification", "电子与智能化工程专业承包二级资质证书"),
+            ("EV-0064", "qualification", "营业执照"),
+            ("EV-0065", "performance", "类似业绩合同-智慧园区弱电工程"),
+        ])
+        for ev in ("EV-0063", "EV-0064", "EV-0065"):
+            assert ev in hint
+        assert "营业执照" in hint and "类似业绩合同" in hint
+        assert "证据引用纪律" in hint
+        assert "[EV-0063]" in hint          # 给出可照抄的引用形态示例
+
+    def test_空证据零指令不炸(self):
+        assert realagent_evidence.evidence_citation_hint([]) == ""
+
+
+class TestLeafPointsMap:
+    """check_scoring_coverage → 叶→评分点归集（P9 0/39 根治面）。"""
+
+    def test_按映射叶归集评分点(self):
+        cov = {"criteria": [
+            {"criterion_id": "REQ-0290",
+             "mapped_sections": ["SEC-0028", "SEC-0029"],
+             "points": [{"point": "培训计划"}, {"point": "培训人员分配"},
+                        {"point": "培训达到的效果预期"}]},
+            {"criterion_id": "REQ-0291",
+             "mapped_sections": ["SEC-0028"],
+             "points": [{"point": "应急响应策略"}, {"point": "网络故障预案"}]},
+        ]}
+        m = realagent_evidence.leaf_points_map(cov)
+        assert m["SEC-0028"] == ["培训计划", "培训人员分配", "培训达到的效果预期",
+                                 "应急响应策略", "网络故障预案"]
+        assert m["SEC-0029"] == ["培训计划", "培训人员分配", "培训达到的效果预期"]
+
+    def test_无映射或无点的criteria跳过(self):
+        cov = {"criteria": [
+            {"criterion_id": "R1", "mapped_sections": [], "points": [{"point": "x"}]},
+            {"criterion_id": "R2", "mapped_sections": ["SEC-1"], "points": []},
+            {"criterion_id": "R3", "mapped_sections": ["SEC-1"], "points": [{"point": None}]},
+        ]}
+        assert realagent_evidence.leaf_points_map(cov) == {}
+
+    def test_空响应空map(self):
+        assert realagent_evidence.leaf_points_map({}) == {}
+        assert realagent_evidence.leaf_points_map({"criteria": []}) == {}
+
+
+class TestScoringPointsHint:
+    """单叶评分点逐点响应指令段。"""
+
+    def test_逐点编号列出并带响应纪律(self):
+        hint = realagent_evidence.scoring_points_hint(["培训计划", "应急响应策略"])
+        assert "（1）培训计划" in hint
+        assert "（2）应急响应策略" in hint
+        assert "逐点显式响应" in hint
+        assert "关键术语" in hint              # 字面命中口径的务实解法提示
+
+    def test_空点零指令不炸(self):
+        assert realagent_evidence.scoring_points_hint([]) == ""
+        assert realagent_evidence.scoring_points_hint(["", None]) == ""

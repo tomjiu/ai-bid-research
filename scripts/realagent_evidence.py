@@ -55,6 +55,73 @@ def initial_instructions() -> str:
     )
 
 
+# ---------------------------------------------------------------- 批三
+
+
+def evidence_citation_hint(evidence: list[tuple[str, str, str]]) -> str:
+    """P5b 证据引用指令段（#113 审计批三——EV 未引用根治面）。
+
+    v2 实锚（realagent-113-v2-20261124）：3 件注册证据仅 EV-0063（18 次）
+    与 EV-0065（1 次）被正文按 ID 引用，EV-0064（营业执照）0 次——
+    「真实模型实际调用证据」维度弱通过未根治（v1 换件发生：v1 是
+    EV-0065 未用）。注入显式证据清单 + 引用纪律：资格/主体资格类响应
+    必须按 EV 编号引用对应证据件（评标时证据不引用=形式分流失）。
+    """
+    if not evidence:
+        return ""
+    lines = ["；".join(f"{ev}（{title}）" for ev, _, title in evidence)]
+    return (
+        "证据引用纪律（#113 审计批三）：本标书已注册证据件 "
+        + "、".join(lines)
+        + "。凡响应资格条件/主体资格/同类业绩类 REQ，正文必须按证据编号"
+          "显式引用对应证据（如 [EV-0063]），并在表述中写明证据名称与"
+          "对应关系；证据是评分与符合性判定的实体依据，未引用=该维度"
+          "零分险。"
+    )
+
+
+def leaf_points_map(coverage_data: dict[str, Any]) -> dict[str, list[str]]:
+    """check_scoring_coverage 响应 → 叶 → 待响应评分点清单（批三 P9 根治面）。
+
+    v2 实锚：细则覆盖 0/39——起草指令从未见过 39 个评分点原文，正文
+    自然无从逐点命中。按 criteria[].mapped_sections 把 points[].point
+    归到映射叶（P4.6 已逐项映射——36 项决策在场），供 P5b 每叶定向
+    注入与 P6.6 定向重起草。
+    """
+    mapping: dict[str, list[str]] = {}
+    for c in coverage_data.get("criteria") or []:
+        if not isinstance(c, dict):
+            continue
+        sids = c.get("mapped_sections") or []
+        pts = [p.get("point") for p in (c.get("points") or [])
+               if isinstance(p, dict) and p.get("point")]
+        if not sids or not pts:
+            continue
+        for sid in sids:
+            mapping.setdefault(sid, []).extend(pts)
+    return mapping
+
+
+def scoring_points_hint(points: list[str]) -> str:
+    """单叶评分细则点逐点响应指令段（批三——闭门条件 2 机器面）。
+
+    评分细则点（评标办法中评委按点给分的 point 原文）逐点显式响应是
+    投标实务正路；指令要求每点单独成段/列表项、保留要点关键词（字面
+    命中口径下「语义等价表述不识别」是引擎已知边界——务实解法是
+    响应文本保留关键术语，而非教引擎做语义匹配）。
+    """
+    pts = [p for p in (points or []) if p]
+    if not pts:
+        return ""
+    enumerated = "；".join(f"（{i}）{p}" for i, p in enumerate(pts, 1))
+    return (
+        "评分细则响应纪律（#113 审计批三）：本节对应招标文件评分细则点，"
+        "正文须逐点显式响应——每点单独成段或列表项，保留该点关键术语"
+        "原文（评委按点给分，未逐点响应=该点扣分）。需逐点响应的细则点："
+        + enumerated
+    )
+
+
 def aggregate_uncovered_reqs(validate_data: dict[str, Any]) -> dict[str, Any]:
     """validate_bid_document 响应 → 未覆盖 REQ 明细（审计缺口②落盘面）。
 
