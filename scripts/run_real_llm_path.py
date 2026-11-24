@@ -601,6 +601,10 @@ try:
     up = os.path.join(WS, ".mang/llm-usage.json")
     if os.path.exists(up):
         llm_usage = json.load(open(up))
+        # #113 审计批二补：llm-usage.json 台账随证据包归档（v1 是手拷的——
+        # 漏拷即缺件，REPORT 文件表机器列实际清单时台账缺席）
+        import shutil as _shutil
+        _shutil.copyfile(up, os.path.join(OUT, "llm-usage.json"))
     result = {
         "project_id": PID, "actor": ACTOR,
         "main_file": os.path.basename(MAIN),
