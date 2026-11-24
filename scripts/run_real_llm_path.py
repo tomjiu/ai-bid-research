@@ -35,6 +35,8 @@ import urllib.request
 # 同目录状态持久层（#113 审计修复批：断点续跑不洗 decisions/repair 历史）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import realagent_state
+# #113 审计修复批二：口径注入指令 / 证据明细聚合 / REPORT 机器底稿
+import realagent_evidence
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(REPO, "bidcore/target/debug/bid-mcp-stdio")
@@ -155,6 +157,9 @@ def save_state(extra=None):
         # 保存面曾在 resume 轮把 draft_stats 洗掉的隐患收口；draft_stats 在
         # 进程内自维护全量，extra 直盖即正确）
         "draft": {"stats": draft_stats},
+        # #113 审计修复批二：累计口径随每轮保存落盘（resume 轮从 state 恢复）
+        "elapsed_total_s": elapsed0 + int(time.time() - t_all),
+        "resume_rounds": resume_rounds,
     }
     return realagent_state.save_state(STATE_FILE, base, extra)
 
@@ -172,6 +177,10 @@ probe = json.loads(urllib.request.urlopen(urllib.request.Request(
 print(f"[bridge] 自检: {probe['choices'][0]['message']['content']}")
 
 t_all = time.time()
+# #113 审计修复批二：elapsed 累计口径——封存包 elapsed_s=2 实为末轮进程秒数
+# （resume 洗史面），跨轮累计 + resume_rounds 落 metrics/state 如实呈现
+elapsed0 = 0
+resume_rounds = 0
 exit_code = 0
 PID = None
 star_missing_n, star_missing_detail = 0, []
@@ -190,8 +199,10 @@ try:
         ev_ids = [(e["ev_id"], e["kind"], e["title"]) for e in sv.get("evidence", [])]
         draft_stats = sv.get("draft", {}).get("stats", [])
         repair_log = sv.get("repair", [])  # 跨轮恢复：旧实现在轮次边界洗掉修复历史
+        elapsed0 = int(sv.get("elapsed_total_s", 0))  # 前轮累计耗时（累计口径）
+        resume_rounds = int(sv.get("resume_rounds", 0)) + 1  # 本次 = 第 N 轮续跑
         print(f"[resume] 续跑 {PID}（P1-P4 已完成，已起草 {len(draft_stats)} 叶，"
-              f"修复历史 {len(repair_log)} 节次）")
+              f"修复历史 {len(repair_log)} 节次，累计 {elapsed0}s/{resume_rounds} 轮）")
     else:
         # ---- P1-P2 ----
         d = must("create_bid_project", {
@@ -328,10 +339,14 @@ try:
 
     # ---- P5b 逐叶真实起草（限速 + 429 优雅退出）----
     t_draft = time.time()
+    # #113 审计修复批二：canonical 口径注入首稿（修复方向②——三处大写幻觉
+    # 与段55 抄限价都是「无源数字自由发挥」产物；预防优于检出-修复）
+    INITIAL_INSTR = realagent_evidence.initial_instructions()
+    print("[P5b] 初始指令含 canonical 口径（报价/保证金/工期/有效期 + 分项和约束 + 无源数字禁令）")
     for i, sid in enumerate(pending, 1):
         r = call("draft_response_section", {
             "project_id": PID, "section_id": sid,
-            "instructions": "按招标文件逐项响应，突出同类业绩与实施方案；引用只准用列出的 REQ/EV 编号",
+            "instructions": INITIAL_INSTR,
             "generator": "real", "project_version": "latest",
         }, timeout=620)
         if not r.get("ok"):
@@ -574,6 +589,14 @@ try:
 
     # ---- 质量面 + 台账 ----
     d = must("check_bid_quality", {"project_id": PID, "project_version": "latest"}, "quality")
+    # #113 审计缺口②落盘：sections[].uncovered_reqs 明细引擎已算出，
+    # 只落 summary 的旧面把「9 条未覆盖」变成了无明细总数——审校无从查
+    uncovered_detail = realagent_evidence.aggregate_uncovered_reqs(d)
+    if uncovered_detail["total"]:
+        print(f"[P9.6] 未覆盖 REQ 明细: {uncovered_detail['total']} 条 "
+              f"（mismatch={uncovered_detail['mismatch']}）——已落 metrics.uncovered_reqs")
+    # #113 审计 P9 弱正留痕：哪 38 条细则点没逐字命中（审校素材）
+    uncovered_points = realagent_evidence.aggregate_uncovered_points(cov)
     llm_usage = None
     up = os.path.join(WS, ".mang/llm-usage.json")
     if os.path.exists(up):
@@ -587,18 +610,38 @@ try:
         "draft": {"leaves_done": len(done) + len(draft_stats), "total_words": total_words,
                   "stats": draft_stats},
         "validate": d.get("summary", {}),
+        "uncovered_reqs": uncovered_detail,          # 审计缺口②：明细落盘
         "export": export_meta,
         "evidence_citation": ev_cite,
         "scoring_coverage": coverage_summary,
+        "scoring_coverage_uncovered_points": uncovered_points,  # P9 哪条缺
         "llm_usage": llm_usage,
-        "elapsed_s": int(time.time() - t_all),
+        # 累计口径：末轮进程秒数（旧口径 resume 下洗成 2s）→ 跨轮累计如实
+        "elapsed_s": elapsed0 + int(time.time() - t_all),
+        "resume_rounds": resume_rounds,
     }
     result["main_sha256"] = hashlib.sha256(open(MAIN, "rb").read()).hexdigest()
     json.dump(result, open(os.path.join(OUT, "realagent-metrics.json"), "w"),
               ensure_ascii=False, indent=1)
     with open(os.path.join(OUT, "tool-call-log.json"), "w") as f:
         json.dump(calls, f, ensure_ascii=False, indent=1)
-    print(f"[done] {OUT} （{result['elapsed_s']}s, {len(calls)} 次工具调用）")
+    # ---- REPORT.md 机器底稿（#113 审计批二：防手写漂移——fe9d7ca 手写
+    # 「含 13 节次修复决策日志」而 state 实为 decisions=[] 的教训；决策数/
+    # 文件表全取 state 实留与 OUT 实际清单，人只改叙事。既有 REPORT.md
+    # 不覆盖（封存不回改）→ REPORT.generated.md。----
+    state_final = {}
+    if os.path.exists(STATE_FILE):
+        try:
+            state_final = json.load(open(STATE_FILE))
+        except (OSError, ValueError):
+            state_final = {}
+    report_path = realagent_evidence.report_target(OUT)
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(realagent_evidence.build_report_md(result, state_final, OUT))
+    print(f"[P10] REPORT 底稿: {os.path.basename(report_path)}"
+          f"（机器取数；人工叙事在其上改）")
+    print(f"[done] {OUT} （累计 {result['elapsed_s']}s/{result['resume_rounds'] + 1} 轮, "
+          f"{len(calls)} 次工具调用）")
 finally:
     bridge.terminate()
     try:
