@@ -63,6 +63,47 @@ def test_p66_block_calls_draft():
     )
 
 
+def test_p65_split_conflict_repairable():
+    """契约 3：非规范键的节内分项金额冲突必须可定向修复（v3-r2 实锚）。
+
+    v3-r2 实弹（realagent-113-v3-20261124-r2）：
+        E_AMOUNT_CONFLICT@SEC-0012: 金额冲突：服务部分报价
+          在 SEC-0012=46365 与 SEC-0012=89635
+        E_AMOUNT_CONFLICT@SEC-0012: 金额冲突：设备部分报价
+          在 SEC-0012=100000 与 SEC-0012=4710365
+    ——LLM 发明具体分项数且节内自相矛盾；旧规划器因 kind 不在 CANON
+    判「不可定向修复」→ 诚实报红退出。修复口径 = v2 复审通过的成品面：
+    不写具体分项数值、只声明分项纪律（480万/46,000 canonical 照常）。
+    """
+    s = _src()
+    m_p65 = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
+    m_p7 = re.search(r"# ---- P7", s)
+    assert m_p65 and m_p7
+    block = s[m_p65.start(): m_p7.start()]
+    # 1) repair_instruction 带 no_split 通道
+    assert re.search(r"def repair_instruction\(floor, ban_money, no_split", block), (
+        "repair_instruction 缺 no_split 形参——节内分项冲突无法定向修复"
+        "（v3-r2 SEC-0012 报红实锚）。"
+    )
+    # 2) 规划器把「有 pairs 无 kind」路由到重起草而非 unrepairable
+    assert re.search(r"if pairs and not kind", block), (
+        "E_AMOUNT_CONFLICT 分支缺「pairs and not kind」前置路由——非规范键"
+        "冲突仍会掉进不可定向修复。"
+    )
+    # 3) NO_SPLIT 指令禁止具体分项数值（v2 复审通过的成品口径）
+    m_ns = re.search(r"NO_SPLIT = \(", block)
+    assert m_ns, "NO_SPLIT 指令常量缺失"
+    ns_text = block[m_ns.start(): m_ns.start() + 500]
+    assert "分项" in ns_text and ("不写" in ns_text or "不得" in ns_text), (
+        "NO_SPLIT 指令未禁止具体分项数值。"
+    )
+    # 4) 重起草调用处传 no_split
+    assert re.search(
+        r'repair_instruction\(\s*e\["floor"\],\s*e\["ban"\],', block), (
+        "P6.5 调用处未传 no_split——分项冲突修复指令不会生效。"
+    )
+
+
 def test_p65_repair_instruction_carries_points():
     """契约 2：P6.5 修复指令携带本节评分点（覆盖不回退）。"""
     s = _src()

@@ -473,8 +473,18 @@ try:
                  "「报价」等金额表述与任何金额数字（金额口径只在投标函/报价节"
                  "统一表述）；工期如需表述用「自合同签订之日起三十七个日历日内"
                  "完成」的文字形态，不出现阿拉伯数字。")
+    # v3-r2 实弹新面：LLM 发明具体分项数且节内自相矛盾（SEC-0012 服务部分
+    # 46,365 vs 89,635 / 设备部分 100,000 vs 4,710,365）。修复口径锚 =
+    # v2 复审通过的成品面：分项不落具体数、只声明纪律（480万/46,000
+    # canonical 照常）——分项和一致性门（批一）继续在线把关。
+    NO_SPLIT = ("分项报价纪律（v2 复审通过面）：本节不写任何具体分项报价数值——"
+                "「设备部分报价」「服务部分报价」金额一律不落具体数，只保留"
+                "「分项报价之和等于投标总报价、未将最高投标限价作为本方分项"
+                "报价」的纪律声明；节内金额口径仅限：投标总报价 4,800,000 元"
+                "（肆佰捌拾万元整）、投标保证金 46,000 元（肆万陆仟圆整）、"
+                "工期 37 天、投标有效期 90 天。")
 
-    def repair_instruction(floor, ban_money):
+    def repair_instruction(floor, ban_money, no_split=False):
         instr = ("按招标文件逐项响应，引用只准用列出的 REQ/EV 编号。"
                  f"正文不少于 {floor} 字（当前版本未达篇幅门——逐条展开写足）。")
         if ban_money:
@@ -487,6 +497,8 @@ try:
                       "分项之和必须等于投标总报价，且不得把招标文件最高投标限价"
                       "当分项报价；源文件未给定金额（如履约保证金费率）不写具体"
                       "数值，按招标文件原文表述（「金额见前附表」）。")
+        if no_split:
+            instr += NO_SPLIT
         return instr
 
     for round_no in range(1, 16):
@@ -535,6 +547,18 @@ try:
             elif code in ("E_AMOUNT_CONFLICT", "E_SCHEDULE_CONFLICT"):
                 kind = next((k for k in CANON if k in msg), None)
                 pairs = re.findall(r"(SEC-\d+)=(\d+)", msg)
+                if pairs and not kind:
+                    # v3-r2 实弹新面：非规范键的节内分项冲突（服务部分报价
+                    # SEC-0012=46365 vs 89635 等——LLM 发明具体分项数）。
+                    # 修复 = no_split 定向重起草（不写具体分项数，v2 复审
+                    # 通过面口径）；分项和门（批一）继续复验把关。
+                    for s in sorted({s for s, _ in pairs}):
+                        e = plan.setdefault(s, {"floor": 0, "ban": False, "why": []})
+                        e["floor"] = max(e["floor"], 600)
+                        e["no_split"] = True
+                        e["why"].append(f"{code}: {msg[:80]}（分项口径节内冲突——"
+                                        "no_split 重起草：不写具体分项数）")
+                    continue
                 if not kind or not pairs:
                     unrepairable.append(f"{code}: {msg}")
                     continue
@@ -562,7 +586,9 @@ try:
                 # 批三补（v3 E_STATE 修复同款纪律）：修复指令携带本节映射
                 # 评分点——整节重起草换全文，点不随行即洗掉 P6.6 已命中的
                 # 细则覆盖（覆盖不回退）。
-                "instructions": (repair_instruction(e["floor"], e["ban"]) + EV_HINT
+                "instructions": (repair_instruction(
+                                     e["floor"], e["ban"], bool(e.get("no_split")))
+                                 + EV_HINT
                                  + realagent_evidence.scoring_points_hint(
                                      POINTS_MAP.get(sid) or [])),
                 "generator": "real", "project_version": "latest",
@@ -580,8 +606,10 @@ try:
                                 "citations": st.get("citations")})
             repair_log.append({"round": round_no, "sid": sid, "why": e["why"],
                                "floor": e["floor"], "ban": e["ban"],
+                               "no_split": bool(e.get("no_split")),
                                "words": st.get("words"), "citations": st.get("citations")})
             print(f"[P6.5] {sid} 重起草 floor={e['floor']} ban={e['ban']} "
+                  f"no_split={bool(e.get('no_split'))} "
                   f"words={st.get('words')} cites={st.get('citations')}", flush=True)
             save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
             time.sleep(DRAFT_GAP_S)
