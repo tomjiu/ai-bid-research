@@ -384,6 +384,76 @@ try:
     print(f"[P5b] 起草面收口: {len(done) + len([s for s in draft_stats if s['sid'] not in done])}"
           f"/{len(leaves)} 叶 / 累计 {total_words} 字")
 
+    # ---- P6.6 细则覆盖修复轮（#113 审计批三：P9 0/39 根治面）----
+    # v2 实锚：字面细则命中 0/39、条件 2 机器面回退为零。与 P6.5 同款
+    # 定向重起草——对未命中点的映射叶注入该叶全部评分点（含已命中——
+    # 重起草保持节内全文一致），复测直至覆盖或轮次耗尽（如实登记，
+    # 不豁免）。留痕并入 repair（kind=scoring；round 100 起避开 P6.5
+    # 1-15 的判别键空间）。
+    # ★执行位置契约（v3 实弹 E_STATE 教训，tests/test_p66_scoring_repair_order.py
+    # 回归锁）：本修复轮必须在**首个全稿 validate_bid_document 之前**执行。
+    # 状态机事实链：#243——全稿校验**通过**即推进 Drafting→Validating（失败
+    # 留原态可修订）；bid-domain allowed_tools() 的 Validating 白名单**不含**
+    # draft_response_section（整节重起草在复核态被合法拒绝——v3 首跑
+    # SEC-0028 E_STATE 崩溃实锚）。故 P6.6 前置于 P6/P6.5；P6.5 blocker
+    # 重起草随后仍在 Drafting 态内合法（带 blocker 的校验不推进状态），
+    # 且其修复指令携带本节评分点防覆盖回退（见 repair 调用处）。
+    cov_mid = must("check_scoring_coverage", {"project_id": PID}, "cov-mid")
+    sc_round = 0
+    while (cov_mid["summary"].get("points_covered", 0)
+           < cov_mid["summary"].get("points_total", 0)):
+        unc = realagent_evidence.aggregate_uncovered_points(cov_mid)["uncovered"]
+        crit_by_id = {c.get("criterion_id"): c for c in cov_mid.get("criteria", [])}
+        sid_pts = {}
+        for u in unc:
+            c = crit_by_id.get(u.get("criterion_id")) or {}
+            for s in (c.get("mapped_sections") or []):
+                sid_pts.setdefault(s, []).append(u["point"])
+        if not sid_pts:
+            print("[P6.6] 未命中点无映射叶可定向——如实登记退出（不豁免）")
+            break
+        sc_round += 1
+        if sc_round > 5:
+            print("[P6.6] 细则覆盖修复轮耗尽——剩余缺口如实登记（不豁免）")
+            break
+        print(f"[P6.6] 细则覆盖修复轮 {sc_round}: {len(unc)} 点未命中 → "
+              f"{len(sid_pts)} 叶定向重起草")
+        for sid, pts in sorted(sid_pts.items()):
+            instr = (INITIAL_INSTR + EV_HINT
+                     + realagent_evidence.scoring_points_hint(pts)
+                     + " 本节当前版本未逐点命中上述评分细则——重起草逐点"
+                       "补齐，正文不少于 600 字。")
+            r = call("draft_response_section", {
+                "project_id": PID, "section_id": sid,
+                "instructions": instr,
+                "generator": "real", "project_version": "latest",
+            }, timeout=620)
+            if not r.get("ok"):
+                err = json.dumps(r.get("error", {}), ensure_ascii=False)
+                if "429" in err or "Too many requests" in err or "LLM" in err:
+                    print(f"[P6.6] {sid} 修复生成失败（限流）——保存进度优雅退出: {err[:160]}")
+                    exit_code = 2
+                    break
+                raise AssertionError(f"[scoring-repair:{sid}] {err[:400]}")
+            st = r["data"].get("stats", {})
+            draft_stats = [x for x in draft_stats if x["sid"] != sid]
+            draft_stats.append({"sid": sid, "words": st.get("words"),
+                                "citations": st.get("citations")})
+            repair_log.append({"round": 100 + sc_round, "sid": sid,
+                              "kind": "scoring",
+                              "why": [f"P6.6 细则覆盖: {len(pts)} 点未命中——注入逐点响应指令重起草"],
+                              "floor": 600, "ban": False,
+                              "words": st.get("words"), "citations": st.get("citations")})
+            print(f"[P6.6] {sid} 重起草 words={st.get('words')} "
+                  f"cites={st.get('citations')}（注入 {len(pts)} 点）", flush=True)
+            save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
+            time.sleep(DRAFT_GAP_S)
+        if exit_code == 2:
+            sys.exit(2)
+        cov_mid = must("check_scoring_coverage", {"project_id": PID}, f"cov-mid:{sc_round}")
+    print(f"[P6.6] 细则覆盖收口: covered={cov_mid['summary']['points_covered']}/"
+          f"{cov_mid['summary']['points_total']}")
+
     # ---- P6 校验 ----
     d = must("validate_bid_document", {"project_id": PID, "scope": "all",
                                        "project_version": "latest"}, "validate")
@@ -489,7 +559,12 @@ try:
         for sid, e in sorted(plan.items()):
             r = call("draft_response_section", {
                 "project_id": PID, "section_id": sid,
-                "instructions": repair_instruction(e["floor"], e["ban"]) + EV_HINT,
+                # 批三补（v3 E_STATE 修复同款纪律）：修复指令携带本节映射
+                # 评分点——整节重起草换全文，点不随行即洗掉 P6.6 已命中的
+                # 细则覆盖（覆盖不回退）。
+                "instructions": (repair_instruction(e["floor"], e["ban"]) + EV_HINT
+                                 + realagent_evidence.scoring_points_hint(
+                                     POINTS_MAP.get(sid) or [])),
                 "generator": "real", "project_version": "latest",
             }, timeout=620)
             if not r.get("ok"):
@@ -527,68 +602,6 @@ try:
             open(os.path.join(OUT, "blockers-unresolved.json"), "w"), ensure_ascii=False, indent=1)
         sys.exit(1)
     print(f"[P6.5] 零 blocker（修复 {len(repair_log)} 节次）")
-
-    # ---- P6.6 细则覆盖修复轮（#113 审计批三：P9 0/39 根治面）----
-    # v2 实锚：字面细则命中 0/39、条件 2 机器面回退为零。与 P6.5 同款
-    # 定向重起草——对未命中点的映射叶注入该叶全部评分点（含已命中——
-    # 重起草保持节内全文一致），复测直至覆盖或轮次耗尽（如实登记，
-    # 不豁免）。留痕并入 repair（kind=scoring；round 100 起避开 P6.5
-    # 1-15 的判别键空间）。
-    cov_mid = must("check_scoring_coverage", {"project_id": PID}, "cov-mid")
-    sc_round = 0
-    while (cov_mid["summary"].get("points_covered", 0)
-           < cov_mid["summary"].get("points_total", 0)):
-        unc = realagent_evidence.aggregate_uncovered_points(cov_mid)["uncovered"]
-        crit_by_id = {c.get("criterion_id"): c for c in cov_mid.get("criteria", [])}
-        sid_pts = {}
-        for u in unc:
-            c = crit_by_id.get(u.get("criterion_id")) or {}
-            for s in (c.get("mapped_sections") or []):
-                sid_pts.setdefault(s, []).append(u["point"])
-        if not sid_pts:
-            print("[P6.6] 未命中点无映射叶可定向——如实登记退出（不豁免）")
-            break
-        sc_round += 1
-        if sc_round > 5:
-            print("[P6.6] 细则覆盖修复轮耗尽——剩余缺口如实登记（不豁免）")
-            break
-        print(f"[P6.6] 细则覆盖修复轮 {sc_round}: {len(unc)} 点未命中 → "
-              f"{len(sid_pts)} 叶定向重起草")
-        for sid, pts in sorted(sid_pts.items()):
-            instr = (INITIAL_INSTR + EV_HINT
-                     + realagent_evidence.scoring_points_hint(pts)
-                     + " 本节当前版本未逐点命中上述评分细则——重起草逐点"
-                       "补齐，正文不少于 600 字。")
-            r = call("draft_response_section", {
-                "project_id": PID, "section_id": sid,
-                "instructions": instr,
-                "generator": "real", "project_version": "latest",
-            }, timeout=620)
-            if not r.get("ok"):
-                err = json.dumps(r.get("error", {}), ensure_ascii=False)
-                if "429" in err or "Too many requests" in err or "LLM" in err:
-                    print(f"[P6.6] {sid} 修复生成失败（限流）——保存进度优雅退出: {err[:160]}")
-                    exit_code = 2
-                    break
-                raise AssertionError(f"[scoring-repair:{sid}] {err[:400]}")
-            st = r["data"].get("stats", {})
-            draft_stats = [x for x in draft_stats if x["sid"] != sid]
-            draft_stats.append({"sid": sid, "words": st.get("words"),
-                                "citations": st.get("citations")})
-            repair_log.append({"round": 100 + sc_round, "sid": sid,
-                              "kind": "scoring",
-                              "why": [f"P6.6 细则覆盖: {len(pts)} 点未命中——注入逐点响应指令重起草"],
-                              "floor": 600, "ban": False,
-                              "words": st.get("words"), "citations": st.get("citations")})
-            print(f"[P6.6] {sid} 重起草 words={st.get('words')} "
-                  f"cites={st.get('citations')}（注入 {len(pts)} 点）", flush=True)
-            save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
-            time.sleep(DRAFT_GAP_S)
-        if exit_code == 2:
-            sys.exit(2)
-        cov_mid = must("check_scoring_coverage", {"project_id": PID}, f"cov-mid:{sc_round}")
-    print(f"[P6.6] 细则覆盖收口: covered={cov_mid['summary']['points_covered']}/"
-          f"{cov_mid['summary']['points_total']}")
 
     # ---- P7' 导出前门 ----
     pass_gate("pre_export_confirm", "#113 验收跑批：定稿内容过门（agent 声明——留痕待人工追认）")
