@@ -1,0 +1,177 @@
+[
+ {
+  "tool": "check_bid_quality",
+  "ok": true,
+  "ms": 660
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 3721
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 3217
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 7991
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 7456
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 7144
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 9255
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 5819
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 9869
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 8321
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 28
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 17022
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 7564
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 30
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 10330
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 6138
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 28
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 125
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 124
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 11686
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 4296
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 4398
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 181
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 177
+ },
+ {
+  "tool": "get_bid_project_state",
+  "ok": true,
+  "ms": 25
+ },
+ {
+  "tool": "record_review_gate",
+  "ok": true,
+  "ms": 81
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "export_bid_document",
+  "ok": true,
+  "ms": 153
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "check_bid_quality",
+  "ok": true,
+  "ms": 688
+ }
+]

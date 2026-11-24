@@ -1,0 +1,582 @@
+{
+ "project_id": "PRJ-0001",
+ "actor": "agent-zai",
+ "main_file": "A-telecom-huaian-主文件.docx",
+ "star_missing": {
+  "count": 2,
+  "detail": [
+   {
+    "block_idx": 77,
+    "page": null,
+    "text": "第四章 ★商务规范书"
+   },
+   {
+    "block_idx": 78,
+    "page": null,
+    "text": "★第五章 技术规范书"
+   }
+  ]
+ },
+ "evidence": [
+  {
+   "ev_id": "EV-0063",
+   "kind": "qualification",
+   "title": "电子与智能化工程专业承包二级资质证书",
+   "synthetic": true
+  },
+  {
+   "ev_id": "EV-0064",
+   "kind": "qualification",
+   "title": "营业执照",
+   "synthetic": true
+  },
+  {
+   "ev_id": "EV-0065",
+   "kind": "performance",
+   "title": "类似业绩合同-智慧园区弱电工程",
+   "synthetic": true
+  }
+ ],
+ "req_total": 380,
+ "leaves": 48,
+ "draft": {
+  "leaves_done": 93,
+  "total_words": 54798,
+  "stats": [
+   {
+    "sid": "SEC-0007",
+    "words": 911,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0008",
+    "words": 1863,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0009",
+    "words": 884,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0010",
+    "words": 1055,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0011",
+    "words": 648,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0012",
+    "words": 970,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0013",
+    "words": 1062,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0014",
+    "words": 1268,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 1020,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0016",
+    "words": 907,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0017",
+    "words": 1022,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 750,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0019",
+    "words": 1189,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0021",
+    "words": 1181,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 1227,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0023",
+    "words": 1243,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0024",
+    "words": 944,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0025",
+    "words": 960,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0026",
+    "words": 1380,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0030",
+    "words": 1736,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0031",
+    "words": 1006,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0032",
+    "words": 1562,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0033",
+    "words": 1070,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0034",
+    "words": 1329,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0035",
+    "words": 1837,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 412,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0038",
+    "words": 417,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0040",
+    "words": 1052,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1628,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 1024,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0044",
+    "words": 888,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0045",
+    "words": 810,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0046",
+    "words": 1076,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0047",
+    "words": 1625,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0048",
+    "words": 1169,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0049",
+    "words": 981,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0050",
+    "words": 1221,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0051",
+    "words": 1112,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0052",
+    "words": 1074,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0054",
+    "words": 990,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0058",
+    "words": 628,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0060",
+    "words": 397,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0062",
+    "words": 1205,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0028",
+    "words": 1448,
+    "citations": 0
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 988,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0020",
+    "words": 1524,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 769,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0056",
+    "words": 686,
+    "citations": 3
+   }
+  ]
+ },
+ "validate": {
+  "char_deviation_pct": 8.6,
+  "char_target": 48000,
+  "char_total": 52148,
+  "drafted": 48,
+  "dup_max_similarity": 0.0,
+  "dup_pairs": 0,
+  "failed": 0,
+  "out_of_band": 18,
+  "pending": 0,
+  "total": 48,
+  "unanchored_total": 359,
+  "uncovered_req_total": 8
+ },
+ "uncovered_reqs": {
+  "total": 8,
+  "ids": [
+   "REQ-0002",
+   "REQ-0003",
+   "REQ-0004",
+   "REQ-0005",
+   "REQ-0006",
+   "REQ-0007",
+   "REQ-0009",
+   "REQ-0010"
+  ],
+  "by_section": [
+   {
+    "section_id": "SEC-0028",
+    "uncovered_reqs": [
+     "REQ-0002",
+     "REQ-0003",
+     "REQ-0004",
+     "REQ-0005",
+     "REQ-0006",
+     "REQ-0007",
+     "REQ-0009",
+     "REQ-0010"
+    ]
+   }
+  ],
+  "summary_reported": 8,
+  "mismatch": false
+ },
+ "export": {
+  "size": 269386,
+  "sha256": "662ef858190bc7a7b3ff1764f60ea8b9ea319f3c819962645007e3066f74f15d",
+  "chapters_written": 48,
+  "total_chars": 52148,
+  "generator_summary": {
+   "external": 0,
+   "mock": 0,
+   "real": 48,
+   "scoring_leaves_non_real": 0,
+   "scoring_leaves_total": 8,
+   "unknown": 0
+  },
+  "evidence_validity": {
+   "active": 3,
+   "expired": 0,
+   "expiring": 0,
+   "expiring_detail": [],
+   "superseded": 0
+  },
+  "warnings_count": 34
+ },
+ "evidence_citation": {
+  "registered": [
+   "EV-0063",
+   "EV-0064",
+   "EV-0065"
+  ],
+  "cited": [
+   "EV-0063",
+   "EV-0065"
+  ],
+  "uncited": [
+   "EV-0064"
+  ]
+ },
+ "scoring_coverage": {
+  "coverage_ratio": 0.07692307692307693,
+  "criteria_total": 36,
+  "criteria_unmapped": 0,
+  "criteria_with_points": 9,
+  "hard_gates_excluded": 120,
+  "points_covered": 3,
+  "points_total": 39,
+  "suggested_deduction": 26.5
+ },
+ "scoring_coverage_uncovered_points": {
+  "points_total": 39,
+  "points_covered": 3,
+  "uncovered": [
+   {
+    "criterion_id": "REQ-0285",
+    "point": "合同内容页",
+    "max_score": 6.0
+   },
+   {
+    "criterion_id": "REQ-0288",
+    "point": "但不限于人员组织计划",
+    "max_score": 0.5
+   },
+   {
+    "criterion_id": "REQ-0288",
+    "point": "设备材料供应计划",
+    "max_score": 0.5
+   },
+   {
+    "criterion_id": "REQ-0288",
+    "point": "集成方案",
+    "max_score": 0.5
+   },
+   {
+    "criterion_id": "REQ-0290",
+    "point": "培训人员分配",
+    "max_score": 0.75
+   },
+   {
+    "criterion_id": "REQ-0290",
+    "point": "培训计划",
+    "max_score": 0.75
+   },
+   {
+    "criterion_id": "REQ-0290",
+    "point": "培训达到的效果预期",
+    "max_score": 0.75
+   },
+   {
+    "criterion_id": "REQ-0290",
+    "point": "日常常见故障排除",
+    "max_score": 0.75
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "但不限于应急保障组织架构",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "应急响应策略",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "应急制度要求",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "网络故障预案",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "病毒暴发应急预案",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "电源故障预案",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0291",
+    "point": "消防",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0292",
+    "point": "功能证明需充分",
+    "max_score": 2.0
+   },
+   {
+    "criterion_id": "REQ-0293",
+    "point": "前缀",
+    "max_score": 1.0
+   },
+   {
+    "criterion_id": "REQ-0293",
+    "point": "后缀",
+    "max_score": 1.0
+   },
+   {
+    "criterion_id": "REQ-0293",
+    "point": "功能证明需充分",
+    "max_score": 1.0
+   },
+   {
+    "criterion_id": "REQ-0294",
+    "point": "功能证明需充分",
+    "max_score": 2.0
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "副本",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "前缀",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "后缀",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "标签",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "元数据",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "对象大小",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "对象类型",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "对象拥有者",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "功能证明需充分",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "低速恢复",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "中速恢复",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "高速恢复",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "单盘最小恢复带宽",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "单盘最大恢复带宽",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "客户端带宽阈值",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "功能证明需充分",
+    "max_score": 0.43
+   }
+  ]
+ },
+ "llm_usage": {
+  "calls": 61,
+  "prompt_tokens": 58267,
+  "completion_tokens": 42174,
+  "total_tokens": 100441,
+  "by_model": {
+   "glm-4-plus": {
+    "calls": 61,
+    "prompt_tokens": 58267,
+    "completion_tokens": 42174,
+    "total_tokens": 100441
+   }
+  },
+  "last_at": 1795527667
+ },
+ "elapsed_s": 1414,
+ "resume_rounds": 2,
+ "main_sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd"
+}
