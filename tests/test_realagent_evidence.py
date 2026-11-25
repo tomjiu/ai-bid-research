@@ -282,3 +282,63 @@ class TestScoringPointsHint:
     def test_空点零指令不炸(self):
         assert realagent_evidence.scoring_points_hint([]) == ""
         assert realagent_evidence.scoring_points_hint(["", None]) == ""
+
+
+# ---------------------------------------------------------------- 批六②③
+
+
+class TestBatch6EvidenceFacts:
+    """批六③（r5 审读 A2/A3 实锚）：业绩实载口径注入——比禁令更硬的根治面。
+
+    r5 成品段18：业绩合同金额写 200 万（证据件 EV-0065 实载 260 万——
+    200 恰为资格线值，凑线幻觉新形态）；同时声称「签订日期在
+    2023-10-01 至公告发布之间」（证据件实载 2023-05-20，在窗口外）——
+    日期断言与所引证据件直接矛盾。禁令挡不住 LLM 编具体值：唯一根治面
+    是把证据件实载口径直接注入指令（抄对，而不是被禁止编错）。
+    """
+
+    def test_业绩金额实载口径_260万注入(self):
+        instr = realagent_evidence.initial_instructions()
+        assert "260" in instr and "万" in instr, (
+            "业绩证据件 EV-0065 实载金额（260 万）必须注入指令——LLM 抄对"
+        )
+
+    def test_业绩签订日期实载口径_2023_05_20注入(self):
+        instr = realagent_evidence.initial_instructions()
+        assert "2023-05-20" in instr, "证据件实载签订日期必须注入（防日期断言与证据矛盾）"
+
+    def test_资格线值禁当业绩值_显式禁令(self):
+        instr = realagent_evidence.initial_instructions()
+        assert "资格线" in instr
+        assert "200 万" in instr or "200万" in instr, (
+            "禁令必须点名资格线数值形态（r5 段18 把资格线值写成业绩值）"
+        )
+
+
+class TestBatch6ScoringEvidencePoints:
+    """批六②（r5 审读 C4 实锚）：证据型评分点响应纪律增强。
+
+    r5 实测 P9 34/39：缺的 5 点全是「依赖外部证据件的点」（信息系统
+    管理师证书/演示/样机/检测报告类）——正文无从引用对应证据（台账无
+    该类证据件）时 LLM 直接跳过。指令增强：证据型点要么按 EV 编号显式
+    引用，要么如实声明【待补】——不静默跳过。
+    """
+
+    def test_证据型评分点_追加证据响应纪律子句(self):
+        hint = realagent_evidence.scoring_points_hint(
+            ["技术负责人须具备信息系统管理师证书", "提供设备检测报告"]
+        )
+        assert "证书" in hint
+        assert "证据" in hint
+        assert "EV" in hint or "【待补】" in hint, (
+            "证据型点必须引导按 EV 引用或如实【待补】——不静默跳过"
+        )
+
+    def test_非证据型点_不追加证据段_保持原有形态(self):
+        hint = realagent_evidence.scoring_points_hint(["培训计划", "应急响应策略"])
+        assert "（1）培训计划" in hint
+        assert "（2）应急响应策略" in hint
+
+    def test_空点行为不变(self):
+        assert realagent_evidence.scoring_points_hint([]) == ""
+        assert realagent_evidence.scoring_points_hint(["", None]) == ""

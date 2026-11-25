@@ -246,8 +246,11 @@ pub fn build_export_extras(
     let mut tables: Vec<LocatedBidTable> = Vec::new();
 
     // ---- ① 项目概况表（恒生成——缺的栏位落【待填】，不缺表）
+    // 批六①：项目名称栏走决策正名优先（内部名泄漏根治）——缺则内部名+告警。
+    let (overview_table, overview_warnings) = build_overview_table(store, profile, decision);
+    warnings.extend(overview_warnings);
     tables.push(LocatedBidTable {
-        table: build_overview_table(store, profile, decision),
+        table: overview_table,
         anchor: TableAnchor::Appendix, // 占位——统一在收尾处换成 anchor_keywords
     });
     if decision.bid_amount.is_none() {
@@ -603,20 +606,31 @@ fn can_use(e: &Evidence) -> bool {
 /// 项目概况表（项/值两列——评委第一眼直读面）。
 ///
 /// 取值口径（全部确定性——同 store 同输出）：
-/// - 项目名称 ← store.project().name；
+/// - 项目名称 ← 决策正名优先（`decision.project_name`，与格式件抬头同口径——
+///   批六① r5 审读 A5 根治：内部名「验收#113-…」不再泄漏进表件）；
+///   缺 → 回落 `store.project().name` + 诚实告警；
 /// - 项目编号 ← 首个「摘要含『项目编号』且 params.model 在场」的 REQ；
 /// - 最高限价 ← 首个「摘要含 最高限价/招标控制价/预算金额 且 params.amount_wan
 ///   在场」的 REQ（万元口径原样落表）；
 /// - 投标总报价 ← 决策（缺 → 【待填】）；
 /// - 投标人 ← profile（缺 → 【待填】）。
+///
+/// 返回 (表, 告警清单)——告警由 `build_export_extras` 并入导出 warnings。
 fn build_overview_table(
     store: &DomainStore,
     profile: &BidderProfile,
     decision: &ExportDecision,
-) -> BidTable {
+) -> (BidTable, Vec<String>) {
+    let mut warnings: Vec<String> = Vec::new();
     let mut rows: Vec<(String, String)> = Vec::new();
-    if let Ok(p) = store.project() {
+    if let Some(n) = &decision.project_name {
+        rows.push(("项目名称".into(), n.clone()));
+    } else if let Ok(p) = store.project() {
         rows.push(("项目名称".into(), p.name.clone()));
+        warnings.push(format!(
+            "项目名称未随导出决策给出（decision.project_name）——概况表使用内部项目名「{}」（应核对招标文件官方项目名）",
+            p.name
+        ));
     }
     if let Some(no) = req_param_by_excerpt(store, "项目编号", "model") {
         rows.push(("项目编号".into(), no));
@@ -653,7 +667,7 @@ fn build_overview_table(
         "投标人".into(),
         Blank::or(&profile.company_name, "投标人名称"),
     ));
-    BidTable::ProjectOverview { rows }
+    (BidTable::ProjectOverview { rows }, warnings)
 }
 
 /// 摘要含 `keyword` 且 `params[param_key]` 在场的首个 REQ → 参数字符串值。

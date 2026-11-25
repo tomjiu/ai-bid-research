@@ -528,3 +528,57 @@ fn breakdown_total_mismatch_with_bid_amount_warns_loudly() {
         "不一致告警要带两个数字（实际 vs 期望）: {warnings:?}"
     );
 }
+
+// ---------------------------------------------------------------- ④ 批六①（r5 审读 A5）：
+// 概况表项目名称栏——决策正名优先（内部名泄漏根治，与批五格式件抬头同口径）
+
+#[test]
+fn overview_table_uses_decision_project_name_over_internal_name() {
+    let (store, _dir) = full_store("ov_name_decision");
+    let mut d = full_decision();
+    d.project_name = Some("官方招标文件口径项目名-淮安视频平台".into());
+    let (extras, warnings) = build_export_extras(&store, &full_profile(), &d);
+
+    let overview = extras
+        .tables
+        .iter()
+        .find(|lt| lt.table.kind() == "项目概况表")
+        .expect("概况表恒生成");
+    let md = overview.table.to_markdown();
+    assert!(
+        md.contains("官方招标文件口径项目名-淮安视频平台"),
+        "概况表项目名称走决策正名: {md}"
+    );
+    assert!(
+        !md.contains("表格接线验收"),
+        "内部项目名不得泄漏进概况表（决策正名在场）: {md}"
+    );
+    assert!(
+        !warnings.iter().any(|w| w.contains("概况表使用内部项目名")),
+        "决策正名在场 → 无概况表内部名告警: {warnings:?}"
+    );
+}
+
+#[test]
+fn overview_table_missing_decision_falls_back_to_internal_name_with_warning() {
+    let (store, _dir) = full_store("ov_name_fallback");
+    let (extras, warnings) =
+        build_export_extras(&store, &BidderProfile::default(), &ExportDecision::default());
+
+    let overview = extras
+        .tables
+        .iter()
+        .find(|lt| lt.table.kind() == "项目概况表")
+        .expect("概况表恒生成");
+    let md = overview.table.to_markdown();
+    assert!(
+        md.contains("表格接线验收"),
+        "缺决策正名 → 回落内部名（不落空）: {md}"
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("概况表使用内部项目名") && w.contains("表格接线验收")),
+        "缺正名 → 诚实告警点名内部名（与格式件路径同款）: {warnings:?}"
+    );
+}
