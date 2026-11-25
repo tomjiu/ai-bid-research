@@ -210,3 +210,74 @@ Failed to make API r → 45s 后重试
 Failed to make API r → 90s 后重试
 [zai-bridge 2026-11-25T07:38:14.869Z] retry#3(429) model=glm-4-plus 135173ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592294819.json
 Failed to make API r → 150s 后重试
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:38:56.722Z] retry#1(429) model=glm-4-plus 46ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592336676.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:39:41.773Z] retry#2(429) model=glm-4-plus 45097ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592381726.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:40:44.927Z] fail model=glm-4-plus 285231ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592444872.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:41:11.836Z] retry#3(429) model=glm-4-plus 135160ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592471779.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:43:41.894Z] fail model=glm-4-plus 285218ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592621837.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:50:36.934Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T07:50:38.139Z] retry#1(429) model=glm-4-plus 54ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593038085.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:51:23.196Z] retry#2(429) model=glm-4-plus 45111ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593083140.json
+Failed to make API r → 90s 后重试
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:52:43.405Z] retry#1(429) model=glm-4-plus 52ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593163353.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:52:53.260Z] retry#3(429) model=glm-4-plus 135175ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593173203.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:53:28.463Z] retry#2(429) model=glm-4-plus 45110ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593208407.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:54:58.518Z] retry#3(429) model=glm-4-plus 135165ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593298465.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:55:23.315Z] fail model=glm-4-plus 285230ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593323264.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:57:28.576Z] fail model=glm-4-plus 285223ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593448525.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON

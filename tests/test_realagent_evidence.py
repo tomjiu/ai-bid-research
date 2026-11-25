@@ -342,3 +342,57 @@ class TestBatch6ScoringEvidencePoints:
     def test_空点行为不变(self):
         assert realagent_evidence.scoring_points_hint([]) == ""
         assert realagent_evidence.scoring_points_hint(["", None]) == ""
+
+
+class TestBatch7SectionRepairFullPoints:
+    """批七（#113 全链审计 D3）：P6.6 修复轮防回退契约。
+
+    实锚缺陷：r6b SEC-0028 修复轮覆盖 7→8→31 回退——重起草指令只注入
+    未命中点，模型重写把已命中点丢了。契约：按叶聚合全量点（missing/hit
+    双栏）+ 已命中点保留纪律注入段。
+    """
+
+    COV = {
+        "criteria": [
+            {"criterion_id": "REQ-A", "mapped_sections": ["SEC-0028"],
+             "points": [
+                 {"point": "应急响应策略", "hit_section": None},
+                 {"point": "网络故障预案", "hit_section": None},
+             ]},
+            {"criterion_id": "REQ-B", "mapped_sections": ["SEC-0028"],
+             "points": [
+                 {"point": "培训计划", "hit_section": "SEC-0028"},
+                 {"point": "电源故障预案", "hit_section": None},
+             ]},
+            {"criterion_id": "REQ-C", "mapped_sections": ["SEC-0031"],
+             "points": [
+                 {"point": "进度计划", "hit_section": "SEC-0031"},
+             ]},
+        ],
+        "summary": {"points_total": 5, "points_covered": 2},
+    }
+
+    def test_全量点按叶分栏_含已命中(self):
+        out = realagent_evidence.section_points_for_repair(self.COV)
+        sec = out.get("SEC-0028")
+        assert sec is not None, f"SEC-0028 须在键位: {out.keys()}"
+        assert set(sec["missing"]) == {"应急响应策略", "网络故障预案", "电源故障预案"}
+        assert sec["hit"] == ["培训计划"], "已命中点必须入 hit 栏（D3 防回退）"
+
+    def test_全命中叶仍入键位_hit_only(self):
+        out = realagent_evidence.section_points_for_repair(self.COV)
+        assert out.get("SEC-0031") == {"missing": [], "hit": ["进度计划"]}
+
+    def test_跨叶聚合不串门(self):
+        out = realagent_evidence.section_points_for_repair(self.COV)
+        assert "SEC-0028" in out and "SEC-0031" in out and len(out) == 2
+
+    def test_保留纪律段_点名已命中点_只增不删(self):
+        hint = realagent_evidence.retained_points_hint(["培训计划", "进度计划"])
+        assert "培训计划" in hint and "进度计划" in hint
+        assert "保留" in hint and "只增不删" in hint
+        assert realagent_evidence.retained_points_hint([]) == ""
+
+    def test_空响应_空字典(self):
+        assert realagent_evidence.section_points_for_repair({}) == {}
+        assert realagent_evidence.section_points_for_repair({"criteria": []}) == {}

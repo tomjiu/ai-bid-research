@@ -84,6 +84,12 @@ def initial_instructions() -> str:
         "分项报价之和必须等于投标总报价，"
         "不得把最高投标限价当作本方分项报价；"
         "投标保证金 46,000 元（肆万陆仟圆整）；"
+        # 批七 D5（#113 全链审计——r6b SEC-0018/0043 实锚）：大写近形
+        # 错字「肆万陆仌」（仌≠仟）→ 中文解析 40006 → E_AMOUNT_CONFLICT
+        # 假 BLOCKER。规范字表硬注入：仟/佰/拾是规范大写位字，近形错字
+        # （仌/什/阡）禁止。
+        "大写金额用规范位字（仟/佰/拾/万），逐字核对不得写近形错字"
+        "（仌不是仟、什不是拾）——大写错一字即金额冲突废标级拦门；"
         "工期 37 日历天；投标有效期 90 天。"
         "分项报价（设备部分/服务部分报价）一律不写具体数值，"
         "只作「分项报价之和等于投标总报价」的纪律声明；"
@@ -247,6 +253,55 @@ def aggregate_uncovered_points(coverage_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def section_points_for_repair(coverage_data: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
+    """check_scoring_coverage 响应 → 每映射叶的**全量**评分点（批七 D3）。
+
+    P6.6 修复轮实锚缺陷（r6b：SEC-0028 覆盖 7→8→31 回退）：重起草指令
+    只注入未命中点 → 模型重写把已命中点丢了。本函数按叶聚合该叶承载的
+    全部细则点并分「missing/hit」两栏——修复指令双注入：未命中点逐点
+    补齐 + 已命中点关键术语保留（防回退）。
+
+    返回 {sec: {"missing": [点…], "hit": [点…]}}；无点叶不出现在键位。
+    """
+    criteria = coverage_data.get("criteria") or []
+    out: dict[str, dict[str, list[str]]] = {}
+    for c in criteria:
+        pts = c.get("points") or []
+        if not pts:
+            continue
+        for sec in (c.get("mapped_sections") or []):
+            slot = out.setdefault(sec, {"missing": [], "hit": []})
+            for p in pts:
+                point = p.get("point") or ""
+                if not point:
+                    continue
+                if p.get("hit_section") is None:
+                    if point not in slot["missing"]:
+                        slot["missing"].append(point)
+                else:
+                    if point not in slot["hit"]:
+                        slot["hit"].append(point)
+    return out
+
+
+def retained_points_hint(hit_points: list[str]) -> str:
+    """已命中点保留纪律段（批七 D3——防回退注入面）。
+
+    重起草丢已命中点 = 覆盖回退（r6b 实锚 7→8→31）；指令显式点名须
+    保留关键术语原文的已命中点——字面命中口径下丢词 = 丢点。
+    """
+    pts = [p for p in (hit_points or []) if p]
+    if not pts:
+        return ""
+    enumerated = "；".join(f"（{i}）{p}" for i, p in enumerate(pts, 1))
+    return (
+        "已命中点保留纪律（#113 全链审计批七）：本节已有评分细则点在正文中"
+        "命中——重起草后以下各点关键术语必须原文保留（丢词即丢分）："
+        + enumerated
+        + "。重起草只增不删：新增未命中点响应，不改写/删除已命中点对应段。"
+    )
+
+
 def report_target(out_dir: str) -> str:
     """REPORT 底稿目标路径：OUT 无 REPORT.md → REPORT.md（首跑即机器底稿）；
     已有（手写叙事/封存包）→ REPORT.generated.md——**不覆盖既有文件**
@@ -308,8 +363,13 @@ def build_report_md(
                  f"（偏差 {val.get('char_deviation_pct')}%） |")
     lines.append(f"| 修复决策 | 映射决策 {decisions} · 修复决策 {repairs} 节次（state 实留） |")
     lines.append(f"| 导出 | {exp.get('size')} B · {exp.get('chapters_written')} 章 · sha256 {str(exp.get('sha256'))[:16]}… |")
-    lines.append(f"| 细则覆盖 | criteria {cov.get('criteria_total')} · points {cov.get('points_total')} · "
-                 f"covered {cov.get('points_covered')} · ratio {ratio_s} |")
+    cwp = cov.get("criteria_with_points") or 0
+    ctt = cov.get("criteria_total") or 0
+    lines.append(f"| 细则覆盖 | criteria {ctt} · 拆点细则 "
+                 f"{cwp} · points {cov.get('points_total')} · "
+                 f"covered {cov.get('points_covered')} · ratio {ratio_s}——无枚举形态细则 "
+                 f"{ctt - cwp} 条不拆点不虚构"
+                 f"（批七 D4 诚实面：P9 分母仅拆点细则） |")
     lines.append("")
     lines.append("## LLM 用量（llm-usage.json）")
     lines.append("")
