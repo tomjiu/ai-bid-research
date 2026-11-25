@@ -55,6 +55,10 @@ PROFILE = {
     "duration_days": 37, "validity_days": 90,
     "bid_amount": 4_800_000.0, "project_no": "HA-2026-BID-001",
     "legal_rep_gender": "男",
+    # 批五（审计 A5 根治）：格式件（投标函等）抬头取 profile.project_name——
+    # 引擎 export.rs 在缺位时 fallback 内部项目名「验收#113-真实LLM起草」
+    # 并打警告（r3/r4 成品实锤泄漏）。传招标文件正名（主文件封面）。
+    "project_name": "中国电信股份有限公司淮安分公司2026年淮安本地视频能力平台建设采购项目",
 }
 TARGET_TOTAL_CHARS = 48_000
 ACTOR = "agent-zai"
