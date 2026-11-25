@@ -1,0 +1,854 @@
+{
+ "A_parse": {
+  "req_total": 380,
+  "findings": [
+   {
+    "A1_锚点缺失": []
+   },
+   {
+    "A2_锚点摘录为空": []
+   },
+   {
+    "A3_锚点文件异常": []
+   },
+   {
+    "A4_重复摘录(>1次)": {
+     "第一章中国电信股份有限公司淮安分公司2026年淮安本地视频能力平台建设采购项目招标公告(用于公开招标资格后审)": 2,
+     "1.1项目概况": 2,
+     "1.2资金来源和落实情况": 2,
+     "1.3招标范围": 2,
+     "1.4标包划分": 2,
+     "1.5招标方式": 2,
+     "1.6招标组织形式": 2,
+     "1.7资格审查": 2,
+     "1.8投标人不得存在的情形": 2,
+     "1.9合格的货物和服务": 2,
+     "1.10投标费用": 2,
+     "1.11保密": 2,
+     "2.1招标文件的组成": 2,
+     "2.2踏勘现场": 2,
+     "2.3投标预备会": 2,
+     "2.4招标文件的澄清和修改": 2,
+     "3.1投标文件的组成": 2,
+     "3.2投标文件的编制": 2,
+     "3.3投标报价": 2,
+     "3.4投标有效期": 2,
+     "3.5投标保证金": 2,
+     "3.6备选投标方案": 2,
+     "3.7投标文件的式样、密封和标记（递交纸质文件适用）": 2,
+     "3.8电子招标的投标文件上传形式": 2,
+     "4.1投标文件的递交": 2,
+     "4.2投标文件的修改、撤回和撤销": 2,
+     "5.1开标时间和地点": 2,
+     "5.2开标程序": 2,
+     "5.3异议": 2,
+     "5.4电子招标开标的其他要求及异常处理": 2,
+     "6.1评标委员会": 2,
+     "6.2评标原则": 2,
+     "6.3评标方法": 2,
+     "6.4中标候选人推荐原则": 2,
+     "6.5评标报告": 2,
+     "7.1中标候选人公示": 2,
+     "7.2确定中标人": 2,
+     "7.3中标通知": 2,
+     "8.1履约保证金": 2,
+     "8.2合同签订": 2,
+     "10.1对招标人的纪律要求": 2,
+     "10.2对投标人的纪律要求": 2,
+     "10.3对评标委员会成员的纪律要求": 2,
+     "10.4对与评标活动有关的工作人员的纪律要求": 2,
+     "10.5投诉": 2,
+     "2.1初步评审标准": 2,
+     "2.2详细评审标准": 2,
+     "3.1初步评审": 2,
+     "3.2详细评审": 2,
+     "3.3投标文件的澄清": 2,
+     "3.4中标候选人推荐原则": 2,
+     "3.5评标结果": 2,
+     "2.1开发工具类": 2,
+     "中国电信供应商不良行为管理规则": 2,
+     "（2）被依法暂停或取消投标资格的；": 2,
+     "（5）在最近三年内（自2023年10月1日起）被相关行业主管部门或司法机关认定有骗取中标、严重违约、重大工程质量或者安全": 2,
+     "（6）在最近五年内（自2021年10月1日起）被判处单位行贿罪，且行贿行为与采购活动相关的（以“中国裁判文书网”的生效判": 2,
+     "（8）被最高人民法院在“信用中国”网站（www.creditchina.gov.cn）或各级信用信息共享平台中列入失信被": 2,
+     "（15）被工商行政管理机关在国家企业信用信息公示系统中列入严重违法失信企业名单的；": 2,
+     "（19）其他按照中国电信供应商不良行为处理结果及《中国电信供应商不良行为管理规则》的结果执行规则，应对投标人及其投标产品": 2,
+     "招标人：中国电信股份有限公司淮安分公司": 2,
+     "招标代理机构：中邮通建设咨询有限公司": 2,
+     "资格审查资料": 3
+    }
+   },
+   {
+    "A5_摘录无法回溯源件": []
+   }
+  ],
+  "category": {
+   "资格条件": 36,
+   "其他": 180,
+   "评分项": 36,
+   "格式要求": 8,
+   "否决项": 120
+  }
+ },
+ "B_scoring": {
+  "criteria_total": 36,
+  "criteria_with_points": 12,
+  "criteria_unmapped": 0,
+  "points_total": 52,
+  "points_covered": 7,
+  "coverage_ratio": 0.1346153846153846,
+  "hard_gates_excluded": 120,
+  "suggested_deduction": 31.309523809523814,
+  "uncovered": [
+   {
+    "criterion": "REQ-0285",
+    "point": "合同内容页",
+    "mapped_sections": [
+     "SEC-0029"
+    ],
+    "max_score": 6.0
+   },
+   {
+    "criterion": "REQ-0285",
+    "point": "合同金额页",
+    "mapped_sections": [
+     "SEC-0029"
+    ],
+    "max_score": 6.0
+   },
+   {
+    "criterion": "REQ-0286",
+    "point": "质量管理能力",
+    "mapped_sections": [
+     "SEC-0035"
+    ],
+    "max_score": 4.0
+   },
+   {
+    "criterion": "REQ-0286",
+    "point": "职业健康安全管理能力",
+    "mapped_sections": [
+     "SEC-0035"
+    ],
+    "max_score": 4.0
+   },
+   {
+    "criterion": "REQ-0286",
+    "point": "信息技术服务管理能力",
+    "mapped_sections": [
+     "SEC-0035"
+    ],
+    "max_score": 4.0
+   },
+   {
+    "criterion": "REQ-0286",
+    "point": "信息安全管理能力",
+    "mapped_sections": [
+     "SEC-0035"
+    ],
+    "max_score": 4.0
+   },
+   {
+    "criterion": "REQ-0288",
+    "point": "设备材料供应计划",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0288",
+    "point": "集成方案",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0288",
+    "point": "进度计划",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0288",
+    "point": "项目管理",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0288",
+    "point": "验收交付等方面内容",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0289",
+    "point": "设备安装调试的安全保障措施",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0289",
+    "point": "信息安全保障措施",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0289",
+    "point": "现场环境保护等方面内容",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0290",
+    "point": "培训内容",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0290",
+    "point": "培训人员分配",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0290",
+    "point": "培训计划",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0290",
+    "point": "培训达到的效果预期",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0290",
+    "point": "日常常见故障排除",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0290",
+    "point": "重大故障处理预案等方面内容",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0291",
+    "point": "应急响应策略",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0291",
+    "point": "应急制度要求",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0291",
+    "point": "网络故障预案",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0291",
+    "point": "病毒暴发应急预案",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0291",
+    "point": "电源故障预案",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0291",
+    "point": "消防",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0293",
+    "point": "前缀",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0293",
+    "point": "后缀",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "副本",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "前缀",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "后缀",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "标签",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "元数据",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "对象大小",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "对象类型",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0295",
+    "point": "对象拥有者",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0296",
+    "point": "低速恢复",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0296",
+    "point": "中速恢复",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0296",
+    "point": "高速恢复",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0296",
+    "point": "单盘最小恢复带宽",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0296",
+    "point": "单盘最大恢复带宽",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0296",
+    "point": "客户端带宽阈值",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0297",
+    "point": "身份证扫描件",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0297",
+    "point": "证书扫描件",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   },
+   {
+    "criterion": "REQ-0297",
+    "point": "所提供人员2026年3月份",
+    "mapped_sections": [
+     "SEC-0028"
+    ],
+    "max_score": 3.0
+   }
+  ],
+  "no_points_criteria": [
+   {
+    "id": "REQ-0046",
+    "excerpt": "2.1初步评审标准",
+    "max_score": null,
+    "mapped": [
+     "SEC-0009"
+    ]
+   },
+   {
+    "id": "REQ-0047",
+    "excerpt": "2.2详细评审标准",
+    "max_score": null,
+    "mapped": [
+     "SEC-0009"
+    ]
+   },
+   {
+    "id": "REQ-0048",
+    "excerpt": "3.1初步评审",
+    "max_score": null,
+    "mapped": [
+     "SEC-0029"
+    ]
+   },
+   {
+    "id": "REQ-0049",
+    "excerpt": "3.2详细评审",
+    "max_score": null,
+    "mapped": [
+     "SEC-0029"
+    ]
+   },
+   {
+    "id": "REQ-0050",
+    "excerpt": "3.3投标文件的澄清",
+    "max_score": null,
+    "mapped": [
+     "SEC-0030"
+    ]
+   },
+   {
+    "id": "REQ-0051",
+    "excerpt": "3.4中标候选人推荐原则",
+    "max_score": null,
+    "mapped": [
+     "SEC-0041"
+    ]
+   },
+   {
+    "id": "REQ-0052",
+    "excerpt": "3.5评标结果",
+    "max_score": null,
+    "mapped": [
+     "SEC-0042"
+    ]
+   },
+   {
+    "id": "REQ-0287",
+    "excerpt": "投标文件质量 2 根据投标文件对招标文件的响应满足情况及投标文件编制质量进行打分…",
+    "max_score": 2.0,
+    "mapped": [
+     "SEC-0056"
+    ]
+   },
+   {
+    "id": "REQ-0298",
+    "excerpt": "价格\n（60分） 价格分 60 1、评审价格为有效投标人的合计不含税总价。\n2、…",
+    "max_score": 60.0,
+    "mapped": [
+     "SEC-0028"
+    ]
+   },
+   {
+    "id": "REQ-0299",
+    "excerpt": "【投标人不良行为】 【《中国电信供应商不良行为管理规则》及处理结果执行】 - 按…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0028"
+    ]
+   },
+   {
+    "id": "REQ-0301",
+    "excerpt": "2.1初步评审标准",
+    "max_score": null,
+    "mapped": [
+     "SEC-0009"
+    ]
+   },
+   {
+    "id": "REQ-0302",
+    "excerpt": "2.2详细评审标准",
+    "max_score": null,
+    "mapped": [
+     "SEC-0009"
+    ]
+   },
+   {
+    "id": "REQ-0303",
+    "excerpt": "3.1初步评审",
+    "max_score": null,
+    "mapped": [
+     "SEC-0029"
+    ]
+   },
+   {
+    "id": "REQ-0326",
+    "excerpt": "3.2详细评审",
+    "max_score": null,
+    "mapped": [
+     "SEC-0029"
+    ]
+   },
+   {
+    "id": "REQ-0327",
+    "excerpt": "3.2.1评标委员会按照本章第2.2款规定的评审因素和量化标准进行评分，并计算出…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0009"
+    ]
+   },
+   {
+    "id": "REQ-0328",
+    "excerpt": "3.2.2评分分值计算原则上保留小数点后两位，小数点后第三位“四舍五入”。另有规…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0041"
+    ]
+   },
+   {
+    "id": "REQ-0329",
+    "excerpt": "3.3投标文件的澄清",
+    "max_score": null,
+    "mapped": [
+     "SEC-0030"
+    ]
+   },
+   {
+    "id": "REQ-0331",
+    "excerpt": "3.3.2细微偏差是指投标文件在实质上响应招标文件要求，但个别地方存在漏项或者提…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0030"
+    ]
+   },
+   {
+    "id": "REQ-0332",
+    "excerpt": "3.3.3澄清、说明和补正不得改变投标文件的实质性内容（算术性错误修正的除外）。…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0030"
+    ]
+   },
+   {
+    "id": "REQ-0335",
+    "excerpt": "3.4中标候选人推荐原则",
+    "max_score": null,
+    "mapped": [
+     "SEC-0041"
+    ]
+   },
+   {
+    "id": "REQ-0336",
+    "excerpt": "3.4.1除第二章投标人须知前附表授权直接确定中标人外，评标委员会按照综合评分由…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0029"
+    ]
+   },
+   {
+    "id": "REQ-0337",
+    "excerpt": "3.4.2中标候选人推荐原则见评标办法前附表。",
+    "max_score": null,
+    "mapped": [
+     "SEC-0030"
+    ]
+   },
+   {
+    "id": "REQ-0338",
+    "excerpt": "3.5评标结果",
+    "max_score": null,
+    "mapped": [
+     "SEC-0042"
+    ]
+   },
+   {
+    "id": "REQ-0339",
+    "excerpt": "3.5.1评标委员会完成评标后，应当向招标人递交书面评标报告。评标委员会分组评审…",
+    "max_score": null,
+    "mapped": [
+     "SEC-0029"
+    ]
+   }
+  ],
+  "uncovered_by_section": {
+   "SEC-0029": 2,
+   "SEC-0035": 4,
+   "SEC-0028": 39
+  }
+ },
+ "C_mapping": {
+  "matrix_total": 380,
+  "leaves": 48,
+  "scoring_mappings": 36,
+  "findings": [
+   {
+    "C1_矩阵指向不存在章节(前12)": [
+     "CMP-0046→None",
+     "CMP-0047→None",
+     "CMP-0048→None",
+     "CMP-0049→None",
+     "CMP-0050→None",
+     "CMP-0051→None",
+     "CMP-0052→None",
+     "CMP-0285→None",
+     "CMP-0286→None",
+     "CMP-0287→None",
+     "CMP-0288→None",
+     "CMP-0289→None"
+    ]
+   },
+   {
+    "C2_矩阵无响应章节(前12)": [
+     "CMP-0046 req=REQ-0046",
+     "CMP-0047 req=REQ-0047",
+     "CMP-0048 req=REQ-0048",
+     "CMP-0049 req=REQ-0049",
+     "CMP-0050 req=REQ-0050",
+     "CMP-0051 req=REQ-0051",
+     "CMP-0052 req=REQ-0052",
+     "CMP-0285 req=REQ-0285",
+     "CMP-0286 req=REQ-0286",
+     "CMP-0287 req=REQ-0287",
+     "CMP-0288 req=REQ-0288",
+     "CMP-0289 req=REQ-0289"
+    ]
+   },
+   {
+    "C3_REQ不在矩阵": []
+   },
+   {
+    "C4_矩阵多出REQ": []
+   },
+   {
+    "C5_孤儿叶(无REQ指向)": []
+   },
+   {
+    "C6_叶REQLIST与矩阵不一致": []
+   },
+   {
+    "C7_评分映射指向不存在章节": []
+   },
+   {
+    "C8_评分类REQ数": 36,
+    "未映射": []
+   }
+  ]
+ },
+ "D_draft": {
+  "leaves": 48,
+  "empty_or_short": [],
+  "no_citations": [],
+  "leaks": [
+   {
+    "sid": "SEC-0015",
+    "kind": "测试名泄漏",
+    "hit": "保投标文件能够被系统正常接收。我方已充分测试电子投标文件上传流程，确保在投标截止时间"
+   },
+   {
+    "sid": "SEC-0031",
+    "kind": "测试名泄漏",
+    "hit": "程序，待问题解决后继续进行。投标人应提前测试系统环境，确保投标文件能够正常上传。\n\n"
+   }
+  ],
+  "gt_present": {
+   "保证金_46,000": [
+    "肆万陆仟",
+    "46,000"
+   ],
+   "限价_4,946,365": [
+    "4810365"
+   ],
+   "工期_37天": [
+    "37"
+   ],
+   "有效期_90天": [
+    "90"
+   ],
+   "业绩_260万": [
+    "260"
+   ],
+   "业绩日_2023-05-20": [
+    "2023"
+   ],
+   "资格线_200万": [
+    "200"
+   ]
+  },
+  "gt_absent_all": {},
+  "cap_direction_hits": [
+   {
+    "sid": "SEC-0012",
+    "sent": "[REQ-0058] 我方投标总报价为人民币肆佰捌拾万元整（4,800,000元），其中设备部分报价和服务部分报价之和等于投标总报价，且均未超过招标文件规定的最"
+   },
+   {
+    "sid": "SEC-0015",
+    "sent": "针对 [REQ-0104] 本项目设置最高投标限价，投标人投标报价高于最高投标限价的，其投标将被否决"
+   },
+   {
+    "sid": "SEC-0017",
+    "sent": "投标总报价为人民币肆佰捌拾万元整，不高于招标文件设定的最高投标限价且不低于成本价"
+   },
+   {
+    "sid": "SEC-0018",
+    "sent": "针对 [REQ-0175] 本项目投标总报价为人民币肆佰捌拾万元整（4,800,000元），未超过招标文件规定的最高投标限价"
+   },
+   {
+    "sid": "SEC-0022",
+    "sent": "针对[REQ-0312]（否决项）「（7）投标报价低于成本或者高于招标文件设定的最高投标限价"
+   },
+   {
+    "sid": "SEC-0022",
+    "sent": "」，我方投标总报价为人民币肆佰捌拾万元整（4,800,000元），分项报价之和等于投标总报价，未低于成本也未高于招标文件设定的最高投标限价"
+   }
+  ],
+  "proj_name_count": 30,
+  "total_chars": 52169
+ },
+ "E_export": {
+  "v2": {
+   "paras": 742,
+   "tables": 2,
+   "chars": 53262,
+   "leak_验收#113": 12,
+   "leak_测试": 2,
+   "leak_PRJ": 0,
+   "gt_保证金46k": true,
+   "gt_业绩260万": true,
+   "gt_工期37": true,
+   "gt_有效期90": true,
+   "报价高于限价反写": 9,
+   "proj_name_count": 1,
+   "评标方法矛盾": false
+  },
+  "r3": {
+   "paras": 769,
+   "tables": 2,
+   "chars": 54845,
+   "leak_验收#113": 12,
+   "leak_测试": 3,
+   "leak_PRJ": 0,
+   "gt_保证金46k": true,
+   "gt_业绩260万": true,
+   "gt_工期37": true,
+   "gt_有效期90": true,
+   "报价高于限价反写": 4,
+   "proj_name_count": 2,
+   "评标方法矛盾": false
+  },
+  "r4": {
+   "paras": 829,
+   "tables": 2,
+   "chars": 57549,
+   "leak_验收#113": 12,
+   "leak_测试": 2,
+   "leak_PRJ": 0,
+   "gt_保证金46k": true,
+   "gt_业绩260万": true,
+   "gt_工期37": true,
+   "gt_有效期90": true,
+   "报价高于限价反写": 5,
+   "proj_name_count": 26,
+   "评标方法矛盾": false
+  },
+  "r5": {
+   "paras": 774,
+   "tables": 2,
+   "chars": 54637,
+   "leak_验收#113": 1,
+   "leak_测试": 7,
+   "leak_PRJ": 0,
+   "gt_保证金46k": true,
+   "gt_业绩260万": true,
+   "gt_工期37": true,
+   "gt_有效期90": true,
+   "报价高于限价反写": 7,
+   "proj_name_count": 39,
+   "评标方法矛盾": false
+  }
+ }
+}
