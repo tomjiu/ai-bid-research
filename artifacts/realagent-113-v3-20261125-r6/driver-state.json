@@ -1,0 +1,528 @@
+{
+ "project_id": "PRJ-0001",
+ "actor": "agent-zai",
+ "main_file": "A-telecom-huaian-主文件.docx",
+ "main_sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd",
+ "star_missing": {
+  "count": 2,
+  "detail": [
+   {
+    "block_idx": 77,
+    "page": null,
+    "text": "第四章 ★商务规范书"
+   },
+   {
+    "block_idx": 78,
+    "page": null,
+    "text": "★第五章 技术规范书"
+   }
+  ],
+  "handling": "零标记正则兜底 + 导出豁免（章标题装饰，设计内）"
+ },
+ "evidence": [
+  {
+   "ev_id": "EV-0063",
+   "kind": "qualification",
+   "title": "电子与智能化工程专业承包二级资质证书",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  },
+  {
+   "ev_id": "EV-0064",
+   "kind": "qualification",
+   "title": "营业执照",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  },
+  {
+   "ev_id": "EV-0065",
+   "kind": "performance",
+   "title": "类似业绩合同-智慧园区弱电工程",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  }
+ ],
+ "req_total": 380,
+ "draft": {
+  "stats": [
+   {
+    "sid": "SEC-0007",
+    "words": 1067,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0008",
+    "words": 1144,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0009",
+    "words": 1006,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0010",
+    "words": 1007,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0011",
+    "words": 614,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0012",
+    "words": 1025,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0013",
+    "words": 1421,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0014",
+    "words": 1660,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 1078,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0016",
+    "words": 1009,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0017",
+    "words": 1010,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 835,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0019",
+    "words": 1176,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0020",
+    "words": 1366,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0021",
+    "words": 1101,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 1094,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0023",
+    "words": 1047,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0024",
+    "words": 947,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0025",
+    "words": 873,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0026",
+    "words": 1678,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0030",
+    "words": 1242,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0031",
+    "words": 1160,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0032",
+    "words": 1169,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0033",
+    "words": 1881,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0034",
+    "words": 1326,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0035",
+    "words": 1016,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 608,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0038",
+    "words": 618,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0040",
+    "words": 1405,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1393,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 826,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 1265,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0044",
+    "words": 913,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0045",
+    "words": 1097,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0046",
+    "words": 972,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0047",
+    "words": 1348,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0048",
+    "words": 1246,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0049",
+    "words": 1440,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0050",
+    "words": 1137,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0051",
+    "words": 1005,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0052",
+    "words": 974,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0054",
+    "words": 768,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0056",
+    "words": 573,
+    "citations": 3
+   },
+   {
+    "sid": "SEC-0058",
+    "words": 587,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0060",
+    "words": 496,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0062",
+    "words": 947,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 1364,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0028",
+    "words": 1188,
+    "citations": 8
+   }
+  ]
+ },
+ "elapsed_total_s": 1123,
+ "resume_rounds": 2,
+ "scoring_mapping": {
+  "unmapped_before": 36,
+  "unmapped_after": 0,
+  "decisions": [
+   {
+    "req_id": "REQ-0046",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0047",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0048",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0049",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0050",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0051",
+    "section_id": "SEC-0041",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0052",
+    "section_id": "SEC-0042",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0285",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0286",
+    "section_id": "SEC-0035",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0287",
+    "section_id": "SEC-0056",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0288",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0289",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0290",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0291",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0292",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0293",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0294",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0295",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0296",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0297",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0298",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0299",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0301",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0302",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0303",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0326",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0327",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0328",
+    "section_id": "SEC-0041",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0329",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0331",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:4"
+   },
+   {
+    "req_id": "REQ-0332",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0335",
+    "section_id": "SEC-0041",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0336",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:9"
+   },
+   {
+    "req_id": "REQ-0337",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0338",
+    "section_id": "SEC-0042",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0339",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:3"
+   }
+  ]
+ },
+ "repair": [
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 7 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1466,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1364,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 31 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 2238,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 8 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1188,
+   "citations": 8
+  }
+ ]
+}
