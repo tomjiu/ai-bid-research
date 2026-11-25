@@ -1,0 +1,94 @@
+[bridge] 自检: 就绪
+[P1] project PRJ-0001
+[P1] 导入 4 件
+[P2] 抽取完成（计数在建纲回执口径）
+[P2'] ★漏标 2 块（零标记保正则兜底）：['第四章 ★商务规范书', '★第五章 技术规范书']
+[P3] 大纲 counts: {'leaves': 48, 'matrix_blocking': 156, 'matrix_rows': 380, 'requirements': 380, 'sections': 57, 'total_requirements': 380, 'total_target_chars': 48000}
+[P4] EV-0063 tier=FILE_EXISTS「电子与智能化工程专业承包二级资质证书」
+[P4] EV-0064 tier=FILE_EXISTS「营业执照」
+[P4] EV-0065 tier=FILE_EXISTS「类似业绩合同-智慧园区弱电工程」
+[P4] 矩阵 380 行，阻断 156
+[P4] 绑定完成，阻断 156→0
+[P4'] 门: matrix=agent_declared outline=agent_declared addendum=agent_declared human_confirmed=False
+[P3] 起草叶 48（已完成 0，待起草 48）
+[P4.6] 评分映射: 36 未映射 → 逐项映射（bigram 36）；映射后 criteria_unmapped=0
+[P5b] 初始指令含 canonical 口径 + 证据引用纪律 + 评分点注入（3 叶 / 52 点）
+[P5b] (1/48) SEC-0007 words=983 cites=9 (8s)
+[P5b] (2/48) SEC-0008 words=1819 cites=9 (36s)
+[P5b] (3/48) SEC-0009 words=1218 cites=9 (62s)
+[P5b] (4/48) SEC-0010 words=895 cites=9 (85s)
+[P5b] (5/48) SEC-0011 words=664 cites=5 (105s)
+[P5b] (6/48) SEC-0012 words=1100 cites=9 (129s)
+[P5b] (7/48) SEC-0013 words=1089 cites=9 (152s)
+[P5b] (8/48) SEC-0014 words=1359 cites=9 (178s)
+[P5b] (9/48) SEC-0015 words=1111 cites=9 (202s)
+[P5b] (10/48) SEC-0016 words=1077 cites=9 (227s)
+[P5b] (11/48) SEC-0017 words=887 cites=9 (250s)
+[P5b] (12/48) SEC-0018 words=829 cites=9 (276s)
+[P5b] (13/48) SEC-0019 words=1256 cites=9 (303s)
+[P5b] (14/48) SEC-0020 words=1305 cites=9 (331s)
+[P5b] (15/48) SEC-0021 words=925 cites=9 (356s)
+[P5b] (16/48) SEC-0022 words=1092 cites=9 (380s)
+[P5b] (17/48) SEC-0023 words=1034 cites=9 (404s)
+[P5b] (18/48) SEC-0024 words=959 cites=8 (427s)
+[P5b] (19/48) SEC-0025 words=1294 cites=9 (455s)
+[P5b] (20/48) SEC-0026 words=1145 cites=9 (480s)
+[P5b] (21/48) SEC-0028 words=2617 cites=8 (516s)
+[P5b] (22/48) SEC-0029 words=1162 cites=8 (541s)
+[bridge] 自检: 就绪
+[resume] 续跑 PRJ-0001（P1-P4 已完成，已起草 22 叶，修复历史 0 节次，累计 547s/1 轮）
+[P3] 起草叶 48（已完成 22，待起草 26）
+[P4.6] 评分映射: 0 未映射 → 逐项映射（bigram 0）；映射后 criteria_unmapped=0
+[P5b] 初始指令含 canonical 口径 + 证据引用纪律 + 评分点注入（3 叶 / 52 点）
+[P5b] (23/48) SEC-0030 words=1275 cites=8 (10s)
+[P5b] (24/48) SEC-0031 words=1320 cites=8 (38s)
+[P5b] (25/48) SEC-0032 words=1314 cites=8 (65s)
+[P5b] (26/48) SEC-0033 words=1207 cites=8 (89s)
+[P5b] (27/48) SEC-0034 words=1146 cites=8 (115s)
+[P5b] (28/48) SEC-0035 words=1854 cites=0 (146s)
+[P5b] (29/48) SEC-0036 words=575 cites=2 (166s)
+[P5b] (30/48) SEC-0038 words=487 cites=1 (185s)
+[P5b] (31/48) SEC-0040 words=1255 cites=7 (212s)
+[P5b] (32/48) SEC-0041 words=1571 cites=8 (244s)
+[P5b] (33/48) SEC-0042 words=1266 cites=8 (269s)
+[P5b] (34/48) SEC-0043 words=1287 cites=8 (295s)
+[P5b] (35/48) SEC-0044 words=1110 cites=8 (320s)
+[P5b] (36/48) SEC-0045 words=1021 cites=8 (343s)
+[P5b] (37/48) SEC-0046 words=1505 cites=8 (370s)
+[P5b] (38/48) SEC-0047 words=1457 cites=8 (399s)
+[P5b] (39/48) SEC-0048 words=1042 cites=8 (425s)
+[P5b] (40/48) SEC-0049 words=1547 cites=8 (452s)
+[P5b] (41/48) SEC-0050 words=1223 cites=8 (478s)
+[P5b] (42/48) SEC-0051 words=879 cites=8 (501s)
+[P5b] (43/48) SEC-0052 words=1072 cites=7 (526s)
+[P5b] (44/48) SEC-0054 words=891 cites=5 (547s)
+[bridge] 自检: 就绪
+[resume] 续跑 PRJ-0001（P1-P4 已完成，已起草 44 叶，修复历史 0 节次，累计 1095s/2 轮）
+[P3] 起草叶 48（已完成 44，待起草 4）
+[P4.6] 评分映射: 0 未映射 → 逐项映射（bigram 0）；映射后 criteria_unmapped=0
+[P5b] 初始指令含 canonical 口径 + 证据引用纪律 + 评分点注入（3 叶 / 52 点）
+[P5b] (45/48) SEC-0056 words=616 cites=3 (5s)
+[P5b] (46/48) SEC-0058 words=941 cites=1 (29s)
+[P5b] (47/48) SEC-0060 words=518 cites=1 (49s)
+[P5b] (48/48) SEC-0062 words=1294 cites=7 (74s)
+[P5b] 起草面收口: 48/48 叶 / 累计 55493 字
+[P6.6] 细则覆盖修复轮 1: 2 点未命中 → 1 叶定向重起草（全量点双注入防回退）
+[P6.6] SEC-0029 重起草 words=1337 cites=8（注入 2 缺点 + 0 已命中保留）
+[P6.6] 细则覆盖修复轮 2: 2 点未命中 → 1 叶定向重起草（全量点双注入防回退）
+[P6.6] SEC-0029 重起草 words=1553 cites=8（对照表兜底：全量 2 点入表逐字复述）
+[P6.6] 细则覆盖收口: covered=52/52
+[P6] 校验: ok=False counts={'blocker': 1, 'deterministic': 19, 'major': 1, 'minor': 17, 'model': 0}
+[P6.5] 修复轮 1: 1 blocker 待处置
+[P6.5] SEC-0009 重起草 floor=600 ban=True no_split=False words=783 cites=9
+[P6.5] SEC-0012 重起草 floor=600 ban=True no_split=False words=818 cites=8
+[P6.5] 修复轮 2: 2 blocker 待处置
+[P6.5] SEC-0009 重起草 floor=1117 ban=False no_split=False words=1472 cites=9
+[P6.5] SEC-0017 重起草 floor=600 ban=True no_split=False words=1011 cites=9
+[P6.5] 零 blocker（修复 6 节次）
+[P8] 导出: 291537B / 48 章 sha256=0021c90bfc226686…
+[P8] generator_summary: {'external': 0, 'mock': 0, 'real': 48, 'scoring_leaves_non_real': 0, 'scoring_leaves_total': 8, 'unknown': 0}
+[P9] 细则覆盖: criteria=36 points=52 covered=52 ratio=1.000 deduction=0.0
+[P9.5] 证据引用审计: 2/3 被引用；未引用: ['EV-0064']（审阅面关注：证据件是否实质调用）
+[P9.6] 未覆盖 REQ 明细: 10 条 （mismatch=False）——已落 metrics.uncovered_reqs
+[P10] REPORT 底稿: REPORT.md（机器取数；人工叙事在其上改）
+[done] artifacts/realagent-113-v3-20261126-r7 （累计 1318s/3 轮, 30 次工具调用）

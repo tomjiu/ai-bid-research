@@ -302,6 +302,30 @@ def retained_points_hint(hit_points: list[str]) -> str:
     )
 
 
+def point_table_hint(all_points: list[str]) -> str:
+    """评分细则逐点响应对照表兜底指令段（批九——r6 实弹终验实锚）。
+
+    r6 实锚：P6.6「逐点织入正文」五轮不收敛——残余三点
+    （合同内容页/合同金额页/所提供人员2026年3月份）每轮注入仍被
+    LLM 重写丢词，且整节重写两次触发覆盖回退（49→21 / 49→46）。
+    投标实务正路 = 评分办法逐点响应对照表：表格「评分细则点」列
+    逐字复述点原文（一字不差）——字面命中口径下结构性保证覆盖，
+    复制入表对 LLM 是远弱于织入正文的指令（复制类任务）。
+    """
+    pts = [p for p in (all_points or []) if p]
+    if not pts:
+        return ""
+    enumerated = "；".join(f"（{i}）{p}" for i, p in enumerate(pts, 1))
+    return (
+        "评分细则逐点响应对照表纪律（#113 审计批九）：本节正文照常撰写，"
+        "并在节末追加「评分细则逐点响应对照表」作为收口要件——表格两列："
+        "第一列「评分细则点」，第二列「我方响应」。第一列必须逐字复述"
+        "下列各点原文（一字不差，评委按点给分，对照表即逐点响应载体）；"
+        "第二列写响应承诺与对应材料出处："
+        + enumerated
+    )
+
+
 def report_target(out_dir: str) -> str:
     """REPORT 底稿目标路径：OUT 无 REPORT.md → REPORT.md（首跑即机器底稿）；
     已有（手写叙事/封存包）→ REPORT.generated.md——**不覆盖既有文件**

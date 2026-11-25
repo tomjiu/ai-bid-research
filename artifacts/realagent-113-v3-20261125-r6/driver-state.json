@@ -86,11 +86,6 @@
     "citations": 9
    },
    {
-    "sid": "SEC-0015",
-    "words": 1078,
-    "citations": 9
-   },
-   {
     "sid": "SEC-0016",
     "words": 1009,
     "citations": 9
@@ -98,11 +93,6 @@
    {
     "sid": "SEC-0017",
     "words": 1010,
-    "citations": 9
-   },
-   {
-    "sid": "SEC-0018",
-    "words": 835,
     "citations": 9
    },
    {
@@ -118,11 +108,6 @@
    {
     "sid": "SEC-0021",
     "words": 1101,
-    "citations": 9
-   },
-   {
-    "sid": "SEC-0022",
-    "words": 1094,
     "citations": 9
    },
    {
@@ -171,16 +156,6 @@
     "citations": 8
    },
    {
-    "sid": "SEC-0035",
-    "words": 1016,
-    "citations": 8
-   },
-   {
-    "sid": "SEC-0036",
-    "words": 608,
-    "citations": 2
-   },
-   {
     "sid": "SEC-0038",
     "words": 618,
     "citations": 1
@@ -189,21 +164,6 @@
     "sid": "SEC-0040",
     "words": 1405,
     "citations": 7
-   },
-   {
-    "sid": "SEC-0041",
-    "words": 1393,
-    "citations": 8
-   },
-   {
-    "sid": "SEC-0042",
-    "words": 826,
-    "citations": 8
-   },
-   {
-    "sid": "SEC-0043",
-    "words": 1265,
-    "citations": 8
    },
    {
     "sid": "SEC-0044",
@@ -276,19 +236,59 @@
     "citations": 8
    },
    {
-    "sid": "SEC-0029",
-    "words": 1364,
+    "sid": "SEC-0035",
+    "words": 2230,
     "citations": 8
    },
    {
     "sid": "SEC-0028",
-    "words": 1188,
+    "words": 1856,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 1383,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 877,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 939,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 1481,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 985,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 673,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1575,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 1012,
     "citations": 8
    }
   ]
  },
- "elapsed_total_s": 1123,
- "resume_rounds": 2,
+ "elapsed_total_s": 1670,
+ "resume_rounds": 5,
  "scoring_mapping": {
   "unmapped_before": 36,
   "unmapped_after": 0,
@@ -522,6 +522,270 @@
    "floor": 600,
    "ban": false,
    "words": 1188,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 37 点未命中——全量点双注入重起草（已命中 3 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 2136,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 2 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1303,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 3 点未命中——全量点双注入重起草（已命中 37 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1373,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 4 点未命中——全量点双注入重起草（已命中 36 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1243,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 2 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1170,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0035",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 4 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 2230,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——全量点双注入重起草（已命中 39 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1714,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 2 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1032,
+   "citations": 8
+  },
+  {
+   "round": 103,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 23 点未命中——全量点双注入重起草（已命中 17 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 2308,
+   "citations": 0
+  },
+  {
+   "round": 103,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 2 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1254,
+   "citations": 8
+  },
+  {
+   "round": 104,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——全量点双注入重起草（已命中 39 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1214,
+   "citations": 8
+  },
+  {
+   "round": 104,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 2 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1313,
+   "citations": 8
+  },
+  {
+   "round": 105,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 4 点未命中——全量点双注入重起草（已命中 36 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1856,
+   "citations": 8
+  },
+  {
+   "round": 105,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 2 点未命中——全量点双注入重起草（已命中 0 点保留防回退）"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1383,
+   "citations": 8
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0015",
+   "why": [
+    "E_BID_CAP_DIRECTION: 章节「否决情形响应（第4组 8条）」存在报价高于限价的反向断言 「针对 [REQ-0104] 本项目设置最高投标限价，投标人投标报价高于最高投标限价的，其投标将"
+   ],
+   "floor": 600,
+   "ban": false,
+   "no_split": false,
+   "words": 877,
+   "citations": 9
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0018",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0018=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 939,
+   "citations": 9
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0042",
+   "why": [
+    "E_CHARS_BELOW_MIN: 评分章节「第七章 其他（条款 3.2.2-3.3.5）」正文 826 字低于最低篇幅 867（目标 1084 的 −20% 容差下限）——评分主体篇幅不足不得达"
+   ],
+   "floor": 1117,
+   "ban": false,
+   "no_split": false,
+   "words": 1481,
+   "citations": 8
+  },
+  {
+   "round": 2,
+   "sid": "SEC-0022",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0022=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 985,
+   "citations": 9
+  },
+  {
+   "round": 3,
+   "sid": "SEC-0036",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0036=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 673,
+   "citations": 2
+  },
+  {
+   "round": 4,
+   "sid": "SEC-0041",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0041=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 850,
+   "citations": 8
+  },
+  {
+   "round": 5,
+   "sid": "SEC-0041",
+   "why": [
+    "E_CHARS_BELOW_MIN: 评分章节「第七章 其他（条款 2.4-3.2）」正文 850 字低于最低篇幅 867（目标 1084 的 −20% 容差下限）——评分主体篇幅不足不得达标/导出"
+   ],
+   "floor": 1117,
+   "ban": false,
+   "no_split": false,
+   "words": 1575,
+   "citations": 8
+  },
+  {
+   "round": 5,
+   "sid": "SEC-0043",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0043=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 1012,
    "citations": 8
   }
  ]

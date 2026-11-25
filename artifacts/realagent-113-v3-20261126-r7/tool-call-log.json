@@ -1,0 +1,152 @@
+[
+ {
+  "tool": "get_bid_project_state",
+  "ok": true,
+  "ms": 25
+ },
+ {
+  "tool": "check_bid_quality",
+  "ok": true,
+  "ms": 642
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 5661
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 9051
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 4764
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 10420
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 11349
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 10038
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 29
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 129
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 149
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 32
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 5975
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 7188
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 125
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 12928
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 8620
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 186
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 183
+ },
+ {
+  "tool": "get_bid_project_state",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "record_review_gate",
+  "ok": true,
+  "ms": 80
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "export_bid_document",
+  "ok": true,
+  "ms": 157
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "check_bid_quality",
+  "ok": true,
+  "ms": 693
+ }
+]

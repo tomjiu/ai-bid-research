@@ -184,3 +184,69 @@ def test_p65_cap_direction_blocker_has_directed_discipline():
         "重起草指令拼装处未按 cap_dir 旗标注入 CAP_DIR_DISCIPLINE——"
         "定向分支置旗而不注入指令 = 修复不生效。"
     )
+
+
+# ------------------------------------------------- 批九 G1：对照表兜底契约
+
+def test_p66_对照表兜底_历史非收敛叶第二轮起切表模式():
+    """契约 4（批九）：P6.6 逐点织入正文五轮不收敛（r6 实锚 49/52，
+    残余三点为短碎片点；且整节重写两次覆盖回退 49→21/49→46）——
+    历史非收敛叶（含跨 invocation 的 repair 留痕）≥2 轮未收敛必须切
+    「逐点响应对照表」模式（point_table_hint——点原文列逐字复述，
+    字面覆盖结构性保证）。"""
+    s = _src()
+    m_p66 = re.search(r"# ---- P6\.6 细则覆盖修复轮", s)
+    m_end = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
+    assert m_p66 and m_end, "P6.6/P6.5 代码块缺失"
+    block = s[m_p66.start():m_end.start()]
+    assert "point_table_hint" in block, (
+        "P6.6 块无对照表兜底（point_table_hint）——短碎片点织入正文"
+        "不收敛无兜底路径，P9 残余缺口将永远如实登记。"
+    )
+    assert re.search(r'sid_stuck', block), (
+        "P6.6 块无叶级非收敛计数（sid_stuck）——无法判别哪叶该切表模式。"
+    )
+    assert re.search(r'kind.*==.*"scoring"|kind.*==.*\'scoring\'', block), (
+        "P6.6 块无历史 stuck 预载（从 repair 留痕 kind=scoring 计数）——"
+        "断点续跑后非收敛叶首轮仍浪费一次织入正文 LLM 调用。"
+    )
+    assert re.search(r'stuck\s*>=\s*2', block), (
+        "对照表兜底阈值必须 ≥2（首轮织入正文仍要给一次机会——投标"
+        "正文织入是首选形态，表格是兜底形态）。"
+    )
+
+
+def test_p66_对照表兜底_表模式仍保留retained防回退():
+    """契约 5（批九）：对照表兜底分支必须同时携带 retained_points_hint
+    （已命中点保留纪律）——表格是覆盖载体，但正文重写仍可能洗掉已命中
+    点（r6 实锚 49→21 回退形态），双注入纪律在表模式不豁免。"""
+    s = _src()
+    m_p66 = re.search(r"# ---- P6\.6 细则覆盖修复轮", s)
+    m_end = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
+    block = s[m_p66.start():m_end.start()]
+    # 表模式分支：instr 组装行内两个 hint 共存
+    m_tab = re.search(r"point_table_hint.*?\n", block)
+    assert m_tab, "point_table_hint 调用缺失"
+    # 找到含 point_table_hint 的 instr 组装块，其内必须也有 retained_points_hint
+    seg = block[block.find("point_table_hint") - 200:block.find("point_table_hint") + 600]
+    assert "retained_points_hint" in seg, (
+        "对照表分支未同时注入 retained_points_hint——表模式丢防回退纪律"
+        "（r6 实锚覆盖回退 49→21 同型风险）。"
+    )
+
+
+def test_resume_对已完成EXPORTED项目幂等收口不撞状态门():
+    """契约 6（批九 G2——r6 实弹终验后实锚）：EXIT=0 全链完成后项目处于
+    EXPORTED 终态——状态机（#243 家族）不放行 draft_response_section。
+    对已完成项目重跑驱动器，P6.6 直撞 E_STATE 抛 traceback（EXIT=1，
+    留崩溃假象）= 驱动器 UX 缺陷非引擎缺陷。resume 分支必须先查项目
+    状态：EXPORTED → 如实报告已完成 + 幂等退出 0。"""
+    s = _src()
+    m_resume = re.search(r"\[resume\] 续跑", s)
+    assert m_resume, "resume 分支缺失"
+    # resume 分支（含其后 40 行）必须含 EXPORTED 终态幂等收口
+    seg = s[m_resume.start() - 800:m_resume.start() + 1200]
+    assert "EXPORTED" in seg and "sys.exit(0)" in seg, (
+        "resume 分支无 EXPORTED 终态幂等收口——对已完成项目重跑会在 "
+        "P6.6 撞 E_STATE 抛 traceback（EXIT=1 崩溃假象，r6 实锚）。"
+    )

@@ -281,3 +281,35 @@ Failed to make API request:  98 |                 headers: headers,
 [zai-bridge 2026-11-25T07:57:28.576Z] fail model=glm-4-plus 285223ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593448525.json
 Failed to make API request:  98 |                 headers: headers,
  99 |                 body: JSON
+[zai-bridge 2026-11-25T23:14:02.991Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:14:04.511Z] ok model=glm-4-plus 367ms out=2ch
+[zai-bridge 2026-11-25T23:14:22.582Z] ok model=glm-4-plus 17115ms out=2163ch
+[zai-bridge 2026-11-25T23:14:47.722Z] ok model=glm-4-plus 10037ms out=1330ch
+[zai-bridge 2026-11-25T23:16:42.925Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:16:44.454Z] ok model=glm-4-plus 378ms out=2ch
+[zai-bridge 2026-11-25T23:16:57.878Z] ok model=glm-4-plus 12544ms out=1400ch
+[zai-bridge 2026-11-25T23:19:18.425Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:19:20.005Z] ok model=glm-4-plus 425ms out=2ch
+[zai-bridge 2026-11-25T23:19:32.147Z] ok model=glm-4-plus 11353ms out=1243ch
+[zai-bridge 2026-11-25T23:19:58.107Z] ok model=glm-4-plus 10861ms out=1197ch
+[zai-bridge 2026-11-25T23:20:31.209Z] ok model=glm-4-plus 18001ms out=2257ch
+[zai-bridge 2026-11-25T23:21:01.183Z] ok model=glm-4-plus 14848ms out=1759ch
+[zai-bridge 2026-11-25T23:21:26.142Z] ok model=glm-4-plus 9860ms out=1059ch
+[zai-bridge 2026-11-25T23:21:58.903Z] ok model=glm-4-plus 17633ms out=2335ch
+[zai-bridge 2026-11-25T23:22:25.160Z] ok model=glm-4-plus 11154ms out=1263ch
+[zai-bridge 2026-11-25T23:22:51.132Z] ok model=glm-4-plus 10844ms out=1214ch
+[zai-bridge 2026-11-25T23:23:18.798Z] ok model=glm-4-plus 12565ms out=1334ch
+[zai-bridge 2026-11-25T23:23:48.534Z] ok model=glm-4-plus 14605ms out=1883ch
+[zai-bridge 2026-11-25T23:24:16.475Z] ok model=glm-4-plus 12840ms out=1383ch
+[zai-bridge 2026-11-25T23:24:39.446Z] ok model=glm-4-plus 7548ms out=877ch
+[zai-bridge 2026-11-25T23:25:03.113Z] ok model=glm-4-plus 8556ms out=948ch
+[zai-bridge 2026-11-25T23:25:31.276Z] ok model=glm-4-plus 13062ms out=1481ch
+[zai-bridge 2026-11-25T23:25:55.842Z] ok model=glm-4-plus 9310ms out=985ch
+[zai-bridge 2026-11-25T23:26:15.576Z] ok model=glm-4-plus 4484ms out=700ch
+[zai-bridge 2026-11-25T23:26:37.536Z] ok model=glm-4-plus 6702ms out=850ch
+[zai-bridge 2026-11-25T23:27:07.260Z] ok model=glm-4-plus 14465ms out=1602ch
+[zai-bridge 2026-11-25T23:27:31.605Z] ok model=glm-4-plus 9240ms out=1012ch
+[zai-bridge 2026-11-25T23:31:47.024Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:31:48.597Z] ok model=glm-4-plus 423ms out=2ch
+[zai-bridge 2026-11-25T23:33:12.649Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:33:14.834Z] ok model=glm-4-plus 1028ms out=2ch

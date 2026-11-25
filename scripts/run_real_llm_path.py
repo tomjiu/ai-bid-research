@@ -210,6 +210,16 @@ try:
         repair_log = sv.get("repair", [])  # 跨轮恢复：旧实现在轮次边界洗掉修复历史
         elapsed0 = int(sv.get("elapsed_total_s", 0))  # 前轮累计耗时（累计口径）
         resume_rounds = int(sv.get("resume_rounds", 0)) + 1  # 本次 = 第 N 轮续跑
+        # 批九 G2（r6 实弹终验后实锚）：EXIT=0 全链完成后项目处 EXPORTED
+        # 终态——状态机（#243 家族）不放行 draft_response_section，重跑
+        # 会在 P6.6 撞 E_STATE 抛 traceback（EXIT=1 崩溃假象，驱动器 UX
+        # 缺陷非引擎缺陷）。已完成项目重跑 = 幂等收口：如实报告 + 退出 0。
+        _st = call("get_bid_project_state", {"project_id": PID})
+        _status = (_st.get("data") or {}).get("status") or ""
+        if _status == "EXPORTED":
+            print(f"[resume] {PID} 已处 EXPORTED 终态——全链此前已完成（EXIT=0）；"
+                  f"状态机不放行再起草（#243 家族），本次重跑幂等收口退出。")
+            sys.exit(0)
         print(f"[resume] 续跑 {PID}（P1-P4 已完成，已起草 {len(draft_stats)} 叶，"
               f"修复历史 {len(repair_log)} 节次，累计 {elapsed0}s/{resume_rounds} 轮）")
     else:
@@ -411,6 +421,16 @@ try:
     # 且其修复指令携带本节评分点防覆盖回退（见 repair 调用处）。
     cov_mid = must("check_scoring_coverage", {"project_id": PID}, "cov-mid")
     sc_round = 0
+    # 批九 G1（r6 实弹终验实锚）：P6.6「逐点织入正文」对短碎片点不收敛
+    # ——r6b 五轮 49/52，残余三点（合同内容页/合同金额页/所提供人员2026
+    # 年3月份）每轮注入仍被 LLM 重写丢词，且整节重写两次覆盖回退
+    # （49→21 / 49→46）。叶级 stuck 计数（含跨 invocation 的 repair 留痕
+    # kind=scoring 预载）：≥2 轮未收敛即切「逐点响应对照表」兜底——
+    # 表第一列逐字复述点原文（一字不差），字面命中口径下结构性保证覆盖。
+    sid_stuck = {}
+    for e in repair_log:
+        if e.get("kind") == "scoring":
+            sid_stuck[e["sid"]] = sid_stuck.get(e["sid"], 0) + 1
     while (cov_mid["summary"].get("points_covered", 0)
            < cov_mid["summary"].get("points_total", 0)):
         sec_pts = realagent_evidence.section_points_for_repair(cov_mid)
@@ -427,11 +447,29 @@ try:
               f"{len(sid_pts)} 叶定向重起草（全量点双注入防回退）")
         for sid, pts in sorted(sid_pts.items()):
             hit_pts = sec_pts[sid]["hit"]
-            instr = (INITIAL_INSTR + EV_HINT
-                     + realagent_evidence.scoring_points_hint(pts)
-                     + realagent_evidence.retained_points_hint(hit_pts)
-                     + " 本节当前版本未逐点命中上述评分细则——重起草逐点"
-                       "补齐，正文不少于 600 字。")
+            stuck = sid_stuck.get(sid, 0) + 1
+            sid_stuck[sid] = stuck
+            if stuck >= 2:
+                # 批九 G1：对照表兜底——点原文列逐字复述（含全量点：
+                # 缺点 + 已命中点全数入表，表格即逐点响应载体）；
+                # retained 双注入不豁免（表模式正文重写仍可洗已命中点）。
+                instr = (INITIAL_INSTR + EV_HINT
+                         + realagent_evidence.point_table_hint(
+                             list(pts) + list(hit_pts))
+                         + realagent_evidence.retained_points_hint(hit_pts)
+                         + " 本节前轮逐点织入正文未收敛——对照表兜底重起草："
+                           "表第一列逐字复述点原文（一字不差），正文照常撰写"
+                           "不少于 600 字。")
+                why = (f"P6.6 细则覆盖: {len(pts)} 点未命中——对照表兜底重起草"
+                       f"（历史 {stuck - 1} 轮织入未收敛，表列逐字复述）")
+            else:
+                instr = (INITIAL_INSTR + EV_HINT
+                         + realagent_evidence.scoring_points_hint(pts)
+                         + realagent_evidence.retained_points_hint(hit_pts)
+                         + " 本节当前版本未逐点命中上述评分细则——重起草逐点"
+                           "补齐，正文不少于 600 字。")
+                why = (f"P6.6 细则覆盖: {len(pts)} 点未命中——全量点双注入重起草"
+                       f"（已命中 {len(hit_pts)} 点保留防回退）")
             r = call("draft_response_section", {
                 "project_id": PID, "section_id": sid,
                 "instructions": instr,
@@ -450,11 +488,15 @@ try:
                                 "citations": st.get("citations")})
             repair_log.append({"round": 100 + sc_round, "sid": sid,
                               "kind": "scoring",
-                              "why": [f"P6.6 细则覆盖: {len(pts)} 点未命中——全量点双注入重起草（已命中 {len(hit_pts)} 点保留防回退）"],
+                              "why": [why],
                               "floor": 600, "ban": False,
                               "words": st.get("words"), "citations": st.get("citations")})
             print(f"[P6.6] {sid} 重起草 words={st.get('words')} "
-                  f"cites={st.get('citations')}（注入 {len(pts)} 缺点 + {len(hit_pts)} 已命中保留）", flush=True)
+                  f"cites={st.get('citations')}"
+                  + ("（对照表兜底：全量 " + str(len(pts) + len(hit_pts))
+                     + " 点入表逐字复述）" if stuck >= 2 else
+                     f"（注入 {len(pts)} 缺点 + {len(hit_pts)} 已命中保留）"),
+                  flush=True)
             save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
             time.sleep(DRAFT_GAP_S)
         if exit_code == 2:

@@ -396,3 +396,34 @@ class TestBatch7SectionRepairFullPoints:
     def test_空响应_空字典(self):
         assert realagent_evidence.section_points_for_repair({}) == {}
         assert realagent_evidence.section_points_for_repair({"criteria": []}) == {}
+
+
+# ------------------------------------------------- 批九 G1：P6.6 对照表兜底
+
+class TestPointTableHint:
+    """批九（#113 r6 实弹终验实锚）：P6.6 五轮「逐点织入正文」对短碎片点
+    不收敛——r6b 收口 49/52，残余三点（合同内容页/合同金额页/所提供人员
+    2026年3月份）五轮注入 LLM 反复丢词，且整节重写造成覆盖震荡
+    （49→21 / 49→46 各一次）。投标实务正路是「评分细则逐点响应对照表」：
+    表格点原文列逐字复述细则点——字面命中口径下结构性保证覆盖，且表格
+    逐字复述对 LLM 是远比织入正文更弱的指令（复制类指令）。
+    """
+
+    def test_全量点逐字入表_含逐字复述纪律(self):
+        hint = realagent_evidence.point_table_hint(
+            ["合同内容页", "合同金额页", "所提供人员2026年3月份"])
+        for p in ("合同内容页", "合同金额页", "所提供人员2026年3月份"):
+            assert p in hint, f"点原文必须逐字出现在指令中: {p}"
+        assert "逐字" in hint and "一字不差" in hint, "必须点名逐字复述纪律"
+        assert "对照表" in hint, "必须是对照表形态指令"
+        assert "两列" in hint, "必须是两列表（点原文 | 我方响应）"
+
+    def test_空点空指令不炸(self):
+        assert realagent_evidence.point_table_hint([]) == ""
+        assert realagent_evidence.point_table_hint(None) == ""
+
+    def test_指令声明追加而非替换_防洗正文(self):
+        """对照表是节末追加件——指令必须声明正文照常撰写，防 LLM 把
+        全节缩写成一张表（篇幅门会红）。"""
+        hint = realagent_evidence.point_table_hint(["培训计划"])
+        assert "追加" in hint and ("正文" in hint), "须声明节末追加 + 正文照常"
