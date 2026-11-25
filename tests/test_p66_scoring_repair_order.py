@@ -124,3 +124,63 @@ def test_p65_repair_instruction_carries_points():
         "P6.5 instructions 仍为裸 repair_instruction+EV_HINT——"
         "需追加 scoring_points_hint(POINTS_MAP…)"
     )
+
+
+def test_p65_repair_carries_retention_discipline():
+    """契约 4（批八 G2——D3 修复不完整的另一半入口）：
+
+    P6.5 blocker 整节重起草换全文时只注入 scoring_points_hint（补齐面）
+    而缺 retained_points_hint（已命中点保留纪律）——P6.6 收敛的覆盖
+    仍会被 P6.5 洗掉（r6b SEC-0028 覆盖 7→8→31 回退的入口之一）。
+    批七 D3 只修了 P6.6 入口；P6.5 必须同款双注入：
+    1. 每轮修复前取当前覆盖面（check_scoring_coverage）算 hit/missing；
+    2. 重起草指令 = 全量点补齐（scoring_points_hint）+ 已命中点
+       保留纪律（retained_points_hint，只增不删）。
+    """
+    s = _src()
+    m_p65 = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
+    m_p7 = re.search(r"# ---- P7", s)
+    assert m_p65 and m_p7
+    block = s[m_p65.start(): m_p7.start()]
+    assert "retained_points_hint" in block, (
+        "P6.5 修复指令缺 retained_points_hint（已命中点保留纪律）——"
+        "批七 D3 只修了 P6.6 入口，P6.5 整节重起草仍是覆盖回退入口"
+        "（换全文时模型可丢已命中点，r6b SEC-0028 回退同族）。"
+    )
+    # 每轮取当前 hit 面（不是静态 POINTS_MAP——P6.5 多轮间覆盖会漂移）
+    assert "section_points_for_repair" in block, (
+        "P6.5 未用 section_points_for_repair 取当前 hit/missing 面——"
+        "保留纪律必须基于轮内最新覆盖，静态表会把已丢点误列为保留项。"
+    )
+
+
+def test_p65_cap_direction_blocker_has_directed_discipline():
+    """契约 5（批八 G3——方向门 blocker 无定向修复口径）：
+
+    E_BID_CAP_DIRECTION 掉进 P6.5 兜底分支（floor=500）——而
+    repair_instruction 不携带 finding 消息（why 只进日志不进指令），
+    重起草指令无任何方向纪律 → 模型自然复述「报价高于限价将被否决」
+    规则句即再犯（句级三要素共现判 BLOCKER，引述句不放行），轮次
+    耗尽 = 假终局（如实报红退出但成品不可用）。r6b SEC-0015 实锚
+    正是此 blocker。修：规划器加定向分支（cap_dir 旗标），重起草
+    指令注入 CAP_DIR_DISCIPLINE（合规口径「未超过/不高于限价」，
+    含规则复述句禁写纪律）。
+    """
+    s = _src()
+    m_p65 = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
+    m_p7 = re.search(r"# ---- P7", s)
+    assert m_p65 and m_p7
+    block = s[m_p65.start(): m_p7.start()]
+    assert 'code == "E_BID_CAP_DIRECTION"' in block, (
+        "P6.5 规划器无 E_BID_CAP_DIRECTION 定向分支——方向门 blocker 走"
+        "兜底 floor=500 重起草，无方向口径指令，规则复述句再犯无解。"
+    )
+    assert "CAP_DIR_DISCIPLINE" in block, (
+        "P6.5 缺 CAP_DIR_DISCIPLINE 常量/注入——方向门 blocker 的重起草"
+        "必须教模型合规口径（未超过/不高于限价，含规则复述句禁写纪律）。"
+    )
+    m = re.search(r'CAP_DIR_DISCIPLINE if e\.get\("cap_dir"\)', block)
+    assert m, (
+        "重起草指令拼装处未按 cap_dir 旗标注入 CAP_DIR_DISCIPLINE——"
+        "定向分支置旗而不注入指令 = 修复不生效。"
+    )

@@ -497,6 +497,15 @@ try:
                 "报价」的纪律声明；节内金额口径仅限：投标总报价 4,800,000 元"
                 "（肆佰捌拾万元整）、投标保证金 46,000 元（肆万陆仟圆整）、"
                 "工期 37 天、投标有效期 90 天。")
+    # 批八 G3（#113 代码审计）：方向门 blocker 定向口径——句级三要素共现
+    # 判 BLOCKER（含规则复述句），重起草必须教会模型合规句式，否则复述
+    # 「报价高于限价将被否决」规则句即再犯、轮次耗尽假终局（r6b
+    # SEC-0015 实锚）。
+    CAP_DIR_DISCIPLINE = (
+        "报价方向纪律（#113 批六④门）：全文任何句式——包括对招标文件"
+        "规则的复述引用——不得出现「报价/总价…高于/超过/超出…限价」的"
+        "表述（句级三要素共现即判废标级 BLOCKER，引述句不放行）；我方"
+        "报价合规口径一律写「投标总报价未超过/不高于最高投标限价」。")
 
     def repair_instruction(floor, ban_money, no_split=False):
         instr = ("按招标文件逐项响应，引用只准用列出的 REQ/EV 编号。"
@@ -592,6 +601,16 @@ try:
                     e["floor"] = max(e["floor"], 600)
                     e["ban"] = True
                     e["why"].append(f"{code}: {msg[:80]}（规范 {kind}={CANON[kind]:,}）")
+            elif code == "E_BID_CAP_DIRECTION":
+                # 批八 G3（#113 代码审计）：方向门 blocker 定向修复——兜底分支
+                # 重起草无方向口径，模型复述「报价高于限价将被否决」规则句即
+                # 再犯（句级三要素共现判 BLOCKER，引述句不放行），轮次耗尽
+                # 假终局。置 cap_dir 旗标，重起草指令注入 CAP_DIR_DISCIPLINE
+                # （合规口径「未超过/不高于限价」+ 规则复述句禁写纪律）。
+                e = plan.setdefault(f["section_id"], {"floor": 0, "ban": False, "why": []})
+                e["floor"] = max(e["floor"], 600)
+                e["cap_dir"] = True
+                e["why"].append(f"{code}: {msg[:80]}")
             else:
                 if f.get("section_id"):
                     e = plan.setdefault(f["section_id"], {"floor": 0, "ban": False, "why": []})
@@ -602,6 +621,13 @@ try:
         if unrepairable:
             print(f"[P6.5] {len(unrepairable)} 条不可定向修复——登记: "
                   f"{[u[:60] for u in unrepairable]}")
+        # 批八 G2（#113 代码审计——D3 修复不完整的另一半入口）：P6.5 整节
+        # 重起草换全文时只带补齐面（scoring_points_hint）而缺已命中点保留
+        # 纪律——P6.6 收敛的覆盖仍会被 P6.5 洗掉（覆盖回退入口）。每轮取
+        # 当前覆盖面（check_scoring_coverage）算 hit/missing，重起草指令与
+        # P6.6 同款双注入：全量点补齐 + 已命中点保留（只增不删）。
+        cov_r = must("check_scoring_coverage", {"project_id": PID}, f"cov-p65:{round_no}")
+        sec_pts_r = realagent_evidence.section_points_for_repair(cov_r)
         for sid, e in sorted(plan.items()):
             r = call("draft_response_section", {
                 "project_id": PID, "section_id": sid,
@@ -611,8 +637,13 @@ try:
                 "instructions": (repair_instruction(
                                      e["floor"], e["ban"], bool(e.get("no_split")))
                                  + EV_HINT
+                                 + (CAP_DIR_DISCIPLINE if e.get("cap_dir") else "")
                                  + realagent_evidence.scoring_points_hint(
-                                     POINTS_MAP.get(sid) or [])),
+                                     (sec_pts_r.get(sid, {}).get("missing", [])
+                                      + sec_pts_r.get(sid, {}).get("hit", []))
+                                     or (POINTS_MAP.get(sid) or []))
+                                 + realagent_evidence.retained_points_hint(
+                                     sec_pts_r.get(sid, {}).get("hit", []))),
                 "generator": "real", "project_version": "latest",
             }, timeout=620)
             if not r.get("ok"):

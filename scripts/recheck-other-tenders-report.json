@@ -1,0 +1,269 @@
+{
+ "engine": "eab556b",
+ "generated_at": "2026-11-25T12:2x",
+ "projects": [
+  {
+   "tag": "unicom-ry",
+   "file": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+   "baseline_req": 302,
+   "baseline_src": "multifile-20261118",
+   "steps": {
+    "create": true,
+    "import": true,
+    "per_file": [
+     {
+      "f": "A-unicom-ry-2026CUC-RJY-PT0783-招标文件.docx",
+      "status": null,
+      "err": null
+     }
+    ],
+    "extract": true,
+    "extract_counts": {
+     "added": 302,
+     "by_category": {
+      "format": 11,
+      "other": 169,
+      "qualification": 16,
+      "scoring": 18,
+      "veto": 88
+     },
+     "total": 302
+    },
+    "outline": true,
+    "outline_counts": {
+     "leaves": 38,
+     "matrix_blocking": 104,
+     "matrix_rows": 302,
+     "requirements": 302,
+     "sections": 45,
+     "total_requirements": 302,
+     "total_target_chars": 48000
+    }
+   },
+   "scoring": {
+    "criteria_total": 18,
+    "criteria_with_points": 0,
+    "criteria_unmapped": 18,
+    "points_total": 0,
+    "hard_gates_excluded": 88,
+    "实测 with_points": 0,
+    "实测 points": 0
+   },
+   "req_total": 302,
+   "anchor_check": {
+    "A1_缺失": 0,
+    "A2_空摘录": 0,
+    "A3_文件异常": 0,
+    "明细前5": []
+   },
+   "category": {
+    "其他": 169,
+    "资格条件": 16,
+    "否决项": 88,
+    "评分项": 18,
+    "格式要求": 11
+   },
+   "conflicts": 0,
+   "extract_warnings": 0,
+   "req_drift_vs_baseline": {
+    "delta": 0,
+    "verdict": "一致"
+   }
+  },
+  {
+   "tag": "songjiang",
+   "file": "A-telecom-shanghai-songjiang-光终端放装-招标文件.docx",
+   "baseline_req": 317,
+   "baseline_src": "songling-67-recheck-20261113",
+   "steps": {
+    "create": true,
+    "import": true,
+    "per_file": [
+     {
+      "f": "A-telecom-shanghai-songjiang-光终端放装-招标文件.docx",
+      "status": null,
+      "err": null
+     }
+    ],
+    "extract": true,
+    "extract_counts": {
+     "added": 814,
+     "by_category": {
+      "commercial": 396,
+      "other": 175,
+      "qualification": 69,
+      "scoring": 27,
+      "veto": 147
+     },
+     "total": 814
+    },
+    "outline": false
+   },
+   "scoring": {
+    "criteria_total": 27,
+    "criteria_with_points": 8,
+    "criteria_unmapped": 27,
+    "points_total": 41,
+    "hard_gates_excluded": 147,
+    "实测 with_points": 8,
+    "实测 points": 41
+   },
+   "req_total": 814,
+   "anchor_check": {
+    "A1_缺失": 0,
+    "A2_空摘录": 0,
+    "A3_文件异常": 0,
+    "明细前5": []
+   },
+   "category": {
+    "资格条件": 69,
+    "否决项": 147,
+    "其他": 175,
+    "评分项": 27,
+    "商务要求": 396
+   },
+   "conflicts": 0,
+   "extract_warnings": 0,
+   "req_drift_vs_baseline": {
+    "delta": 497,
+    "verdict": "漂移 +497"
+   }
+  },
+  {
+   "tag": "shanxi",
+   "file": "A-telecom-shanxi-灵枢智关-招标正文.docx",
+   "baseline_req": null,
+   "baseline_src": "无 REQ 级基线（engine-diff 仅块级 2587）",
+   "steps": {
+    "create": true,
+    "import": true,
+    "per_file": [
+     {
+      "f": "A-telecom-shanxi-灵枢智关-招标正文.docx",
+      "status": null,
+      "err": null
+     }
+    ],
+    "extract": true,
+    "extract_counts": {
+     "added": 723,
+     "by_category": {
+      "commercial": 346,
+      "format": 12,
+      "other": 197,
+      "qualification": 29,
+      "scoring": 28,
+      "veto": 111
+     },
+     "total": 723
+    },
+    "outline": true,
+    "outline_counts": {
+     "leaves": 92,
+     "matrix_blocking": 140,
+     "matrix_rows": 723,
+     "requirements": 723,
+     "sections": 102,
+     "total_requirements": 723,
+     "total_target_chars": 48000
+    }
+   },
+   "scoring": {
+    "criteria_total": 28,
+    "criteria_with_points": 0,
+    "criteria_unmapped": 28,
+    "points_total": 0,
+    "hard_gates_excluded": 111,
+    "实测 with_points": 0,
+    "实测 points": 0
+   },
+   "req_total": 723,
+   "anchor_check": {
+    "A1_缺失": 0,
+    "A2_空摘录": 0,
+    "A3_文件异常": 0,
+    "明细前5": []
+   },
+   "category": {
+    "其他": 197,
+    "资格条件": 29,
+    "评分项": 28,
+    "否决项": 111,
+    "商务要求": 346,
+    "格式要求": 12
+   },
+   "conflicts": 0,
+   "extract_warnings": 0
+  },
+  {
+   "tag": "cqyd",
+   "file": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+   "baseline_req": 339,
+   "baseline_src": "multifile-20261118",
+   "steps": {
+    "create": true,
+    "import": true,
+    "per_file": [
+     {
+      "f": "A-cqyd-20260500728-重庆西永水冷空调-招标文件.pdf",
+      "status": null,
+      "err": null
+     }
+    ],
+    "extract": true,
+    "extract_counts": {
+     "added": 340,
+     "by_category": {
+      "commercial": 1,
+      "format": 66,
+      "other": 163,
+      "qualification": 13,
+      "scoring": 29,
+      "veto": 68
+     },
+     "total": 340
+    },
+    "outline": true,
+    "outline_counts": {
+     "leaves": 48,
+     "matrix_blocking": 81,
+     "matrix_rows": 340,
+     "requirements": 340,
+     "sections": 65,
+     "total_requirements": 340,
+     "total_target_chars": 48000
+    }
+   },
+   "scoring": {
+    "criteria_total": 29,
+    "criteria_with_points": 2,
+    "criteria_unmapped": 29,
+    "points_total": 4,
+    "hard_gates_excluded": 68,
+    "实测 with_points": 2,
+    "实测 points": 4
+   },
+   "req_total": 340,
+   "anchor_check": {
+    "A1_缺失": 0,
+    "A2_空摘录": 0,
+    "A3_文件异常": 0,
+    "明细前5": []
+   },
+   "category": {
+    "资格条件": 13,
+    "其他": 163,
+    "否决项": 68,
+    "格式要求": 66,
+    "评分项": 29,
+    "商务要求": 1
+   },
+   "conflicts": 0,
+   "extract_warnings": 0,
+   "req_drift_vs_baseline": {
+    "delta": 1,
+    "verdict": "漂移 +1"
+   }
+  }
+ ]
+}

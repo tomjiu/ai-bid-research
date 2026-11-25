@@ -695,9 +695,18 @@ fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
                 // 「投标保证金的有效期…均为90天」的 90 曾被裸数字兜底分支
                 // （int_digits>=2）抓成 Exact(90) 保证金 → 与他章 46000
                 // 正面冲突 = E_AMOUNT_CONFLICT 假 BLOCKER 误拦导出。
+                // 批八 G1（残余漏洞——D2 家族收口）：原守卫表漏了同属时长/
+                // 序列面的其余单位——工作日（无「个」形：「28工作日内退还」
+                // 的 28 曾可被抓成 Exact(28) 履约保证金）、小时/分钟/秒
+                // （服务价率面「按90分钟计费」）、旬、「12期支付」的期数。
+                // 守卫只加不减：元/万/圆/百分比锚的金额面不受影响。
                 let unit_probe = skip_ws(scan, next, win_end);
                 if unit_probe < win_end
-                    && matches!(scan[unit_probe], '天' | '日' | '月' | '年' | '周' | '个')
+                    && matches!(
+                        scan[unit_probe],
+                        '天' | '日' | '月' | '年' | '周' | '个' |
+                        '工' | '小' | '分' | '秒' | '旬' | '期'
+                    )
                 {
                     k = next;
                     continue;
