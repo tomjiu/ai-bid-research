@@ -53,7 +53,12 @@ EVIDENCE = [
 ]
 PROFILE = {
     "duration_days": 37, "validity_days": 90,
-    "bid_amount": 4_800_000.0, "project_no": "HA-2026-BID-001",
+    "bid_amount": 4_800_000.0,
+    # 批六（r5 通读审读 A4 根治）：project_no 必须传主文件正源编号——
+    # 曾写内部虚构编号 HA-2026-BID-001（主文件 0 命中），经 profile 进入
+    # LLM 上下文后照抄进投标函「项目编号为 HA-2026-BID-001」（r5 段643
+    # 实锤泄漏）。正源：A-telecom-huaian-主文件.docx ×3 命中。
+    "project_no": "JSCGXM202610210082001001",
     "legal_rep_gender": "男",
     # 批五（审计 A5 根治）：格式件（投标函等）抬头取 profile.project_name——
     # 引擎 export.rs 在缺位时 fallback 内部项目名「验收#113-真实LLM起草」
