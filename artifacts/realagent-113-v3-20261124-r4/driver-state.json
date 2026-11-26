@@ -1,0 +1,708 @@
+{
+ "project_id": "PRJ-0001",
+ "actor": "agent-zai",
+ "main_file": "A-telecom-huaian-主文件.docx",
+ "main_sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd",
+ "star_missing": {
+  "count": 2,
+  "detail": [
+   {
+    "block_idx": 77,
+    "page": null,
+    "text": "第四章 ★商务规范书"
+   },
+   {
+    "block_idx": 78,
+    "page": null,
+    "text": "★第五章 技术规范书"
+   }
+  ],
+  "handling": "零标记正则兜底 + 导出豁免（章标题装饰，设计内）"
+ },
+ "evidence": [
+  {
+   "ev_id": "EV-0063",
+   "kind": "qualification",
+   "title": "电子与智能化工程专业承包二级资质证书",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  },
+  {
+   "ev_id": "EV-0064",
+   "kind": "qualification",
+   "title": "营业执照",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  },
+  {
+   "ev_id": "EV-0065",
+   "kind": "performance",
+   "title": "类似业绩合同-智慧园区弱电工程",
+   "synthetic": true,
+   "provenance": "fixtures/corpus-A/files/evidence（仓内合成 fixture）"
+  }
+ ],
+ "req_total": 380,
+ "draft": {
+  "stats": [
+   {
+    "sid": "SEC-0007",
+    "words": 1205,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0008",
+    "words": 1226,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0009",
+    "words": 953,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0010",
+    "words": 858,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0011",
+    "words": 593,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0012",
+    "words": 1137,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0013",
+    "words": 1340,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0014",
+    "words": 1427,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 1194,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0017",
+    "words": 1170,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0019",
+    "words": 969,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0021",
+    "words": 895,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 1040,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0023",
+    "words": 1335,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0024",
+    "words": 917,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0025",
+    "words": 962,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0026",
+    "words": 1433,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0030",
+    "words": 1578,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0031",
+    "words": 1571,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0032",
+    "words": 1302,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0033",
+    "words": 1146,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0034",
+    "words": 1203,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0035",
+    "words": 1350,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 612,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0040",
+    "words": 2253,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 943,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0045",
+    "words": 1084,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0046",
+    "words": 1423,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0047",
+    "words": 1492,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0049",
+    "words": 1103,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0050",
+    "words": 1124,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0051",
+    "words": 1006,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0052",
+    "words": 1094,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0054",
+    "words": 624,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0056",
+    "words": 471,
+    "citations": 3
+   },
+   {
+    "sid": "SEC-0058",
+    "words": 891,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0062",
+    "words": 906,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0028",
+    "words": 2282,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 1116,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0016",
+    "words": 1005,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 709,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0020",
+    "words": 1866,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 1020,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0038",
+    "words": 699,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1720,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0044",
+    "words": 897,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0048",
+    "words": 1223,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0060",
+    "words": 636,
+    "citations": 1
+   }
+  ]
+ },
+ "elapsed_total_s": 1511,
+ "resume_rounds": 2,
+ "scoring_mapping": {
+  "unmapped_before": 36,
+  "unmapped_after": 0,
+  "decisions": [
+   {
+    "req_id": "REQ-0046",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0047",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0048",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0049",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0050",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0051",
+    "section_id": "SEC-0041",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0052",
+    "section_id": "SEC-0042",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0285",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0286",
+    "section_id": "SEC-0035",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0287",
+    "section_id": "SEC-0056",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0288",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0289",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0290",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0291",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0292",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0293",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0294",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0295",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0296",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0297",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0298",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0299",
+    "section_id": "SEC-0028",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0301",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0302",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0303",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0326",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0327",
+    "section_id": "SEC-0009",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0328",
+    "section_id": "SEC-0041",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0329",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0331",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:4"
+   },
+   {
+    "req_id": "REQ-0332",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0335",
+    "section_id": "SEC-0041",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0336",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:9"
+   },
+   {
+    "req_id": "REQ-0337",
+    "section_id": "SEC-0030",
+    "method": "bigram-overlap:3"
+   },
+   {
+    "req_id": "REQ-0338",
+    "section_id": "SEC-0042",
+    "method": "bigram-overlap:2"
+   },
+   {
+    "req_id": "REQ-0339",
+    "section_id": "SEC-0029",
+    "method": "bigram-overlap:3"
+   }
+  ]
+ },
+ "repair": [
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 3 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1105,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1527,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 37 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 934,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1294,
+   "citations": 8
+  },
+  {
+   "round": 103,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 37 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 2355,
+   "citations": 0
+  },
+  {
+   "round": 103,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1143,
+   "citations": 8
+  },
+  {
+   "round": 104,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 3 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 927,
+   "citations": 8
+  },
+  {
+   "round": 104,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1382,
+   "citations": 8
+  },
+  {
+   "round": 105,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 36 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 2282,
+   "citations": 8
+  },
+  {
+   "round": 105,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1116,
+   "citations": 8
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0016",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0016=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 1005,
+   "citations": 9
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0018",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0018=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 709,
+   "citations": 9
+  },
+  {
+   "round": 2,
+   "sid": "SEC-0020",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0020=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 1866,
+   "citations": 9
+  },
+  {
+   "round": 2,
+   "sid": "SEC-0043",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标保证金 在 SEC-0007=46000 与 SEC-0043=40006（规范 投标保证金=46,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 1020,
+   "citations": 8
+  },
+  {
+   "round": 3,
+   "sid": "SEC-0038",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0038=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 699,
+   "citations": 1
+  },
+  {
+   "round": 4,
+   "sid": "SEC-0041",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0041=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 1720,
+   "citations": 8
+  },
+  {
+   "round": 5,
+   "sid": "SEC-0044",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0044=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 897,
+   "citations": 8
+  },
+  {
+   "round": 6,
+   "sid": "SEC-0048",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0048=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 1223,
+   "citations": 8
+  },
+  {
+   "round": 7,
+   "sid": "SEC-0060",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0060=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "no_split": false,
+   "words": 636,
+   "citations": 1
+  }
+ ]
+}

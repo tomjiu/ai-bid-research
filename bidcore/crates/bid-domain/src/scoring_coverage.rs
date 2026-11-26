@@ -78,31 +78,52 @@ use serde::{Deserialize, Serialize};
 
 /// 拆点触发词（细则「要求什么」的谓语面——长词在前防半截命中）。
 /// 来源：真实评标办法表述族（需包含/包括/应具备/应提供/须响应…）。
-const TRIGGERS: [&str; 18] = [
+/// 批七（#113 全链审计 D1）：补裸「包含」「涵盖」——「包含但不限于：」
+/// 形态（REQ-0289 实锚）无裸形触发词会空手；「包含但不限于」本体由
+/// 预处理归一为「包括」（见 [`extract_scoring_points`]）。
+const TRIGGERS: [&str; 20] = [
     "需包含", "应包含", "须包含", "需包括", "应包括", "须包括", "需涵盖", "应涵盖",
     "需具备", "应具备", "须具备", "需提供", "应提供", "须提供", "需响应", "应响应",
-    "含有", "包括",
+    "含有", "包括", "包含", "涵盖",
 ];
 
 /// 段内连接词（「A、B及C」的段内再拆——及/和/与/或）。
 const CONNECTIVES: [&str; 5] = ["以及", "及", "和", "与", "或"];
 
-/// 从细则原文提取「要求的点」——确定性字面挖掘（#318 ①）。
+/// 句子终结符（顿号段跨句截断面——批七 D1-3：段尾含句读整段被拒的陪葬面）。
+const SENTENCE_ENDS: [char; 8] = ['。', '；', ';', '！', '？', '?', '!', '\n'];
+
+/// 拆点上限（每条细则）——防御性：病态文本（整页顿号）不炸报告。
+const MAX_POINT_LEN: usize = 16;
+
+/// 从细则原文提取「要求的点」——确定性字面挖掘（#318 ① + 批七 D1 修复面）。
 ///
 /// 规则（保守、可解释、可复现）：
-/// 1. 触发词扫描：命中任一触发词后，取其后的**同句**片段（到 。；！？\n
+/// 1. 预处理：「包含但不限于/包括但不限于」归一为「包括」（ qualifier 不是内容面）；
+/// 2. 触发词扫描：命中任一触发词后，取其后的**同句**片段（到 。；！？\n
 ///    或串尾），按 、切分，段内再按连接词拆；
-/// 2. 无触发词回退：全文找**顿号串**（≥2 个合法段）——「总体架构、实施
+/// 3. 无触发词回退：全文找**顿号串**（≥2 个合法段）——「总体架构、实施
 ///    步骤、风险应对」直接成点；
-/// 3. 合法段 = 2..=12 字、CJK 主导（汉字数×2 ≥ 字符数——滤掉「（10分）」
-///    类数字/标点残段）、非纯数字、不含句读；
-/// 4. 段首剥连接词残根、段尾剥「等」；去重保序；上限
+/// 4. （N）式子行回退（批七 D1-4）：无点且含 ≥2 个（数字）子行标记时，
+///    逐子行取「X的Y」的 Y（能力/资质名词短语——REQ-0286 实锚：
+///    四个「XX管理能力」零提取即评委失明面）；<2 点不成立（不虚构）；
+/// 5. 合法段 = 2..=16 字（批七 D1-2：12→16——「设备安装调试的安全
+///    保障措施」13 字是真实评标点形态）、CJK 主导（汉字数×2 ≥ 字符数
+///    ——滤掉「（10分）」类数字/标点残段）、非纯数字、不含句读（顿号
+///    段先在句终结符处截断再验——批七 D1-3）；
+/// 6. 段首剥连接词/引导标点残根、段尾剥「等」；去重保序；上限
 ///    [`MAX_POINTS_PER_CRITERION`]。
 ///
 /// 返回空 = 细则无枚举形态（如实——不虚构点；报告面计入
 /// `criteria_with_points` 的分母差，提示人工读细则）。
 pub fn extract_scoring_points(rule_text: &str) -> Vec<String> {
-    let text = rule_text.trim();
+    // 批七 D1-1：qualifier 归一——「包含但不限于：」本质是「包括：」的
+    // 强调形，无裸形触发词即空手（REQ-0289 实锚：3 分细则零点）。
+    let text = rule_text
+        .trim()
+        .replace("包含但不限于", "包括")
+        .replace("包括但不限于", "包括");
+    let text = text.as_str();
     if text.is_empty() {
         return Vec::new();
     }
@@ -141,7 +162,87 @@ pub fn extract_scoring_points(rule_text: &str) -> Vec<String> {
         }
     }
 
+    // ---- 3. （N）式子行回退（批七 D1-4）：评标表「（1）…（2）…」子行
+    //      形态。子行内容「投标人具备提供…的XX能力（如…）的得N分」
+    //      的评标点是名词短语「XX能力」——取子行头部（首「（」前）的
+    //      最后一个「的」之后段。≥2 点才成立（单子行 = 无枚举证据不虚构）。
+    if points.is_empty() {
+        let sub = numbered_subrow_points(text);
+        if sub.len() >= 2 {
+            points = sub;
+        }
+    }
+
     dedup_cap(points)
+}
+
+/// （N）式子行拆点（批七 D1-4——REQ-0286 实锚面）。
+fn numbered_subrow_points(text: &str) -> Vec<String> {
+    // 标记位（（后紧跟 ASCII 数字再紧跟 ）——「（1）」；「（如…）」非数字形不命中）
+    let cs: Vec<char> = text.chars().collect();
+    let mut markers: Vec<(usize, usize)> = Vec::new(); // (标记起始字符位，标记结束字符位)
+    let mut i = 0;
+    while i + 2 < cs.len() {
+        if cs[i] == '（' && cs[i + 1].is_ascii_digit() {
+            let mut j = i + 1;
+            while j < cs.len() && cs[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j < cs.len() && cs[j] == '）' {
+                markers.push((i, j + 1));
+                i = j + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if markers.len() < 2 {
+        return Vec::new();
+    }
+    let mut points: Vec<String> = Vec::new();
+    for w in markers.windows(2) {
+        let frag: String = cs[w[0].1..w[1].0].iter().collect();
+        // 句终结符处截断（「的得N分；」之后是尾注面不是点面）
+        let frag = match frag.find(SENTENCE_ENDS) {
+            Some(end) => &frag[..end],
+            None => frag.as_str(),
+        };
+        // 头部 = 首「（」前（剥「（如…）」例示括号）
+        let head = match frag.find('（') {
+            Some(p) => &frag[..p],
+            None => frag,
+        };
+        // 「X的Y」→ Y（能力/资质名词短语）；无「的」时头部自身 ≤16 字才成点
+        let candidate = match head.rfind('的') {
+            Some(p) => &head[p + '的'.len_utf8()..],
+            None => head,
+        };
+        if let Some(p) = clean_point(candidate) {
+            points.push(p);
+        }
+    }
+    // 尾子行（最后一个标记到串尾）
+    if let Some(last_end) = markers.last().map(|m| m.1) {
+        let frag: String = cs[last_end..].iter().collect();
+        let frag = match frag.find(SENTENCE_ENDS) {
+            Some(end) => &frag[..end],
+            None => frag.as_str(),
+        };
+        if !frag.trim().is_empty() {
+            let head = match frag.find('（') {
+                Some(p) => &frag[..p],
+                None => frag,
+            };
+            let candidate = match head.rfind('的') {
+                Some(p) => &head[p + '的'.len_utf8()..],
+                None => head,
+            };
+            if let Some(p) = clean_point(candidate) {
+                points.push(p);
+            }
+        }
+    }
+    points
 }
 
 /// 取同句尾段（到句终结符或串尾——触发词后的枚举不住在下一句）。
@@ -161,6 +262,13 @@ fn collect_segments(tail: &str, points: &mut Vec<String>) {
             replaced = replaced.replace(c, "、");
         }
         for piece in replaced.split('、') {
+            // 批七 D1-3：顿号段尾跨句（含句读）→ 句终结符处截断再验——
+            // 「A、B。后续句」的 B 不因段尾带 。整段陪葬；句后文本
+            // 截断后余空/成残段自然不过 clean_point。
+            let piece = match piece.find(SENTENCE_ENDS) {
+                Some(end) => &piece[..end],
+                None => piece,
+            };
             if let Some(p) = clean_point(piece) {
                 points.push(p);
             }
@@ -168,8 +276,8 @@ fn collect_segments(tail: &str, points: &mut Vec<String>) {
     }
 }
 
-/// 段清洗：剥连接词残根/首尾空白/尾「等」；合法性（2..=12 字、CJK 主导、
-/// 无句读、非纯数字）不过 → None。
+/// 段清洗：剥连接词/引导标点残根/首尾空白/尾「等」；合法性（2..=16 字
+/// （批七 D1-2）、CJK 主导、无句读、非纯数字）不过 → None。
 fn clean_point(raw: &str) -> Option<String> {
     let mut p = raw.trim().to_string();
     // 段首连接词残根（「及A」→「A」）
@@ -178,12 +286,19 @@ fn clean_point(raw: &str) -> Option<String> {
             p = p[c.len()..].trim().to_string();
         }
     }
+    // 批七 D1-1：引导标点残根（「：A」→「A」——触发词尾段的引导冒号
+    // 不是点内容：「包括：A、B」首段「：A」曾被 ： 命中面整段拒）
+    while let Some(rest) = p.strip_prefix('：').or_else(|| p.strip_prefix(':')) {
+        p = rest.trim_start().to_string();
+    }
     // 段尾「等」（「C等」→「C」——枚举省略号不是点本身）
     if p.ends_with('等') {
         p.pop();
     }
     let total = p.chars().count();
-    if total < 2 || total > 12 {
+    // 批七 D1-2：12→16（MAX_POINT_LEN）——「设备安装调试的安全保障
+    // 措施」13 字是真实评标点形态（REQ-0289 实锤被 12 字上限拒）
+    if total < 2 || total > MAX_POINT_LEN {
         return None;
     }
     if p.contains(['。', '；', ';', '：', ':', '，', ',', '（', '）', '(', ')', '"', '"', '「', '」']) {

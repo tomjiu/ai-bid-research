@@ -1,0 +1,31 @@
+[bridge] 自检: 就绪
+[resume] 续跑 PRJ-0001（P1-P4 已完成，已起草 42 叶，修复历史 0 节次，累计 1133s/2 轮）
+[P3] 起草叶 48（已完成 42，待起草 6）
+[P4.6] 评分映射: 0 未映射 → 逐项映射（bigram 0）；映射后 criteria_unmapped=0
+[P5b] 初始指令含 canonical 口径 + 证据引用纪律 + 评分点注入（3 叶 / 52 点）
+[P5b] (43/48) SEC-0052 words=1187 cites=7 (12s)
+[P5b] (44/48) SEC-0054 words=1014 cites=5 (35s)
+[P5b] (45/48) SEC-0056 words=657 cites=3 (58s)
+[P5b] (46/48) SEC-0058 words=612 cites=1 (79s)
+[P5b] (47/48) SEC-0060 words=459 cites=1 (99s)
+[P5b] (48/48) SEC-0062 words=1227 cites=8 (126s)
+[P5b] 起草面收口: 48/48 叶 / 累计 54816 字
+[P6.6] 细则覆盖修复轮 1: 2 点未命中 → 1 叶定向重起草（全量点双注入防回退）
+[P6.6] SEC-0029 重起草 words=939 cites=8（注入 2 缺点 + 0 已命中保留）
+[P6.6] 细则覆盖修复轮 2: 2 点未命中 → 1 叶定向重起草（全量点双注入防回退）
+[P6.6] SEC-0029 重起草 words=1210 cites=8（对照表兜底：全量 2 点入表逐字复述）
+[P6.6] 细则覆盖收口: covered=52/52
+[P6.7] REQ 引用补齐轮 1: 8 条未覆盖 REQ → 1 叶定向重起草（未覆盖补齐 + 已覆盖保留双注入）
+[P6.7] SEC-0051 重起草 words=1345 cites=8（补 8 条引用 + 保留 0 条）
+[P6.7] REQ 引用收口: uncovered=0
+[P6.8] 证据引用收口: 全档援引 ['EV-0063', 'EV-0064', 'EV-0065'] / 注册 ['EV-0063', 'EV-0064', 'EV-0065']
+[P6] 校验: ok=False counts={'blocker': 1, 'deterministic': 19, 'major': 2, 'minor': 16, 'model': 0}
+[P6.5] 修复轮 1: 1 blocker 待处置
+[P6.5] SEC-0043 重起草 floor=600 ban=True no_split=False words=915 cites=8
+[P6.5] 零 blocker（修复 4 节次）
+[P8] 导出: 287015B / 48 章 sha256=e33d2b75f797e17e…
+[P8] generator_summary: {'external': 0, 'mock': 0, 'real': 48, 'scoring_leaves_non_real': 0, 'scoring_leaves_total': 8, 'unknown': 0}
+[P9] 细则覆盖: criteria=36 points=52 covered=52 ratio=1.000 deduction=0.0
+[P9.5] 证据引用审计: 3/3 全部被引用
+[P10] REPORT 底稿: REPORT.md（机器取数；人工叙事在其上改）
+[done] artifacts/realagent-113-v3-20261126-r8b （累计 1373s/3 轮, 40 次工具调用）

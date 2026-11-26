@@ -1,0 +1,413 @@
+{
+ "project_id": "PRJ-0001",
+ "actor": "agent-zai",
+ "main_file": "A-telecom-huaian-主文件.docx",
+ "star_missing": {
+  "count": 2,
+  "detail": [
+   {
+    "block_idx": 77,
+    "page": null,
+    "text": "第四章 ★商务规范书"
+   },
+   {
+    "block_idx": 78,
+    "page": null,
+    "text": "★第五章 技术规范书"
+   }
+  ]
+ },
+ "evidence": [
+  {
+   "ev_id": "EV-0063",
+   "kind": "qualification",
+   "title": "电子与智能化工程专业承包二级资质证书",
+   "synthetic": true
+  },
+  {
+   "ev_id": "EV-0064",
+   "kind": "qualification",
+   "title": "营业执照",
+   "synthetic": true
+  },
+  {
+   "ev_id": "EV-0065",
+   "kind": "performance",
+   "title": "类似业绩合同-智慧园区弱电工程",
+   "synthetic": true
+  }
+ ],
+ "req_total": 380,
+ "leaves": 48,
+ "draft": {
+  "leaves_done": 91,
+  "total_words": 56757,
+  "stats": [
+   {
+    "sid": "SEC-0008",
+    "words": 1606,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0009",
+    "words": 986,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0010",
+    "words": 951,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0011",
+    "words": 674,
+    "citations": 6
+   },
+   {
+    "sid": "SEC-0013",
+    "words": 1040,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0014",
+    "words": 1470,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 964,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0017",
+    "words": 991,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 855,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0019",
+    "words": 1047,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0020",
+    "words": 1535,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0021",
+    "words": 726,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 1201,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0023",
+    "words": 1413,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0024",
+    "words": 971,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0025",
+    "words": 866,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0026",
+    "words": 1519,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0030",
+    "words": 928,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0032",
+    "words": 1053,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0033",
+    "words": 1154,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0034",
+    "words": 1384,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 603,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0038",
+    "words": 684,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0040",
+    "words": 1206,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1610,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 1468,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0044",
+    "words": 1685,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0045",
+    "words": 1057,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0046",
+    "words": 1425,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0047",
+    "words": 1419,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0048",
+    "words": 1062,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0049",
+    "words": 1763,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0050",
+    "words": 1172,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0051",
+    "words": 1433,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0052",
+    "words": 1410,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0054",
+    "words": 1027,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0056",
+    "words": 535,
+    "citations": 3
+   },
+   {
+    "sid": "SEC-0058",
+    "words": 732,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0060",
+    "words": 530,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 1399,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0028",
+    "words": 1575,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0035",
+    "words": 1313,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 1001,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0062",
+    "words": 1450,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0007",
+    "words": 1096,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0012",
+    "words": 859,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0016",
+    "words": 1168,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0031",
+    "words": 1600,
+    "citations": 8
+   }
+  ]
+ },
+ "validate": {
+  "char_deviation_pct": 15.9,
+  "char_target": 48000,
+  "char_total": 55616,
+  "drafted": 48,
+  "dup_max_similarity": 0.0,
+  "dup_pairs": 0,
+  "failed": 0,
+  "out_of_band": 28,
+  "pending": 0,
+  "total": 48,
+  "unanchored_total": 304,
+  "uncovered_req_total": 0
+ },
+ "uncovered_reqs": {
+  "total": 0,
+  "ids": [],
+  "by_section": [],
+  "summary_reported": 0,
+  "mismatch": false
+ },
+ "export": {
+  "size": 279864,
+  "sha256": "188a629e64174c6dbc541a9c23692b31feafd9bff978a6d7185ca0fa5fb4c39d",
+  "chapters_written": 48,
+  "total_chars": 55616,
+  "generator_summary": {
+   "external": 0,
+   "mock": 0,
+   "real": 48,
+   "scoring_leaves_non_real": 0,
+   "scoring_leaves_total": 8,
+   "unknown": 0
+  },
+  "evidence_validity": {
+   "active": 3,
+   "expired": 0,
+   "expiring": 0,
+   "expiring_detail": [],
+   "superseded": 0
+  },
+  "warnings_count": 33
+ },
+ "evidence_citation": {
+  "registered": [
+   "EV-0063",
+   "EV-0064",
+   "EV-0065"
+  ],
+  "cited": [
+   "EV-0063",
+   "EV-0064",
+   "EV-0065"
+  ],
+  "uncited": []
+ },
+ "scoring_coverage": {
+  "coverage_ratio": 0.8653846153846154,
+  "criteria_total": 36,
+  "criteria_unmapped": 0,
+  "criteria_with_points": 12,
+  "hard_gates_excluded": 120,
+  "points_covered": 45,
+  "points_total": 52,
+  "suggested_deduction": 7.261904761904762
+ },
+ "scoring_coverage_uncovered_points": {
+  "points_total": 52,
+  "points_covered": 45,
+  "uncovered": [
+   {
+    "criterion_id": "REQ-0290",
+    "point": "培训达到的效果预期",
+    "max_score": 0.5
+   },
+   {
+    "criterion_id": "REQ-0292",
+    "point": "功能证明需充分",
+    "max_score": 2.0
+   },
+   {
+    "criterion_id": "REQ-0293",
+    "point": "功能证明需充分",
+    "max_score": 1.0
+   },
+   {
+    "criterion_id": "REQ-0294",
+    "point": "功能证明需充分",
+    "max_score": 2.0
+   },
+   {
+    "criterion_id": "REQ-0295",
+    "point": "功能证明需充分",
+    "max_score": 0.33
+   },
+   {
+    "criterion_id": "REQ-0296",
+    "point": "功能证明需充分",
+    "max_score": 0.43
+   },
+   {
+    "criterion_id": "REQ-0297",
+    "point": "所提供人员2026年3月份",
+    "max_score": 1.0
+   }
+  ]
+ },
+ "llm_usage": {
+  "calls": 60,
+  "prompt_tokens": 87364,
+  "completion_tokens": 43682,
+  "total_tokens": 131046,
+  "by_model": {
+   "glm-4-plus": {
+    "calls": 60,
+    "prompt_tokens": 87364,
+    "completion_tokens": 43682,
+    "total_tokens": 131046
+   }
+  },
+  "last_at": 1795682736
+ },
+ "elapsed_s": 1602,
+ "resume_rounds": 2,
+ "main_sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd"
+}

@@ -1,0 +1,99 @@
+[zai-bridge 2026-11-24T09:11:29.497Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-24T09:11:31.088Z] ok model=glm-4-plus 434ms out=2ch
+[zai-bridge 2026-11-24T09:11:45.075Z] ok model=glm-4-plus 8190ms out=1102ch
+[zai-bridge 2026-11-24T09:12:06.567Z] ok model=glm-4-plus 6405ms out=1219ch
+[zai-bridge 2026-11-24T09:12:28.451Z] ok model=glm-4-plus 6794ms out=960ch
+[zai-bridge 2026-11-24T09:12:51.070Z] ok model=glm-4-plus 7529ms out=1089ch
+[zai-bridge 2026-11-24T09:13:10.853Z] ok model=glm-4-plus 4695ms out=641ch
+[zai-bridge 2026-11-24T09:13:33.096Z] ok model=glm-4-plus 7148ms out=997ch
+[zai-bridge 2026-11-24T09:13:55.814Z] ok model=glm-4-plus 7628ms out=1005ch
+[zai-bridge 2026-11-24T09:14:16.430Z] ok model=glm-4-plus 5527ms out=998ch
+[zai-bridge 2026-11-24T09:14:37.837Z] ok model=glm-4-plus 6318ms out=931ch
+[zai-bridge 2026-11-24T09:14:58.717Z] ok model=glm-4-plus 5789ms out=1037ch
+[zai-bridge 2026-11-24T09:15:21.683Z] ok model=glm-4-plus 7876ms out=1332ch
+[zai-bridge 2026-11-24T09:15:41.581Z] ok model=glm-4-plus 4805ms out=772ch
+[zai-bridge 2026-11-24T09:16:06.096Z] ok model=glm-4-plus 9424ms out=1108ch
+[zai-bridge 2026-11-24T09:16:35.015Z] ok model=glm-4-plus 13807ms out=1809ch
+[zai-bridge 2026-11-24T09:17:19.412Z] ok model=glm-4-plus 29307ms out=1074ch
+[zai-bridge 2026-11-24T09:17:43.737Z] ok model=glm-4-plus 9233ms out=1111ch
+[zai-bridge 2026-11-24T09:18:07.552Z] ok model=glm-4-plus 8725ms out=1425ch
+[zai-bridge 2026-11-24T09:18:34.904Z] ok model=glm-4-plus 12262ms out=886ch
+[zai-bridge 2026-11-24T09:18:56.639Z] ok model=glm-4-plus 6642ms out=1098ch
+[zai-bridge 2026-11-24T09:19:21.840Z] ok model=glm-4-plus 10109ms out=1257ch
+[zai-bridge 2026-11-24T09:19:47.617Z] ok model=glm-4-plus 10684ms out=1821ch
+[zai-bridge 2026-11-24T09:20:09.994Z] ok model=glm-4-plus 7282ms out=1024ch
+[zai-bridge 2026-11-24T09:20:39.041Z] ok model=glm-4-plus 13953ms out=1432ch
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-24T09:20:45.210Z] ok model=glm-4-plus 370ms out=2ch
+[zai-bridge 2026-11-24T09:20:57.689Z] ok model=glm-4-plus 11971ms out=1622ch
+[zai-bridge 2026-11-24T09:21:23.650Z] ok model=glm-4-plus 10858ms out=1375ch
+[zai-bridge 2026-11-24T09:21:50.638Z] ok model=glm-4-plus 11896ms out=1238ch
+[zai-bridge 2026-11-24T09:22:10.930Z] ok model=glm-4-plus 5165ms out=962ch
+[zai-bridge 2026-11-24T09:22:36.229Z] ok model=glm-4-plus 10207ms out=1444ch
+[zai-bridge 2026-11-24T09:22:55.065Z] ok model=glm-4-plus 3744ms out=422ch
+[zai-bridge 2026-11-24T09:23:14.079Z] ok model=glm-4-plus 3917ms out=536ch
+[zai-bridge 2026-11-24T09:23:37.997Z] ok model=glm-4-plus 8813ms out=961ch
+[zai-bridge 2026-11-24T09:23:59.510Z] ok model=glm-4-plus 6403ms out=1079ch
+[zai-bridge 2026-11-24T09:24:20.002Z] ok model=glm-4-plus 5397ms out=891ch
+[zai-bridge 2026-11-24T09:24:40.971Z] ok model=glm-4-plus 5877ms out=825ch
+[zai-bridge 2026-11-24T09:25:00.046Z] ok model=glm-4-plus 3981ms out=634ch
+[zai-bridge 2026-11-24T09:25:21.031Z] ok model=glm-4-plus 5889ms out=1059ch
+[zai-bridge 2026-11-24T09:25:43.874Z] ok model=glm-4-plus 7748ms out=1026ch
+[zai-bridge 2026-11-24T09:26:09.376Z] ok model=glm-4-plus 10407ms out=1632ch
+[zai-bridge 2026-11-24T09:26:32.793Z] ok model=glm-4-plus 8322ms out=1039ch
+[zai-bridge 2026-11-24T09:26:59.980Z] ok model=glm-4-plus 12090ms out=1499ch
+[zai-bridge 2026-11-24T09:27:23.157Z] ok model=glm-4-plus 8081ms out=1158ch
+[zai-bridge 2026-11-24T09:27:44.689Z] ok model=glm-4-plus 6436ms out=1038ch
+[zai-bridge 2026-11-24T09:28:06.455Z] ok model=glm-4-plus 6670ms out=1025ch
+[zai-bridge 2026-11-24T09:28:26.906Z] ok model=glm-4-plus 5356ms out=785ch
+[zai-bridge 2026-11-24T09:28:44.237Z] ok model=glm-4-plus 2234ms out=346ch
+[zai-bridge 2026-11-24T09:29:06.776Z] ok model=glm-4-plus 7444ms out=926ch
+[zai-bridge 2026-11-24T09:29:25.183Z] ok model=glm-4-plus 3309ms out=492ch
+[zai-bridge 2026-11-24T09:29:50.884Z] ok model=glm-4-plus 10605ms out=1140ch
+[zai-bridge 2026-11-24T09:29:56.807Z] ok model=glm-4-plus 5578ms out=928ch
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-24T09:29:58.728Z] ok model=glm-4-plus 393ms out=2ch
+[zai-bridge 2026-11-24T09:29:59.797Z] retry#1(429) model=glm-4-plus 49ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：否决情形响应（第1组 8条）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，引用只准用列出的 REQ/EV 编号。 → 45s 后重试
+[zai-bridge 2026-11-24T09:30:52.372Z] ok model=glm-4-plus 52624ms out=1107ch (retry#1)
+[zai-bridge 2026-11-24T09:31:13.204Z] ok model=glm-4-plus 5736ms out=762ch

@@ -1,8 +1,8 @@
 {
  "seed": 20261112,
- "generated_at": "2026-11-12T06:31:25+00:00",
- "repo_root": "/home/z/my-project/repo",
- "base_dir": "/home/z/my-project/repo/artifacts/closeout-real-20261112",
+ "generated_at": "2026-11-26T09:19:10+00:00",
+ "repo_root": "/home/z/my-project/ai-bid-research",
+ "base_dir": "/home/z/my-project/ai-bid-research/artifacts/closeout-real-20261112",
  "runs": [
   {
    "id": "A-95b62593bced",
@@ -21,22 +21,22 @@
    },
    "files": [
     {
-     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/A-telecom-huaian-主文件.docx",
+     "path": "/home/z/my-project/ai-bid-research/real-corpus/telecom/parse-input/A-telecom-huaian-主文件.docx",
      "filename": "A-telecom-huaian-主文件.docx",
      "kind": "招标文件"
     },
     {
-     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf",
+     "path": "/home/z/my-project/ai-bid-research/fixtures/corpus-A/files/evidence/EV-02-电子与智能化工程专业承包二级资质证书.pdf",
      "filename": "EV-02-电子与智能化工程专业承包二级资质证书.pdf",
      "kind": "附件"
     },
     {
-     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-01-营业执照.pdf",
+     "path": "/home/z/my-project/ai-bid-research/fixtures/corpus-A/files/evidence/EV-01-营业执照.pdf",
      "filename": "EV-01-营业执照.pdf",
      "kind": "附件"
     },
     {
-     "path": "/home/z/my-project/repo/fixtures/corpus-A/files/evidence/EV-03-类似业绩合同-智慧园区弱电工程.pdf",
+     "path": "/home/z/my-project/ai-bid-research/fixtures/corpus-A/files/evidence/EV-03-类似业绩合同-智慧园区弱电工程.pdf",
      "filename": "EV-03-类似业绩合同-智慧园区弱电工程.pdf",
      "kind": "附件"
     }
@@ -66,7 +66,7 @@
    "min_reqs": 0,
    "files": [
     {
-     "path": "/home/z/my-project/repo/real-corpus/telecom/parse-input/B-telecom-huaian-报价文件.xlsx",
+     "path": "/home/z/my-project/ai-bid-research/real-corpus/telecom/parse-input/B-telecom-huaian-报价文件.xlsx",
      "filename": "B-telecom-huaian-报价文件.xlsx",
      "kind": "附件"
     }

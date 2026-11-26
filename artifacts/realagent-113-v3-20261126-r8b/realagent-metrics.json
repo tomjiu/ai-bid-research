@@ -1,0 +1,377 @@
+{
+ "project_id": "PRJ-0001",
+ "actor": "agent-zai",
+ "main_file": "A-telecom-huaian-主文件.docx",
+ "star_missing": {
+  "count": 2,
+  "detail": [
+   {
+    "block_idx": 77,
+    "page": null,
+    "text": "第四章 ★商务规范书"
+   },
+   {
+    "block_idx": 78,
+    "page": null,
+    "text": "★第五章 技术规范书"
+   }
+  ]
+ },
+ "evidence": [
+  {
+   "ev_id": "EV-0063",
+   "kind": "qualification",
+   "title": "电子与智能化工程专业承包二级资质证书",
+   "synthetic": true
+  },
+  {
+   "ev_id": "EV-0064",
+   "kind": "qualification",
+   "title": "营业执照",
+   "synthetic": true
+  },
+  {
+   "ev_id": "EV-0065",
+   "kind": "performance",
+   "title": "类似业绩合同-智慧园区弱电工程",
+   "synthetic": true
+  }
+ ],
+ "req_total": 380,
+ "leaves": 48,
+ "draft": {
+  "leaves_done": 90,
+  "total_words": 54816,
+  "stats": [
+   {
+    "sid": "SEC-0007",
+    "words": 985,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0008",
+    "words": 1156,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0009",
+    "words": 1078,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0010",
+    "words": 967,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0011",
+    "words": 579,
+    "citations": 6
+   },
+   {
+    "sid": "SEC-0012",
+    "words": 1134,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0013",
+    "words": 1052,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0014",
+    "words": 1290,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0015",
+    "words": 992,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0016",
+    "words": 1152,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0017",
+    "words": 994,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0018",
+    "words": 860,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0019",
+    "words": 1043,
+    "citations": 9
+   },
+   {
+    "sid": "SEC-0020",
+    "words": 1412,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0021",
+    "words": 909,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0022",
+    "words": 1242,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0023",
+    "words": 1475,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0024",
+    "words": 940,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0025",
+    "words": 1370,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0026",
+    "words": 1546,
+    "citations": 10
+   },
+   {
+    "sid": "SEC-0028",
+    "words": 2789,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0030",
+    "words": 1030,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0031",
+    "words": 1280,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0032",
+    "words": 1130,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0033",
+    "words": 1289,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0034",
+    "words": 1220,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0035",
+    "words": 1711,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0036",
+    "words": 521,
+    "citations": 2
+   },
+   {
+    "sid": "SEC-0038",
+    "words": 500,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0040",
+    "words": 1197,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0041",
+    "words": 1560,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0042",
+    "words": 951,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0044",
+    "words": 1292,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0045",
+    "words": 1049,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0046",
+    "words": 1637,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0047",
+    "words": 1545,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0048",
+    "words": 1281,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0049",
+    "words": 1952,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0050",
+    "words": 1090,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0052",
+    "words": 1187,
+    "citations": 7
+   },
+   {
+    "sid": "SEC-0054",
+    "words": 1014,
+    "citations": 5
+   },
+   {
+    "sid": "SEC-0056",
+    "words": 657,
+    "citations": 3
+   },
+   {
+    "sid": "SEC-0058",
+    "words": 612,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0060",
+    "words": 459,
+    "citations": 1
+   },
+   {
+    "sid": "SEC-0062",
+    "words": 1227,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0029",
+    "words": 1210,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0051",
+    "words": 1345,
+    "citations": 8
+   },
+   {
+    "sid": "SEC-0043",
+    "words": 915,
+    "citations": 8
+   }
+  ]
+ },
+ "validate": {
+  "char_deviation_pct": 16.3,
+  "char_target": 48000,
+  "char_total": 55826,
+  "drafted": 48,
+  "dup_max_similarity": 0.0,
+  "dup_pairs": 0,
+  "failed": 0,
+  "out_of_band": 16,
+  "pending": 0,
+  "total": 48,
+  "unanchored_total": 254,
+  "uncovered_req_total": 0
+ },
+ "uncovered_reqs": {
+  "total": 0,
+  "ids": [],
+  "by_section": [],
+  "summary_reported": 0,
+  "mismatch": false
+ },
+ "export": {
+  "size": 287015,
+  "sha256": "e33d2b75f797e17e50cdbad3d99320090efeee85167e8c85198fd45646ef66d6",
+  "chapters_written": 48,
+  "total_chars": 55826,
+  "generator_summary": {
+   "external": 0,
+   "mock": 0,
+   "real": 48,
+   "scoring_leaves_non_real": 0,
+   "scoring_leaves_total": 8,
+   "unknown": 0
+  },
+  "evidence_validity": {
+   "active": 3,
+   "expired": 0,
+   "expiring": 0,
+   "expiring_detail": [],
+   "superseded": 0
+  },
+  "warnings_count": 33
+ },
+ "evidence_citation": {
+  "registered": [
+   "EV-0063",
+   "EV-0064",
+   "EV-0065"
+  ],
+  "cited": [
+   "EV-0063",
+   "EV-0064",
+   "EV-0065"
+  ],
+  "uncited": []
+ },
+ "scoring_coverage": {
+  "coverage_ratio": 1.0,
+  "criteria_total": 36,
+  "criteria_unmapped": 0,
+  "criteria_with_points": 12,
+  "hard_gates_excluded": 120,
+  "points_covered": 52,
+  "points_total": 52,
+  "suggested_deduction": 0.0
+ },
+ "scoring_coverage_uncovered_points": {
+  "points_total": 52,
+  "points_covered": 52,
+  "uncovered": []
+ },
+ "llm_usage": {
+  "calls": 52,
+  "prompt_tokens": 75346,
+  "completion_tokens": 35203,
+  "total_tokens": 110549,
+  "by_model": {
+   "glm-4-plus": {
+    "calls": 52,
+    "prompt_tokens": 75346,
+    "completion_tokens": 35203,
+    "total_tokens": 110549
+   }
+  },
+  "last_at": 1795684625
+ },
+ "elapsed_s": 1373,
+ "resume_rounds": 2,
+ "main_sha256": "95b62593bced58518b084eebf772ed098bc304087dacca30c934621df1df75fd"
+}

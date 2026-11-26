@@ -474,6 +474,14 @@ pub fn validate_document(
         });
     }
 
+    // ---- 规则 9b（批六④）：报价 vs 限价语义方向门（全局级——恒全量）。
+    //      r5 成品段114 实锚：数值一致性（规则 9）拦不住方向反写——双方数值
+    //      各自都对，错在断言方向（报价 480 万 < 限价却写「高于限价」= 自认
+    //      否决项）。句级三要素共现 + 否定窗口放行（详见函数文档）。
+    for f in bid_cap_direction_findings(store) {
+        structural_f.push(f);
+    }
+
     // ---- #187 四桶归位（Passed / Failed；semantic 未配置 → NotPerformed）
     let into_result =
         |v: Vec<ValidationFinding>| if v.is_empty() { CheckResult::Passed } else { CheckResult::Failed(v) };
@@ -1185,6 +1193,79 @@ pub fn global_conflict_findings(store: &DomainStore) -> Vec<ValidationFinding> {
             ),
         })
         .collect()
+}
+
+/// 批六④（r5 审读 A1）：报价 vs 限价**语义方向门**（`E_BID_CAP_DIRECTION`）。
+///
+/// 缺陷形态（r5 成品段114 实锚）：正文写「投标总报价为人民币肆佰捌拾万元
+/// 整（4,800,000元），**高于**招标文件设定的最高投标限价」——事实反写
+/// （480 万 < 限价 494.6 万），自认否决项；同稿另节又正确写「不低于成本
+/// 也不高于限价」。数值一致性门（S-5/规则 9）拦不住它：双方数值各自都对，
+/// 错在**断言方向**——纯语义层缺陷。
+///
+/// 扫描口径（保守三要素共现，句级）：
+/// 1. 单句内同时含：限价词（`限价`）+ 报价主体词（`报价`/`总价`）+
+///    反写词（`高于`/`超过`/`超出`）；
+/// 2. 反写词前 6 字符窗口含否定词（`未`/`不`/`没`/`无`/`低于`）→ 放行
+///    （「均未超过限价」「不高于限价」「低于成本也不高于限价」均合法）；
+/// 3. 无报价主体词的限价句（「限价高于成本的说法不成立」）→ 放行
+///    （主体不是报价断言，不误报）。
+///
+/// 命中 = BLOCKER（废标级——评标专家直读该句即质疑报价合规性）。全局级：
+/// 恒全量扫（scope 局部复审不缩小视野——方向断言错误没有「局部」语义）。
+pub fn bid_cap_direction_findings(store: &DomainStore) -> Vec<ValidationFinding> {
+    /// 反写词（含前缀否定窗口判定）。
+    const REVERSE_WORDS: [&str; 3] = ["高于", "超过", "超出"];
+    /// 否定词（反写词前 6 字符窗口内出现即视为合法否定句式）。
+    const NEGATION_WORDS: [&str; 5] = ["未", "不", "没", "无", "低于"];
+    /// 报价主体词（句内须共现——限价句无主体不扫）。
+    const BID_WORDS: [&str; 2] = ["报价", "总价"];
+
+    let mut out = Vec::new();
+    let parents: HashSet<&str> = store.sections().iter()
+        .filter_map(|n| n.parent_id.as_deref())
+        .collect();
+    for node in store.sections().iter().filter(|n| {
+        !parents.contains(&n.id[..]) && n.content.as_deref().is_some_and(|c| c.contains("限价"))
+    }) {
+        let Some(content) = node.content.as_deref() else { continue };
+        let mut hit: Option<String> = None;
+        // 句级切分（。；！？与换行——句内共现才计）。
+        for sentence in content.split(|c: char| "。；！？\n\r".contains(c)) {
+            let has_bid_subject = BID_WORDS.iter().any(|w| sentence.contains(w));
+            if !sentence.contains("限价") || !has_bid_subject {
+                continue;
+            }
+            for w in REVERSE_WORDS {
+                let Some(pos) = sentence.find(w) else { continue };
+                // 否定窗口：反写词前 6 字符（UTF-8 安全回溯——中文 3 字节/字）。
+                let window: String = sentence
+                    .char_indices()
+                    .filter(|(i, _)| *i < pos && *i >= pos.saturating_sub(18)) // 6 字 ≈ 18 字节
+                    .map(|(_, c)| c)
+                    .collect();
+                if NEGATION_WORDS.iter().any(|neg| window.contains(neg)) {
+                    continue; // 合法否定句式（未超过/不高于/低于…也不高于）
+                }
+                hit = Some(format!("「{sentence}」"));
+                break;
+            }
+            if hit.is_some() { break; }
+        }
+        if let Some(sent) = hit {
+            out.push(ValidationFinding {
+                rule_code: "E_BID_CAP_DIRECTION".into(),
+                severity: "BLOCKER",
+                section_id: Some(node.id.clone()),
+                requirement_id: None,
+                message: format!(
+                    "章节「{}」存在报价高于限价的反向断言 {}——报价低于限价才合规，正文事实反写（自认否决项）；改写为『未超过/不高于/低于限价』口径后重校",
+                    node.title, sent,
+                ),
+            });
+        }
+    }
+    out
 }
 
 /// #88 审计 F-05（决策面对账——导出门 1j 消费）。

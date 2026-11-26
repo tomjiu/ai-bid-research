@@ -1,0 +1,315 @@
+[zai-bridge 2026-11-25T06:57:37.420Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T06:57:38.979Z] ok model=glm-4-plus 404ms out=2ch
+[zai-bridge 2026-11-25T06:57:50.992Z] ok model=glm-4-plus 6314ms out=1085ch
+[zai-bridge 2026-11-25T06:58:16.007Z] ok model=glm-4-plus 9926ms out=1144ch
+[zai-bridge 2026-11-25T06:58:37.905Z] ok model=glm-4-plus 6811ms out=1015ch
+[zai-bridge 2026-11-25T06:58:59.619Z] ok model=glm-4-plus 6622ms out=1044ch
+[zai-bridge 2026-11-25T06:59:19.081Z] ok model=glm-4-plus 4368ms out=641ch
+[zai-bridge 2026-11-25T06:59:39.611Z] ok model=glm-4-plus 5438ms out=1034ch
+[zai-bridge 2026-11-25T07:00:02.550Z] ok model=glm-4-plus 7848ms out=1421ch
+[zai-bridge 2026-11-25T07:00:28.112Z] ok model=glm-4-plus 10472ms out=1669ch
+[zai-bridge 2026-11-25T07:00:50.581Z] ok model=glm-4-plus 7378ms out=1087ch
+[zai-bridge 2026-11-25T07:01:11.771Z] ok model=glm-4-plus 6099ms out=1027ch
+[zai-bridge 2026-11-25T07:01:33.074Z] ok model=glm-4-plus 6200ms out=1010ch
+[zai-bridge 2026-11-25T07:01:52.976Z] ok model=glm-4-plus 4813ms out=835ch
+[zai-bridge 2026-11-25T07:02:16.404Z] ok model=glm-4-plus 8328ms out=1212ch
+[zai-bridge 2026-11-25T07:02:41.794Z] ok model=glm-4-plus 10269ms out=1375ch
+[zai-bridge 2026-11-25T07:03:04.745Z] ok model=glm-4-plus 7856ms out=1119ch
+[zai-bridge 2026-11-25T07:03:27.129Z] ok model=glm-4-plus 7291ms out=1112ch
+[zai-bridge 2026-11-25T07:03:48.237Z] ok model=glm-4-plus 6019ms out=1065ch
+[zai-bridge 2026-11-25T07:04:09.039Z] ok model=glm-4-plus 5705ms out=956ch
+[zai-bridge 2026-11-25T07:04:29.071Z] ok model=glm-4-plus 4941ms out=891ch
+[zai-bridge 2026-11-25T07:04:53.792Z] ok model=glm-4-plus 9628ms out=1687ch
+[zai-bridge 2026-11-25T07:05:19.668Z] ok model=glm-4-plus 10785ms out=1649ch
+[zai-bridge 2026-11-25T07:05:41.120Z] ok model=glm-4-plus 6360ms out=1118ch
+[zai-bridge 2026-11-25T07:06:05.351Z] ok model=glm-4-plus 9135ms out=1242ch
+[zai-bridge 2026-11-25T07:06:31.508Z] ok model=glm-4-plus 11064ms out=1160ch
+[zai-bridge 2026-11-25T07:06:53.217Z] ok model=glm-4-plus 6617ms out=1196ch
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:07:13.159Z] ok model=glm-4-plus 380ms out=2ch
+[zai-bridge 2026-11-25T07:07:24.302Z] ok model=glm-4-plus 10635ms out=1908ch
+[zai-bridge 2026-11-25T07:07:48.304Z] ok model=glm-4-plus 8905ms out=1351ch
+[zai-bridge 2026-11-25T07:08:11.085Z] ok model=glm-4-plus 7689ms out=1052ch
+[zai-bridge 2026-11-25T07:08:30.490Z] ok model=glm-4-plus 4311ms out=635ch
+[zai-bridge 2026-11-25T07:08:49.724Z] ok model=glm-4-plus 4139ms out=645ch
+[zai-bridge 2026-11-25T07:09:15.411Z] ok model=glm-4-plus 10592ms out=1432ch
+[zai-bridge 2026-11-25T07:09:38.722Z] ok model=glm-4-plus 8217ms out=1420ch
+[zai-bridge 2026-11-25T07:10:00.315Z] ok model=glm-4-plus 6498ms out=826ch
+[zai-bridge 2026-11-25T07:10:25.125Z] ok model=glm-4-plus 9713ms out=1265ch
+[zai-bridge 2026-11-25T07:10:46.818Z] ok model=glm-4-plus 6595ms out=913ch
+[zai-bridge 2026-11-25T07:11:10.281Z] ok model=glm-4-plus 8368ms out=1124ch
+[zai-bridge 2026-11-25T07:11:30.906Z] ok model=glm-4-plus 5528ms out=972ch
+[zai-bridge 2026-11-25T07:11:55.291Z] ok model=glm-4-plus 9291ms out=1348ch
+[zai-bridge 2026-11-25T07:12:17.121Z] ok model=glm-4-plus 6733ms out=1274ch
+[zai-bridge 2026-11-25T07:12:41.269Z] ok model=glm-4-plus 9034ms out=1440ch
+[zai-bridge 2026-11-25T07:13:03.048Z] ok model=glm-4-plus 6678ms out=1173ch
+[zai-bridge 2026-11-25T07:13:23.860Z] ok model=glm-4-plus 5718ms out=1005ch
+[zai-bridge 2026-11-25T07:13:44.463Z] ok model=glm-4-plus 5506ms out=974ch
+[zai-bridge 2026-11-25T07:14:06.064Z] ok model=glm-4-plus 6502ms out=804ch
+[zai-bridge 2026-11-25T07:14:25.301Z] ok model=glm-4-plus 4131ms out=600ch
+[zai-bridge 2026-11-25T07:14:45.249Z] ok model=glm-4-plus 4850ms out=587ch
+[zai-bridge 2026-11-25T07:15:04.513Z] ok model=glm-4-plus 4160ms out=523ch
+[zai-bridge 2026-11-25T07:15:26.052Z] ok model=glm-4-plus 6444ms out=947ch
+[zai-bridge 2026-11-25T07:15:36.688Z] ok model=glm-4-plus 10514ms out=1493ch
+[zai-bridge 2026-11-25T07:16:02.122Z] ok model=glm-4-plus 10336ms out=1391ch
+[zai-bridge 2026-11-25T07:16:33.443Z] ok model=glm-4-plus 16193ms out=2259ch
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:16:47.742Z] ok model=glm-4-plus 375ms out=2ch
+[zai-bridge 2026-11-25T07:16:57.322Z] ok model=glm-4-plus 8794ms out=1215ch
+[zai-bridge 2026-11-25T07:17:12.467Z] retry#1(429) model=glm-4-plus 47ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案 → 45s 后重试
+[zai-bridge 2026-11-25T07:17:57.523Z] retry#2(429) model=glm-4-plus 45104ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案 → 90s 后重试
+[zai-bridge 2026-11-25T07:19:27.585Z] retry#3(429) model=glm-4-plus 135166ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案 → 150s 后重试
+[zai-bridge 2026-11-25T07:21:02.781Z] retry#1(429) model=glm-4-plus 51ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案 → 45s 后重试
+[zai-bridge 2026-11-25T07:21:47.834Z] retry#2(429) model=glm-4-plus 45104ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案 → 90s 后重试
+[zai-bridge 2026-11-25T07:21:57.633Z] fail model=glm-4-plus 285214ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案；引用只准用列出的 REQ/EV 编号。【项目身份（正文必须锁定，不得改写或自由发挥）】本项目为「中国电信股份有限公司淮安分公司2026年淮安本地视频能力平台建
+[zai-bridge 2026-11-25T07:23:17.896Z] retry#3(429) model=glm-4-plus 135166ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案 → 150s 后重试
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:25:34.716Z] retry#1(429) model=glm-4-plus 55ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591534661.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:25:47.944Z] fail model=glm-4-plus 285214ms err=Error: Command failed: z-ai chat --prompt 章节素材如下。
+章节标题：第二章 投标人须知（条款 1.10-3.2）
+目标字数：1084（±20%）
+起草指令：按招标文件逐项响应，突出同类业绩与实施方案；引用只准用列出的 REQ/EV 编号。【项目身份（正文必须锁定，不得改写或自由发挥）】本项目为「中国电信股份有限公司淮安分公司2026年淮安本地视频能力平台建
+[zai-bridge 2026-11-25T07:26:19.765Z] retry#2(429) model=glm-4-plus 45104ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591579720.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:27:49.831Z] retry#3(429) model=glm-4-plus 135170ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591669769.json
+Failed to make API r → 150s 后重试
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:29:47.337Z] retry#1(429) model=glm-4-plus 52ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591787285.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:30:19.888Z] fail model=glm-4-plus 285227ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591819833.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:30:32.388Z] retry#2(429) model=glm-4-plus 45103ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591832338.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:32:02.452Z] retry#3(429) model=glm-4-plus 135167ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795591922396.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:34:32.512Z] fail model=glm-4-plus 285227ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592072455.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:35:59.755Z] retry#1(429) model=glm-4-plus 59ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592159696.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:36:44.813Z] retry#2(429) model=glm-4-plus 45117ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592204759.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:38:14.869Z] retry#3(429) model=glm-4-plus 135173ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592294819.json
+Failed to make API r → 150s 后重试
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:38:56.722Z] retry#1(429) model=glm-4-plus 46ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592336676.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:39:41.773Z] retry#2(429) model=glm-4-plus 45097ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592381726.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:40:44.927Z] fail model=glm-4-plus 285231ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592444872.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:41:11.836Z] retry#3(429) model=glm-4-plus 135160ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592471779.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:43:41.894Z] fail model=glm-4-plus 285218ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-5573-1795592621837.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:50:36.934Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T07:50:38.139Z] retry#1(429) model=glm-4-plus 54ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593038085.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:51:23.196Z] retry#2(429) model=glm-4-plus 45111ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593083140.json
+Failed to make API r → 90s 后重试
+node:events:505
+    throw er; // Unhandled 'error' event
+    ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
+    at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+    at listenInCluster (node:net:2499:12)
+    at node:net:2728:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2478:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 8787
+}
+
+Node.js v24.22.3
+[zai-bridge 2026-11-25T07:52:43.405Z] retry#1(429) model=glm-4-plus 52ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593163353.json
+Failed to make API r → 45s 后重试
+[zai-bridge 2026-11-25T07:52:53.260Z] retry#3(429) model=glm-4-plus 135175ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593173203.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:53:28.463Z] retry#2(429) model=glm-4-plus 45110ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593208407.json
+Failed to make API r → 90s 后重试
+[zai-bridge 2026-11-25T07:54:58.518Z] retry#3(429) model=glm-4-plus 135165ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593298465.json
+Failed to make API r → 150s 后重试
+[zai-bridge 2026-11-25T07:55:23.315Z] fail model=glm-4-plus 285230ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593323264.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T07:57:28.576Z] fail model=glm-4-plus 285223ms err=Error: Command failed: z-ai chat --prompt 回复两个字：就绪 --output /tmp/zai-bridge-6779-1795593448525.json
+Failed to make API request:  98 |                 headers: headers,
+ 99 |                 body: JSON
+[zai-bridge 2026-11-25T23:14:02.991Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:14:04.511Z] ok model=glm-4-plus 367ms out=2ch
+[zai-bridge 2026-11-25T23:14:22.582Z] ok model=glm-4-plus 17115ms out=2163ch
+[zai-bridge 2026-11-25T23:14:47.722Z] ok model=glm-4-plus 10037ms out=1330ch
+[zai-bridge 2026-11-25T23:16:42.925Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:16:44.454Z] ok model=glm-4-plus 378ms out=2ch
+[zai-bridge 2026-11-25T23:16:57.878Z] ok model=glm-4-plus 12544ms out=1400ch
+[zai-bridge 2026-11-25T23:19:18.425Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:19:20.005Z] ok model=glm-4-plus 425ms out=2ch
+[zai-bridge 2026-11-25T23:19:32.147Z] ok model=glm-4-plus 11353ms out=1243ch
+[zai-bridge 2026-11-25T23:19:58.107Z] ok model=glm-4-plus 10861ms out=1197ch
+[zai-bridge 2026-11-25T23:20:31.209Z] ok model=glm-4-plus 18001ms out=2257ch
+[zai-bridge 2026-11-25T23:21:01.183Z] ok model=glm-4-plus 14848ms out=1759ch
+[zai-bridge 2026-11-25T23:21:26.142Z] ok model=glm-4-plus 9860ms out=1059ch
+[zai-bridge 2026-11-25T23:21:58.903Z] ok model=glm-4-plus 17633ms out=2335ch
+[zai-bridge 2026-11-25T23:22:25.160Z] ok model=glm-4-plus 11154ms out=1263ch
+[zai-bridge 2026-11-25T23:22:51.132Z] ok model=glm-4-plus 10844ms out=1214ch
+[zai-bridge 2026-11-25T23:23:18.798Z] ok model=glm-4-plus 12565ms out=1334ch
+[zai-bridge 2026-11-25T23:23:48.534Z] ok model=glm-4-plus 14605ms out=1883ch
+[zai-bridge 2026-11-25T23:24:16.475Z] ok model=glm-4-plus 12840ms out=1383ch
+[zai-bridge 2026-11-25T23:24:39.446Z] ok model=glm-4-plus 7548ms out=877ch
+[zai-bridge 2026-11-25T23:25:03.113Z] ok model=glm-4-plus 8556ms out=948ch
+[zai-bridge 2026-11-25T23:25:31.276Z] ok model=glm-4-plus 13062ms out=1481ch
+[zai-bridge 2026-11-25T23:25:55.842Z] ok model=glm-4-plus 9310ms out=985ch
+[zai-bridge 2026-11-25T23:26:15.576Z] ok model=glm-4-plus 4484ms out=700ch
+[zai-bridge 2026-11-25T23:26:37.536Z] ok model=glm-4-plus 6702ms out=850ch
+[zai-bridge 2026-11-25T23:27:07.260Z] ok model=glm-4-plus 14465ms out=1602ch
+[zai-bridge 2026-11-25T23:27:31.605Z] ok model=glm-4-plus 9240ms out=1012ch
+[zai-bridge 2026-11-25T23:31:47.024Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:31:48.597Z] ok model=glm-4-plus 423ms out=2ch
+[zai-bridge 2026-11-25T23:33:12.649Z] listening on http://127.0.0.1:8787/v1/chat/completions
+[zai-bridge 2026-11-25T23:33:14.834Z] ok model=glm-4-plus 1028ms out=2ch

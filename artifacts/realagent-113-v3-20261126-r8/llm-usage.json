@@ -1,0 +1,15 @@
+{
+  "calls": 60,
+  "prompt_tokens": 87364,
+  "completion_tokens": 43682,
+  "total_tokens": 131046,
+  "by_model": {
+    "glm-4-plus": {
+      "calls": 60,
+      "prompt_tokens": 87364,
+      "completion_tokens": 43682,
+      "total_tokens": 131046
+    }
+  },
+  "last_at": 1795682736
+}

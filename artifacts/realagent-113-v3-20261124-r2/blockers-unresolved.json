@@ -1,0 +1,171 @@
+{
+ "validate_final": {
+  "blocker": 2,
+  "deterministic": 18,
+  "major": 3,
+  "minor": 13,
+  "model": 0
+ },
+ "blockers": [
+  {
+   "kind": "DETERMINISTIC",
+   "message": "金额冲突：服务部分报价 在 SEC-0012=46365 与 SEC-0012=89635",
+   "requirement_id": null,
+   "rule_code": "E_AMOUNT_CONFLICT",
+   "section_id": "SEC-0012",
+   "severity": "BLOCKER"
+  },
+  {
+   "kind": "DETERMINISTIC",
+   "message": "金额冲突：设备部分报价 在 SEC-0012=100000 与 SEC-0012=4710365",
+   "requirement_id": null,
+   "rule_code": "E_AMOUNT_CONFLICT",
+   "section_id": "SEC-0012",
+   "severity": "BLOCKER"
+  }
+ ],
+ "repair_log": [
+  {
+   "round": 101,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 3 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1182,
+   "citations": 8
+  },
+  {
+   "round": 101,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1455,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 36 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1733,
+   "citations": 8
+  },
+  {
+   "round": 102,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1236,
+   "citations": 8
+  },
+  {
+   "round": 103,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 4 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1682,
+   "citations": 8
+  },
+  {
+   "round": 103,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1296,
+   "citations": 8
+  },
+  {
+   "round": 104,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 35 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1720,
+   "citations": 8
+  },
+  {
+   "round": 104,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1264,
+   "citations": 8
+  },
+  {
+   "round": 105,
+   "sid": "SEC-0028",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 5 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1116,
+   "citations": 8
+  },
+  {
+   "round": 105,
+   "sid": "SEC-0029",
+   "kind": "scoring",
+   "why": [
+    "P6.6 细则覆盖: 1 点未命中——注入逐点响应指令重起草"
+   ],
+   "floor": 600,
+   "ban": false,
+   "words": 1132,
+   "citations": 8
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0025",
+   "why": [
+    "E_AMOUNT_CONFLICT: 金额冲突：投标总报价 在 SEC-0007=4800000 与 SEC-0025=46000（规范 投标总报价=4,800,000）"
+   ],
+   "floor": 600,
+   "ban": true,
+   "words": 913,
+   "citations": 9
+  },
+  {
+   "round": 1,
+   "sid": "SEC-0056",
+   "why": [
+    "E_CHARS_BELOW_MIN: 评分章节「第六章  投标文件格式」正文 389 字低于最低篇幅 400（目标 500 的 −20% 容差下限）——评分主体篇幅不足不得达标/导出，补写后重校"
+   ],
+   "floor": 650,
+   "ban": false,
+   "words": 767,
+   "citations": 3
+  }
+ ]
+}

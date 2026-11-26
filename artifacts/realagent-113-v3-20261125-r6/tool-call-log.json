@@ -1,0 +1,237 @@
+[
+ {
+  "tool": "check_bid_quality",
+  "ok": true,
+  "ms": 679
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 25
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 11447
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 10960
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 18099
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 28
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 14942
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 9957
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 29
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 17734
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 11252
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 29
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 10942
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 12664
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 30
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 14704
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 12944
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 30
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 132
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 127
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 7643
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 8665
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 13160
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 130
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 9406
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 125
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 4579
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 129
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 28
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 6801
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 129
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 27
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 14566
+ },
+ {
+  "tool": "draft_response_section",
+  "ok": true,
+  "ms": 9338
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 179
+ },
+ {
+  "tool": "validate_bid_document",
+  "ok": true,
+  "ms": 176
+ },
+ {
+  "tool": "get_bid_project_state",
+  "ok": true,
+  "ms": 25
+ },
+ {
+  "tool": "record_review_gate",
+  "ok": true,
+  "ms": 79
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "export_bid_document",
+  "ok": true,
+  "ms": 163
+ },
+ {
+  "tool": "check_scoring_coverage",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "tool": "check_bid_quality",
+  "ok": true,
+  "ms": 703
+ }
+]

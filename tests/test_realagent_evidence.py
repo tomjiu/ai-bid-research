@@ -214,3 +214,305 @@ class TestBuildReportMd:
         empty_dir = tmp_path / "fresh"
         empty_dir.mkdir()
         assert realagent_evidence.report_target(str(empty_dir)).endswith("REPORT.md")
+
+
+# ---------------------------------------------------------------- 批三
+
+
+class TestEvidenceCitationHint:
+    """P5b 证据引用指令（EV-0064 未引用根治面）。"""
+
+    def test_列全证据编号与名称_指令可执行(self):
+        hint = realagent_evidence.evidence_citation_hint([
+            ("EV-0063", "qualification", "电子与智能化工程专业承包二级资质证书"),
+            ("EV-0064", "qualification", "营业执照"),
+            ("EV-0065", "performance", "类似业绩合同-智慧园区弱电工程"),
+        ])
+        for ev in ("EV-0063", "EV-0064", "EV-0065"):
+            assert ev in hint
+        assert "营业执照" in hint and "类似业绩合同" in hint
+        assert "证据引用纪律" in hint
+        assert "[EV-0063]" in hint          # 给出可照抄的引用形态示例
+
+    def test_空证据零指令不炸(self):
+        assert realagent_evidence.evidence_citation_hint([]) == ""
+
+
+class TestLeafPointsMap:
+    """check_scoring_coverage → 叶→评分点归集（P9 0/39 根治面）。"""
+
+    def test_按映射叶归集评分点(self):
+        cov = {"criteria": [
+            {"criterion_id": "REQ-0290",
+             "mapped_sections": ["SEC-0028", "SEC-0029"],
+             "points": [{"point": "培训计划"}, {"point": "培训人员分配"},
+                        {"point": "培训达到的效果预期"}]},
+            {"criterion_id": "REQ-0291",
+             "mapped_sections": ["SEC-0028"],
+             "points": [{"point": "应急响应策略"}, {"point": "网络故障预案"}]},
+        ]}
+        m = realagent_evidence.leaf_points_map(cov)
+        assert m["SEC-0028"] == ["培训计划", "培训人员分配", "培训达到的效果预期",
+                                 "应急响应策略", "网络故障预案"]
+        assert m["SEC-0029"] == ["培训计划", "培训人员分配", "培训达到的效果预期"]
+
+    def test_无映射或无点的criteria跳过(self):
+        cov = {"criteria": [
+            {"criterion_id": "R1", "mapped_sections": [], "points": [{"point": "x"}]},
+            {"criterion_id": "R2", "mapped_sections": ["SEC-1"], "points": []},
+            {"criterion_id": "R3", "mapped_sections": ["SEC-1"], "points": [{"point": None}]},
+        ]}
+        assert realagent_evidence.leaf_points_map(cov) == {}
+
+    def test_空响应空map(self):
+        assert realagent_evidence.leaf_points_map({}) == {}
+        assert realagent_evidence.leaf_points_map({"criteria": []}) == {}
+
+
+class TestScoringPointsHint:
+    """单叶评分点逐点响应指令段。"""
+
+    def test_逐点编号列出并带响应纪律(self):
+        hint = realagent_evidence.scoring_points_hint(["培训计划", "应急响应策略"])
+        assert "（1）培训计划" in hint
+        assert "（2）应急响应策略" in hint
+        assert "逐点显式响应" in hint
+        assert "关键术语" in hint              # 字面命中口径的务实解法提示
+
+    def test_空点零指令不炸(self):
+        assert realagent_evidence.scoring_points_hint([]) == ""
+        assert realagent_evidence.scoring_points_hint(["", None]) == ""
+
+
+# ---------------------------------------------------------------- 批六②③
+
+
+class TestBatch6EvidenceFacts:
+    """批六③（r5 审读 A2/A3 实锚）：业绩实载口径注入——比禁令更硬的根治面。
+
+    r5 成品段18：业绩合同金额写 200 万（证据件 EV-0065 实载 260 万——
+    200 恰为资格线值，凑线幻觉新形态）；同时声称「签订日期在
+    2023-10-01 至公告发布之间」（证据件实载 2023-05-20，在窗口外）——
+    日期断言与所引证据件直接矛盾。禁令挡不住 LLM 编具体值：唯一根治面
+    是把证据件实载口径直接注入指令（抄对，而不是被禁止编错）。
+    """
+
+    def test_业绩金额实载口径_260万注入(self):
+        instr = realagent_evidence.initial_instructions()
+        assert "260" in instr and "万" in instr, (
+            "业绩证据件 EV-0065 实载金额（260 万）必须注入指令——LLM 抄对"
+        )
+
+    def test_业绩签订日期实载口径_2023_05_20注入(self):
+        instr = realagent_evidence.initial_instructions()
+        assert "2023-05-20" in instr, "证据件实载签订日期必须注入（防日期断言与证据矛盾）"
+
+    def test_资格线值禁当业绩值_显式禁令(self):
+        instr = realagent_evidence.initial_instructions()
+        assert "资格线" in instr
+        assert "200 万" in instr or "200万" in instr, (
+            "禁令必须点名资格线数值形态（r5 段18 把资格线值写成业绩值）"
+        )
+
+
+class TestBatch6ScoringEvidencePoints:
+    """批六②（r5 审读 C4 实锚）：证据型评分点响应纪律增强。
+
+    r5 实测 P9 34/39：缺的 5 点全是「依赖外部证据件的点」（信息系统
+    管理师证书/演示/样机/检测报告类）——正文无从引用对应证据（台账无
+    该类证据件）时 LLM 直接跳过。指令增强：证据型点要么按 EV 编号显式
+    引用，要么如实声明【待补】——不静默跳过。
+    """
+
+    def test_证据型评分点_追加证据响应纪律子句(self):
+        hint = realagent_evidence.scoring_points_hint(
+            ["技术负责人须具备信息系统管理师证书", "提供设备检测报告"]
+        )
+        assert "证书" in hint
+        assert "证据" in hint
+        assert "EV" in hint or "【待补】" in hint, (
+            "证据型点必须引导按 EV 引用或如实【待补】——不静默跳过"
+        )
+
+    def test_非证据型点_不追加证据段_保持原有形态(self):
+        hint = realagent_evidence.scoring_points_hint(["培训计划", "应急响应策略"])
+        assert "（1）培训计划" in hint
+        assert "（2）应急响应策略" in hint
+
+    def test_空点行为不变(self):
+        assert realagent_evidence.scoring_points_hint([]) == ""
+        assert realagent_evidence.scoring_points_hint(["", None]) == ""
+
+
+class TestBatch7SectionRepairFullPoints:
+    """批七（#113 全链审计 D3）：P6.6 修复轮防回退契约。
+
+    实锚缺陷：r6b SEC-0028 修复轮覆盖 7→8→31 回退——重起草指令只注入
+    未命中点，模型重写把已命中点丢了。契约：按叶聚合全量点（missing/hit
+    双栏）+ 已命中点保留纪律注入段。
+    """
+
+    COV = {
+        "criteria": [
+            {"criterion_id": "REQ-A", "mapped_sections": ["SEC-0028"],
+             "points": [
+                 {"point": "应急响应策略", "hit_section": None},
+                 {"point": "网络故障预案", "hit_section": None},
+             ]},
+            {"criterion_id": "REQ-B", "mapped_sections": ["SEC-0028"],
+             "points": [
+                 {"point": "培训计划", "hit_section": "SEC-0028"},
+                 {"point": "电源故障预案", "hit_section": None},
+             ]},
+            {"criterion_id": "REQ-C", "mapped_sections": ["SEC-0031"],
+             "points": [
+                 {"point": "进度计划", "hit_section": "SEC-0031"},
+             ]},
+        ],
+        "summary": {"points_total": 5, "points_covered": 2},
+    }
+
+    def test_全量点按叶分栏_含已命中(self):
+        out = realagent_evidence.section_points_for_repair(self.COV)
+        sec = out.get("SEC-0028")
+        assert sec is not None, f"SEC-0028 须在键位: {out.keys()}"
+        assert set(sec["missing"]) == {"应急响应策略", "网络故障预案", "电源故障预案"}
+        assert sec["hit"] == ["培训计划"], "已命中点必须入 hit 栏（D3 防回退）"
+
+    def test_全命中叶仍入键位_hit_only(self):
+        out = realagent_evidence.section_points_for_repair(self.COV)
+        assert out.get("SEC-0031") == {"missing": [], "hit": ["进度计划"]}
+
+    def test_跨叶聚合不串门(self):
+        out = realagent_evidence.section_points_for_repair(self.COV)
+        assert "SEC-0028" in out and "SEC-0031" in out and len(out) == 2
+
+    def test_保留纪律段_点名已命中点_只增不删(self):
+        hint = realagent_evidence.retained_points_hint(["培训计划", "进度计划"])
+        assert "培训计划" in hint and "进度计划" in hint
+        assert "保留" in hint and "只增不删" in hint
+        assert realagent_evidence.retained_points_hint([]) == ""
+
+    def test_空响应_空字典(self):
+        assert realagent_evidence.section_points_for_repair({}) == {}
+        assert realagent_evidence.section_points_for_repair({"criteria": []}) == {}
+
+
+# ------------------------------------------------- 批九 G1：P6.6 对照表兜底
+
+class TestPointTableHint:
+    """批九（#113 r6 实弹终验实锚）：P6.6 五轮「逐点织入正文」对短碎片点
+    不收敛——r6b 收口 49/52，残余三点（合同内容页/合同金额页/所提供人员
+    2026年3月份）五轮注入 LLM 反复丢词，且整节重写造成覆盖震荡
+    （49→21 / 49→46 各一次）。投标实务正路是「评分细则逐点响应对照表」：
+    表格点原文列逐字复述细则点——字面命中口径下结构性保证覆盖，且表格
+    逐字复述对 LLM 是远比织入正文更弱的指令（复制类指令）。
+    """
+
+    def test_全量点逐字入表_含逐字复述纪律(self):
+        hint = realagent_evidence.point_table_hint(
+            ["合同内容页", "合同金额页", "所提供人员2026年3月份"])
+        for p in ("合同内容页", "合同金额页", "所提供人员2026年3月份"):
+            assert p in hint, f"点原文必须逐字出现在指令中: {p}"
+        assert "逐字" in hint and "一字不差" in hint, "必须点名逐字复述纪律"
+        assert "对照表" in hint, "必须是对照表形态指令"
+        assert "两列" in hint, "必须是两列表（点原文 | 我方响应）"
+
+    def test_空点空指令不炸(self):
+        assert realagent_evidence.point_table_hint([]) == ""
+        assert realagent_evidence.point_table_hint(None) == ""
+
+    def test_指令声明追加而非替换_防洗正文(self):
+        """对照表是节末追加件——指令必须声明正文照常撰写，防 LLM 把
+        全节缩写成一张表（篇幅门会红）。"""
+        hint = realagent_evidence.point_table_hint(["培训计划"])
+        assert "追加" in hint and ("正文" in hint), "须声明节末追加 + 正文照常"
+
+
+# ------------------------------------------------- 批十 P6.7：uncovered-REQ 引用补齐
+
+class TestReqCitationHint:
+    """批十（#113 P6.7 候补面落地）：r7 实锚——real 生成器 prompt 已含
+    REQ 清单与引用规则（llm.rs 系统规则 2/3 + 素材面逐条「要求条款」），
+    LLM 对低显著度样板条款（1.8.1 不得存在情形 / 1.9 货物原产地 / 1.10
+    投标费用 / 1.11 保密 / 2.2 踏勘现场等——r7 SEC-0035×8/SEC-0040×1/
+    SEC-0062×1 共 10 条）仍丢 [REQ-xxxx] 标注。P6.5 修 blocker、P6.6 修
+    评分点，唯独 REQ 引用无修复面——P6.7 同款定向重起草指令注入。
+    """
+
+    def test_未覆盖REQ逐条列出_显式引用纪律(self):
+        hint = realagent_evidence.req_citation_hint(
+            ["REQ-0138", "REQ-0142", "REQ-0363"])
+        for rid in ("REQ-0138", "REQ-0142", "REQ-0363"):
+            assert rid in hint, f"未覆盖 REQ 必须逐条出现在指令中: {rid}"
+        assert "针对 [REQ-" in hint, "必须点名「针对 [REQ-xxxx]」显式引用形态"
+        assert "未" in hint and "引用" in hint
+
+    def test_空清单空指令不炸(self):
+        assert realagent_evidence.req_citation_hint([]) == ""
+        assert realagent_evidence.req_citation_hint(None) == ""
+
+    def test_已覆盖REQ保留纪律_只增不删(self):
+        """retained 同款（批七 D3 对偶）：整节重起草换全文——已覆盖 REQ
+        的显式引用必须点名保留，否则修复 A 缺口洗掉 B 覆盖。"""
+        hint = realagent_evidence.retained_req_citation_hint(
+            ["REQ-0058", "REQ-0099"])
+        for rid in ("REQ-0058", "REQ-0099"):
+            assert rid in hint, f"已覆盖 REQ 必须逐条点名保留: {rid}"
+        assert "只增不删" in hint or ("保留" in hint and "不得" in hint), (
+            "必须声明只增不删纪律"
+        )
+        assert realagent_evidence.retained_req_citation_hint([]) == ""
+
+    def test_逐REQ响应段兜底_编号逐字写入(self):
+        """批九 G1 对偶：织入正文不收敛（≥2 轮）→ 逐 REQ 显式响应段
+        兜底形态——段落首「针对 [REQ-xxxx]（类别）要求」编号逐字写入，
+        字面引用口径下结构性保证。"""
+        hint = realagent_evidence.req_response_list_hint(
+            ["REQ-0138", "REQ-0154"])
+        for rid in ("REQ-0138", "REQ-0154"):
+            assert rid in hint, f"兜底指令必须逐条列出 REQ: {rid}"
+        assert "逐" in hint and ("段落" in hint or "一段" in hint), (
+            "必须是逐 REQ 独立成段的形态指令"
+        )
+        assert "不得合并" in hint, "必须禁止合并省略编号（合并即丢引用）"
+        assert realagent_evidence.req_response_list_hint([]) == ""
+
+
+# ------------------------------------------------- 批十一 P6.8：EV 引用补齐
+
+class TestEvCitationHint:
+    """批十一（#113 P9.5 面落地）：r7 实锚——EV-0064（营业执照）全文
+    0 援引（P9.5 证据引用 2/3）。根因双层：P4 绑定只绑 quals[0]/perfs[0]
+    （EV-0064 注册后从未绑定任何 REQ 组——不绑定不进素材面，且 draft.rs
+    起草时剔除「不在已知集」的引用）；驱动器 P6.5/P6.6/P6.7 之后唯独
+    EV 引用无修复面。P6.8 同款定向重起草指令注入。
+    """
+
+    def test_零援引EV逐条列出_显式援引纪律(self):
+        hint = realagent_evidence.ev_citation_hint(["EV-0064"])
+        assert "EV-0064" in hint, "零援引 EV 必须逐条出现在指令中"
+        assert "[EV-" in hint, "必须点名「[EV-xxxx]」显式援引形态"
+        assert realagent_evidence.ev_citation_hint([]) == ""
+        assert realagent_evidence.ev_citation_hint(None) == ""
+
+    def test_已援引EV保留纪律_只增不删(self):
+        """整节重起草换全文——已援引 EV 必须点名保留，否则修复 EV-0064
+        洗掉 EV-0063（21 次援引）。"""
+        hint = realagent_evidence.retained_ev_citation_hint(
+            ["EV-0063", "EV-0065"])
+        for ev in ("EV-0063", "EV-0065"):
+            assert ev in hint, f"已援引 EV 必须逐条点名保留: {ev}"
+        assert "只增不删" in hint or ("保留" in hint and "不得" in hint), (
+            "必须声明只增不删纪律"
+        )
+        assert realagent_evidence.retained_ev_citation_hint([]) == ""
+
+    def test_逐EV援引段兜底_编号逐字写入(self):
+        """织入正文不收敛（≥2 轮）→ 逐 EV 援引段兜底——每条 EV 各写一段
+        「[EV-xxxx]（名称）：本方持有该证据……」编号逐字写入。"""
+        hint = realagent_evidence.ev_statement_hint(["EV-0064"])
+        assert "EV-0064" in hint
+        assert "一段" in hint or "段落" in hint, "必须是逐 EV 独立成段形态"
+        assert realagent_evidence.ev_statement_hint([]) == ""
+        assert realagent_evidence.ev_statement_hint(None) == ""
