@@ -427,3 +427,53 @@ class TestPointTableHint:
         全节缩写成一张表（篇幅门会红）。"""
         hint = realagent_evidence.point_table_hint(["培训计划"])
         assert "追加" in hint and ("正文" in hint), "须声明节末追加 + 正文照常"
+
+
+# ------------------------------------------------- 批十 P6.7：uncovered-REQ 引用补齐
+
+class TestReqCitationHint:
+    """批十（#113 P6.7 候补面落地）：r7 实锚——real 生成器 prompt 已含
+    REQ 清单与引用规则（llm.rs 系统规则 2/3 + 素材面逐条「要求条款」），
+    LLM 对低显著度样板条款（1.8.1 不得存在情形 / 1.9 货物原产地 / 1.10
+    投标费用 / 1.11 保密 / 2.2 踏勘现场等——r7 SEC-0035×8/SEC-0040×1/
+    SEC-0062×1 共 10 条）仍丢 [REQ-xxxx] 标注。P6.5 修 blocker、P6.6 修
+    评分点，唯独 REQ 引用无修复面——P6.7 同款定向重起草指令注入。
+    """
+
+    def test_未覆盖REQ逐条列出_显式引用纪律(self):
+        hint = realagent_evidence.req_citation_hint(
+            ["REQ-0138", "REQ-0142", "REQ-0363"])
+        for rid in ("REQ-0138", "REQ-0142", "REQ-0363"):
+            assert rid in hint, f"未覆盖 REQ 必须逐条出现在指令中: {rid}"
+        assert "针对 [REQ-" in hint, "必须点名「针对 [REQ-xxxx]」显式引用形态"
+        assert "未" in hint and "引用" in hint
+
+    def test_空清单空指令不炸(self):
+        assert realagent_evidence.req_citation_hint([]) == ""
+        assert realagent_evidence.req_citation_hint(None) == ""
+
+    def test_已覆盖REQ保留纪律_只增不删(self):
+        """retained 同款（批七 D3 对偶）：整节重起草换全文——已覆盖 REQ
+        的显式引用必须点名保留，否则修复 A 缺口洗掉 B 覆盖。"""
+        hint = realagent_evidence.retained_req_citation_hint(
+            ["REQ-0058", "REQ-0099"])
+        for rid in ("REQ-0058", "REQ-0099"):
+            assert rid in hint, f"已覆盖 REQ 必须逐条点名保留: {rid}"
+        assert "只增不删" in hint or ("保留" in hint and "不得" in hint), (
+            "必须声明只增不删纪律"
+        )
+        assert realagent_evidence.retained_req_citation_hint([]) == ""
+
+    def test_逐REQ响应段兜底_编号逐字写入(self):
+        """批九 G1 对偶：织入正文不收敛（≥2 轮）→ 逐 REQ 显式响应段
+        兜底形态——段落首「针对 [REQ-xxxx]（类别）要求」编号逐字写入，
+        字面引用口径下结构性保证。"""
+        hint = realagent_evidence.req_response_list_hint(
+            ["REQ-0138", "REQ-0154"])
+        for rid in ("REQ-0138", "REQ-0154"):
+            assert rid in hint, f"兜底指令必须逐条列出 REQ: {rid}"
+        assert "逐" in hint and ("段落" in hint or "一段" in hint), (
+            "必须是逐 REQ 独立成段的形态指令"
+        )
+        assert "不得合并" in hint, "必须禁止合并省略编号（合并即丢引用）"
+        assert realagent_evidence.req_response_list_hint([]) == ""

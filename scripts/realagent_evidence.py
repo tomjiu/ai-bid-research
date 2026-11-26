@@ -326,6 +326,68 @@ def point_table_hint(all_points: list[str]) -> str:
     )
 
 
+def req_citation_hint(uncovered_reqs: list[str]) -> str:
+    """未覆盖 REQ 逐条补引用指令段（批十 P6.7——候补面落地）。
+
+    r7 实锚：real 生成器 prompt 已含 REQ 清单与引用规则（llm.rs 系统规则
+    2/3 + 素材面逐条「要求条款」），LLM 对低显著度样板条款（1.8.1 不得
+    存在情形 / 1.9 货物原产地 / 1.10 投标费用 / 1.11 保密 / 2.2 踏勘
+    现场等——r7 共 10 条）仍丢 [REQ-xxxx] 标注。指令逐条点名未覆盖
+    REQ，要求「针对 [REQ-xxxx]（类别）……」形态逐条显式响应。
+    """
+    reqs = [r for r in (uncovered_reqs or []) if r]
+    if not reqs:
+        return ""
+    enumerated = "、".join(f"[{r}]" for r in reqs)
+    return (
+        "REQ 引用补齐纪律（#113 审计批十）：本节绑定条款中以下 REQ 在"
+        "正文未被显式引用：" + enumerated + "。重起草须对上述每条 REQ 单独"
+        "成段显式响应——段落首「针对 [REQ-xxxx]（类别）要求，我方响应：……」"
+        "编号逐字写入正文（引擎按 [REQ-xxxx] 字面引用判覆盖，语义等价"
+        "表述不识别；缺引用 = 该条款无响应面，审校按未回应处理）；"
+        "不得合并多条款省略编号。"
+    )
+
+
+def retained_req_citation_hint(covered_reqs: list[str]) -> str:
+    """已覆盖 REQ 引用保留纪律段（批十 P6.7——批七 D3 对偶面）。
+
+    整节重起草换全文——已覆盖 REQ 的显式引用必须点名保留（只增不删），
+    否则修复 A 缺口洗掉 B 覆盖（P6.6 覆盖回退 r6b 7→8→31 同族）。
+    """
+    reqs = [r for r in (covered_reqs or []) if r]
+    if not reqs:
+        return ""
+    enumerated = "、".join(f"[{r}]" for r in reqs)
+    return (
+        "已覆盖 REQ 保留纪律（#113 审计批十）：本节正文已显式引用下列"
+        "REQ——重起草后仍须逐条保留引用与对应响应段（只增不删：新增"
+        "未覆盖 REQ 的响应段，不改写/删除已覆盖 REQ 的既有段）："
+        + enumerated
+    )
+
+
+def req_response_list_hint(uncovered_reqs: list[str]) -> str:
+    """逐 REQ 显式响应段兜底指令段（批十 P6.7——批九 G1 对偶）。
+
+    织入正文 ≥2 轮不收敛（LLM 对低显著度条款反复丢引用）→ 逐 REQ
+    响应段兜底：每条 REQ 各写一段「针对 [REQ-xxxx]（类别）要求，我方
+    响应：……」——段落首编号逐字写入是字面引用口径下的结构性保证
+    （同 P6.6 对照表兜底的「复制类指令远弱于织入正文」机理）。
+    """
+    reqs = [r for r in (uncovered_reqs or []) if r]
+    if not reqs:
+        return ""
+    enumerated = "、".join(f"[{r}]" for r in reqs)
+    return (
+        "逐 REQ 显式响应段兜底纪律（#113 审计批十）：本节前轮织入正文"
+        "未收敛，本轮改逐 REQ 响应段形态收口。对下列每条 REQ 各写一段"
+        "「针对 [REQ-xxxx]（类别）要求，我方响应：……」的独立段落："
+        + enumerated + "。段落首编号逐字写入，不得合并省略编号，"
+        "不得以概述性段落笼统带过——缺段落即缺响应面。"
+    )
+
+
 def report_target(out_dir: str) -> str:
     """REPORT 底稿目标路径：OUT 无 REPORT.md → REPORT.md（首跑即机器底稿）；
     已有（手写叙事/封存包）→ REPORT.generated.md——**不覆盖既有文件**

@@ -510,6 +510,96 @@ try:
     print(f"[P6.6] 细则覆盖收口: covered={cov_mid['summary']['points_covered']}/"
           f"{cov_mid['summary']['points_total']}")
 
+    # ---- P6.7 uncovered-REQ 引用补齐修复轮（批十——批九登记候补面落地）----
+    # r7 实锚：P9.6 未覆盖 REQ 10 条（SEC-0035×8 / SEC-0040×1 / SEC-0062×1
+    # ——第一章「其他」类样板条款：1.8.1 不得存在情形 / 1.9 货物原产地 /
+    # 1.10 投标费用 / 1.11 保密 / 2.2 踏勘现场等）。根因非 prompt 缺口
+    # （llm.rs 系统规则 2/3 与素材面已含 REQ 清单及引用规则）——LLM 对
+    # 低显著度样板条款丢 [REQ-xxxx] 标注，而驱动器有 P6.5（blocker）/
+    # P6.6（评分点）两条修复轮唯独 REQ 引用无修复面。同款定向重起草：
+    # check_bid_quality 活体取 sections[].uncovered_reqs（补齐面）/
+    # covered_reqs（保留面）→ 未覆盖 REQ 逐条补引用 + 已覆盖 REQ 保留
+    # 纪律双注入（整节重起草换全文，不点名保留即修复 A 洗掉 B——批七
+    # D3 对偶）。≥2 轮未收敛切逐 REQ 显式响应段兜底（批九 G1 对偶：
+    # 段落首编号逐字写入是字面引用口径下的结构性保证）。
+    # ★执行位置契约（E_STATE 纪律，tests/test_p67_req_repair_order.py
+    # 回归锁）：本修复轮必须在**首个全稿 validate_bid_document 之前**
+    # 执行（P6.6 之后、P6 校验之前——全在 Drafting 态内）。
+    q_mid = must("check_bid_quality", {"project_id": PID, "project_version": "latest"}, "q-mid")
+    rq_stuck = {}
+    for e in repair_log:
+        if e.get("kind") == "req-cite":
+            rq_stuck[e["sid"]] = rq_stuck.get(e["sid"], 0) + 1
+    rq_round = 0
+    while any(s.get("uncovered_reqs") for s in q_mid["sections"]):
+        bad = {s["section_id"]: s for s in q_mid["sections"] if s.get("uncovered_reqs")}
+        rq_round += 1
+        if rq_round > 5:
+            print(f"[P6.7] REQ 引用补齐轮耗尽——剩余 {sum(len(s['uncovered_reqs']) for s in bad.values())}"
+                  f" 条如实登记（不豁免）")
+            break
+        print(f"[P6.7] REQ 引用补齐轮 {rq_round}: "
+              f"{sum(len(s['uncovered_reqs']) for s in bad.values())} 条未覆盖 REQ → "
+              f"{len(bad)} 叶定向重起草（未覆盖补齐 + 已覆盖保留双注入）")
+        for sid, s in sorted(bad.items()):
+            unc = s["uncovered_reqs"]
+            cov = s.get("covered_reqs") or []
+            stuck = rq_stuck.get(sid, 0) + 1
+            rq_stuck[sid] = stuck
+            if stuck >= 2:
+                # 逐 REQ 显式响应段兜底：段落首编号逐字写入（结构性保证）
+                instr = (INITIAL_INSTR + EV_HINT
+                         + realagent_evidence.req_response_list_hint(unc)
+                         + realagent_evidence.retained_req_citation_hint(cov)
+                         + " 本节前轮逐条织入未收敛——逐 REQ 响应段兜底"
+                           "重起草，正文照常不少于 600 字。")
+                why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——逐 REQ 响应段"
+                       f"兜底（历史 {stuck - 1} 轮织入未收敛）")
+            else:
+                instr = (INITIAL_INSTR + EV_HINT
+                         + realagent_evidence.req_citation_hint(unc)
+                         + realagent_evidence.retained_req_citation_hint(cov)
+                         + " 本节当前版本未逐条引用上述 REQ——重起草逐条"
+                           "补引用，正文不少于 600 字。")
+                why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——定向重起草"
+                       f"补引用（已覆盖 {len(cov)} 条保留防回退）")
+            r = call("draft_response_section", {
+                "project_id": PID, "section_id": sid,
+                "instructions": instr,
+                "generator": "real", "project_version": "latest",
+            }, timeout=620)
+            if not r.get("ok"):
+                err = json.dumps(r.get("error", {}), ensure_ascii=False)
+                if "429" in err or "Too many requests" in err or "LLM" in err:
+                    print(f"[P6.7] {sid} 修复生成失败（限流）——保存进度优雅退出: {err[:160]}")
+                    exit_code = 2
+                    break
+                raise AssertionError(f"[req-cite-repair:{sid}] {err[:400]}")
+            st = r["data"].get("stats", {})
+            draft_stats = [x for x in draft_stats if x["sid"] != sid]
+            draft_stats.append({"sid": sid, "words": st.get("words"),
+                                "citations": st.get("citations")})
+            repair_log.append({"round": 300 + rq_round, "sid": sid,
+                              "kind": "req-cite",
+                              "why": [why],
+                              "floor": 600, "ban": False,
+                              "words": st.get("words"),
+                              "citations": st.get("citations")})
+            print(f"[P6.7] {sid} 重起草 words={st.get('words')} "
+                  f"cites={st.get('citations')}"
+                  + ("（逐 REQ 响应段兜底：" + str(len(unc)) + " 条）"
+                     if stuck >= 2 else
+                     f"（补 {len(unc)} 条引用 + 保留 {len(cov)} 条）"),
+                  flush=True)
+            save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
+            time.sleep(DRAFT_GAP_S)
+        if exit_code == 2:
+            sys.exit(2)
+        q_mid = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
+                     f"q-mid:{rq_round}")
+    print(f"[P6.7] REQ 引用收口: uncovered="
+          f"{sum(len(s.get('uncovered_reqs') or []) for s in q_mid['sections'])}")
+
     # ---- P6 校验 ----
     d = must("validate_bid_document", {"project_id": PID, "scope": "all",
                                        "project_version": "latest"}, "validate")
@@ -670,6 +760,15 @@ try:
         # P6.6 同款双注入：全量点补齐 + 已命中点保留（只增不删）。
         cov_r = must("check_scoring_coverage", {"project_id": PID}, f"cov-p65:{round_no}")
         sec_pts_r = realagent_evidence.section_points_for_repair(cov_r)
+        # 批十 P6.7 对偶（批八 G2 同型入口）：P6.5 整节重起草换全文——
+        # 不带 REQ 引用纪律会把 P6.7 收口洗掉（REQ 引用回退入口）。每轮
+        # 取活体 check_bid_quality 的 REQ 面（validate 响应无
+        # sections[].covered_reqs——数据源必须用 quality 工具），指令双
+        # 注入：未覆盖 REQ 补齐（req_citation_hint）+ 已覆盖 REQ 保留
+        # （retained_req_citation_hint，只增不删）。
+        q_r = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
+                   f"q-p65:{round_no}")
+        sec_reqs_r = {s.get("section_id"): s for s in (q_r.get("sections") or [])}
         for sid, e in sorted(plan.items()):
             r = call("draft_response_section", {
                 "project_id": PID, "section_id": sid,
@@ -685,7 +784,13 @@ try:
                                       + sec_pts_r.get(sid, {}).get("hit", []))
                                      or (POINTS_MAP.get(sid) or []))
                                  + realagent_evidence.retained_points_hint(
-                                     sec_pts_r.get(sid, {}).get("hit", []))),
+                                     sec_pts_r.get(sid, {}).get("hit", []))
+                                 + realagent_evidence.req_citation_hint(
+                                     (sec_reqs_r.get(sid) or {}).get("uncovered_reqs")
+                                     or [])
+                                 + realagent_evidence.retained_req_citation_hint(
+                                     (sec_reqs_r.get(sid) or {}).get("covered_reqs")
+                                     or [])),
                 "generator": "real", "project_version": "latest",
             }, timeout=620)
             if not r.get("ok"):
