@@ -25,9 +25,14 @@ r7 实锚（artifacts/realagent-113-v3-20261126-r7）：
        + retained_req_citation_hint（已覆盖保留纪律，只增不删）。
 """
 import re
+import sys
 from pathlib import Path
 
-DRIVER = Path(__file__).resolve().parent.parent / "scripts" / "run_real_llm_path.py"
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "scripts"))
+import realagent_evidence  # noqa: E402
+
+DRIVER = REPO / "scripts" / "run_real_llm_path.py"
 
 
 def _src() -> str:
@@ -37,9 +42,11 @@ def _src() -> str:
 def _p67_block(s: str) -> str:
     m = re.search(r"# ---- P6\.7 uncovered-REQ 引用补齐修复轮", s)
     assert m, "P6.7 修复轮代码块缺失（批十面被误删？）"
-    # 块右界：首个全稿 validate 或 P6.5 块头（P6.7 在两者之前）
-    m_val = re.search(r'must\(\s*"validate_bid_document"', s)
-    end = m_val.start() if m_val else len(s)
+    # 块右界 = 下一相位边界（批#221 Lead 指定修正：旧「首个 validate」
+    # 右界把 P6.8 块整个包进来——存在性字符串断言可被 P6.8 的字符串
+    # 误满足，测试盲区）。
+    m_next = re.search(r"# ---- P6\.8 证据引用补齐修复轮", s)
+    end = m_next.start() if m_next else len(s)
     return s[m.start():end]
 
 
@@ -97,35 +104,35 @@ def test_p67_repair_kind_isolated_from_scoring():
 def test_p67_stuck_fallback_to_response_list():
     """契约 4：≥2 轮未收敛切逐 REQ 响应段兜底（req_response_list_hint）——
     批九 G1 对偶：织入正文对低显著度条款不收敛，段落首编号逐字写入是
-    字面引用的结构性保证。"""
+    字面引用的结构性保证。批#221：指令尾抽为可测函数——行为断言。"""
     block = _p67_block(_src())
-    assert "req_response_list_hint" in block, (
-        "P6.7 无逐 REQ 响应段兜底（req_response_list_hint）——织入正文"
-        "不收敛无兜底路径，残余缺口将永远如实登记。"
+    assert "p67_repair_instruction_tail" in block, (
+        "P6.7 指令尾未接线可测函数——兜底/保留栈无法离线行为测试。"
     )
-    assert re.search(r"stuck\s*>=\s*2", block), (
-        "兜底切换阈值必须 ≥2（首轮织入正文仍要给机会，响应段是兜底形态）。"
+    # 行为断言：stuck≥2 切响应段兜底；stuck=1 织入补引用
+    tail_fb = realagent_evidence.p67_repair_instruction_tail(
+        ["REQ-0031"], ["REQ-0032"], [], [], ["EV-0063"], 2)
+    assert "逐 REQ 显式响应段兜底纪律" in tail_fb and "REQ-0031" in tail_fb, (
+        "≥2 轮未收敛无逐 REQ 响应段兜底——残余缺口将永远如实登记。"
     )
+    tail_norm = realagent_evidence.p67_repair_instruction_tail(
+        ["REQ-0031"], [], [], [], [], 1)
+    assert "REQ 引用补齐纪律" in tail_norm, "stuck=1 应为织入补引用形态。"
 
 
 def test_p67_both_branches_carry_retained():
     """契约 5：两分支双注入 retained_req_citation_hint（已覆盖 REQ 保留
-    纪律）——整节重起草换全文，不点名保留即修复 A 洗掉 B（批七 D3 对偶）。"""
-    block = _p67_block(_src())
-    assert "retained_req_citation_hint" in block, (
-        "P6.7 缺 retained_req_citation_hint——整节重起草是已覆盖 REQ 的"
-        "回退入口（换全文时模型可丢既有引用）。"
-    )
-    # 常规分支（req_citation_hint）与兜底分支（req_response_list_hint）
-    # 的组装段内都必须同时出现 retained
-    for anchor, tag in (("req_citation_hint", "常规分支"),
-                        ("req_response_list_hint", "兜底分支")):
-        i = block.find(anchor)
-        seg = block[max(0, i - 100): i + 700]
-        assert "retained_req_citation_hint" in seg, (
-            f"{tag}（{anchor}）组装段未同时注入 retained_req_citation_hint"
-            "——保留纪律只挂单分支，另一分支仍是回退入口。"
+    纪律）——整节重起草换全文，不点名保留即修复 A 洗掉 B（批七 D3 对偶）。
+    批#221：行为断言——两分支真产出保留纪律文本。"""
+    for stuck in (1, 2):
+        tail = realagent_evidence.p67_repair_instruction_tail(
+            ["REQ-0031"], ["REQ-0032", "REQ-0033"], [], [], [], stuck)
+        assert "已覆盖 REQ 保留纪律" in tail, (
+            f"stuck={stuck} 分支丢已覆盖 REQ 保留纪律——保留纪律只挂单"
+            "分支，另一分支仍是回退入口。"
         )
+        for req in ("REQ-0032", "REQ-0033"):
+            assert req in tail, f"stuck={stuck} 分支保留段未点名 {req}"
 
 
 def test_p67_round_cap_and_honest_exit():
@@ -141,23 +148,28 @@ def test_p65_repair_carries_req_citation_retention():
     r6b 7→8→31 回退家族）。指令必须双注入 req_citation_hint（未覆盖
     补齐）+ retained_req_citation_hint（已覆盖保留），且每轮取活体
     check_bid_quality 的 REQ 面（validate 响应无 sections[].covered_reqs
-    ——不能凑合用 validate 数据）。"""
+    ——不能凑合用 validate 数据）。批#221：行为断言升级。"""
     s = _src()
     m_p65 = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
     m_p7 = re.search(r"# ---- P7", s)
     assert m_p65 and m_p7
     block = s[m_p65.start(): m_p7.start()]
-    assert "retained_req_citation_hint" in block, (
-        "P6.5 修复指令缺 retained_req_citation_hint——blocker 重起草换全文"
+    assert "p65_retention_payload" in block, (
+        "P6.5 修复指令未接线 p65_retention_payload——blocker 重起草换全文"
         "是 REQ 引用回退入口，P6.7 收口会被洗掉。"
-    )
-    assert "req_citation_hint" in block, (
-        "P6.5 修复指令缺 req_citation_hint——blocker 重起草造成的未覆盖"
-        "REQ 无法在该轮内顺手补齐。"
     )
     assert "check_bid_quality" in block, (
         "P6.5 未每轮取活体 check_bid_quality 的 REQ 面——validate 响应无"
         "sections[].covered_reqs，静态/错源数据会把保留纪律建立在过期面上。"
+    )
+    # 行为断言：REQ 补齐 + 保留双注入真在指令尾产出
+    payload = realagent_evidence.p65_retention_payload(
+        [], [], ["REQ-0009"], ["REQ-0001"], [])
+    assert "REQ 引用补齐纪律" in payload and "REQ-0009" in payload, (
+        "P6.5 指令尾缺 REQ 补齐注入——重起草造成的未覆盖 REQ 无法顺手补齐。"
+    )
+    assert "已覆盖 REQ 保留纪律" in payload and "REQ-0001" in payload, (
+        "P6.5 指令尾缺已覆盖 REQ 保留——P6.7 收口被链末重写洗掉。"
     )
 
 
@@ -165,22 +177,26 @@ def test_p67_repair_carries_points_retention():
     """契约 7（批十一——批十自审残余）：P6.7 整节重起草换全文时只带
     REQ 面双注入而缺评分点保留——P6.6 收口（52/52）会被洗掉（r6b
     7→8→31 覆盖回退同族；批七 D3 修了 P6.5 入口、批八 G2 修了另一半，
-    P6.7 是同型的第三个入口）。重起草指令必须带：
-    retained_points_hint（已命中点保留）+ scoring_points_hint（防丢点
-    双注入），且取**活体**覆盖面（每轮 check_scoring_coverage）。"""
+    P6.7 是同型的第三个入口）。批#221：行为断言升级。"""
     s = _src()
     m_p67 = re.search(r"# ---- P6\.7 uncovered-REQ 引用补齐修复轮", s)
     m_p65 = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
     assert m_p67 and m_p65
     block = s[m_p67.start(): m_p65.start()]
-    assert "retained_points_hint" in block, (
-        "P6.7 缺 retained_points_hint——重起草洗掉 P6.6 已命中评分点"
-        "（覆盖回退入口，批十落地时漏带）。"
-    )
-    assert "scoring_points_hint" in block, (
-        "P6.7 缺 scoring_points_hint——丢掉的命中点无法在本轮内补回"
-        "（P6.6 已过序，不会重来）。"
+    assert "p67_repair_instruction_tail" in block, (
+        "P6.7 指令尾未接线可测函数——评分点保留面无法行为测试。"
     )
     assert "check_scoring_coverage" in block, (
         "P6.7 未取活体覆盖面——静态/过期面会把保留纪律建立在漂移数据上。"
+    )
+    # 行为断言：评分点补齐 + 保留双注入真在指令尾产出
+    tail = realagent_evidence.p67_repair_instruction_tail(
+        [], [], ["合同内容页数"], ["培训方案"], [], 1)
+    assert "评分细则响应纪律" in tail and "合同内容页数" in tail, (
+        "P6.7 指令尾缺评分点补齐注入——丢掉的命中点无法在本轮内补回"
+        "（P6.6 已过序，不会重来）。"
+    )
+    assert "已命中点保留纪律" in tail and "培训方案" in tail, (
+        "P6.7 指令尾缺已命中点保留——P6.6 收口（52/52）被洗掉"
+        "（r6b 回退同族第三入口）。"
     )

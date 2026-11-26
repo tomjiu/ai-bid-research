@@ -452,31 +452,31 @@ try:
         print(f"[P6.6] 细则覆盖修复轮 {sc_round}: "
               f"{cov_mid['summary']['points_total'] - cov_mid['summary']['points_covered']} 点未命中 → "
               f"{len(sid_pts)} 叶定向重起草（全量点双注入防回退）")
+        # 批#221：P6.6 整节重写同样是 REQ/EV 引用回退入口——节级已援引
+        # EV 洗掉**不**触发 P6.8 重收口（其判据是文档级零援引，别节仍
+        # 援引即不复活本节）。每轮取活体 check_bid_quality 面
+        # （covered_reqs/cited_evs）→ 指令尾统一走
+        # p66_repair_instruction_tail（REQ/EV 保留纪律随行；REQ 补齐仍归
+        # P6.7 轮次，不前置抢跑）。
+        q_p66 = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
+                     f"q-p66:{sc_round}")
+        sec_q_p66 = {s.get("section_id"): s for s in (q_p66.get("sections") or [])}
         for sid, pts in sorted(sid_pts.items()):
             hit_pts = sec_pts[sid]["hit"]
             stuck = sid_stuck.get(sid, 0) + 1
             sid_stuck[sid] = stuck
-            if stuck >= 2:
-                # 批九 G1：对照表兜底——点原文列逐字复述（含全量点：
-                # 缺点 + 已命中点全数入表，表格即逐点响应载体）；
-                # retained 双注入不豁免（表模式正文重写仍可洗已命中点）。
-                instr = (INITIAL_INSTR + EV_HINT
-                         + realagent_evidence.point_table_hint(
-                             list(pts) + list(hit_pts))
-                         + realagent_evidence.retained_points_hint(hit_pts)
-                         + " 本节前轮逐点织入正文未收敛——对照表兜底重起草："
-                           "表第一列逐字复述点原文（一字不差），正文照常撰写"
-                           "不少于 600 字。")
-                why = (f"P6.6 细则覆盖: {len(pts)} 点未命中——对照表兜底重起草"
-                       f"（历史 {stuck - 1} 轮织入未收敛，表列逐字复述）")
-            else:
-                instr = (INITIAL_INSTR + EV_HINT
-                         + realagent_evidence.scoring_points_hint(pts)
-                         + realagent_evidence.retained_points_hint(hit_pts)
-                         + " 本节当前版本未逐点命中上述评分细则——重起草逐点"
-                           "补齐，正文不少于 600 字。")
-                why = (f"P6.6 细则覆盖: {len(pts)} 点未命中——全量点双注入重起草"
-                       f"（已命中 {len(hit_pts)} 点保留防回退）")
+            s66 = sec_q_p66.get(sid) or {}
+            # 批九 G1：stuck ≥ 2 切对照表兜底（点原文列逐字复述，含全量
+            # 点：表格即逐点响应载体；retained 双注入不豁免——尾函数统一）。
+            instr = (INITIAL_INSTR + EV_HINT
+                     + realagent_evidence.p66_repair_instruction_tail(
+                         pts, hit_pts,
+                         s66.get("covered_reqs") or [],
+                         s66.get("cited_evs") or [], stuck))
+            why = (f"P6.6 细则覆盖: {len(pts)} 点未命中——" + (
+                f"对照表兜底重起草（历史 {stuck - 1} 轮织入未收敛，表列逐字复述）"
+                if stuck >= 2 else
+                f"全量点双注入重起草（已命中 {len(hit_pts)} 点保留防回退）"))
             r = call("draft_response_section", {
                 "project_id": PID, "section_id": sid,
                 "instructions": instr,
@@ -562,31 +562,19 @@ try:
             pts_now = sec_pts_rq.get(sid, {})
             stuck = rq_stuck.get(sid, 0) + 1
             rq_stuck[sid] = stuck
-            if stuck >= 2:
-                # 逐 REQ 显式响应段兜底：段落首编号逐字写入（结构性保证）
-                instr = (INITIAL_INSTR + EV_HINT
-                         + realagent_evidence.req_response_list_hint(unc)
-                         + realagent_evidence.retained_req_citation_hint(cov)
-                         + realagent_evidence.scoring_points_hint(
-                             pts_now.get("missing", []))
-                         + realagent_evidence.retained_points_hint(
-                             pts_now.get("hit", []))
-                         + " 本节前轮逐条织入未收敛——逐 REQ 响应段兜底"
-                           "重起草，正文照常不少于 600 字。")
-                why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——逐 REQ 响应段"
-                       f"兜底（历史 {stuck - 1} 轮织入未收敛）")
-            else:
-                instr = (INITIAL_INSTR + EV_HINT
-                         + realagent_evidence.req_citation_hint(unc)
-                         + realagent_evidence.retained_req_citation_hint(cov)
-                         + realagent_evidence.scoring_points_hint(
-                             pts_now.get("missing", []))
-                         + realagent_evidence.retained_points_hint(
-                             pts_now.get("hit", []))
-                         + " 本节当前版本未逐条引用上述 REQ——重起草逐条"
-                           "补引用，正文不少于 600 字。")
-                why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——定向重起草"
-                       f"补引用（已覆盖 {len(cov)} 条保留防回退）")
+            # 批#221：EV 保留随行——P6.7 整节重写洗掉的节级已援引 EV 不
+            # 触发 P6.8 重收口（其判据是文档级零援引），cited_evs 保留
+            # 纪律必须随指令同行。指令尾统一走 p67_repair_instruction_tail
+            # （批十双分支——stuck ≥ 2 切逐 REQ 响应段兜底，批九 G1 对偶）。
+            instr = (INITIAL_INSTR + EV_HINT
+                     + realagent_evidence.p67_repair_instruction_tail(
+                         unc, cov,
+                         pts_now.get("missing", []), pts_now.get("hit", []),
+                         s.get("cited_evs") or [], stuck))
+            why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——" + (
+                f"逐 REQ 响应段兜底（历史 {stuck - 1} 轮织入未收敛）"
+                if stuck >= 2 else
+                f"定向重起草补引用（已覆盖 {len(cov)} 条保留防回退）"))
             r = call("draft_response_section", {
                 "project_id": PID, "section_id": sid,
                 "instructions": instr,
@@ -692,14 +680,9 @@ try:
                 ev_stuck[e] = stuck_after
                 (stuck_evs if stuck_after >= 2 else fresh_evs).append(e)
             instr = (INITIAL_INSTR + EV_HINT
-                     + realagent_evidence.ev_citation_hint(fresh_evs)
-                     + realagent_evidence.ev_statement_hint(stuck_evs)
-                     + realagent_evidence.retained_ev_citation_hint(cited_evs)
-                     + realagent_evidence.req_citation_hint(unc_reqs)
-                     + realagent_evidence.retained_req_citation_hint(cov_reqs)
-                     + realagent_evidence.scoring_points_hint(pts_now.get("missing", []))
-                     + realagent_evidence.retained_points_hint(pts_now.get("hit", []))
-                     + " 本节重起草补齐上述零援引证据的显式援引，正文不少于 600 字。")
+                     + realagent_evidence.p68_repair_instruction_tail(
+                         fresh_evs, stuck_evs, cited_evs, unc_reqs, cov_reqs,
+                         pts_now.get("missing", []), pts_now.get("hit", [])))
             why = (f"P6.8 证据引用: {len(evs)} 项零援引——定向重起草补援引"
                    f"（已援引 {len(cited_evs)} 项保留防回退）")
             r = call("draft_response_section", {
@@ -744,6 +727,20 @@ try:
     d = must("validate_bid_document", {"project_id": PID, "scope": "all",
                                        "project_version": "latest"}, "validate")
     print(f"[P6] 校验: ok={d.get('ok')} counts={d.get('counts')}")
+
+    # ---- 批#221：P6.5 前基线捕获（P6.8 收口面——最后一次重写后的集合验证锚）----
+    # P6.5 是修复链**最后一个**整节重写入口，其后无任何轮次再兜底。
+    # 保留回归门（每轮修复体后）以本基线比对：丢 REQ / 丢 EV（节级已
+    # 援引集合）/ 评分点覆盖数。门必须先于零 blocker validate 收口（该
+    # 次 validate 即推进 VALIDATING，Drafting 态外重写被状态机拒绝）。
+    q_base = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
+                  "q-base")
+    base_req_cov, base_ev_cit = set(), set()
+    for s_ in q_base.get("sections") or []:
+        base_req_cov.update(s_.get("covered_reqs") or [])
+        base_ev_cit.update(s_.get("cited_evs") or [])
+    cov_base = must("check_scoring_coverage", {"project_id": PID}, "cov-base")
+    base_pts_cov = cov_base["summary"].get("points_covered", 0)
 
     # ---- P6.5 BLOCKER 修复轮（真实 LLM 面的诚实修复——不豁免不绕门）----
     # blocker 形态（huaian 真跑实锚）：E_CHARS_BELOW_MIN（评分章节篇幅门
@@ -914,22 +911,23 @@ try:
                 "project_id": PID, "section_id": sid,
                 # 批三补（v3 E_STATE 修复同款纪律）：修复指令携带本节映射
                 # 评分点——整节重起草换全文，点不随行即洗掉 P6.6 已命中的
-                # 细则覆盖（覆盖不回退）。
+                # 细则覆盖（覆盖不回退）。批#221：指令尾统一走
+                # p65_retention_payload（保留栈含 EV 面——同一 q_r 活体
+                # 响应内 cited_evs，零额外工具调用）。
                 "instructions": (repair_instruction(
                                      e["floor"], e["ban"], bool(e.get("no_split")))
                                  + EV_HINT
                                  + (CAP_DIR_DISCIPLINE if e.get("cap_dir") else "")
-                                 + realagent_evidence.scoring_points_hint(
-                                     (sec_pts_r.get(sid, {}).get("missing", [])
-                                      + sec_pts_r.get(sid, {}).get("hit", []))
-                                     or (POINTS_MAP.get(sid) or []))
-                                 + realagent_evidence.retained_points_hint(
-                                     sec_pts_r.get(sid, {}).get("hit", []))
-                                 + realagent_evidence.req_citation_hint(
+                                 + realagent_evidence.p65_retention_payload(
+                                     ((sec_pts_r.get(sid, {}).get("missing", [])
+                                       + sec_pts_r.get(sid, {}).get("hit", []))
+                                      or (POINTS_MAP.get(sid) or [])),
+                                     sec_pts_r.get(sid, {}).get("hit", []),
                                      (sec_reqs_r.get(sid) or {}).get("uncovered_reqs")
-                                     or [])
-                                 + realagent_evidence.retained_req_citation_hint(
+                                     or [],
                                      (sec_reqs_r.get(sid) or {}).get("covered_reqs")
+                                     or [],
+                                     (sec_reqs_r.get(sid) or {}).get("cited_evs")
                                      or [])),
                 "generator": "real", "project_version": "latest",
             }, timeout=620)
@@ -955,6 +953,98 @@ try:
             time.sleep(DRAFT_GAP_S)
         if exit_code == 2:
             sys.exit(2)
+        # ---- 批#221 保留回归门（issue 任务 3：验证最后一次重写之后的集合）----
+        # 每轮修复体后、下轮 validate 前收口（零 blocker validate 即推进
+        # VALIDATING——门在推进前才合法重写）。回退 = p68 全栈尾定向修复
+        # （≤2 轮，修复有界）；未收口 = 如实 FAIL（regression-unresolved
+        # .json + exit 1，不装绿——「不能只在 P9 落日志后标成已收口」）。
+        # 只在本轮真发生重写（plan 非空）时过门——无重写即无回退面。
+        if plan:
+            for gate_round in (1, 2):
+                q_gate = must("check_bid_quality",
+                              {"project_id": PID, "project_version": "latest"},
+                              f"q-gate:{round_no}.{gate_round}")
+                cov_gate = must("check_scoring_coverage", {"project_id": PID},
+                                f"cov-gate:{round_no}.{gate_round}")
+                sec_pts_gate = realagent_evidence.section_points_for_repair(cov_gate)
+                now_req_cov, now_ev_cit = set(), set()
+                for s_ in q_gate.get("sections") or []:
+                    now_req_cov.update(s_.get("covered_reqs") or [])
+                    now_ev_cit.update(s_.get("cited_evs") or [])
+                now_pts_cov = cov_gate["summary"].get("points_covered", 0)
+                lost_reqs = base_req_cov - now_req_cov
+                lost_evs = base_ev_cit - now_ev_cit
+                lost_pts = base_pts_cov - now_pts_cov
+                if not (lost_reqs or lost_evs or lost_pts > 0):
+                    break
+                if gate_round > 1:
+                    json.dump({
+                        "baseline": {"covered_reqs": sorted(base_req_cov),
+                                     "cited_evs": sorted(base_ev_cit),
+                                     "points_covered": base_pts_cov},
+                        "after_final_rewrite": {"covered_reqs": sorted(now_req_cov),
+                                                "cited_evs": sorted(now_ev_cit),
+                                                "points_covered": now_pts_cov},
+                        "lost": {"reqs": sorted(lost_reqs), "evs": sorted(lost_evs),
+                                 "points": lost_pts},
+                    }, open(os.path.join(OUT, "regression-unresolved.json"), "w"),
+                        ensure_ascii=False, indent=1)
+                    print(f"[P6.5-gate] 保留回退两轮定向修复未收口——如实报红退出："
+                          f"丢 REQ {sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / "
+                          f"评分点 {base_pts_cov}→{now_pts_cov}"
+                          f"（regression-unresolved.json，不装绿）")
+                    sys.exit(1)
+                print(f"[P6.5-gate] ⚠保留回退（P6.5 轮 {round_no} 后）：丢 REQ "
+                      f"{sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / 评分点 "
+                      f"{base_pts_cov}→{now_pts_cov}——全栈指令定向修复（门轮 {gate_round}）")
+                gate_plan = {}
+                for s_ in q_gate.get("sections") or []:
+                    sid_ = s_.get("section_id")
+                    if ((lost_reqs & set(s_.get("uncovered_reqs") or []))
+                            or (lost_evs & set(s_.get("uncited_evs") or []))
+                            or (lost_pts > 0 and sec_pts_gate.get(sid_, {}).get("missing"))):
+                        gate_plan[sid_] = s_
+                for sid_, s_ in sorted(gate_plan.items()):
+                    pf = sec_pts_gate.get(sid_, {})
+                    fresh_evs = sorted(lost_evs & set(s_.get("uncited_evs") or []))
+                    instr = (INITIAL_INSTR + EV_HINT
+                             + realagent_evidence.p68_repair_instruction_tail(
+                                 fresh_evs, [],
+                                 s_.get("cited_evs") or [],
+                                 s_.get("uncovered_reqs") or [],
+                                 s_.get("covered_reqs") or [],
+                                 pf.get("missing", []), pf.get("hit", [])))
+                    r = call("draft_response_section", {
+                        "project_id": PID, "section_id": sid_,
+                        "instructions": instr,
+                        "generator": "real", "project_version": "latest",
+                    }, timeout=620)
+                    if not r.get("ok"):
+                        err = json.dumps(r.get("error", {}), ensure_ascii=False)
+                        if "429" in err or "Too many requests" in err or "LLM" in err:
+                            print(f"[P6.5-gate] {sid_} 修复生成失败（限流）——"
+                                  f"保存进度优雅退出: {err[:160]}")
+                            exit_code = 2
+                            break
+                        raise AssertionError(f"[retain-gate:{sid_}] {err[:400]}")
+                    st = r["data"].get("stats", {})
+                    draft_stats = [x for x in draft_stats if x["sid"] != sid_]
+                    draft_stats.append({"sid": sid_, "words": st.get("words"),
+                                        "citations": st.get("citations")})
+                    repair_log.append({"round": 500 + round_no, "sid": sid_,
+                                      "kind": "retain-gate",
+                                      "why": [f"保留回归门：丢 REQ {sorted(lost_reqs)} /"
+                                              f" 丢 EV {sorted(lost_evs)} /"
+                                              f" 评分点 {base_pts_cov}→{now_pts_cov}"],
+                                      "floor": 600, "ban": False,
+                                      "words": st.get("words"),
+                                      "citations": st.get("citations")})
+                    print(f"[P6.5-gate] {sid_} 定向重写 words={st.get('words')} "
+                          f"cites={st.get('citations')}", flush=True)
+                    save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
+                    time.sleep(DRAFT_GAP_S)
+                if exit_code == 2:
+                    sys.exit(2)
         if unrepairable and not plan:
             break  # 无可修复面——轮次无意义，提前收口报红
     d = must("validate_bid_document", {"project_id": PID, "scope": "all",

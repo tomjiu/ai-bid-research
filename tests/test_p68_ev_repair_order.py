@@ -23,9 +23,14 @@ r7 实锚（artifacts/realagent-113-v3-20261126-r7 metrics.evidence_citation）�
     6. ≥2 轮不收敛切逐 EV 援引段兜底；5 轮上限耗尽如实登记。
 """
 import re
+import sys
 from pathlib import Path
 
-DRIVER = Path(__file__).resolve().parent.parent / "scripts" / "run_real_llm_path.py"
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "scripts"))
+import realagent_evidence  # noqa: E402
+
+DRIVER = REPO / "scripts" / "run_real_llm_path.py"
 
 
 def _src() -> str:
@@ -97,19 +102,27 @@ def test_p4_binds_all_qual_and_perf_evs():
 
 def test_p68_full_retention_stack():
     """契约 4：P6.8 重起草指令带完整保留栈（评分点 + REQ + EV）——
-    整节重起草换全文，缺哪层保留即洗哪层已收口面。"""
+    整节重起草换全文，缺哪层保留即洗哪层已收口面。
+    批#221：指令尾抽为可测函数——行为断言（非源码字符串搜索）。"""
     block = _p68_block(_src())
-    assert "retained_points_hint" in block, (
-        "P6.8 缺 retained_points_hint——P6.6 收口的评分点会被洗掉"
-        "（r6b 7→8→31 回退家族）。"
+    assert "p68_repair_instruction_tail" in block, (
+        "P6.8 指令尾未接线可测函数——保留栈无法离线行为测试。"
     )
-    assert "retained_req_citation_hint" in block, (
-        "P6.8 缺 retained_req_citation_hint——P6.7 收口会被洗掉。"
+    # 行为断言：三层保留栈真在指令尾产出（活体数据真流进指令）
+    tail = realagent_evidence.p68_repair_instruction_tail(
+        ["EV-0064"], [], ["EV-0063"], [], ["REQ-0001"],
+        ["合同内容页数"], ["培训方案"])
+    for face, marker in (
+            ("已援引证据保留纪律", "EV-0063"),
+            ("已覆盖 REQ 保留纪律", "REQ-0001"),
+            ("已命中点保留纪律", "培训方案")):
+        assert face in tail and marker in tail, (
+            f"P6.8 指令尾丢「{face}」——对应已收口面会被洗掉"
+            f"（r6b 回退家族）。"
+        )
+    assert "证据援引补齐纪律" in tail and "EV-0064" in tail, (
+        "P6.8 尾缺零援引 EV 补齐注入（批十一面回退）。"
     )
-    assert "retained_ev_citation_hint" in block, (
-        "P6.8 缺 retained_ev_citation_hint——已援引 EV（EV-0063×21）会被洗掉。"
-    )
-    assert "ev_citation_hint" in block, "P6.8 缺零援引 EV 补齐注入"
 
 
 def test_p68_repair_kind_isolated():
@@ -122,9 +135,11 @@ def test_p68_repair_kind_isolated():
 
 def test_p68_stuck_fallback_and_round_cap():
     """契约 6：≥2 轮不收敛切逐 EV 援引段兜底（ev_statement_hint）+
-    5 轮上限耗尽如实登记。"""
+    5 轮上限耗尽如实登记。批#221：行为断言升级。"""
     block = _p68_block(_src())
-    assert "ev_statement_hint" in block, (
+    tail = realagent_evidence.p68_repair_instruction_tail(
+        [], ["EV-0064"], [], [], [], [], [])
+    assert "逐证据援引段兜底纪律" in tail and "EV-0064" in tail, (
         "P6.8 无逐 EV 援引段兜底——织入正文不收敛无兜底路径。"
     )
     assert re.search(r"ev_round\s*>\s*5", block), "P6.8 缺轮次上限"

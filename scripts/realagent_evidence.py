@@ -449,6 +449,102 @@ def ev_statement_hint(uncited_evs: list[str]) -> str:
     )
 
 
+# ---------------------------------------------------------------- 批#221
+
+
+def p65_retention_payload(pts_hint, pts_hit, uncovered_reqs, covered_reqs, cited_evs):
+    """P6.5 blocker 重起草指令的补齐/保留尾（#221——指令组装抽为可测函数）。
+
+    Lead 独立审查实锚（issue #221）：P6.5 是修复链**最后**一个整节重写入口
+    （其后无任何轮次再兜底），指令只带评分点/REQ 双注入而缺**活体已援引
+    EV 的显式保留**——P6.8 刚收口的证据引用会被链末 blocker 重起草洗掉。
+
+    入参全部取**活体** check_bid_quality / check_scoring_coverage 面：
+    pts_hint = 本节全量点（missing+hit，驱动侧含 POINTS_MAP 兜底解析）；
+    pts_hit = 当前已命中点（保留面）；uncovered/covered_reqs = REQ 面；
+    cited_evs = 本节当前已援引 EV（保留面——只增不删）。
+    """
+    return (scoring_points_hint(pts_hint)
+            + retained_points_hint(pts_hit)
+            + req_citation_hint(uncovered_reqs)
+            + retained_req_citation_hint(covered_reqs)
+            # 批#221 修复：链末重写入口的 EV 保留——P6.8 收口面不随行
+            # 即被洗掉（Lead 顺序回退登记）。cited_evs 同源 q_r 活体响应。
+            + retained_ev_citation_hint(cited_evs))
+
+
+def p66_repair_instruction_tail(pts_missing, pts_hit, covered_reqs, cited_evs, stuck):
+    """P6.6 细则覆盖修复轮指令尾（#221——REQ/EV 保留补齐 + 抽为可测函数）。
+
+    P6.6 同为整节重写入口：REQ/评分点洗掉有 P6.7/P6.6 自愈轮次兜底，
+    但 EV 节级已援引洗掉**不**触发 P6.8 重收口（P6.8 判据是文档级
+    零援引——别节仍援引即不复活本节）。故 P6.6 指令尾必须携带
+    REQ/EV 保留纪律；补齐面（REQ 织入）仍归 P6.7（不前置抢跑）。
+    stuck ≥ 2 切对照表兜底（批九 G1，点原文列逐字复述）。
+    """
+    if stuck >= 2:
+        core = (point_table_hint(list(pts_missing) + list(pts_hit))
+                + retained_points_hint(pts_hit))
+        closer = (" 本节前轮逐点织入正文未收敛——对照表兜底重起草："
+                  "表第一列逐字复述点原文（一字不差），正文照常撰写"
+                  "不少于 600 字。")
+    else:
+        core = (scoring_points_hint(pts_missing)
+                + retained_points_hint(pts_hit))
+        closer = (" 本节当前版本未逐点命中上述评分细则——重起草逐点"
+                  "补齐，正文不少于 600 字。")
+    return (core
+            # 批#221 修复：REQ/EV 保留随行（REQ 补齐仍归 P6.7 轮次）。
+            + retained_req_citation_hint(covered_reqs)
+            + retained_ev_citation_hint(cited_evs)
+            + closer)
+
+
+def p67_repair_instruction_tail(uncovered_reqs, covered_reqs, pts_missing,
+                                pts_hit, cited_evs, stuck):
+    """P6.7 REQ 引用补齐修复轮指令尾（#221——EV 保留补齐 + 抽为可测函数）。
+
+    P6.7 整节重写洗掉的节级 EV 援引不触发 P6.8 重收口（判据文档级
+    零援引）——cited_evs 保留纪律（只增不删）必须随行。评分点双注入
+    为批十一残余修（P6.6 收口防洗）。
+    stuck ≥ 2 切逐 REQ 响应段兜底（批九 G1 对偶）。
+    """
+    if stuck >= 2:
+        head = req_response_list_hint(uncovered_reqs)
+        closer = (" 本节前轮逐条织入未收敛——逐 REQ 响应段兜底"
+                  "重起草，正文照常不少于 600 字。")
+    else:
+        head = req_citation_hint(uncovered_reqs)
+        closer = (" 本节当前版本未逐条引用上述 REQ——重起草逐条"
+                  "补引用，正文不少于 600 字。")
+    return (head
+            + retained_req_citation_hint(covered_reqs)
+            + scoring_points_hint(pts_missing)
+            + retained_points_hint(pts_hit)
+            # 批#221 修复：EV 保留随行——节级已援引洗掉不触发 P6.8
+            # 重收口（判据文档级零援引）。
+            + retained_ev_citation_hint(cited_evs)
+            + closer)
+
+
+def p68_repair_instruction_tail(fresh_evs, stuck_evs, cited_evs, uncovered_reqs,
+                                covered_reqs, pts_missing, pts_hit):
+    """P6.8 证据引用补齐修复轮指令尾（批十一全栈——#221 抽为可测函数）。
+
+    完整保留栈样板（评分点 + REQ + EV 三层补齐/保留）——P6.5/P6.6/
+    P6.7 的保留补齐即按此对齐；P6.5 保留回归门的定向修复指令亦
+    复用本尾（全栈注入——修复本身不得引入新回退）。
+    """
+    return (ev_citation_hint(fresh_evs)
+            + ev_statement_hint(stuck_evs)
+            + retained_ev_citation_hint(cited_evs)
+            + req_citation_hint(uncovered_reqs)
+            + retained_req_citation_hint(covered_reqs)
+            + scoring_points_hint(pts_missing)
+            + retained_points_hint(pts_hit)
+            + " 本节重起草补齐上述零援引证据的显式援引，正文不少于 600 字。")
+
+
 def report_target(out_dir: str) -> str:
     """REPORT 底稿目标路径：OUT 无 REPORT.md → REPORT.md（首跑即机器底稿）；
     已有（手写叙事/封存包）→ REPORT.generated.md——**不覆盖既有文件**
