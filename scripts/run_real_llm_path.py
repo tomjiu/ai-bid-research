@@ -32,6 +32,10 @@ import sys
 import time
 import urllib.request
 
+# 同目录状态持久层（#113 审计修复批：断点续跑不洗 decisions/repair 历史）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import realagent_state
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(REPO, "bidcore/target/debug/bid-mcp-stdio")
 MAIN = os.path.join(REPO, "real-corpus/telecom/parse-input/A-telecom-huaian-主文件.docx")
@@ -133,7 +137,11 @@ def matrix_rows():
 
 
 def save_state(extra=None):
-    st = {
+    # #113 审计修复批：读-改-写合并（旧实现全量重建——断点续跑 9 轮把
+    # scoring_mapping.decisions / repair 历史洗掉，REPORT.md 与 driver-state
+    # 实际内容矛盾即此根因）。base = 每轮恒新鲜面；extra 键覆盖、其余保留；
+    # scoring_mapping/repair 走累积合并（幂等判别键去重）。
+    base = {
         "project_id": PID, "actor": ACTOR,
         "main_file": os.path.basename(MAIN),
         "main_sha256": hashlib.sha256(open(MAIN, "rb").read()).hexdigest(),
@@ -144,12 +152,11 @@ def save_state(extra=None):
                      for e, k, t in ev_ids],
         "req_total": req_total,
         # draft 恒入 state（resume 后任何保存点不丢已起草进度——P4.6 等中段
-        # 保存面曾在 resume 轮把 draft_stats 洗掉的隐患收口）
+        # 保存面曾在 resume 轮把 draft_stats 洗掉的隐患收口；draft_stats 在
+        # 进程内自维护全量，extra 直盖即正确）
         "draft": {"stats": draft_stats},
     }
-    if extra:
-        st.update(extra)
-    json.dump(st, open(STATE_FILE, "w"), ensure_ascii=False, indent=1)
+    return realagent_state.save_state(STATE_FILE, base, extra)
 
 
 # ---- 桥生命周期 ----
@@ -169,6 +176,7 @@ exit_code = 0
 PID = None
 star_missing_n, star_missing_detail = 0, []
 req_total, ev_ids, draft_stats = 0, [], []
+repair_log = []  # #113 审计修复批：模块级初始化——resume 轮从 state 恢复（跨轮不丢）
 leaves = []
 resume = os.path.exists(STATE_FILE)
 
@@ -181,7 +189,9 @@ try:
         req_total = sv.get("req_total", 0)
         ev_ids = [(e["ev_id"], e["kind"], e["title"]) for e in sv.get("evidence", [])]
         draft_stats = sv.get("draft", {}).get("stats", [])
-        print(f"[resume] 续跑 {PID}（P1-P4 已完成，已起草 {len(draft_stats)} 叶）")
+        repair_log = sv.get("repair", [])  # 跨轮恢复：旧实现在轮次边界洗掉修复历史
+        print(f"[resume] 续跑 {PID}（P1-P4 已完成，已起草 {len(draft_stats)} 叶，"
+              f"修复历史 {len(repair_log)} 节次）")
     else:
         # ---- P1-P2 ----
         d = must("create_bid_project", {
@@ -309,9 +319,12 @@ try:
     cov1 = must("check_scoring_coverage", {"project_id": PID}, "cov1")
     print(f"[P4.6] 评分映射: {len(unmapped)} 未映射 → 逐项映射（bigram {sum(1 for m in mapping_log if m['method'].startswith('bigram-overlap:') and not m['method'].endswith(':0'))}）"
           f"；映射后 criteria_unmapped={cov1['summary']['criteria_unmapped']}")
-    save_state({"scoring_mapping": {"unmapped_before": len(unmapped),
-                                    "unmapped_after": cov1["summary"]["criteria_unmapped"],
-                                    "decisions": mapping_log}})
+    # #113 审计修复批：仅当本轮有新映射才保存（resume 轮已映射完时重存会把
+    # decisions=[] 覆盖首轮 36 项决策——审计缺口 1 根因）；累积合并兜底。
+    if mapping_log or not resume:
+        save_state({"scoring_mapping": {"unmapped_before": len(unmapped),
+                                        "unmapped_after": cov1["summary"]["criteria_unmapped"],
+                                        "decisions": mapping_log}})
 
     # ---- P5b 逐叶真实起草（限速 + 429 优雅退出）----
     t_draft = time.time()
@@ -356,7 +369,7 @@ try:
     # 金额/工期口径漂移——#113 验收点名的「虚构参数」面）。处置 = 定向
     # 重起草（统一 PROFILE 口径 + 篇幅下限指令），重校直至零 blocker 或
     # 轮次耗尽（耗尽 = 如实报红退出，不豁免）。
-    repair_log = []
+    # （repair_log 已模块级初始化并 resume 恢复——#113 审计修复批）
     # 规范值（huaian 真件正源：投标总报价=PROFILE、保证金=须知前附表
     # 3.5.1「人民币肆万陆仟圆整￥46000」、工期=PROFILE 37 天）
     CANON = {"投标总报价": 4800000, "投标保证金": 46000, "工期": 37}
@@ -373,7 +386,11 @@ try:
         else:
             instr += ("全文金额与工期口径统一：投标总报价 4,800,000 元"
                       "（肆佰捌拾万元整）；投标保证金 46,000 元（肆万陆仟圆整）；"
-                      "工期 37 天；投标有效期 90 天。")
+                      "工期 37 天；投标有效期 90 天。"
+                      "分项报价纪律（#113 审计批）：如需分项（设备/服务部分报价），"
+                      "分项之和必须等于投标总报价，且不得把招标文件最高投标限价"
+                      "当分项报价；源文件未给定金额（如履约保证金费率）不写具体"
+                      "数值，按招标文件原文表述（「金额见前附表」）。")
         return instr
 
     for round_no in range(1, 16):
@@ -543,6 +560,18 @@ try:
           f"ratio={coverage_summary['coverage_ratio']:.3f} "
           f"deduction={coverage_summary['suggested_deduction']:.1f}")
 
+    # ---- P9.5 证据引用计数（#113 审计缺口 4：EV-0065 实质未用零提示）----
+    # 注册证据件是否被成品正文实际引用（审计实锚：3 件注册证据仅 EV-0063
+    # 按 ID 引用，EV-0065 业绩合同正文 0 次出现——「真实模型实际调用证据」
+    # 维度弱通过的事实本跑批结束时应留痕，不留给审计才发现）。
+    ev_cite = realagent_state.count_evidence_citations(
+        out_path, [e for e, _, _ in ev_ids])
+    if ev_cite.get("uncited"):
+        print(f"[P9.5] 证据引用审计: {len(ev_cite['cited'])}/{len(ev_ids)} 被引用；"
+              f"未引用: {ev_cite['uncited']}（审阅面关注：证据件是否实质调用）")
+    else:
+        print(f"[P9.5] 证据引用审计: {len(ev_cite['cited'])}/{len(ev_ids)} 全部被引用")
+
     # ---- 质量面 + 台账 ----
     d = must("check_bid_quality", {"project_id": PID, "project_version": "latest"}, "quality")
     llm_usage = None
@@ -559,6 +588,7 @@ try:
                   "stats": draft_stats},
         "validate": d.get("summary", {}),
         "export": export_meta,
+        "evidence_citation": ev_cite,
         "scoring_coverage": coverage_summary,
         "llm_usage": llm_usage,
         "elapsed_s": int(time.time() - t_all),

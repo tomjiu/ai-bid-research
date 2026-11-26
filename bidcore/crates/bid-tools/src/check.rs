@@ -153,7 +153,24 @@ pub(crate) const PLACEHOLDER_MARKERS: [&str; 3] = ["TODO", "待补充", "【占�
 /// （[`crate::review_wire::decision_rows`] 注入）的**自有维度**（报价是
 /// 投标决策不是招标事实，原四词无一覆盖）；缺它决策值无键可落、对账
 /// 无从比起。这是决策面接线的前提词，不是 T-7 自由扩面。
-const AMOUNT_DIMS: [&str; 5] = ["投标保证金", "招标控制价", "项目预算", "服务费", "投标总报价"];
+/// #113 机器审计批（2026-11-24）：+「投标担保」「履约保证金」「设备部分
+/// 报价」「服务部分报价」——huaian 真跑（realagent-113-20261122）审计
+/// 实锤三盲区：段171「投标担保金额为人民币肆拾捌万元整」无源 48 万、
+/// 段301 履约保证金「合同金额 10%」无源费率、段55 把限价天花板
+/// （设备 4,810,365/服务 136,000）抄成分项报价且分项和 ≠ 总报价。
+/// 词面补齐是确定性检出（ground truth：主文件）的最小前置；履约/担保
+/// 的无源值告警面不在本批（引擎无源可比——如实登记，人工审校面）。
+const AMOUNT_DIMS: [&str; 9] = [
+    "投标保证金",
+    "招标控制价",
+    "项目预算",
+    "服务费",
+    "投标总报价",
+    "投标担保",
+    "履约保证金",
+    "设备部分报价",
+    "服务部分报价",
+];
 
 /// 工期维度词（同上——规格列举四词收窄）。
 const SCHEDULE_DIMS: [&str; 4] = ["工期", "交付周期", "实施周期", "服务期"];
@@ -478,6 +495,86 @@ fn amount_constraints_compatible<'a>(values: impl Iterator<Item = &'a str>) -> b
     exact.is_none_or(|yuan| yuan <= upper)
 }
 
+/// 中文大写数字字符 → 数值（壹-玖/零）。大写数字字符集在普通正文极少
+/// 出现在金额语境之外——误报面可控（#113 审计批）。
+fn cn_digit_value(c: char) -> Option<i64> {
+    match c {
+        '壹' => Some(1), '贰' => Some(2), '叁' => Some(3), '肆' => Some(4),
+        '伍' => Some(5), '陆' => Some(6), '柒' => Some(7), '捌' => Some(8),
+        '玖' => Some(9), '零' => Some(0), _ => None,
+    }
+}
+
+/// 大写金额的节内乘性单位（拾佰仟——万/亿另行处理，它们是节进位）。
+fn cn_section_unit(c: char) -> Option<i64> {
+    match c {
+        '拾' => Some(10), '佰' => Some(100), '仟' => Some(1_000), _ => None,
+    }
+}
+
+/// 中文大写金额解析（#113 机器审计批）：从 start 起的连续大写数字/单位
+/// 串 → 元数值 + 结束下标。形态覆盖真跑实锚：玖拾陆万（96 万，段121
+/// 幻觉）/肆万陆仟（4.6 万，前附表正源）/肆佰捌拾万（480 万）/捌万
+/// （8 万，段261 幻觉）/亿级；「元/圆（整）」币符锚可选消费。
+///
+/// 有效性门槛：至少一个乘性/进位单位（拾佰仟万亿）且值 > 0——纯数字串
+/// （「贰零贰陆」类日期年份）不收；终止字符紧邻「年/月/日」→ 日期成分
+/// 拒绝（「贰拾贰年」不入金额面）。全程 checked 整数算术（无浮点）。
+fn parse_cn_amount(scan: &[char], start: usize, win_end: usize) -> Option<(i64, usize)> {
+    let (mut total, mut section, mut digit, mut has_pending) = (0i64, 0i64, 0i64, false);
+    let mut saw_unit = false;
+    let mut i = start;
+    let mut currency_end = None;
+    while i < win_end {
+        let c = scan[i];
+        if let Some(d) = cn_digit_value(c) {
+            if has_pending {
+                // 连续数字未消费（异常形态）——先结算防丢失
+                section += digit;
+            }
+            digit = d;
+            has_pending = true;
+        } else if let Some(u) = cn_section_unit(c) {
+            saw_unit = true;
+            let base = if has_pending { digit } else { 1 }; // 「拾万」= 10 万
+            section = section.checked_add(base.checked_mul(u)?)?;
+            has_pending = false;
+        } else if c == '万' || c == '亿' {
+            saw_unit = true;
+            if has_pending {
+                section += digit;
+                has_pending = false;
+            }
+            let scale = if c == '万' { 10_000 } else { 100_000_000 };
+            total = total.checked_add(section)?.checked_mul(scale)?;
+            section = 0;
+        } else if c == '元' || c == '圆' {
+            i += 1;
+            if i < win_end && scan[i] == '整' {
+                i += 1;
+            }
+            currency_end = Some(i);
+            break;
+        } else {
+            break;
+        }
+        i += 1;
+    }
+    if has_pending {
+        section += digit;
+    }
+    let end = currency_end.unwrap_or(i);
+    let total = total.checked_add(section)?;
+    if !saw_unit || total <= 0 {
+        return None;
+    }
+    // 日期守卫：非币符终止后紧邻年/月/日 → 日期成分（「贰拾贰年」）非金额
+    if currency_end.is_none() && end < scan.len() && matches!(scan[end], '年' | '月' | '日') {
+        return None;
+    }
+    Some((total, end))
+}
+
 /// 数字记号解析：`[0-9]+（,[0-9]+)*（.[0-9]{1,8})?`——返回（剥逗号数字串,
 /// 结束下标）。小数截 8 位（金额/工期面足够；超长小数视为噪声面跳过不解析）。
 fn parse_number(scan: &[char], start: usize, end: usize) -> Option<(String, usize)> {
@@ -550,6 +647,30 @@ fn scan_amount(section: &str, scan: &[char], out: &mut FeatSet) {
             let mut k = word_end;
             while k < win_end {
                 if !scan[k].is_ascii_digit() {
+                    // #113 审计批：中文大写金额分支——「金额为人民币玖拾陆万元整」
+                    // 纯大写形态（无任何阿拉伯数字）在 ASCII-only 扫描下是盲区
+                    //（真跑实锤：8 处 46000 正确 + 3 处大写幻觉零检出 = 假绿面）。
+                    // 守卫与 ASCII 分支同纪律：上限语非本方承诺不入精确面
+                    //（F2 大写版）；日期形态在 parse 内部拒绝。
+                    if let Some((yuan, next)) = parse_cn_amount(scan, k, win_end) {
+                        let is_upper = has_upper_limit_prefix(scan, k);
+                        if is_upper && !bidder_bound_belongs_here(scan, dim, pos, word_end, k) {
+                            k = next;
+                            continue;
+                        }
+                        let amount = if is_upper {
+                            AmountConstraint::Upper(yuan)
+                        } else {
+                            AmountConstraint::Exact(yuan)
+                        };
+                        out.insert((
+                            FeatureType::Amount,
+                            dim.to_string(),
+                            amount.normalized(),
+                            section.to_string(),
+                        ));
+                        break;
+                    }
                     k += 1;
                     continue;
                 }
@@ -723,6 +844,57 @@ fn scan_commitments(section: &str, scan: &[char], out: &mut FeatSet) {
 
 // ---------------------------------------------------------------- 全局冲突检测（第二遍：特征集合上的分组比对）
 
+/// 分项和一致性（#113 机器审计批——段55 面）：设备部分报价 + 服务部分
+/// 报价必须等于投标总报价。真跑实锤：LLM 把主文件 1.8 条限价天花板
+/// （设备 4,810,365/服务 136,000）原样抄成分项报价，分项和 4,946,365 ≠
+/// 自称总报价 4,800,000——评标澄清质疑级事故。多值同键冲突已由
+/// check_global 报过，本门只做跨键算术一致性（各键取全局唯一精确值，
+/// 任一键多值/无值则不判——交给同键冲突门或不触发）。消息带 SEC=值
+/// 对（驱动 P6.5 修复环的 pairs 正则与 CANON 键匹配兼容——kind 复用
+/// AmountConflict，下游门与导出链零改动接线）。
+fn check_subtotal(features: &[FeatureTuple]) -> Vec<CheckFinding> {
+    let exact_unique = |key: &str| -> Option<(i64, String)> {
+        let mut found: Option<(i64, String)> = None;
+        for f in features {
+            if f.feature_type == FeatureType::Amount && f.key == key {
+                // "<=n" 上限不是分项值——parse 失败即跳过
+                let Ok(v) = f.value.parse::<i64>() else {
+                    continue;
+                };
+                match &found {
+                    Some((pv, _)) if *pv != v => return None, // 多值——同键冲突门管
+                    _ => {}
+                }
+                if found.is_none() {
+                    found = Some((v, f.section_id.clone()));
+                }
+            }
+        }
+        found
+    };
+    let (Some((dev, dev_sec)), Some((svc, svc_sec)), Some((total, total_sec))) = (
+        exact_unique("设备部分报价"),
+        exact_unique("服务部分报价"),
+        exact_unique("投标总报价"),
+    ) else {
+        return Vec::new();
+    };
+    let Some(sum) = dev.checked_add(svc) else {
+        return Vec::new();
+    };
+    if sum == total {
+        return Vec::new();
+    }
+    vec![CheckFinding {
+        kind: CheckKind::AmountConflict,
+        severity: CheckSeverity::Blocker,
+        section_id: dev_sec.clone(),
+        message: format!(
+            "金额冲突（分项和）：设备部分报价 在 {dev_sec}={dev} 与 服务部分报价 在 {svc_sec}={svc}，分项和 {sum} ≠ 投标总报价 在 {total_sec}={total}——分项之和必须等于总报价（#113 审计段55：限价天花板不得抄作分项报价）；改齐后重试"
+        ),
+    }]
+}
+
 /// 全局冲突检测（第二遍——特征集合上的分组比对，输入只有特征无原文：这就是
 /// 全局检查不炸内存的结构保证）。按 (feature_type, key) 分组；组内归一化值
 /// 去重后 >1 种 → 冲突 Blocker；金额按精确值/上限的约束交集判定，交集
@@ -843,6 +1015,7 @@ pub fn run_review(chapters: &[ChapterInput], known_refs: &HashSet<String>) -> Re
         features.extend(feats);
     }
     findings.extend(check_global(&features));
+    findings.extend(check_subtotal(&features));
     findings.sort_by(|a, b| {
         (a.section_id.as_str(), a.kind, a.message.as_str()).cmp(&(b.section_id.as_str(), b.kind, b.message.as_str()))
     });
