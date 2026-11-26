@@ -1195,77 +1195,145 @@ pub fn global_conflict_findings(store: &DomainStore) -> Vec<ValidationFinding> {
         .collect()
 }
 
-/// 批六④（r5 审读 A1）：报价 vs 限价**语义方向门**（`E_BID_CAP_DIRECTION`）。
-///
-/// 缺陷形态（r5 成品段114 实锚）：正文写「投标总报价为人民币肆佰捌拾万元
-/// 整（4,800,000元），**高于**招标文件设定的最高投标限价」——事实反写
-/// （480 万 < 限价 494.6 万），自认否决项；同稿另节又正确写「不低于成本
-/// 也不高于限价」。数值一致性门（S-5/规则 9）拦不住它：双方数值各自都对，
-/// 错在**断言方向**——纯语义层缺陷。
-///
-/// 扫描口径（保守三要素共现，句级）：
-/// 1. 单句内同时含：限价词（`限价`）+ 报价主体词（`报价`/`总价`）+
-///    反写词（`高于`/`超过`/`超出`）；
-/// 2. 反写词前 6 字符窗口含否定词（`未`/`不`/`没`/`无`/`低于`）→ 放行
-///    （「均未超过限价」「不高于限价」「低于成本也不高于限价」均合法）；
-/// 3. 无报价主体词的限价句（「限价高于成本的说法不成立」）→ 放行
-///    （主体不是报价断言，不误报）。
-///
-/// 命中 = BLOCKER（废标级——评标专家直读该句即质疑报价合规性）。全局级：
-/// 恒全量扫（scope 局部复审不缩小视野——方向断言错误没有「局部」语义）。
+/// 报价方向门：检查具体的“报价主体 → 超价谓词 → 限价对象”关系。
+/// #222：来源已核实的条件规则引用不是我方事实断言；引号外仍完整扫描。
+/// 否定只修饰紧邻谓词，先前的“无偏离/不含税”不能掩盖实际超价。
 pub fn bid_cap_direction_findings(store: &DomainStore) -> Vec<ValidationFinding> {
-    /// 反写词（含前缀否定窗口判定）。
-    const REVERSE_WORDS: [&str; 3] = ["高于", "超过", "超出"];
-    /// 否定词（反写词前 6 字符窗口内出现即视为合法否定句式）。
-    const NEGATION_WORDS: [&str; 5] = ["未", "不", "没", "无", "低于"];
-    /// 报价主体词（句内须共现——限价句无主体不扫）。
-    const BID_WORDS: [&str; 2] = ["报价", "总价"];
-
-    let mut out = Vec::new();
-    let parents: HashSet<&str> = store.sections().iter()
+    let parents: HashSet<&str> = store
+        .sections()
+        .iter()
         .filter_map(|n| n.parent_id.as_deref())
         .collect();
-    for node in store.sections().iter().filter(|n| {
-        !parents.contains(&n.id[..]) && n.content.as_deref().is_some_and(|c| c.contains("限价"))
-    }) {
-        let Some(content) = node.content.as_deref() else { continue };
-        let mut hit: Option<String> = None;
-        // 句级切分（。；！？与换行——句内共现才计）。
-        for sentence in content.split(|c: char| "。；！？\n\r".contains(c)) {
-            let has_bid_subject = BID_WORDS.iter().any(|w| sentence.contains(w));
-            if !sentence.contains("限价") || !has_bid_subject {
-                continue;
-            }
-            for w in REVERSE_WORDS {
-                let Some(pos) = sentence.find(w) else { continue };
-                // 否定窗口：反写词前 6 字符（UTF-8 安全回溯——中文 3 字节/字）。
-                let window: String = sentence
-                    .char_indices()
-                    .filter(|(i, _)| *i < pos && *i >= pos.saturating_sub(18)) // 6 字 ≈ 18 字节
-                    .map(|(_, c)| c)
-                    .collect();
-                if NEGATION_WORDS.iter().any(|neg| window.contains(neg)) {
-                    continue; // 合法否定句式（未超过/不高于/低于…也不高于）
-                }
-                hit = Some(format!("「{sentence}」"));
-                break;
-            }
-            if hit.is_some() { break; }
-        }
-        if let Some(sent) = hit {
-            out.push(ValidationFinding {
+    store.sections().iter().filter(|n| !parents.contains(&n.id[..]))
+        .filter_map(|node| {
+            let content = node.content.as_deref()?;
+            let scanned = mask_verified_cap_rule_quotes(content, store);
+            let sentence = scanned.split(|c: char| "。；！？\n\r".contains(c))
+                .find(|sentence| has_over_cap_assertion(sentence))?;
+            Some(ValidationFinding {
                 rule_code: "E_BID_CAP_DIRECTION".into(),
-                severity: "BLOCKER",
-                section_id: Some(node.id.clone()),
+                severity: "BLOCKER", section_id: Some(node.id.clone()),
                 requirement_id: None,
                 message: format!(
-                    "章节「{}」存在报价高于限价的反向断言 {}——报价低于限价才合规，正文事实反写（自认否决项）；改写为『未超过/不高于/低于限价』口径后重校",
-                    node.title, sent,
+                    "章节「{}」存在报价高于限价的反向断言「{}」——核对报价与限价，修正事实断言后重校",
+                    node.title, sentence.trim(),
                 ),
+            })
+        }).collect()
+}
+
+fn normalize_cap_quote(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// 仅屏蔽逐字存在于 REQ 锚中的条件否决规则；不按“有引号”豁免正文。
+/// 保留句界，防止删去引用后把两侧独立表达拼成一个比较句。
+fn mask_verified_cap_rule_quotes(content: &str, store: &DomainStore) -> String {
+    use std::sync::OnceLock;
+    static CONDITIONAL: OnceLock<regex::Regex> = OnceLock::new();
+    let rule = CONDITIONAL.get_or_init(|| regex::Regex::new(
+        r"(?:投标人)?(?:投标)?(?:总报价|报价|总价|投标总额)(?:高于|超过|超出)(?:最高)?(?:投标)?限价的[，,]其投标(?:将)?被否决|[（(][0-9]+[）)]投标报价低于成本(?:或者|或)高于(?:招标文件设定的)?(?:最高)?(?:投标)?限价"
+    ).expect("constant cap-rule regex"));
+    let mut output = String::new();
+    let mut aside_residuals = String::new();
+    let mut cursor = 0;
+    while let Some(open_rel) = content[cursor..].find('「') {
+        let open = cursor + open_rel;
+        let body = open + '「'.len_utf8();
+        let Some(close_rel) = content[body..].find('」') else {
+            break;
+        };
+        let close = body + close_rel;
+        let quote = &content[body..close];
+        let normalized = normalize_cap_quote(quote);
+        let verified = !normalized.is_empty()
+            && rule.is_match(&normalized)
+            && store.requirements().iter().any(|req| {
+                req.anchors
+                    .iter()
+                    .any(|anchor| normalize_cap_quote(&anchor.excerpt).contains(&normalized))
             });
+        output.push_str(&content[cursor..open]);
+        if verified {
+            let in_aside = content[..open].chars().fold(0usize, |depth, c| match c {
+                '（' | '(' => depth + 1,
+                ')' | '）' => depth.saturating_sub(1),
+                _ => depth,
+            }) > 0;
+            let remaining = rule.replace_all(&normalized, "");
+            if in_aside {
+                // Check source residuals separately AND retain the outer assertion.
+                output.push(' ');
+                aside_residuals.push('。');
+                aside_residuals.push_str(&remaining);
+            } else {
+                output.push('。');
+                output.push_str(&remaining);
+                output.push('。');
+            }
+        } else {
+            output.push_str(&content[open..close + '」'.len_utf8()]);
         }
+        cursor = close + '」'.len_utf8();
     }
-    out
+    output.push_str(&content[cursor..]);
+    output.push_str(&aside_residuals);
+    output
+}
+
+fn last_term_position(text: &str, terms: &[&str]) -> Option<usize> {
+    terms.iter().filter_map(|term| text.rfind(term)).max()
+}
+
+fn has_over_cap_assertion(sentence: &str) -> bool {
+    const BIDS: &[&str] = &["报价", "总价", "投标总额"];
+    use std::sync::OnceLock;
+    static OTHER_SUBJECT: OnceLock<regex::Regex> = OnceLock::new();
+    let other_subject = OTHER_SUBJECT.get_or_init(|| regex::Regex::new(
+        r"(?:^|[，,且但而并也])(?:招标人公布的|招标文件设定的)?(?:最高|该|本项目)?(?:投标)?(?:限价|成本|预算)\s*$"
+    ).expect("constant comparison subject regex"));
+    ["高于", "超过", "超出"].iter().any(|word| {
+        sentence.match_indices(word).any(|(pos, predicate)| {
+            let left = &sentence[..pos];
+            if last_term_position(left, BIDS).is_none() || other_subject.is_match(left) {
+                return false;
+            }
+            let prefix = left.trim_end();
+            let negated = [
+                "不",
+                "未",
+                "没",
+                "无",
+                "没有",
+                "不得",
+                "不能",
+                "不会",
+                "不应",
+                "尚未",
+                "并非",
+                "不可能",
+                "未曾",
+            ]
+            .iter()
+            .any(|neg| prefix.ends_with(neg));
+            let double_negated = ["不得不", "不能不", "并非不", "不是不"]
+                .iter()
+                .any(|neg| prefix.ends_with(neg));
+            if negated && !double_negated {
+                return false;
+            }
+            let right = &sentence[pos + predicate.len()..];
+            // 比较对象止于连接词/逗号；“高于成本且低于限价”不能错配限价对象。
+            let object = right
+                .split(|c: char| "，,且但而并也及「」".contains(c))
+                .next()
+                .unwrap_or("");
+            let Some(cap_pos) = object.find("限价") else {
+                return false;
+            };
+            !BIDS.iter().any(|term| object[..cap_pos].contains(term))
+        })
+    })
 }
 
 /// #88 审计 F-05（决策面对账——导出门 1j 消费）。
