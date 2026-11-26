@@ -1,0 +1,41 @@
+[bridge] 自检: 就绪
+[resume] 续跑 PRJ-0001（P1-P4 已完成，已起草 43 叶，修复历史 0 节次，累计 1146s/2 轮）
+[P3] 起草叶 48（已完成 43，待起草 5）
+[P4.6] 评分映射: 0 未映射 → 逐项映射（bigram 0）；映射后 criteria_unmapped=0
+[P5b] 初始指令含 canonical 口径 + 证据引用纪律 + 评分点注入（3 叶 / 52 点）
+[P5b] (44/48) SEC-0054 words=1027 cites=5 (9s)
+[P5b] (45/48) SEC-0056 words=535 cites=3 (29s)
+[P5b] (46/48) SEC-0058 words=732 cites=1 (51s)
+[P5b] (47/48) SEC-0060 words=530 cites=1 (72s)
+[P5b] (48/48) SEC-0062 words=1308 cites=7 (100s)
+[P5b] 起草面收口: 48/48 叶 / 累计 56757 字
+[P6.6] 细则覆盖修复轮 1: 4 点未命中 → 2 叶定向重起草（全量点双注入防回退）
+[P6.6] SEC-0028 重起草 words=1308 cites=8（注入 2 缺点 + 38 已命中保留）
+[P6.6] SEC-0029 重起草 words=1026 cites=8（注入 2 缺点 + 0 已命中保留）
+[P6.6] ⚠覆盖回退告警: 48→42（重起草丢已命中点——如实登记，下轮全量点双注入再收敛）
+[P6.6] 细则覆盖修复轮 2: 10 点未命中 → 2 叶定向重起草（全量点双注入防回退）
+[P6.6] SEC-0028 重起草 words=3437 cites=0（对照表兜底：全量 40 点入表逐字复述）
+[P6.6] SEC-0029 重起草 words=1399 cites=8（对照表兜底：全量 2 点入表逐字复述）
+[P6.6] 细则覆盖收口: covered=52/52
+[P6.7] REQ 引用补齐轮 1: 25 条未覆盖 REQ → 4 叶定向重起草（未覆盖补齐 + 已覆盖保留双注入）
+[P6.7] SEC-0028 重起草 words=1575 cites=8（补 8 条引用 + 保留 0 条）
+[P6.7] SEC-0035 重起草 words=1313 cites=8（补 8 条引用 + 保留 0 条）
+[P6.7] SEC-0042 重起草 words=1001 cites=8（补 8 条引用 + 保留 0 条）
+[P6.7] SEC-0062 重起草 words=1450 cites=8（补 1 条引用 + 保留 7 条）
+[P6.7] REQ 引用收口: uncovered=0
+[P6.8] 零援引证据 ['EV-0065'] 无绑定节可定向——绑定面缺口（P4 全量绑定面向新跑生效；如实登记不硬造）
+[P6.8] 证据引用收口: 全档援引 ['EV-0063', 'EV-0064'] / 注册 ['EV-0063', 'EV-0064', 'EV-0065']
+[P6] 校验: ok=False counts={'blocker': 3, 'deterministic': 32, 'major': 3, 'minor': 26, 'model': 0}
+[P6.5] 修复轮 1: 3 blocker 待处置
+[P6.5] SEC-0007 重起草 floor=600 ban=True no_split=False words=1096 cites=10
+[P6.5] SEC-0012 重起草 floor=600 ban=False no_split=False words=859 cites=9
+[P6.5] SEC-0016 重起草 floor=600 ban=True no_split=False words=1168 cites=9
+[P6.5] 修复轮 2: 1 blocker 待处置
+[P6.5] SEC-0031 重起草 floor=600 ban=True no_split=False words=1600 cites=8
+[P6.5] 零 blocker（修复 12 节次）
+[P8] 导出: 279864B / 48 章 sha256=188a629e64174c6d…
+[P8] generator_summary: {'external': 0, 'mock': 0, 'real': 48, 'scoring_leaves_non_real': 0, 'scoring_leaves_total': 8, 'unknown': 0}
+[P9] 细则覆盖: criteria=36 points=52 covered=45 ratio=0.865 deduction=7.3
+[P9.5] 证据引用审计: 3/3 全部被引用
+[P10] REPORT 底稿: REPORT.md（机器取数；人工叙事在其上改）
+[done] artifacts/realagent-113-v3-20261126-r8 （累计 1602s/3 轮, 50 次工具调用）

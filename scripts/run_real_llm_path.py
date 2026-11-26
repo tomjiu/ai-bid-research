@@ -285,8 +285,21 @@ try:
         # bound_evidence_ids），且起草器剔除「不在已知集」的引用——LLM 写了
         # [EV-0064] 也会被剥掉。全量绑定：每个 qualification/performance
         # 证据各绑其组（绑定是引用存活的前置件，不只是台账登记）。
+        # 批十三（r8 实锚 EV-0065 unlocatable）：本语料矩阵无「商务要求/
+        # 技术参数」类目——perf 组恒空，performance EV 永无结构绑定面
+        # （r7 同病，被 P6.5「业绩实载口径」指令的 LLM 回声式文档级援引
+        # 掩盖；r8 P6.8 诚实登记无绑定节）。兜底：perf 组空时绑到 other
+        # 组（进节级素材面——P6.8 可定位、援引可修复）。
+        if perfs and not groups["perf"] and groups["other"]:
+            print(f"[P4] perf 组空（本语料无 商务要求/技术参数 类目）——"
+                  f"performance EV 兜底绑 other 组（{len(groups['other'])} 条）")
+        perf_bind_key = ("perf" if groups["perf"]
+                         else ("other" if groups["other"] else "perf"))
+        if perfs and not groups["perf"] and not groups["other"]:
+            print("[P4] performance EV 无可绑组（qual/perf/other 全空）——"
+                  "如实登记（绑定面缺口，P6.8 将登记 unlocatable）")
         bind_pairs = ([(ev, "qual") for ev in quals]
-                      + [(ev, "perf") for ev in perfs]
+                      + [(ev, perf_bind_key) for ev in perfs]
                       + [(ev_ids[0][0], "other")])
         for ev, key in bind_pairs:
             if groups[key]:
@@ -517,6 +530,115 @@ try:
     print(f"[P6.6] 细则覆盖收口: covered={cov_mid['summary']['points_covered']}/"
           f"{cov_mid['summary']['points_total']}")
 
+    # ---- 批#221（批十三窗口扩展）：P6.6 收口基线（52/52 时刻）----
+    # r8 实锚：基线在 P6 校验后捕获太晚——P6.7/P6.5 重写洗掉的 7 点
+    # 发生在基线捕获**之前**，门看不见（45/52 假绿）。基线前移到
+    # P6.6 收口时刻（收敛态），其后**所有**整节重写轮（P6.7/P6.8/P6.5）
+    # 每轮后过门比对：丢 REQ / 丢 EV（节级已援引）/ 评分点覆盖数。门
+    # 在零 blocker validate（推进 VALIDATING 的那次）之前收口。
+    q_base = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
+                  "q-base")
+    base_req_cov, base_ev_cit = set(), set()
+    for s_ in q_base.get("sections") or []:
+        base_req_cov.update(s_.get("covered_reqs") or [])
+        base_ev_cit.update(s_.get("cited_evs") or [])
+    cov_base = must("check_scoring_coverage", {"project_id": PID}, "cov-base")
+    base_pts_cov = cov_base["summary"].get("points_covered", 0)
+    gate_seq = [0]
+
+    def retention_gate(phase_label):
+        """批#221 保留回归门（批十三窗口扩展——P6.6 收口后所有整节
+        重写轮共用）。回退 → retain_gate_repair_instruction（p68 全栈
+        + 点对照表）定向修复（≤2 轮有界）；未收口 → 如实 FAIL
+        （regression-unresolved.json + exit 1，不装绿）。"""
+        for gate_round in (1, 2):
+            q_gate = must("check_bid_quality",
+                          {"project_id": PID, "project_version": "latest"},
+                          f"q-gate:{phase_label}.{gate_round}")
+            cov_gate = must("check_scoring_coverage", {"project_id": PID},
+                            f"cov-gate:{phase_label}.{gate_round}")
+            sec_pts_gate = realagent_evidence.section_points_for_repair(cov_gate)
+            now_req_cov, now_ev_cit = set(), set()
+            for s_ in q_gate.get("sections") or []:
+                now_req_cov.update(s_.get("covered_reqs") or [])
+                now_ev_cit.update(s_.get("cited_evs") or [])
+            now_pts_cov = cov_gate["summary"].get("points_covered", 0)
+            lost_reqs = base_req_cov - now_req_cov
+            lost_evs = base_ev_cit - now_ev_cit
+            lost_pts = base_pts_cov - now_pts_cov
+            if not (lost_reqs or lost_evs or lost_pts > 0):
+                return False
+            if gate_round > 1:
+                json.dump({
+                    "baseline": {"covered_reqs": sorted(base_req_cov),
+                                 "cited_evs": sorted(base_ev_cit),
+                                 "points_covered": base_pts_cov},
+                    "after_final_rewrite": {"covered_reqs": sorted(now_req_cov),
+                                            "cited_evs": sorted(now_ev_cit),
+                                            "points_covered": now_pts_cov},
+                    "lost": {"reqs": sorted(lost_reqs), "evs": sorted(lost_evs),
+                             "points": lost_pts},
+                }, open(os.path.join(OUT, "regression-unresolved.json"), "w"),
+                    ensure_ascii=False, indent=1)
+                print(f"[P6.5-gate] 保留回退两轮定向修复未收口——如实报红退出："
+                      f"丢 REQ {sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / "
+                      f"评分点 {base_pts_cov}→{now_pts_cov}"
+                      f"（regression-unresolved.json，不装绿）")
+                sys.exit(1)
+            print(f"[P6.5-gate] ⚠保留回退（{phase_label} 后）：丢 REQ "
+                  f"{sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / 评分点 "
+                  f"{base_pts_cov}→{now_pts_cov}——全栈+对照表定向修复（门轮 {gate_round}）")
+            gate_plan = {}
+            for s_ in q_gate.get("sections") or []:
+                sid_ = s_.get("section_id")
+                if ((lost_reqs & set(s_.get("uncovered_reqs") or []))
+                        or (lost_evs & set(s_.get("uncited_evs") or []))
+                        or (lost_pts > 0 and sec_pts_gate.get(sid_, {}).get("missing"))):
+                    gate_plan[sid_] = s_
+            for sid_, s_ in sorted(gate_plan.items()):
+                pf = sec_pts_gate.get(sid_, {})
+                fresh_evs = sorted(lost_evs & set(s_.get("uncited_evs") or []))
+                instr = (INITIAL_INSTR + EV_HINT
+                         + realagent_evidence.retain_gate_repair_instruction(
+                             fresh_evs,
+                             s_.get("uncovered_reqs") or [],
+                             s_.get("covered_reqs") or [],
+                             s_.get("cited_evs") or [],
+                             pf.get("missing", []), pf.get("hit", [])))
+                r = call("draft_response_section", {
+                    "project_id": PID, "section_id": sid_,
+                    "instructions": instr,
+                    "generator": "real", "project_version": "latest",
+                }, timeout=620)
+                if not r.get("ok"):
+                    err = json.dumps(r.get("error", {}), ensure_ascii=False)
+                    if "429" in err or "Too many requests" in err or "LLM" in err:
+                        print(f"[P6.5-gate] {sid_} 修复生成失败（限流）——"
+                              f"保存进度优雅退出: {err[:160]}")
+                        exit_code = 2
+                        break
+                    raise AssertionError(f"[retain-gate:{sid_}] {err[:400]}")
+                st = r["data"].get("stats", {})
+                draft_stats = [x for x in draft_stats if x["sid"] != sid_]
+                draft_stats.append({"sid": sid_, "words": st.get("words"),
+                                    "citations": st.get("citations")})
+                gate_seq[0] += 1
+                repair_log.append({"round": 500 + gate_seq[0], "sid": sid_,
+                                  "kind": "retain-gate",
+                                  "why": [f"保留回归门（{phase_label}）：丢 REQ "
+                                          f"{sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / "
+                                          f"评分点 {base_pts_cov}→{now_pts_cov}"],
+                                  "floor": 600, "ban": False,
+                                  "words": st.get("words"),
+                                  "citations": st.get("citations")})
+                print(f"[P6.5-gate] {sid_} 定向重写（全栈+对照表）words={st.get('words')} "
+                      f"cites={st.get('citations')}", flush=True)
+                save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
+                time.sleep(DRAFT_GAP_S)
+            if exit_code == 2:
+                sys.exit(2)
+        return True
+
     # ---- P6.7 uncovered-REQ 引用补齐修复轮（批十——批九登记候补面落地）----
     # r7 实锚：P9.6 未覆盖 REQ 10 条（SEC-0035×8 / SEC-0040×1 / SEC-0062×1
     # ——第一章「其他」类样板条款：1.8.1 不得存在情形 / 1.9 货物原产地 /
@@ -607,6 +729,10 @@ try:
             time.sleep(DRAFT_GAP_S)
         if exit_code == 2:
             sys.exit(2)
+        # 批十三窗口扩展：P6.7 每轮重写后过保留回归门（r8 实锚：P6.6
+        # 表模式收口的 52/52 被 P6.7 织入式重写洗掉 7 点——修复 A 洗掉 B
+        # 的跨轮次形态，门必须逐轮收口）。
+        retention_gate(f"p67-r{rq_round}")
         q_mid = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
                      f"q-mid:{rq_round}")
     print(f"[P6.7] REQ 引用收口: uncovered="
@@ -716,6 +842,8 @@ try:
             time.sleep(DRAFT_GAP_S)
         if exit_code == 2:
             sys.exit(2)
+        # 批十三窗口扩展：P6.8 每轮重写后过保留回归门（同 P6.7 轮末口径）。
+        retention_gate(f"p68-r{ev_round}")
         q_mid = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
                      f"q-ev:{ev_round}")
     ev_cited_final = set()
@@ -728,19 +856,8 @@ try:
                                        "project_version": "latest"}, "validate")
     print(f"[P6] 校验: ok={d.get('ok')} counts={d.get('counts')}")
 
-    # ---- 批#221：P6.5 前基线捕获（P6.8 收口面——最后一次重写后的集合验证锚）----
-    # P6.5 是修复链**最后一个**整节重写入口，其后无任何轮次再兜底。
-    # 保留回归门（每轮修复体后）以本基线比对：丢 REQ / 丢 EV（节级已
-    # 援引集合）/ 评分点覆盖数。门必须先于零 blocker validate 收口（该
-    # 次 validate 即推进 VALIDATING，Drafting 态外重写被状态机拒绝）。
-    q_base = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
-                  "q-base")
-    base_req_cov, base_ev_cit = set(), set()
-    for s_ in q_base.get("sections") or []:
-        base_req_cov.update(s_.get("covered_reqs") or [])
-        base_ev_cit.update(s_.get("cited_evs") or [])
-    cov_base = must("check_scoring_coverage", {"project_id": PID}, "cov-base")
-    base_pts_cov = cov_base["summary"].get("points_covered", 0)
+    # （批十三：基线已前移至 P6.6 收口时刻——见 retention_gate 定义处；
+    # P6.5 是链末重写入口，其轮末过门与 P6.7/P6.8 同一函数同一基线。）
 
     # ---- P6.5 BLOCKER 修复轮（真实 LLM 面的诚实修复——不豁免不绕门）----
     # blocker 形态（huaian 真跑实锚）：E_CHARS_BELOW_MIN（评分章节篇幅门
@@ -953,98 +1070,12 @@ try:
             time.sleep(DRAFT_GAP_S)
         if exit_code == 2:
             sys.exit(2)
-        # ---- 批#221 保留回归门（issue 任务 3：验证最后一次重写之后的集合）----
-        # 每轮修复体后、下轮 validate 前收口（零 blocker validate 即推进
-        # VALIDATING——门在推进前才合法重写）。回退 = p68 全栈尾定向修复
-        # （≤2 轮，修复有界）；未收口 = 如实 FAIL（regression-unresolved
-        # .json + exit 1，不装绿——「不能只在 P9 落日志后标成已收口」）。
-        # 只在本轮真发生重写（plan 非空）时过门——无重写即无回退面。
+        # ---- 批#221 保留回归门（批十三窗口扩展——P6.5 轮末过门）----
+        # 门函数与 P6.7/P6.8 轮末同一入口（retention_gate，基线=P6.6
+        # 收口时刻）；只在本轮真发生重写（plan 非空）时过门——无重写
+        # 即无回退面。
         if plan:
-            for gate_round in (1, 2):
-                q_gate = must("check_bid_quality",
-                              {"project_id": PID, "project_version": "latest"},
-                              f"q-gate:{round_no}.{gate_round}")
-                cov_gate = must("check_scoring_coverage", {"project_id": PID},
-                                f"cov-gate:{round_no}.{gate_round}")
-                sec_pts_gate = realagent_evidence.section_points_for_repair(cov_gate)
-                now_req_cov, now_ev_cit = set(), set()
-                for s_ in q_gate.get("sections") or []:
-                    now_req_cov.update(s_.get("covered_reqs") or [])
-                    now_ev_cit.update(s_.get("cited_evs") or [])
-                now_pts_cov = cov_gate["summary"].get("points_covered", 0)
-                lost_reqs = base_req_cov - now_req_cov
-                lost_evs = base_ev_cit - now_ev_cit
-                lost_pts = base_pts_cov - now_pts_cov
-                if not (lost_reqs or lost_evs or lost_pts > 0):
-                    break
-                if gate_round > 1:
-                    json.dump({
-                        "baseline": {"covered_reqs": sorted(base_req_cov),
-                                     "cited_evs": sorted(base_ev_cit),
-                                     "points_covered": base_pts_cov},
-                        "after_final_rewrite": {"covered_reqs": sorted(now_req_cov),
-                                                "cited_evs": sorted(now_ev_cit),
-                                                "points_covered": now_pts_cov},
-                        "lost": {"reqs": sorted(lost_reqs), "evs": sorted(lost_evs),
-                                 "points": lost_pts},
-                    }, open(os.path.join(OUT, "regression-unresolved.json"), "w"),
-                        ensure_ascii=False, indent=1)
-                    print(f"[P6.5-gate] 保留回退两轮定向修复未收口——如实报红退出："
-                          f"丢 REQ {sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / "
-                          f"评分点 {base_pts_cov}→{now_pts_cov}"
-                          f"（regression-unresolved.json，不装绿）")
-                    sys.exit(1)
-                print(f"[P6.5-gate] ⚠保留回退（P6.5 轮 {round_no} 后）：丢 REQ "
-                      f"{sorted(lost_reqs)} / 丢 EV {sorted(lost_evs)} / 评分点 "
-                      f"{base_pts_cov}→{now_pts_cov}——全栈指令定向修复（门轮 {gate_round}）")
-                gate_plan = {}
-                for s_ in q_gate.get("sections") or []:
-                    sid_ = s_.get("section_id")
-                    if ((lost_reqs & set(s_.get("uncovered_reqs") or []))
-                            or (lost_evs & set(s_.get("uncited_evs") or []))
-                            or (lost_pts > 0 and sec_pts_gate.get(sid_, {}).get("missing"))):
-                        gate_plan[sid_] = s_
-                for sid_, s_ in sorted(gate_plan.items()):
-                    pf = sec_pts_gate.get(sid_, {})
-                    fresh_evs = sorted(lost_evs & set(s_.get("uncited_evs") or []))
-                    instr = (INITIAL_INSTR + EV_HINT
-                             + realagent_evidence.p68_repair_instruction_tail(
-                                 fresh_evs, [],
-                                 s_.get("cited_evs") or [],
-                                 s_.get("uncovered_reqs") or [],
-                                 s_.get("covered_reqs") or [],
-                                 pf.get("missing", []), pf.get("hit", [])))
-                    r = call("draft_response_section", {
-                        "project_id": PID, "section_id": sid_,
-                        "instructions": instr,
-                        "generator": "real", "project_version": "latest",
-                    }, timeout=620)
-                    if not r.get("ok"):
-                        err = json.dumps(r.get("error", {}), ensure_ascii=False)
-                        if "429" in err or "Too many requests" in err or "LLM" in err:
-                            print(f"[P6.5-gate] {sid_} 修复生成失败（限流）——"
-                                  f"保存进度优雅退出: {err[:160]}")
-                            exit_code = 2
-                            break
-                        raise AssertionError(f"[retain-gate:{sid_}] {err[:400]}")
-                    st = r["data"].get("stats", {})
-                    draft_stats = [x for x in draft_stats if x["sid"] != sid_]
-                    draft_stats.append({"sid": sid_, "words": st.get("words"),
-                                        "citations": st.get("citations")})
-                    repair_log.append({"round": 500 + round_no, "sid": sid_,
-                                      "kind": "retain-gate",
-                                      "why": [f"保留回归门：丢 REQ {sorted(lost_reqs)} /"
-                                              f" 丢 EV {sorted(lost_evs)} /"
-                                              f" 评分点 {base_pts_cov}→{now_pts_cov}"],
-                                      "floor": 600, "ban": False,
-                                      "words": st.get("words"),
-                                      "citations": st.get("citations")})
-                    print(f"[P6.5-gate] {sid_} 定向重写 words={st.get('words')} "
-                          f"cites={st.get('citations')}", flush=True)
-                    save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
-                    time.sleep(DRAFT_GAP_S)
-                if exit_code == 2:
-                    sys.exit(2)
+            retention_gate(f"p65-r{round_no}")
         if unrepairable and not plan:
             break  # 无可修复面——轮次无意义，提前收口报红
     d = must("validate_bid_document", {"project_id": PID, "scope": "all",

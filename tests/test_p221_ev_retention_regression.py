@@ -130,26 +130,31 @@ def test_p65_washes_req_citations_after_p68_closeout():
     )
 
 
-def test_driver_phase_order_p68_validate_baseline_p65_gate():
-    """顺序断言（源级相位锚）：P6.8 → P6 校验（首个全稿 validate）→
-    基线捕获 → P6.5 重写 → 保留回归门 → validate:final——门必须在
-    零 blocker validate（推进 VALIDATING 的那次）之前收口。"""
+def test_driver_phase_order_p66_closure_baseline_gate_def_rounds():
+    """顺序断言（批十三窗口扩展）：P6.6 收口 → 基线捕获（52/52 时刻）→
+    门函数定义 → P6.7 → P6.8 → P6 校验 → P6.5 → validate:final——
+    门覆盖 P6.6 收口后的**所有**整节重写轮，且在零 blocker validate
+    （推进 VALIDATING 的那次）之前收口（r8 实锚：基线在 P6 校验后捕获
+    太晚，P6.7 段洗掉的 7 点门看不见——45/52 假绿）。"""
     s = _src()
     pos = {
+        "P6.6 收口": s.find('print(f"[P6.6] 细则覆盖收口'),
+        "基线捕获": s.find("批#221（批十三窗口扩展）：P6.6 收口基线"),
+        "门函数": s.find("def retention_gate("),
+        "P6.7": s.find("# ---- P6.7 uncovered-REQ"),
         "P6.8": s.find("# ---- P6.8 证据引用补齐修复轮"),
         "P6 校验": s.find("    # ---- P6 校验 ----"),
-        "基线捕获": s.find("批#221：P6.5 前基线捕获"),
         "P6.5": s.find("# ---- P6.5 BLOCKER 修复轮"),
-        "保留回归门": s.find("批#221 保留回归门"),
         "validate:final": s.find('"validate:final"'),
     }
     for k, v in pos.items():
-        assert v >= 0, f"相位缺失：{k}（#221 面被误删？）"
-    order = ["P6.8", "P6 校验", "基线捕获", "P6.5", "保留回归门", "validate:final"]
+        assert v >= 0, f"相位缺失：{k}（批十三面被误删？）"
+    order = ["P6.6 收口", "基线捕获", "门函数", "P6.7", "P6.8",
+             "P6 校验", "P6.5", "validate:final"]
     seq = [pos[k] for k in order]
     assert seq == sorted(seq), (
-        f"相位顺序破坏：{dict(zip(order, seq))}——保留回归门必须在零 "
-        "blocker validate（推进 VALIDATING 的那次）之前收口。"
+        f"相位顺序破坏：{dict(zip(order, seq))}——基线必须前移到 P6.6"
+        "收口时刻，其后所有整节重写轮（P6.7/P6.8/P6.5）每轮后过门。"
     )
 
 
@@ -275,33 +280,74 @@ def test_p65_block_tail_with_cited_evs():
     assert "q-p65" in block, "P6.5 缺每轮活体 quality 调用（q-p65）"
 
 
-# ================================================== 五、保留回归门（任务 3）
+# ================================================== 五、保留回归门（任务 3 + 批十三窗口扩展）
+
+
+def _gate_region(s: str) -> str:
+    """门函数区：P6.6 收口基线标记 → P6.7 块头（批十三窗口扩展后
+    门结构与调用统一在此区定义）。"""
+    return _block(s, r"批#221（批十三窗口扩展）：P6\.6 收口基线",
+                  r"# ---- P6\.7 uncovered-REQ")
 
 
 def test_gate_structure_bounded_and_honest_fail():
-    """P6.5 保留回归门（#221 任务 3——结构即行为）：每轮修复体后过门、
-    两轮定向修复有界、未收口 regression-unresolved.json + exit 1 不装绿。"""
-    block = _block(_src(), r"# ---- P6\.5 BLOCKER 修复轮", r"# ---- P7")
-    assert "for gate_round in (1, 2)" in block, (
+    """保留回归门（#221 任务 3——结构即行为，批十三窗口扩展）：两轮定向
+    修复有界、未收口 regression-unresolved.json + exit 1 不装绿。"""
+    region = _gate_region(_src())
+    assert "for gate_round in (1, 2)" in region, (
         "保留回归门缺两轮有界循环——修复无界即轮次耗尽假终局。"
     )
-    assert "regression-unresolved.json" in block, (
+    assert "regression-unresolved.json" in region, (
         "保留回归门未收口时缺落盘件——回退只在日志里出现即被标成已收口"
         "（#221 任务 3 点名的「不能只在 P9 落日志后标成已收口」）。"
     )
-    assert "sys.exit(1)" in block, "门未收口必须如实报红退出（exit 1）"
-    assert '"retain-gate"' in block, (
+    assert "sys.exit(1)" in region, "门未收口必须如实报红退出（exit 1）"
+    assert '"retain-gate"' in region, (
         '门修复留痕缺独立 kind="retain-gate"——污染 P6.6/P6.7/P6.8 '
         "非收敛计数（kind 隔离纪律）。"
     )
-    # 门比较三面：丢 REQ / 丢 EV / 评分点覆盖数
     for face in ("lost_reqs", "lost_evs", "lost_pts"):
-        assert face in block, f"门缺 {face} 面（三面集合验证不齐）"
+        assert face in region, f"门缺 {face} 面（三面集合验证不齐）"
+
+
+def test_gate_window_covers_p67_p68_p65_rounds():
+    """批十三窗口扩展（r8 实锚）：门必须在 P6.7/P6.8/P6.5 **每轮**重写后
+    过——r8 的 7 点丢在 P6.7 段（基线太晚门看不见，45/52 假绿）。"""
+    s = _src()
+    bounds = {
+        "P6.7": (r"# ---- P6\.7 uncovered-REQ", r"# ---- P6\.8 证据引用补齐修复轮", "p67-r"),
+        "P6.8": (r"# ---- P6\.8 证据引用补齐修复轮", r"# ---- P6 校验 ----", "p68-r"),
+        "P6.5": (r"# ---- P6\.5 BLOCKER 修复轮", r"# ---- P7", "p65-r"),
+    }
+    for label, (start_pat, end_pat, tag) in bounds.items():
+        block = _block(s, start_pat, end_pat)
+        assert f'retention_gate(f"{tag}' in block, (
+            f"{label} 轮末未过保留回归门——跨轮次回退（r8 实锚：P6.6 收口"
+            "52/52 被 P6.7 洗掉 7 点）无逐轮收口即假绿。"
+        )
+
+
+def test_gate_baseline_captured_at_p66_closure():
+    """批十三：基线前移到 P6.6 收口时刻（52/52 时刻）——r8 实锚根因
+    （基线在 P6 校验后捕获太晚，P6.7 段洗掉的 7 点门看不见）。"""
+    s = _src()
+    closure = s.find('print(f"[P6.6] 细则覆盖收口')
+    baseline = s.find("批#221（批十三窗口扩展）：P6.6 收口基线")
+    p67 = s.find("# ---- P6.7 uncovered-REQ")
+    assert 0 <= closure < baseline < p67, (
+        "基线必须位于 P6.6 收口与 P6.7 之间（收敛时刻锚）——晚于此即"
+        "存在门看不见的回退窗口（r8 45/52 假绿实锚）。"
+    )
+    # 旧位置的基线块必须已删（P6 校验后不得残留第二捕获点）
+    gate_after_p6 = s.find("q-base", s.find("    # ---- P6 校验 ----"))
+    assert gate_after_p6 < 0 or gate_after_p6 > s.find('"validate:final"'), (
+        "P6 校验后仍残留 q-base 捕获——双基线会让门比对错锚。"
+    )
 
 
 def test_gate_runs_before_state_advancing_validate():
-    """门位置契约：修复体后、下轮 validate 前（Drafting 态内合法重写）——
-    validate:final 在门之后（终验前所有回退已收口或已诚实报红）。"""
+    """门位置契约：修复体后、validate:final 前（Drafting 态内合法重写）——
+    终验前所有回退已收口或已诚实报红。"""
     s = _src()
     gate = s.find("批#221 保留回归门")
     val_final = s.find('"validate:final"')
@@ -311,14 +357,66 @@ def test_gate_runs_before_state_advancing_validate():
     )
 
 
-def test_gate_uses_full_stack_tail():
-    """门定向修复指令复用 p68 全栈尾——修复本身不得引入新回退
-    （全栈注入），fresh_evs 取活体 uncited_evs ∩ lost_evs。"""
-    block = _block(_src(), r"# ---- P6\.5 BLOCKER 修复轮", r"# ---- P7")
-    assert block.count("p68_repair_instruction_tail") >= 1, (
-        "保留回归门未复用 p68 全栈指令尾（门定向修复是链末的链末——"
-        "必须全栈注入，修复本身不得引入新回退）。"
+def test_gate_repair_instruction_full_stack_plus_table():
+    """批十三行为断言：门修复指令 = p68 全栈（EV/REQ/点补齐+保留）+
+    点对照表（r8 实锚：「功能证明需充分」×4 等短碎片点是 r6 家族织入
+    不收敛形态——门修复无表列载体即两轮耗尽假终局）。"""
+    instr = realagent_evidence.retain_gate_repair_instruction(
+        ["EV-0064"], ["REQ-0009"], ["REQ-0001"], ["EV-0063"],
+        ["功能证明需充分"], ["培训方案"])
+    # 全栈三补齐 + 三保留
+    assert "证据援引补齐纪律" in instr and "EV-0064" in instr
+    assert "REQ 引用补齐纪律" in instr and "REQ-0009" in instr
+    assert "已援引证据保留纪律" in instr and "EV-0063" in instr
+    assert "已覆盖 REQ 保留纪律" in instr and "REQ-0001" in instr
+    assert "已命中点保留纪律" in instr and "培训方案" in instr
+    # 表载体（结构性保证）
+    assert "评分细则逐点响应对照表纪律" in instr and "功能证明需充分" in instr, (
+        "门修复指令缺点对照表——短碎片点（r6/r8 家族）织入不收敛，"
+        "两轮有界耗尽即假终局（regression-unresolved 假红）。"
     )
-    assert "lost_evs & set(s_.get(\"uncited_evs\")" in block, (
+
+
+def test_gate_uses_full_stack_tail():
+    """门定向修复指令接线 retain_gate_repair_instruction，fresh_evs 取
+    活体 uncited_evs ∩ lost_evs。"""
+    region = _gate_region(_src())
+    assert "retain_gate_repair_instruction" in region, (
+        "门未接线 retain_gate_repair_instruction（全栈+对照表统一载体）。"
+    )
+    assert "lost_evs & set(s_.get(\"uncited_evs\")" in region, (
         "门 fresh_evs 未取活体 uncited_evs ∩ lost_evs（文档级复活定位）。"
+    )
+
+
+# ================================================== 六、P4 perf 绑定兜底（批十三）
+
+
+def test_p4_perf_binding_fallback_to_other_group():
+    """批十三（r8 实锚 EV-0065 unlocatable）：本语料矩阵无「商务要求/
+    技术参数」类目——perf 组恒空，performance EV 永无结构绑定面（r7 同病
+    被文档级回声援引掩盖）。P4 必须兜底绑 other 组（进节级素材面）。"""
+    s = _src()
+    m_p4 = re.search(r"# ---- P4 证据登记", s)
+    m_gate = re.search(r"# ---- 审核门", s)
+    assert m_p4 and m_gate
+    block = s[m_p4.start():m_gate.start()]
+    assert "perf_bind_key" in block, (
+        "P4 缺 perf 绑定兜底键——perf 组空时 performance EV 无绑定面"
+        "（EV-0065 节级素材面缺失，P6.8 定位不到修复面）。"
+    )
+    assert '("perf" if groups["perf"]' in block, (
+        "perf_bind_key 兜底逻辑缺失——组空须落 other 组。"
+    )
+
+
+def test_p4_fallback_honest_registration_when_all_groups_empty():
+    """批十三：qual/perf/other 全空时如实登记（不硬造绑定面）。"""
+    s = _src()
+    m_p4 = re.search(r"# ---- P4 证据登记", s)
+    m_gate = re.search(r"# ---- 审核门", s)
+    block = s[m_p4.start():m_gate.start()]
+    assert "无可绑组" in block and "如实登记" in block, (
+        "P4 全空组时缺诚实登记分支——静默跳过即 r8 EV-0065 unlocatable"
+        " 实锚的旧形态（绑定面缺口不落痕）。"
     )

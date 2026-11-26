@@ -545,6 +545,22 @@ def p68_repair_instruction_tail(fresh_evs, stuck_evs, cited_evs, uncovered_reqs,
             + " 本节重起草补齐上述零援引证据的显式援引，正文不少于 600 字。")
 
 
+def retain_gate_repair_instruction(fresh_evs, unc_reqs, cov_reqs, cited_evs,
+                                   pts_missing, pts_hit):
+    """批十三：保留回归门定向修复指令——p68 全栈 + 点对照表。
+
+    r8 实锚（realagent-113-v3-20261126-r8）：P6.6 表模式收口 52/52 后
+    被 P6.7 织入式重写洗掉 7 点（「功能证明需充分」×4 等短碎片点——
+    r6 家族织入不收敛形态）——门修复必须带表列逐字复述的结构性载体
+    （批九 G1：复制类指令远弱于织入正文），否则门修复本身对短碎片点
+    不收敛（有界两轮耗尽即假终局）。EV/REQ/点补齐 + 保留全栈随行
+    （修复本身不得引入新回退）。
+    """
+    return (p68_repair_instruction_tail(
+                fresh_evs, [], cited_evs, unc_reqs, cov_reqs, pts_missing, pts_hit)
+            + point_table_hint(list(pts_missing) + list(pts_hit)))
+
+
 def report_target(out_dir: str) -> str:
     """REPORT 底稿目标路径：OUT 无 REPORT.md → REPORT.md（首跑即机器底稿）；
     已有（手写叙事/封存包）→ REPORT.generated.md——**不覆盖既有文件**
