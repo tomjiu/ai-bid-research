@@ -477,3 +477,42 @@ class TestReqCitationHint:
         )
         assert "不得合并" in hint, "必须禁止合并省略编号（合并即丢引用）"
         assert realagent_evidence.req_response_list_hint([]) == ""
+
+
+# ------------------------------------------------- 批十一 P6.8：EV 引用补齐
+
+class TestEvCitationHint:
+    """批十一（#113 P9.5 面落地）：r7 实锚——EV-0064（营业执照）全文
+    0 援引（P9.5 证据引用 2/3）。根因双层：P4 绑定只绑 quals[0]/perfs[0]
+    （EV-0064 注册后从未绑定任何 REQ 组——不绑定不进素材面，且 draft.rs
+    起草时剔除「不在已知集」的引用）；驱动器 P6.5/P6.6/P6.7 之后唯独
+    EV 引用无修复面。P6.8 同款定向重起草指令注入。
+    """
+
+    def test_零援引EV逐条列出_显式援引纪律(self):
+        hint = realagent_evidence.ev_citation_hint(["EV-0064"])
+        assert "EV-0064" in hint, "零援引 EV 必须逐条出现在指令中"
+        assert "[EV-" in hint, "必须点名「[EV-xxxx]」显式援引形态"
+        assert realagent_evidence.ev_citation_hint([]) == ""
+        assert realagent_evidence.ev_citation_hint(None) == ""
+
+    def test_已援引EV保留纪律_只增不删(self):
+        """整节重起草换全文——已援引 EV 必须点名保留，否则修复 EV-0064
+        洗掉 EV-0063（21 次援引）。"""
+        hint = realagent_evidence.retained_ev_citation_hint(
+            ["EV-0063", "EV-0065"])
+        for ev in ("EV-0063", "EV-0065"):
+            assert ev in hint, f"已援引 EV 必须逐条点名保留: {ev}"
+        assert "只增不删" in hint or ("保留" in hint and "不得" in hint), (
+            "必须声明只增不删纪律"
+        )
+        assert realagent_evidence.retained_ev_citation_hint([]) == ""
+
+    def test_逐EV援引段兜底_编号逐字写入(self):
+        """织入正文不收敛（≥2 轮）→ 逐 EV 援引段兜底——每条 EV 各写一段
+        「[EV-xxxx]（名称）：本方持有该证据……」编号逐字写入。"""
+        hint = realagent_evidence.ev_statement_hint(["EV-0064"])
+        assert "EV-0064" in hint
+        assert "一段" in hint or "段落" in hint, "必须是逐 EV 独立成段形态"
+        assert realagent_evidence.ev_statement_hint([]) == ""
+        assert realagent_evidence.ev_statement_hint(None) == ""

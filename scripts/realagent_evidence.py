@@ -388,6 +388,67 @@ def req_response_list_hint(uncovered_reqs: list[str]) -> str:
     )
 
 
+def ev_citation_hint(uncited_evs: list[str]) -> str:
+    """零援引 EV 补齐指令段（批十一 P6.8——r7 实锚 EV-0064 营业执照）。
+
+    r7 实锚：P9.5 证据引用 2/3——EV-0064 注册后全文 0 援引。引擎口径
+    注记：uncited_evs 是信息面（绑定集内未援引——非全部证据都必须在每
+    节援引）；本 hint 的判据是**文档级零援引**（全档没有任何一节援引过
+    它——审阅面关注项口径），不做每节必须援引的过度收紧。
+    """
+    evs = [e for e in (uncited_evs or []) if e]
+    if not evs:
+        return ""
+    enumerated = "、".join(f"[{e}]" for e in evs)
+    return (
+        "证据援引补齐纪律（#113 审计批十一）：本标书已注册证据件 "
+        + enumerated + " 在全部正文中未被援引过（零援引）——重起草须在本节"
+        "为其各写显式援引表述：写明证据编号与证据名称（如「[EV-0064]"
+        "（营业执照）：本方持有该证据并已登记台账，作为本项资格的佐证」），"
+        "编号逐字写入正文；不得静默跳过（注册而零援引 = 证据件形同虚设，"
+        "审阅按无佐证处理）。"
+    )
+
+
+def retained_ev_citation_hint(cited_evs: list[str]) -> str:
+    """已援引 EV 保留纪律段（批十一 P6.8——r7 实锚 EV-0063 ×21 次援引）。
+
+    整节重起草换全文——已援引 EV 的引用必须点名保留（只增不删），
+    否则修复 EV-0064 洗掉 EV-0063（与 P6.6/P6.7 保留纪律同族）。
+    """
+    evs = [e for e in (cited_evs or []) if e]
+    if not evs:
+        return ""
+    enumerated = "、".join(f"[{e}]" for e in evs)
+    return (
+        "已援引证据保留纪律（#113 审计批十一）：本节正文已显式援引下列"
+        "证据件——重起草后仍须逐条保留援引表述与对应佐证段（只增不删："
+        "新增零援引证据的援引段，不改写/删除已援引证据的既有佐证段）："
+        + enumerated
+    )
+
+
+def ev_statement_hint(uncited_evs: list[str]) -> str:
+    """逐 EV 援引段兜底指令段（批十一 P6.8——P6.7 响应段兜底对偶）。
+
+    织入正文 ≥2 轮不收敛（LLM 对援引反复丢编号）→ 逐 EV 援引段兜底：
+    每条零援引 EV 各写一段独立佐证段——编号逐字写入是字面援引口径下
+    的结构性保证（同 P6.6 对照表/P6.7 响应段兜底的「复制类指令远弱于
+    织入正文」机理）。
+    """
+    evs = [e for e in (uncited_evs or []) if e]
+    if not evs:
+        return ""
+    enumerated = "、".join(f"[{e}]" for e in evs)
+    return (
+        "逐证据援引段兜底纪律（#113 审计批十一）：本节前轮织入正文未收敛，"
+        "本轮改逐证据独立佐证段形态收口。对下列每条证据各写一段「[EV-xxxx]"
+        "（证据名称）：本方持有该证据并已登记台账，作为对应资格/业绩要求的"
+        "佐证」的独立段落：" + enumerated + "。段落首编号逐字写入，不得合并"
+        "省略编号，不得以概述性段落笼统带过——缺段落即缺佐证面。"
+    )
+
+
 def report_target(out_dir: str) -> str:
     """REPORT 底稿目标路径：OUT 无 REPORT.md → REPORT.md（首跑即机器底稿）；
     已有（手写叙事/封存包）→ REPORT.generated.md——**不覆盖既有文件**

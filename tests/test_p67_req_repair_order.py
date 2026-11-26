@@ -159,3 +159,28 @@ def test_p65_repair_carries_req_citation_retention():
         "P6.5 未每轮取活体 check_bid_quality 的 REQ 面——validate 响应无"
         "sections[].covered_reqs，静态/错源数据会把保留纪律建立在过期面上。"
     )
+
+
+def test_p67_repair_carries_points_retention():
+    """契约 7（批十一——批十自审残余）：P6.7 整节重起草换全文时只带
+    REQ 面双注入而缺评分点保留——P6.6 收口（52/52）会被洗掉（r6b
+    7→8→31 覆盖回退同族；批七 D3 修了 P6.5 入口、批八 G2 修了另一半，
+    P6.7 是同型的第三个入口）。重起草指令必须带：
+    retained_points_hint（已命中点保留）+ scoring_points_hint（防丢点
+    双注入），且取**活体**覆盖面（每轮 check_scoring_coverage）。"""
+    s = _src()
+    m_p67 = re.search(r"# ---- P6\.7 uncovered-REQ 引用补齐修复轮", s)
+    m_p65 = re.search(r"# ---- P6\.5 BLOCKER 修复轮", s)
+    assert m_p67 and m_p65
+    block = s[m_p67.start(): m_p65.start()]
+    assert "retained_points_hint" in block, (
+        "P6.7 缺 retained_points_hint——重起草洗掉 P6.6 已命中评分点"
+        "（覆盖回退入口，批十落地时漏带）。"
+    )
+    assert "scoring_points_hint" in block, (
+        "P6.7 缺 scoring_points_hint——丢掉的命中点无法在本轮内补回"
+        "（P6.6 已过序，不会重来）。"
+    )
+    assert "check_scoring_coverage" in block, (
+        "P6.7 未取活体覆盖面——静态/过期面会把保留纪律建立在漂移数据上。"
+    )

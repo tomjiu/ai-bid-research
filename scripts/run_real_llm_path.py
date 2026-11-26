@@ -279,14 +279,21 @@ try:
             cat = (r["requirement"].get("category") or "")
             key = "qual" if cat == "资格条件" else ("perf" if cat in ("商务要求", "技术参数") else "other")
             groups[key].append(r["requirement"]["id"])
-        for ev, key in [(quals[0] if quals else ev_ids[0][0], "qual"),
-                        (perfs[0] if perfs else ev_ids[0][0], "perf"),
-                        (ev_ids[0][0], "other")]:
+        # 批十一根因修（r7 实锚 EV-0064 营业执照零援引）：绑定循环旧面只
+        # 绑 quals[0]/perfs[0]——第二个 qualification 件注册后从未绑定任何
+        # REQ 组；不绑定即不进任何节的 per-section 素材面（draft.rs
+        # bound_evidence_ids），且起草器剔除「不在已知集」的引用——LLM 写了
+        # [EV-0064] 也会被剥掉。全量绑定：每个 qualification/performance
+        # 证据各绑其组（绑定是引用存活的前置件，不只是台账登记）。
+        bind_pairs = ([(ev, "qual") for ev in quals]
+                      + [(ev, "perf") for ev in perfs]
+                      + [(ev_ids[0][0], "other")])
+        for ev, key in bind_pairs:
             if groups[key]:
                 must("bind_evidence", {
                     "project_id": PID, "ev_id": ev, "requirement_ids": groups[key],
                     "bid_open_date": "2026-12-31", "project_version": "latest",
-                }, f"bind:{key}")
+                }, f"bind:{key}:{ev}")
         n_after = sum(1 for r in matrix_rows() if r.get("blocking"))
         print(f"[P4] 绑定完成，阻断 {n_blocking}→{n_after}")
 
@@ -531,6 +538,12 @@ try:
         if e.get("kind") == "req-cite":
             rq_stuck[e["sid"]] = rq_stuck.get(e["sid"], 0) + 1
     rq_round = 0
+    # 批十一残余修（批十自审）：P6.7 整节重起草换全文，指令只带 REQ 面
+    # 双注入而缺评分点保留——P6.6 收口（52/52）会被洗掉（r6b 7→8→31
+    # 覆盖回退同族入口，批七 D3 修了 P6.5 入口后这是同型第三入口）。每轮
+    # 取活体覆盖面（P6.6 已过序不会重来，丢点只能在本轮内补回）：
+    # scoring_points_hint（重起草丢的点随指令补）+ retained_points_hint
+    # （已命中点保留，只增不删）。
     while any(s.get("uncovered_reqs") for s in q_mid["sections"]):
         bad = {s["section_id"]: s for s in q_mid["sections"] if s.get("uncovered_reqs")}
         rq_round += 1
@@ -541,9 +554,12 @@ try:
         print(f"[P6.7] REQ 引用补齐轮 {rq_round}: "
               f"{sum(len(s['uncovered_reqs']) for s in bad.values())} 条未覆盖 REQ → "
               f"{len(bad)} 叶定向重起草（未覆盖补齐 + 已覆盖保留双注入）")
+        cov_rq = must("check_scoring_coverage", {"project_id": PID}, f"cov-p67:{rq_round}")
+        sec_pts_rq = realagent_evidence.section_points_for_repair(cov_rq)
         for sid, s in sorted(bad.items()):
             unc = s["uncovered_reqs"]
             cov = s.get("covered_reqs") or []
+            pts_now = sec_pts_rq.get(sid, {})
             stuck = rq_stuck.get(sid, 0) + 1
             rq_stuck[sid] = stuck
             if stuck >= 2:
@@ -551,6 +567,10 @@ try:
                 instr = (INITIAL_INSTR + EV_HINT
                          + realagent_evidence.req_response_list_hint(unc)
                          + realagent_evidence.retained_req_citation_hint(cov)
+                         + realagent_evidence.scoring_points_hint(
+                             pts_now.get("missing", []))
+                         + realagent_evidence.retained_points_hint(
+                             pts_now.get("hit", []))
                          + " 本节前轮逐条织入未收敛——逐 REQ 响应段兜底"
                            "重起草，正文照常不少于 600 字。")
                 why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——逐 REQ 响应段"
@@ -559,6 +579,10 @@ try:
                 instr = (INITIAL_INSTR + EV_HINT
                          + realagent_evidence.req_citation_hint(unc)
                          + realagent_evidence.retained_req_citation_hint(cov)
+                         + realagent_evidence.scoring_points_hint(
+                             pts_now.get("missing", []))
+                         + realagent_evidence.retained_points_hint(
+                             pts_now.get("hit", []))
                          + " 本节当前版本未逐条引用上述 REQ——重起草逐条"
                            "补引用，正文不少于 600 字。")
                 why = (f"P6.7 REQ 引用: {len(unc)} 条未覆盖——定向重起草"
@@ -599,6 +623,122 @@ try:
                      f"q-mid:{rq_round}")
     print(f"[P6.7] REQ 引用收口: uncovered="
           f"{sum(len(s.get('uncovered_reqs') or []) for s in q_mid['sections'])}")
+
+    # ---- P6.8 证据引用补齐修复轮（批十一——r7 诚实边界 P9.5 面落地）----
+    # r7 实锚：P9.5 证据引用 2/3——EV-0064（营业执照）全文 0 援引。根因
+    # 双层：①绑定面缺口（P4 旧面只绑 quals[0]/perfs[0]——EV-0064 注册后
+    # 从未绑定任何 REQ 组：不绑定即不进任何节素材面，且起草器剔除「不在
+    # 已知集」的引用，LLM 写了也被剥掉；P4 已修全量绑定，面向新跑生效）；
+    # ②引用面无修复轮（P6.5 blocker/P6.6 评分点/P6.7 REQ 引用之后，唯独
+    # EV 引用无修复面——evidence_citation 只在 P9.5 落盘登记）。本轮收口②。
+    # 引擎口径注记：sections[].uncited_evs 是信息面（绑定集内未援引——非
+    # 全部证据都必须在每节援引）；本轮判据是**文档级零援引**（registered
+    # − 各节 cited_evs 并集——全档没有任何一节援引过它，审阅面关注项口径），
+    # 不做「每节必须援引」的过度收紧。每个零援引 EV 定位其文档序首个绑定
+    # 节 → 定向重起草，指令带完整保留栈（评分点 + REQ 引用 + 已援引 EV——
+    # 整节重起草换全文，缺哪层保留即洗哪层已收口面）。≥2 轮不收敛切逐
+    # EV 援引段兜底（ev_statement_hint，P6.7 响应段兜底对偶）；5 轮上限
+    # 耗尽如实登记（不豁免不装绿）。
+    # ★执行位置契约（E_STATE 纪律，tests/test_p68_ev_repair_order.py
+    # 回归锁）：P6.7 之后、首个全稿 validate 之前（Drafting 态内）。
+    ev_registered = [e for e, _, _ in ev_ids]
+    ev_stuck = {}
+    for e in repair_log:
+        if e.get("kind") == "ev-cite":
+            for ev in e.get("evs", []):
+                ev_stuck[ev] = ev_stuck.get(ev, 0) + 1
+    ev_round = 0
+    while True:
+        cited_any = set()
+        sec_ev_uncited = {}
+        for s in q_mid["sections"]:
+            cited_any.update(s.get("cited_evs") or [])
+            for e in (s.get("uncited_evs") or []):
+                sec_ev_uncited.setdefault(e, []).append(s["section_id"])
+        never_cited = [e for e in ev_registered if e not in cited_any]
+        if not never_cited:
+            break
+        plan_ev = {}
+        unlocatable = []
+        for e in never_cited:
+            sids = sec_ev_uncited.get(e) or []
+            if not sids:
+                unlocatable.append(e)
+                continue
+            plan_ev.setdefault(sids[0], []).append(e)
+        if not plan_ev:
+            print(f"[P6.8] 零援引证据 {never_cited} 无绑定节可定向——绑定面缺口"
+                  f"（P4 全量绑定面向新跑生效；如实登记不硬造）")
+            break
+        ev_round += 1
+        if ev_round > 5:
+            print(f"[P6.8] 证据引用补齐轮耗尽——剩余零援引 {never_cited} "
+                  f"如实登记（不豁免）")
+            break
+        print(f"[P6.8] 证据引用补齐轮 {ev_round}: 零援引 {never_cited} → "
+              f"{len(plan_ev)} 叶定向重起草"
+              + (f"（{unlocatable} 无绑定节跳过）" if unlocatable else ""))
+        cov_ev = must("check_scoring_coverage", {"project_id": PID}, f"cov-p68:{ev_round}")
+        sec_pts_ev = realagent_evidence.section_points_for_repair(cov_ev)
+        for sid, evs in sorted(plan_ev.items()):
+            s = next(x for x in q_mid["sections"] if x["section_id"] == sid)
+            unc_reqs = s.get("uncovered_reqs") or []
+            cov_reqs = s.get("covered_reqs") or []
+            cited_evs = s.get("cited_evs") or []
+            pts_now = sec_pts_ev.get(sid, {})
+            stuck_evs, fresh_evs = [], []
+            for e in evs:
+                stuck_after = ev_stuck.get(e, 0) + 1
+                ev_stuck[e] = stuck_after
+                (stuck_evs if stuck_after >= 2 else fresh_evs).append(e)
+            instr = (INITIAL_INSTR + EV_HINT
+                     + realagent_evidence.ev_citation_hint(fresh_evs)
+                     + realagent_evidence.ev_statement_hint(stuck_evs)
+                     + realagent_evidence.retained_ev_citation_hint(cited_evs)
+                     + realagent_evidence.req_citation_hint(unc_reqs)
+                     + realagent_evidence.retained_req_citation_hint(cov_reqs)
+                     + realagent_evidence.scoring_points_hint(pts_now.get("missing", []))
+                     + realagent_evidence.retained_points_hint(pts_now.get("hit", []))
+                     + " 本节重起草补齐上述零援引证据的显式援引，正文不少于 600 字。")
+            why = (f"P6.8 证据引用: {len(evs)} 项零援引——定向重起草补援引"
+                   f"（已援引 {len(cited_evs)} 项保留防回退）")
+            r = call("draft_response_section", {
+                "project_id": PID, "section_id": sid,
+                "instructions": instr,
+                "generator": "real", "project_version": "latest",
+            }, timeout=620)
+            if not r.get("ok"):
+                err = json.dumps(r.get("error", {}), ensure_ascii=False)
+                if "429" in err or "Too many requests" in err or "LLM" in err:
+                    print(f"[P6.8] {sid} 修复生成失败（限流）——保存进度优雅退出: {err[:160]}")
+                    exit_code = 2
+                    break
+                raise AssertionError(f"[ev-cite-repair:{sid}] {err[:400]}")
+            st = r["data"].get("stats", {})
+            draft_stats = [x for x in draft_stats if x["sid"] != sid]
+            draft_stats.append({"sid": sid, "words": st.get("words"),
+                                "citations": st.get("citations")})
+            repair_log.append({"round": 400 + ev_round, "sid": sid,
+                              "kind": "ev-cite", "evs": evs,
+                              "why": [why],
+                              "floor": 600, "ban": False,
+                              "words": st.get("words"),
+                              "citations": st.get("citations")})
+            print(f"[P6.8] {sid} 重起草 words={st.get('words')} "
+                  f"cites={st.get('citations')}"
+                  + (f"（援引段兜底：{stuck_evs}）" if stuck_evs
+                     else f"（补 {len(fresh_evs)} 项援引 + 保留 {len(cited_evs)} 项）"),
+                  flush=True)
+            save_state({"draft": {"stats": draft_stats}, "repair": repair_log})
+            time.sleep(DRAFT_GAP_S)
+        if exit_code == 2:
+            sys.exit(2)
+        q_mid = must("check_bid_quality", {"project_id": PID, "project_version": "latest"},
+                     f"q-ev:{ev_round}")
+    ev_cited_final = set()
+    for s in q_mid["sections"]:
+        ev_cited_final.update(s.get("cited_evs") or [])
+    print(f"[P6.8] 证据引用收口: 全档援引 {sorted(ev_cited_final)} / 注册 {ev_registered}")
 
     # ---- P6 校验 ----
     d = must("validate_bid_document", {"project_id": PID, "scope": "all",
